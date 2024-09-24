@@ -1,0 +1,111 @@
+package beyou.beyouapp.backend.user;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.UuidGenerator;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
+
+import java.time.LocalDate;
+import java.util.Collection;
+import java.sql.Date;
+import java.util.List;
+import java.util.UUID;
+
+@Entity
+@Table(name = "users")
+@AllArgsConstructor
+@NoArgsConstructor
+@Setter
+@Getter
+public class User implements UserDetails {
+    @Id
+    @UuidGenerator
+    @Column(updatable = false, nullable = false, unique = true)
+    private UUID id;
+
+    @NotBlank(message = "Name is Required")
+    @Size(min = 2, message = "Name require a minimum of 2 characters")
+    private String name;
+
+    @NotBlank(message = "Email is Required")
+    @Email(message = "Email is invalid")
+    @Column(nullable = false, unique = true)
+    private String email;
+
+    @NotBlank(message = "Password is Required")
+    @Size(min = 6, message = "Password require a minimum of 6 characters")
+    private String password;
+
+    private boolean isGoogleAccount;
+
+    private String perfilPhrase;
+
+    private String perfilPhraseAuthor;
+
+    private String perfilPhoto;
+
+    @NotNull
+    @Min(value = 0, message = "The constance cannot be negative")
+    private int constance;
+
+    private List<String> categories;
+
+    private List<String> tasks;
+
+    private List<String> habits;
+
+    private List<String> routines;
+
+    private List<String> goals;
+
+    private Date createdAt;
+
+    private Date updatedAt;
+
+    @Enumerated(EnumType.STRING)
+    private UserRole userRole;
+
+    @PrePersist
+    protected void onUserCreate(){
+        LocalDate now = LocalDate.now();
+        setCreatedAt(Date.valueOf(now));
+        setUpdatedAt(Date.valueOf(now));
+        setUserRole(UserRole.USER);
+        setConstance(0);
+    }
+
+    @PreUpdate
+    protected void onUpdate(){
+        setUpdatedAt(Date.valueOf(LocalDate.now()));
+    }
+
+    public User(UserRegisterDTO user){
+        LocalDate now = LocalDate.now();
+        setName(user.name());
+        setEmail(user.email());
+        setPassword(user.password());
+        setGoogleAccount(user.isGoogleAccount());
+        setUserRole(UserRole.USER);
+        setConstance(0);
+        setCreatedAt(Date.valueOf(now));
+        setUpdatedAt(Date.valueOf(now));
+    }
+
+    //UserDetails methods
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+    }
+
+    @Override
+    public String getUsername() {
+        return getEmail();
+    }
+}
