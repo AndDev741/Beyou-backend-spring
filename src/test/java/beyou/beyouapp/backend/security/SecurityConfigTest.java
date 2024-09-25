@@ -49,7 +49,7 @@ public class SecurityConfigTest {
                 .andExpect(content().string("{\"success\":\"User logged successfully\"}"));
 
         mockMvc.perform(post("/auth/register")
-                        .content("{\"name\": \"test\", \"email\": \"newtestbeyou4@gmail.com\", \"password\": \"123456\", " +
+                        .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"123456\", " +
                                 "\"isGoogleAccount\": false}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
