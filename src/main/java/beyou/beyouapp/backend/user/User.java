@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -92,6 +93,19 @@ public class User implements UserDetails {
         setEmail(user.email());
         setPassword(user.password());
         setGoogleAccount(user.isGoogleAccount());
+        setUserRole(UserRole.USER);
+        setConstance(0);
+        setCreatedAt(Date.valueOf(now));
+        setUpdatedAt(Date.valueOf(now));
+    }
+
+    public User(GoogleUserDTO googleUser) {
+        LocalDate now = LocalDate.now();
+        setName(googleUser.name());
+        setEmail(googleUser.email());
+        setPassword("GOOGLE_USER");
+        setGoogleAccount(googleUser.isGoogleAccount());
+        setPerfilPhoto(googleUser.perfilPhoto());
         setUserRole(UserRole.USER);
         setConstance(0);
         setCreatedAt(Date.valueOf(now));
