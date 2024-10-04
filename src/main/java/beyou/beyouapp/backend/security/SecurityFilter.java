@@ -32,7 +32,8 @@ public class SecurityFilter extends OncePerRequestFilter {
         String requestURI = request.getRequestURI();
 
         if(requestURI.equals("/auth/login") || requestURI.equals("/auth/register") ||
-                requestURI.startsWith("/swagger-ui") || requestURI.startsWith("/v3/api-docs")){
+                requestURI.startsWith("/swagger-ui") || requestURI.startsWith("/v3/api-docs")
+        || requestURI.startsWith("/auth/google")){
             filterChain.doFilter(request, response);
             return;
         }
