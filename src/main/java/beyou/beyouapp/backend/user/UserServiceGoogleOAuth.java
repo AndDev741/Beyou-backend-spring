@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
+import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
@@ -24,7 +25,7 @@ public class UserServiceGoogleOAuth {
     @Autowired
     UserRepository userRepository;
 
-    public ResponseEntity<Map<String, String>> googleAuth(String code, HttpServletResponse response){
+    public ResponseEntity<Map<String, Object>> googleAuth(String code, HttpServletResponse response){
         String googleAccessToken = getOAuthAccessTokenGoogle(code);
         Map<String, String> profileDetails = getProfileDetailsFromGoogle(googleAccessToken);
         String name = profileDetails.get("name");
@@ -38,7 +39,10 @@ public class UserServiceGoogleOAuth {
             User user =  new User(googleUser);
             String jwtToken = tokenService.generateToken(user);
             addJwtTokenToResponse(response, jwtToken);
-            return ResponseEntity.ok().body(Map.of("success", "User logged successfully"));
+            UserResponseDTO userResponseDTO = new UserResponseDTO(user.getId(), user.getName(),
+                    user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
+                    user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount());
+            return ResponseEntity.ok().body(Map.of("success", userResponseDTO));
         }else{
             User newUser = new User(googleUser);
             userRepository.save(newUser);

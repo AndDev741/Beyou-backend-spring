@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
+import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.*;
@@ -35,14 +36,17 @@ public class UserService {
         }
     }
 
-    public ResponseEntity<Map<String, String>> doLogin(HttpServletResponse response, UserLoginDTO userLoginDTO){
+    public ResponseEntity<Map<String, Object>> doLogin(HttpServletResponse response, UserLoginDTO userLoginDTO){
         Optional<User> loginUser = userRepository.findByEmail(userLoginDTO.email());
         if(loginUser.isPresent()){
             User user = loginUser.get();
             if(passwordEncoder.matches(userLoginDTO.password(), user.getPassword())){
                 String token = tokenService.generateToken(user);
                 addJwtTokenToResponse(response, token);
-                return ResponseEntity.ok().body(Map.of("success", "User logged successfully"));
+                UserResponseDTO userResponse = new UserResponseDTO(user.getId(), user.getName(),
+                        user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
+                        user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount());
+                return ResponseEntity.ok().body(Map.of("success", userResponse));
             }
         }
         return ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED).body(Map.of("error", "Email or password incorrect"));

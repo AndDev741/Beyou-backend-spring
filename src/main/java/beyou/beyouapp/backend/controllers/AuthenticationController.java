@@ -36,7 +36,7 @@ public class AuthenticationController {
     })
     //
     @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> doLogin(HttpServletResponse response, @RequestBody @Valid UserLoginDTO userLoginDTO){
+    public ResponseEntity<Map<String, Object>> doLogin(HttpServletResponse response, @RequestBody @Valid UserLoginDTO userLoginDTO){
         return userService.doLogin(response, userLoginDTO);
     }
 
@@ -58,7 +58,7 @@ public class AuthenticationController {
     }
 
     @GetMapping("/google")
-    public ResponseEntity<Map<String, String>> googleAuth(@RequestParam("code") String code,
+    public ResponseEntity<Map<String, Object>> googleAuth(@RequestParam("code") String code,
                                 HttpServletResponse response){
         return userServiceGoogleOAuth.googleAuth(code, response);
     }
