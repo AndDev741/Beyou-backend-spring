@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
+import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.BeforeEach;
@@ -86,9 +87,13 @@ public class UserServiceTest {
         when(tokenService.generateToken(user)).thenReturn("mockedToken");
 
 
-        ResponseEntity<Map<String, String>> loginResponse = userService.doLogin(response, userLoginDTO);
+        ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(response, userLoginDTO);
 
-        assertEquals(ResponseEntity.ok().body(Map.of("success", "User logged successfully")) ,loginResponse);
+        UserResponseDTO userResponseDTO = new UserResponseDTO(user.getId(), user.getName(),
+                user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
+                user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount());
+
+        assertEquals(ResponseEntity.ok().body(Map.of("success", userResponseDTO)) ,loginResponse);
     }
 
     @Test
@@ -193,7 +198,7 @@ public class UserServiceTest {
 
         when(userRepository.findByEmail(userLoginDTO.email())).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, String>> loginResponse = userService.doLogin(response, userLoginDTO);
+        ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(response, userLoginDTO);
 
         assertEquals(ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED).body(Map.of("error", "Email or password incorrect")) ,loginResponse);
     }
@@ -207,7 +212,7 @@ public class UserServiceTest {
         when(userRepository.findByEmail(userLoginDTO.email())).thenReturn(Optional.empty());
         when(passwordEncoder.matches(userLoginDTO.password(), user.getPassword())).thenReturn(false);
 
-        ResponseEntity<Map<String, String>> loginResponse = userService.doLogin(response, userLoginDTO);
+        ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(response, userLoginDTO);
 
         assertEquals(ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED).body(Map.of("error", "Email or password incorrect")) ,loginResponse);
     }

@@ -45,8 +45,7 @@ public class SecurityConfigTest {
                         .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(cookie().exists("jwt"))
-                .andExpect(content().string("{\"success\":\"User logged successfully\"}"));
+                .andExpect(cookie().exists("jwt"));
 
         mockMvc.perform(post("/auth/register")
                         .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"123456\", " +
