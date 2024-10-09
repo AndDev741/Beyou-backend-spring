@@ -26,7 +26,7 @@ public class AuthenticationControllerTest {
                 .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(content().string("{\"success\":{\"id\":\"341627d3-bae7-4c14-871b-d876413e8a0a\",\"name\":\"aaa\",\"email\":\"testebeyou@gmail.com\",\"phrase\":null,\"phrase_author\":null,\"constance\":0,\"photo\":null,\"isGoogleAccount\":false}}"))
+                .andExpect(content().string("{\"success\":{\"id\":\"a4498905-9b3b-444e-af3f-092a60aff549\",\"name\":\"fafas\",\"email\":\"testebeyou@gmail.com\",\"phrase\":null,\"phrase_author\":null,\"constance\":0,\"photo\":null,\"isGoogleAccount\":false}}"))
                 .andExpect(cookie().exists("jwt"));
     }
 
