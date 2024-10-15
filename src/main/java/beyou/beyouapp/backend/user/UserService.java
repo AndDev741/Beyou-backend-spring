@@ -28,6 +28,10 @@ public class UserService {
     @Autowired
     private TokenService tokenService;
 
+    public ResponseEntity<String> verifyAuthentication(){
+        return ResponseEntity.ok().body("authenticated");
+    }
+
     public Optional<User> getUser(String email){
         try{
             return userRepository.findByEmail(email);

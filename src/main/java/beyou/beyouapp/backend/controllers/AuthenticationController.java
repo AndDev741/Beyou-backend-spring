@@ -25,6 +25,11 @@ public class AuthenticationController {
     @Autowired
     private UserServiceGoogleOAuth userServiceGoogleOAuth;
 
+    @GetMapping("/verify")
+    public ResponseEntity<String> verifyAuthentication(){
+        return userService.verifyAuthentication();
+    }
+
     //Documentation
     @Operation(summary = "Realize the user login")
     @ApiResponses(value = {
