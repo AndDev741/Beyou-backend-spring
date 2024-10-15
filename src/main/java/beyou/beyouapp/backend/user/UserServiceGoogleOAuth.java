@@ -36,7 +36,7 @@ public class UserServiceGoogleOAuth {
         Optional<User> optionalUser = userRepository.findByEmail(googleUser.email());
 
         if(optionalUser.isPresent()){
-            User user =  new User(googleUser);
+            User user =  optionalUser.get();
             String jwtToken = tokenService.generateToken(user);
             addJwtTokenToResponse(response, jwtToken);
             UserResponseDTO userResponseDTO = new UserResponseDTO(user.getId(), user.getName(),
