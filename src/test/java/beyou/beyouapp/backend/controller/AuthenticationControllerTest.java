@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.controller;
 
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -19,6 +21,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class AuthenticationControllerTest {
     @Autowired
     MockMvc mockMvc;
+
+    @Test
+    public void shouldPassSuccessfullyIfUserAreAuthenticated() throws Exception {
+        Cookie jwt = simulateLogin().getResponse().getCookie("jwt");
+
+        mockMvc.perform(get("/auth/verify")
+                .cookie(jwt))
+                .andExpect(status().isOk());
+    }
 
     @Test
     public void shouldMakeLoginSuccessfully() throws Exception {
@@ -44,6 +55,13 @@ public class AuthenticationControllerTest {
     }
 
     //Error Messages
+
+    @Test
+    public void shouldNotPassIfUserAreNotAuthenticated() throws Exception {
+        mockMvc.perform(get("/auth/verify")
+                        .cookie(new Cookie("jwt", "invalid")))
+                .andExpect(status().isUnauthorized());
+    }
 
     @Test
     public void shouldReturnIncorrectEmailOrPasswordWhenPassedAIncorrectEmail() throws Exception {
@@ -123,5 +141,12 @@ public class AuthenticationControllerTest {
                 .andExpect(content().string("{\"password\":\"Password require a minimum of 6 characters\"}"));
     }
 
-
+    private MvcResult simulateLogin() throws Exception {
+        return mockMvc.perform(post("/auth/login")
+                        .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(cookie().exists("jwt"))
+                .andReturn();
+    }
 }

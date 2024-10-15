@@ -5,6 +5,7 @@ import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
+import org.apache.coyote.Response;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +49,13 @@ public class UserServiceTest {
     void setUp(){
         SecurityContextHolder.clearContext();
         MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void shouldReturnAuthenticatedIfUserAreAuthenticated(){
+        ResponseEntity<String> response = userService.verifyAuthentication();
+
+        assertEquals(response.getBody(), "authenticated");
     }
 
     @Test
