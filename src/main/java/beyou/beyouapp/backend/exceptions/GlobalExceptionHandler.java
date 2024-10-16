@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.exceptions;
 
+import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
+import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -38,6 +40,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpClientErrorException.class)
     public ResponseEntity<Map<String, String>> handleHttpClientErrorException(HttpClientErrorException ex){
         return ResponseEntity.badRequest().body(Map.of("error", "error trying login with google, try again"));
+    }
+
+    @ExceptionHandler(UserNotFound.class)
+    public ResponseEntity<Map<String, String>> handleUserNotFoundException(UserNotFound ex){
+        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(CategoryNotFound.class)
+    public ResponseEntity<Map<String, String>> handleCategoryNotFoundException(CategoryNotFound ex){
+        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
     }
 
 }
