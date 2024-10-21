@@ -23,7 +23,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleIllegalArgumentException(IllegalArgumentException ex){
-        return ResponseEntity.badRequest().body(Map.of("argumentError", ex.getMessage()));
+        return ResponseEntity.badRequest().body(Map.of("argumentError", "Error in a passed parameter"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
