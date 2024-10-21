@@ -47,6 +47,9 @@ public class Category {
      @Column(nullable = false)
      private double xp;
 
+     @Column
+     private double nextLevelXp;
+
      @Column(nullable = false)
      private int level;
 

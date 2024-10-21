@@ -2,6 +2,8 @@ package beyou.beyouapp.backend.domain.category;
 
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
+import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
@@ -16,6 +18,9 @@ import java.util.*;
 public class CategoryService {
     @Autowired
     private CategoryRepository categoryRepository;
+
+    @Autowired
+    private XpByLevelRepository xpByLevelRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -33,7 +38,11 @@ public class CategoryService {
     public ResponseEntity<Map<String, Object>> createCategory(CategoryRequestDTO categoryRequestDTO){
         User user = userRepository.findById(UUID.fromString(categoryRequestDTO.userId()))
                 .orElseThrow(() -> new UserNotFound("User not found"));
+
+        XpByLevel xpByLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.level() + 1);
         Category newCategory = new Category(categoryRequestDTO, user);
+        newCategory.setNextLevelXp(xpByLevel.getXp());
+
         categoryRepository.save(newCategory);
 
         return ResponseEntity.ok().body(Map.of("success", newCategory));
