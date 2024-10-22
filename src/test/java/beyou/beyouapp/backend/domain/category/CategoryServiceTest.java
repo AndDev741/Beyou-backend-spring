@@ -51,7 +51,7 @@ public class CategoryServiceTest {
 
     @Test
     @Transactional
-    public void shouldCreateAUserSuccessfully(){
+    public void shouldCreateACategorySuccessfully(){
         CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO("a4498905-9b3b-444e-af3f-092a60aff549", "Life", "test",
                 "My life in category", 0, 0);
 
@@ -62,6 +62,7 @@ public class CategoryServiceTest {
         assertEquals(categoryRequestDTO.name(), assertCategory.getName());
         assertEquals(categoryRequestDTO.icon(), assertCategory.getIconId());
         assertEquals(categoryRequestDTO.description(), assertCategory.getDescription());
+        assertEquals(50, assertCategory.getNextLevelXp());
     }
 
     @Test
