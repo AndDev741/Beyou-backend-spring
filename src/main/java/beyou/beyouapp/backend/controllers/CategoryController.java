@@ -42,7 +42,7 @@ public class CategoryController {
         return categoryService.deleteCategory(categoryId);
     }
 
-    @PostMapping(value = "/execute")
+    @GetMapping(value = "/execute")
     public void executeLevelAlgorithm(){
         xpByLevelAlgorithm.runXpAlgorithm();
     }
