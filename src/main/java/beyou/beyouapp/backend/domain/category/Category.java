@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.category;
 
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.user.User;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
@@ -40,7 +41,9 @@ public class Category {
      @Column(nullable = false)
      private String iconId;
 
-     private List<String> habits;
+     @ManyToMany(mappedBy = "categories")
+     private List<Habit> habits;
+
      private List<String> tasks;
      private List<String> goals;
 

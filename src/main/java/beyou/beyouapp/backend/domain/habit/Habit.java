@@ -10,10 +10,13 @@ import org.hibernate.annotations.UuidGenerator;
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.user.User;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
@@ -47,9 +50,11 @@ public class Habit {
     @Column(nullable = false)
     private String iconId;
 
-    @Column
-    @OneToMany
-    @JoinColumn(name = "categoryId", nullable = true)
+    @ManyToMany
+    @JoinTable(
+    name = "habit_category",
+    joinColumns = @JoinColumn(name = "habit_id"),
+    inverseJoinColumns = @JoinColumn(name = "category_id"))
     private List<Category> categories;
 
     @Column
@@ -83,7 +88,6 @@ public class Habit {
     @Column(nullable = false)
     private Date updatedAt;
 
-    @Column
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

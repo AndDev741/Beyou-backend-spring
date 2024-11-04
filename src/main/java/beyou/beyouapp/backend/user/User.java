@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
@@ -56,11 +58,13 @@ public class User implements UserDetails {
     @Min(value = 0, message = "The constance cannot be negative")
     private int constance;
 
-    private List<String> categories;
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Category> categories;
 
     private List<String> tasks;
 
-    private List<String> habits;
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Habit> habits;
 
     private List<String> routines;
 
