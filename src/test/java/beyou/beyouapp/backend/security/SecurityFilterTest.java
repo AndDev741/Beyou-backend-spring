@@ -121,7 +121,7 @@ public class SecurityFilterTest {
 
         Exception exception = assertThrows(JwtCookieNotFoundException.class, () -> {
             when(request.getCookies()).thenReturn(new Cookie[]{new Cookie("notValid", "notValidToken")});
-            String tokenNotValid = securityFilter.recoverToken(request);
+            securityFilter.recoverToken(request);
         });
 
         assertEquals("JWT Cookie not Found", exception.getMessage());
