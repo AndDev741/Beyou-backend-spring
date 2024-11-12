@@ -63,7 +63,7 @@ public class HabitServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(habitRepository.findAllByUserId(userId)).thenReturn(habits);
 
-        ArrayList<Habit> assertResponse = habitService.getHabits(userId.toString());
+        ArrayList<Habit> assertResponse = habitService.getHabits(userId);
 
         assertEquals(habits, assertResponse);
     }

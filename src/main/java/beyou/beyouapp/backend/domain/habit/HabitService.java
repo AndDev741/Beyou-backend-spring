@@ -33,8 +33,8 @@ public class HabitService {
         .orElseThrow(() -> new HabitNotFound("Habit not found"));
     }
 
-    public ArrayList<Habit> getHabits(String userId){
-        User user = userRepository.findById(UUID.fromString(userId))
+    public ArrayList<Habit> getHabits(UUID userId){
+        User user = userRepository.findById(userId)
         .orElseThrow(() -> new UserNotFound("User not found"));
 
         try{
