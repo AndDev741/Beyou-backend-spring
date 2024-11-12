@@ -1,6 +1,5 @@
 package beyou.beyouapp.backend.controller;
 
-import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;

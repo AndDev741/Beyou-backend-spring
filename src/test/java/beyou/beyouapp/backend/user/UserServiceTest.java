@@ -5,14 +5,12 @@ import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
-import org.apache.coyote.Response;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -25,7 +23,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 @ExtendWith(SpringExtension.class)
 @SpringBootTest
@@ -112,7 +109,7 @@ public class UserServiceTest {
         Optional<User> newUser = userService.getUser(userRegisterDTO.email());
 
         if(newUser.isPresent()){
-            ResponseEntity response = userService.deleteUser(newUser.get());
+            ResponseEntity<Map<String, String>> response = userService.deleteUser(newUser.get());
             assertEquals(ResponseEntity.ok(Map.of("success", "User deleted successfully")),
                     response);
         }
