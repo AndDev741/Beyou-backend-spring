@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
@@ -36,6 +37,9 @@ public class HabitServiceTest {
 
     @Mock
     private XpByLevelRepository xpByLevelRepository;
+
+    @Mock
+    private CategoryService categoryService;
 
     @InjectMocks
     private HabitService habitService;
@@ -75,9 +79,9 @@ public class HabitServiceTest {
         user.setId(userId);
 
         Category newCategory = new Category();
-        List<Category> categories = new ArrayList<>(List.of(newCategory));
+        List<UUID> categories = new ArrayList<>(List.of(UUID.randomUUID()));
 
-        CreateHabitDTO createHabitDTO = new CreateHabitDTO(userId.toString(), 
+        CreateHabitDTO createHabitDTO = new CreateHabitDTO(userId, 
         "name", "", "", "", 2, 2, 
         categories, 0, 0);
 
@@ -87,6 +91,7 @@ public class HabitServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(xpByLevelRepository.findByLevel(0)).thenReturn(xpByLevel);
         when(xpByLevelRepository.findByLevel(0 + 1)).thenReturn(xpByLevel);
+        when(categoryService.getCategory(categories.get(0))).thenReturn(newCategory);
 
         ResponseEntity<Map<String, String>> assertResponse = habitService.createHabit(createHabitDTO);
 
@@ -99,17 +104,28 @@ public class HabitServiceTest {
         Habit habit = new Habit();
         UUID habitId = UUID.randomUUID();
         habit.setId(habitId);
+        habit.setName("initialName");
+
+        UUID categoryId = UUID.randomUUID();
+        Category newCategory = new Category();
+        newCategory.setId(categoryId);
+        habit.setCategories(List.of(newCategory));
+
+        List<UUID> categories = new ArrayList<>(List.of(categoryId));
 
         EditHabitDTO editHabitDTO = new EditHabitDTO(habitId, "editedName", 
-        "", "", "", 0, 0, null);
+        "", "", "", 0, 0, categories);
         ResponseEntity<Map<String, String>> response = ResponseEntity.ok().body(Map.of("success", "Habit edited successfully"));
 
         when(habitRepository.findById(habitId)).thenReturn(Optional.of(habit));
+        when(categoryService.getCategory(categories.get(0))).thenReturn(newCategory);
 
         ResponseEntity<Map<String, String>> assertResponse = habitService.editHabit(editHabitDTO);
 
         assertEquals(response.getBody(), assertResponse.getBody());
         assertEquals(response.getStatusCode(), assertResponse.getStatusCode());
+        
+        
     }
 
     @Test
