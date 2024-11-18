@@ -25,8 +25,8 @@ public class CategoryService {
     @Autowired
     private UserRepository userRepository;
 
-    public Category getCategory(String categoryId){
-        return categoryRepository.findById(UUID.fromString(categoryId))
+    public Category getCategory(UUID categoryId){
+        return categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new CategoryNotFound("Category not found"));
     }
 
@@ -49,7 +49,7 @@ public class CategoryService {
     }
 
     public ResponseEntity<Map<String, Object>> editCategory(CategoryEditRequestDTO categoryEditRequestDTO){
-        Category categoryToEdit = getCategory(categoryEditRequestDTO.categoryId());
+        Category categoryToEdit = getCategory(UUID.fromString(categoryEditRequestDTO.categoryId()));
 
         categoryToEdit.setName(categoryEditRequestDTO.name());
         categoryToEdit.setDescription(categoryEditRequestDTO.description());
