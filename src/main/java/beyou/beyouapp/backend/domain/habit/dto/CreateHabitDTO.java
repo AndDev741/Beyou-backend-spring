@@ -1,10 +1,9 @@
 package beyou.beyouapp.backend.domain.habit.dto;
 
 import java.util.List;
+import java.util.UUID;
 
-import beyou.beyouapp.backend.domain.category.Category;
-
-public record CreateHabitDTO(String userId, String name, String description, String motivationalPhrase, 
-String iconId, int importance, int dificulty, List<Category> categories, int xp, int level) {
+public record CreateHabitDTO(UUID userId, String name, String description, String motivationalPhrase, 
+String iconId, Integer importance, Integer dificulty, List<UUID> categoriesId, Integer xp, Integer level) {
     
 }
