@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.habit;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -8,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
@@ -28,6 +31,9 @@ public class HabitService {
     @Autowired
     private XpByLevelRepository xpByLevelRepository;
 
+    @Autowired
+    private CategoryService categoryService;
+
     public Habit getHabit(UUID habitId){
         return habitRepository.findById(habitId)
         .orElseThrow(() -> new HabitNotFound("Habit not found"));
@@ -45,13 +51,20 @@ public class HabitService {
     }
 
     public ResponseEntity<Map<String, String>> createHabit(CreateHabitDTO createHabitDTO){
-        User user = userRepository.findById(UUID.fromString(createHabitDTO.userId()))
+        User user = userRepository.findById(createHabitDTO.userId())
         .orElseThrow(() -> new UserNotFound("User not found"));
 
         XpByLevel actualBaseXp = xpByLevelRepository.findByLevel(createHabitDTO.level());
         XpByLevel nextLevelXp = xpByLevelRepository.findByLevel(createHabitDTO.level() + 1);
 
-        Habit newHabit = new Habit(createHabitDTO, nextLevelXp.getXp(), actualBaseXp.getXp(), user);
+        ArrayList<Category> categories = new ArrayList<>();
+        int numberOfCategories = createHabitDTO.categoriesId().size();
+        for(int i = 0; i < numberOfCategories; i++){
+            Category category = categoryService.getCategory(createHabitDTO.categoriesId().get(i));
+            categories.add(category);
+        }
+
+        Habit newHabit = new Habit(createHabitDTO, categories, nextLevelXp.getXp(), actualBaseXp.getXp(), user);
 
         try{
             habitRepository.save(newHabit);
@@ -70,8 +83,15 @@ public class HabitService {
         habitToEdit.setMotivationalPhrase(editHabitDTO.motivationalPhrase());
         habitToEdit.setImportance(editHabitDTO.importance());
         habitToEdit.setDificulty(editHabitDTO.dificulty());
-        habitToEdit.setCategories(editHabitDTO.categories());
 
+        List<Category> categoriesEdit = new ArrayList<>();
+        int numberOfCategories = editHabitDTO.categoriesId().size();
+        for(int i = 0; i < numberOfCategories; i++){
+            Category category = categoryService.getCategory(editHabitDTO.categoriesId().get(i));
+            categoriesEdit.add(category);
+        }
+        
+        habitToEdit.setCategories(categoriesEdit);
         try{
             habitRepository.save(habitToEdit);
             return ResponseEntity.ok().body(Map.of("success", "Habit edited successfully"));
