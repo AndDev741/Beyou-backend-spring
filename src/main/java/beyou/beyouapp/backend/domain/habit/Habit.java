@@ -2,10 +2,13 @@ package beyou.beyouapp.backend.domain.habit;
 
 import java.sql.Date;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import org.hibernate.annotations.UuidGenerator;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
@@ -80,6 +83,9 @@ public class Habit {
     @Column(nullable = false)
     private double actualBaseXp;
 
+    @Column(nullable = true)
+    private int constance;
+
     @Column(nullable = false)
     private Date createdAt;
 
@@ -87,6 +93,7 @@ public class Habit {
     private Date updatedAt;
 
     @ManyToOne
+    @JsonIgnore
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
@@ -102,16 +109,17 @@ public class Habit {
         setUpdatedAt(Date.valueOf(LocalDate.now()));
     }
 
-    public Habit(CreateHabitDTO createHabitDTO, double nextLevelXp, double actualBaseXp, User user){
+    public Habit(CreateHabitDTO createHabitDTO, ArrayList<Category> categories, double nextLevelXp, double actualBaseXp, User user){
         setName(createHabitDTO.name());
         setDescription(createHabitDTO.description());
         setIconId(createHabitDTO.iconId());
         setMotivationalPhrase(createHabitDTO.motivationalPhrase());
-        setCategories(createHabitDTO.categories());
+        setCategories(categories);
         setXp(createHabitDTO.xp());
         setLevel(createHabitDTO.level());
         setImportance(createHabitDTO.importance());
         setDificulty(createHabitDTO.dificulty());
+        setConstance(0);
         setNextLevelXp(nextLevelXp);
         setActualBaseXp(actualBaseXp);
         setUser(user);
