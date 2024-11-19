@@ -4,6 +4,7 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.user.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -40,9 +41,9 @@ public class CategoryControllerTest {
 
     @Test
     void shouldGetCategoriesSuccessfully() throws Exception {
-        String userId = "some-user-id";
+        UUID userId = UUID.randomUUID();
 
-        List<Category> categories = List.of(new Category());
+        List<CategoryResponseDTO> categories = List.of(new CategoryResponseDTO(null, userId.toString(), "", "", null, 0, 0, 0, 0, null));
 
         when(categoryService.getAllCategories(userId)).thenReturn(new ArrayList<>(categories));
 
