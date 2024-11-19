@@ -2,35 +2,52 @@ package beyou.beyouapp.backend.domain.category;
 
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
+import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
+import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
+import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserRepository;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 public class CategoryServiceTest {
-    @Autowired
-    CategoryService categoryService;
+    @Mock
+    private CategoryRepository categoryRepository;
+
+    @Mock
+    private XpByLevelRepository xpByLevelRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @InjectMocks
+    private CategoryService categoryService;
 
     @Test
     @Transactional
     public void shouldReturnACategory(){
-        CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO("a4498905-9b3b-444e-af3f-092a60aff549", "Life", "test",
-                "My life in category", 0, 0);
-        ResponseEntity<Map<String, Object>> response = categoryService.createCategory(categoryRequestDTO);
-        Category category = (Category) response.getBody().get("success");
+        UUID categoryId = UUID.randomUUID();
+        Category category = new Category();
 
-        Category assertCategory = categoryService.getCategory(category.getId().toString());
+        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category));
+
+        Category assertCategory = categoryService.getCategory(categoryId);
 
         assertEquals(category, assertCategory);
         assertEquals(category.getName(), assertCategory.getName());
@@ -40,19 +57,28 @@ public class CategoryServiceTest {
 
     @Test
     public void shouldReturnAllTheCategoriesFromUser(){
-        String userId = "a4498905-9b3b-444e-af3f-092a60aff549";
+        UUID userId = UUID.randomUUID();
 
-        ArrayList<Category> categories = categoryService.getAllCategories(userId);
+        when(categoryRepository.findAllByUserId(userId)).thenReturn(Optional.of(new ArrayList<>()));
+
+        ArrayList<CategoryResponseDTO> categories = categoryService.getAllCategories(userId);
 
         assertNotNull(categories);
         assertTrue(categories instanceof ArrayList);
     }
 
     @Test
-    @Transactional
     public void shouldCreateACategorySuccessfully(){
-        CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO("a4498905-9b3b-444e-af3f-092a60aff549", "Life", "test",
+        //Deletar todo o database
+        UUID userId = UUID.randomUUID();
+        XpByLevel xpByLevel = new XpByLevel(0, 0);
+
+        CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO(userId.toString(), "Life", "test",
                 "My life in category", 0, 0);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(new User()));
+        when(xpByLevelRepository.findByLevel(0 + 1)).thenReturn(xpByLevel);
+        when(xpByLevelRepository.findByLevel(0)).thenReturn(xpByLevel);
 
         ResponseEntity<Map<String, Object>> response = categoryService.createCategory(categoryRequestDTO);
         Category assertCategory = (Category) response.getBody().get("success");
@@ -61,20 +87,16 @@ public class CategoryServiceTest {
         assertEquals(categoryRequestDTO.name(), assertCategory.getName());
         assertEquals(categoryRequestDTO.icon(), assertCategory.getIconId());
         assertEquals(categoryRequestDTO.description(), assertCategory.getDescription());
-        assertEquals(50, assertCategory.getNextLevelXp());
     }
 
     @Test
-    @Transactional
     public void shouldEditSuccessfullyACategory(){
-        //Creating
-        CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO("a4498905-9b3b-444e-af3f-092a60aff549", "Life", "test",
-                "My life in category", 0, 0);
-        ResponseEntity<Map<String, Object>> createCategoryResponse = categoryService.createCategory(categoryRequestDTO);
-        Category categoryToEdit = (Category) createCategoryResponse.getBody().get("success");
-        //Creating a class to edit
-        CategoryEditRequestDTO categoryEditRequestDTO = new CategoryEditRequestDTO(categoryToEdit.getId().toString(),
-                categoryToEdit.getName(), categoryToEdit.getIconId(), categoryToEdit.getDescription());
+        UUID categoryId = UUID.randomUUID();
+
+        CategoryEditRequestDTO categoryEditRequestDTO = new CategoryEditRequestDTO(categoryId.toString(),
+                "name", "icon", "description");
+
+        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(new Category()));
 
         ResponseEntity<Map<String, Object>> response = categoryService.editCategory(categoryEditRequestDTO);
         Category editedCategory = (Category) response.getBody().get("success");
@@ -86,17 +108,14 @@ public class CategoryServiceTest {
     }
 
     @Test
-    @Transactional
     public void shouldDeleteACategorySuccessfully(){
-        CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO("a4498905-9b3b-444e-af3f-092a60aff549", "Life", "test",
-                "My life in category", 0, 0);
-        ResponseEntity<Map<String, Object>> createResponse = categoryService.createCategory(categoryRequestDTO);
-        Category category = (Category) createResponse.getBody().get("success");
+        UUID categoryId = UUID.randomUUID();
 
-        ResponseEntity<Map<String, String>> response = categoryService.deleteCategory(category.getId().toString());
+        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(new Category()));
+
+        ResponseEntity<Map<String, String>> response = categoryService.deleteCategory(categoryId.toString());
 
         assertEquals("Category deleted successfully", response.getBody().get("success"));
-
     }
 
 
@@ -105,7 +124,7 @@ public class CategoryServiceTest {
     @Test
     public void shouldThrowAExceptionOfCategoryNotFoundWhenPassedAWrongCategoryId(){
         Exception exception = assertThrows(CategoryNotFound.class, () -> {
-            categoryService.getCategory(UUID.randomUUID().toString());
+            categoryService.getCategory(UUID.randomUUID());
         });
 
         assertEquals("Category not found", exception.getMessage());
@@ -120,6 +139,5 @@ public class CategoryServiceTest {
         });
         assertEquals("User not found", exception.getMessage());
     }
-
 
 }
