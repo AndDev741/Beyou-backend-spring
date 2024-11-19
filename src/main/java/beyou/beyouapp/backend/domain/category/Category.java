@@ -40,6 +40,7 @@ public class Category {
      @Column(nullable = false)
      private String iconId;
 
+     @JsonIgnore
      @ManyToMany(mappedBy = "categories")
      private List<Habit> habits;
 
@@ -51,6 +52,9 @@ public class Category {
 
      @Column
      private double nextLevelXp;
+
+     @Column
+     private double actualLevelXp;
 
      @Column(nullable = false)
      private int level;

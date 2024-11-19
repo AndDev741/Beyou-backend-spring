@@ -1,9 +1,9 @@
 package beyou.beyouapp.backend.controllers;
 
-import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelAlgorithm;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping(value = "/category")
@@ -23,8 +24,8 @@ public class CategoryController {
     XpByLevelAlgorithm xpByLevelAlgorithm;
 
     @GetMapping("/{userId}")
-    public ArrayList<Category> getCategories(@PathVariable String userId){
-        return categoryService.getAllCategories(userId);
+    public ArrayList<CategoryResponseDTO> getCategories(@PathVariable String userId){
+        return categoryService.getAllCategories(UUID.fromString(userId));
     }
 
     @PostMapping

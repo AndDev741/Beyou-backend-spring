@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.category;
 
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
@@ -30,18 +31,40 @@ public class CategoryService {
                 .orElseThrow(() -> new CategoryNotFound("Category not found"));
     }
 
-    public ArrayList<Category> getAllCategories(String userId){
-        return categoryRepository.findAllByUserId(UUID.fromString(userId))
+    public ArrayList<CategoryResponseDTO> getAllCategories(UUID userId){
+        ArrayList<Category> categories = categoryRepository.findAllByUserId(userId)
                 .orElseThrow(() -> new UserNotFound("User not found"));
+        
+        ArrayList<CategoryResponseDTO> categoryResponse = new ArrayList<>();
+        List<Map<UUID, String>> habitIdAndName = new ArrayList<>();
+        
+        for(int i = 0; i < categories.size(); i++){
+            int habitsInCategorySize = categories.get(i).getHabits().size();
+
+            for(int j = 0; j < habitsInCategorySize; j++){
+                UUID habitId = categories.get(i).getHabits().get(j).getId();
+                String habitName = categories.get(i).getHabits().get(j).getName();
+                habitIdAndName.add(Map.of(habitId, habitName));
+            }
+
+            CategoryResponseDTO categoryResponseDTO = new CategoryResponseDTO(categories.get(i).getId(), categories.get(i).getName(), 
+            categories.get(i).getDescription(), categories.get(i).getIconId(), habitIdAndName, categories.get(i).getXp(), categories.get(i).getNextLevelXp(), categories.get(i).getActualLevelXp(), categories.get(i).getLevel(), categories.get(i).getCreatedAt());
+            categoryResponse.add(categoryResponseDTO);
+        }
+
+        return categoryResponse;
     }
 
     public ResponseEntity<Map<String, Object>> createCategory(CategoryRequestDTO categoryRequestDTO){
         User user = userRepository.findById(UUID.fromString(categoryRequestDTO.userId()))
                 .orElseThrow(() -> new UserNotFound("User not found"));
 
-        XpByLevel xpByLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.level() + 1);
+        XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.level() + 1);
+        XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.level());
+
         Category newCategory = new Category(categoryRequestDTO, user);
-        newCategory.setNextLevelXp(xpByLevel.getXp());
+        newCategory.setNextLevelXp(xpForNextLevel.getXp());
+        newCategory.setActualLevelXp(xpForActualLevel.getXp());
 
         categoryRepository.save(newCategory);
 
