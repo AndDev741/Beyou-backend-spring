@@ -47,8 +47,9 @@ public class CategoryService {
                 habitIdAndName.add(Map.of(habitId, habitName));
             }
 
-            CategoryResponseDTO categoryResponseDTO = new CategoryResponseDTO(categories.get(i).getId(), categories.get(i).getName(), 
-            categories.get(i).getDescription(), categories.get(i).getIconId(), habitIdAndName, categories.get(i).getXp(), categories.get(i).getNextLevelXp(), categories.get(i).getActualLevelXp(), categories.get(i).getLevel(), categories.get(i).getCreatedAt());
+            CategoryResponseDTO categoryResponseDTO = new CategoryResponseDTO(categories.get(i).getId(), 
+            categories.get(i).getName(), categories.get(i).getDescription(), categories.get(i).getIconId(), habitIdAndName, categories.get(i).getXp(), categories.get(i).getNextLevelXp(), 
+            categories.get(i).getActualLevelXp(), categories.get(i).getLevel(), categories.get(i).getCreatedAt());
             categoryResponse.add(categoryResponseDTO);
         }
 
@@ -66,9 +67,12 @@ public class CategoryService {
         newCategory.setNextLevelXp(xpForNextLevel.getXp());
         newCategory.setActualLevelXp(xpForActualLevel.getXp());
 
-        categoryRepository.save(newCategory);
-
-        return ResponseEntity.ok().body(Map.of("success", newCategory));
+        try{
+            categoryRepository.save(newCategory);
+            return ResponseEntity.ok().body(Map.of("success", "Category created successfully"));
+        }catch(Exception e){
+            return ResponseEntity.badRequest().body(Map.of("error", "Error trying create the category"));
+        }
     }
 
     public ResponseEntity<Map<String, Object>> editCategory(CategoryEditRequestDTO categoryEditRequestDTO){
