@@ -4,6 +4,7 @@ import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
@@ -69,7 +70,7 @@ public class UserServiceGoogleOAuth {
         try{
             String response = restTemplate.postForObject(url, requestEntity, String.class);
             ObjectMapper mapper = new ObjectMapper();
-            Map<String, String> tokenResponse = mapper.readValue(response, Map.class);
+            Map<String, String> tokenResponse = mapper.readValue(response, new TypeReference<Map<String, String>>() {});
 
             return tokenResponse.get("access_token");
 
@@ -89,8 +90,15 @@ public class UserServiceGoogleOAuth {
         HttpEntity<String> requestEntity = new HttpEntity<>(httpHeaders);
 
         String url = "https://www.googleapis.com/oauth2/v2/userinfo";
-        ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, requestEntity, Map.class);
-        return response.getBody();
+        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, requestEntity, String.class);
+        
+        try{
+            ObjectMapper objectMapper = new ObjectMapper();
+
+            return objectMapper.readValue(response.getBody(), new TypeReference<Map<String, String>>() {});
+        }catch (Exception e) {
+            throw new RuntimeException("Failed to parse Google profile response", e);
+        }
     }
 
     private void addJwtTokenToResponse(HttpServletResponse response, String token){

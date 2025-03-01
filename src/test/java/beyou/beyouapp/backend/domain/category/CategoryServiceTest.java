@@ -97,6 +97,7 @@ public class CategoryServiceTest {
         when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(new Category()));
 
         ResponseEntity<Map<String, Object>> response = categoryService.editCategory(categoryEditRequestDTO);
+        @SuppressWarnings("null")
         Category editedCategory = (Category) response.getBody().get("success");
 
         assertEquals(HttpStatus.OK ,response.getStatusCode());
@@ -105,6 +106,7 @@ public class CategoryServiceTest {
         assertEquals(categoryEditRequestDTO.icon() ,editedCategory.getIconId());
     }
 
+    @SuppressWarnings("null")
     @Test
     public void shouldDeleteACategorySuccessfully(){
         UUID categoryId = UUID.randomUUID();
