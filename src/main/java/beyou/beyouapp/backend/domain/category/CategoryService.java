@@ -33,7 +33,7 @@ public class CategoryService {
 
     public ArrayList<CategoryResponseDTO> getAllCategories(UUID userId){
         ArrayList<Category> categories = categoryRepository.findAllByUserId(userId)
-                .orElseThrow(() -> new UserNotFound("User not found"));
+                .orElseThrow(() -> new UserNotFound(""));
         
         ArrayList<CategoryResponseDTO> categoryResponse = new ArrayList<>();
         List<Map<UUID, String>> habitIdAndName = new ArrayList<>();
