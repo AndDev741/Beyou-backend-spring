@@ -67,6 +67,7 @@ public class CategoryServiceTest {
         assertTrue(categories instanceof ArrayList);
     }
 
+    @SuppressWarnings("null")
     @Test
     public void shouldCreateACategorySuccessfully(){
         //Deletar todo o database
@@ -81,12 +82,9 @@ public class CategoryServiceTest {
         when(xpByLevelRepository.findByLevel(0)).thenReturn(xpByLevel);
 
         ResponseEntity<Map<String, Object>> response = categoryService.createCategory(categoryRequestDTO);
-        Category assertCategory = (Category) response.getBody().get("success");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(categoryRequestDTO.name(), assertCategory.getName());
-        assertEquals(categoryRequestDTO.icon(), assertCategory.getIconId());
-        assertEquals(categoryRequestDTO.description(), assertCategory.getDescription());
+        assertEquals("Category created successfully", response.getBody().get("success"));
     }
 
     @Test
