@@ -9,7 +9,9 @@ import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
@@ -94,8 +96,11 @@ public class CategoryService {
 
             categoryRepository.delete(category);
             return ResponseEntity.ok().body(Map.of("success", "Category deleted successfully"));
-        }catch (Exception e){
-            return ResponseEntity.badRequest().body(Map.of("error", "errorTryingToDeleteCategory"));
+        }catch(DataIntegrityViolationException exception){
+            return ResponseEntity.badRequest().body(Map.of("error", "This category is used in some habit, please delete it first"));
+        }
+        catch (Exception e){
+            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to delete the category"));
         }
     }
 }
