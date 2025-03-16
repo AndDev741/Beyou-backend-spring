@@ -40,18 +40,15 @@ public class HabitService {
     }
 
     public ArrayList<Habit> getHabits(UUID userId){
-        User user = userRepository.findById(userId)
-        .orElseThrow(() -> new UserNotFound("User not found"));
-
         try{
-            return habitRepository.findAllByUserId(user.getId());
+            return habitRepository.findAllByUserId(userId);
         }catch(Exception e){
             throw e;
         }
     }
 
-    public ResponseEntity<Map<String, String>> createHabit(CreateHabitDTO createHabitDTO){
-        User user = userRepository.findById(createHabitDTO.userId())
+    public ResponseEntity<Map<String, String>> createHabit(CreateHabitDTO createHabitDTO, UUID userId){
+        User user = userRepository.findById(userId)
         .orElseThrow(() -> new UserNotFound("User not found"));
 
         XpByLevel actualBaseXp = xpByLevelRepository.findByLevel(createHabitDTO.level());
@@ -74,9 +71,11 @@ public class HabitService {
         }
     }
 
-    public ResponseEntity<Map<String, String>> editHabit(EditHabitDTO editHabitDTO){
+    public ResponseEntity<Map<String, String>> editHabit(EditHabitDTO editHabitDTO, UUID userId){
         Habit habitToEdit = getHabit(editHabitDTO.habitId());
-
+        if(!habitToEdit.getUser().getId().equals(userId)){
+            throw new HabitNotFound("The habit is not from the user in context");
+        }
         habitToEdit.setName(editHabitDTO.name());
         habitToEdit.setDescription(editHabitDTO.description());
         habitToEdit.setIconId(editHabitDTO.iconId());
@@ -100,9 +99,12 @@ public class HabitService {
         }
     }
 
-    public ResponseEntity<Map<String, String>> deleteHabit(UUID habitId){
+    public ResponseEntity<Map<String, String>> deleteHabit(UUID habitId, UUID userId){
         try{
             Habit habitToDelete = getHabit(habitId);
+            if(!habitToDelete.getUser().getId().equals(userId)){
+                throw new HabitNotFound("The habit are not from the user in context");
+            }
             habitRepository.delete(habitToDelete);
             return ResponseEntity.ok().body(Map.of("success", "habit deleted successfully"));
         }catch(Exception e){

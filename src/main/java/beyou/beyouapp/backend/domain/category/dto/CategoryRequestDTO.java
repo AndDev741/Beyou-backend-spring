@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-public record CategoryRequestDTO (@NotNull @NotEmpty String userId,
+public record CategoryRequestDTO (
                                   @NotEmpty @Size(min = 2, max = 256, message = "Category need a minimum of 2 characters")
                                   String name,
                                   @NotBlank

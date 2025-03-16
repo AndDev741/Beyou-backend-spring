@@ -47,7 +47,7 @@ public class UserService {
             if(passwordEncoder.matches(userLoginDTO.password(), user.getPassword())){
                 String token = tokenService.generateToken(user);
                 addJwtTokenToResponse(response, token);
-                UserResponseDTO userResponse = new UserResponseDTO(user.getId(), user.getName(),
+                UserResponseDTO userResponse = new UserResponseDTO(user.getName(),
                         user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
                         user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount());
                 return ResponseEntity.ok().body(Map.of("success", userResponse));

@@ -18,6 +18,8 @@ import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
+import beyou.beyouapp.backend.security.AuthenticatedUser;
+import beyou.beyouapp.backend.user.User;
 
 @RestController
 @RequestMapping(value = "/habit")
@@ -25,23 +27,30 @@ public class HabitController{
     @Autowired
     private HabitService habitService;
 
-    @GetMapping("/{userId}")
-    public ArrayList<Habit> getHabits(@PathVariable UUID userId){
-        return habitService.getHabits(userId);
+    @Autowired
+    private AuthenticatedUser authenticatedUser;
+
+    @GetMapping("")
+    public ArrayList<Habit> getHabits(){
+        User userAuth = authenticatedUser.getAuthenticatedUser();
+        return habitService.getHabits(userAuth.getId());
     }
 
     @PostMapping()
     public ResponseEntity<Map<String, String>> createHabit(@RequestBody CreateHabitDTO createHabitDTO){
-        return habitService.createHabit(createHabitDTO);
+        User userAuth = authenticatedUser.getAuthenticatedUser();
+        return habitService.createHabit(createHabitDTO, userAuth.getId());
     }
 
     @PutMapping()
     public ResponseEntity<Map<String, String>> editHabit(@RequestBody EditHabitDTO editHabitDTO){
-        return habitService.editHabit(editHabitDTO);
+        User userAuth = authenticatedUser.getAuthenticatedUser();
+        return habitService.editHabit(editHabitDTO, userAuth.getId());
     }
 
     @DeleteMapping(value = "/{habitId}")
     public ResponseEntity<Map<String, String>> deleteHabit(@PathVariable UUID habitId){
-        return habitService.deleteHabit(habitId);
+        User userAuth = authenticatedUser.getAuthenticatedUser();
+        return habitService.deleteHabit(habitId, userAuth.getId());
     }
 }

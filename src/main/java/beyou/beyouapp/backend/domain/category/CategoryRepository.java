@@ -8,4 +8,5 @@ import java.util.UUID;
 
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
     Optional<ArrayList<Category>> findAllByUserId(UUID userId);
+    Optional<Category> findByUserId(UUID userId);
 }

@@ -58,8 +58,8 @@ public class CategoryService {
         return categoryResponse;
     }
 
-    public ResponseEntity<Map<String, Object>> createCategory(CategoryRequestDTO categoryRequestDTO){
-        User user = userRepository.findById(UUID.fromString(categoryRequestDTO.userId()))
+    public ResponseEntity<Map<String, Object>> createCategory(CategoryRequestDTO categoryRequestDTO, UUID userId){
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFound("User not found"));
 
         XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.level() + 1);
@@ -77,8 +77,12 @@ public class CategoryService {
         }
     }
 
-    public ResponseEntity<Map<String, Object>> editCategory(CategoryEditRequestDTO categoryEditRequestDTO){
+    public ResponseEntity<Map<String, Object>> editCategory(CategoryEditRequestDTO categoryEditRequestDTO, UUID userId){
         Category categoryToEdit = getCategory(UUID.fromString(categoryEditRequestDTO.categoryId()));
+        //If are not from the user in context
+        if(!categoryToEdit.getUser().getId().equals(userId)){
+            throw new CategoryNotFound("This category are not from the user in context");
+        }
 
         categoryToEdit.setName(categoryEditRequestDTO.name());
         categoryToEdit.setDescription(categoryEditRequestDTO.description());
@@ -89,15 +93,20 @@ public class CategoryService {
         return ResponseEntity.ok().body(Map.of("success", categoryToEdit));
     }
 
-    public ResponseEntity<Map<String, String>> deleteCategory(String categoryId){
+    public ResponseEntity<Map<String, String>> deleteCategory(String categoryId, UUID userId){
         try{
             Category category = categoryRepository.findById(UUID.fromString(categoryId))
                     .orElseThrow(() -> new CategoryNotFound("Category not found"));
+            if(!category.getUser().getId().equals(userId)){
+                throw new CategoryNotFound("This category are not from the user in context");
+            }
 
             categoryRepository.delete(category);
             return ResponseEntity.ok().body(Map.of("success", "Category deleted successfully"));
         }catch(DataIntegrityViolationException exception){
             return ResponseEntity.badRequest().body(Map.of("error", "This category is used in some habit, please delete it first"));
+        }catch(CategoryNotFound ex){
+            throw new CategoryNotFound(ex.getMessage());
         }
         catch (Exception e){
             return ResponseEntity.badRequest().body(Map.of("error", "Error trying to delete the category"));
