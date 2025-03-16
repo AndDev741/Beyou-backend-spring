@@ -81,7 +81,7 @@ public class HabitServiceTest {
         Category newCategory = new Category();
         List<UUID> categories = new ArrayList<>(List.of(UUID.randomUUID()));
 
-        CreateHabitDTO createHabitDTO = new CreateHabitDTO(userId, 
+        CreateHabitDTO createHabitDTO = new CreateHabitDTO( 
         "name", "", "", "", 2, 2, 
         categories, 0, 0);
 
@@ -93,7 +93,7 @@ public class HabitServiceTest {
         when(xpByLevelRepository.findByLevel(0 + 1)).thenReturn(xpByLevel);
         when(categoryService.getCategory(categories.get(0))).thenReturn(newCategory);
 
-        ResponseEntity<Map<String, String>> assertResponse = habitService.createHabit(createHabitDTO);
+        ResponseEntity<Map<String, String>> assertResponse = habitService.createHabit(createHabitDTO, userId);
 
         assertEquals(response.getBody(), assertResponse.getBody());
         assertEquals(response.getStatusCode(), assertResponse.getStatusCode());
@@ -101,6 +101,10 @@ public class HabitServiceTest {
 
     @Test
     public void shouldEditHabitSuccessfully(){
+        User user = new User();
+        UUID userId = UUID.randomUUID();
+        user.setId(userId);
+
         Habit habit = new Habit();
         UUID habitId = UUID.randomUUID();
         habit.setId(habitId);
@@ -120,7 +124,7 @@ public class HabitServiceTest {
         when(habitRepository.findById(habitId)).thenReturn(Optional.of(habit));
         when(categoryService.getCategory(categories.get(0))).thenReturn(newCategory);
 
-        ResponseEntity<Map<String, String>> assertResponse = habitService.editHabit(editHabitDTO);
+        ResponseEntity<Map<String, String>> assertResponse = habitService.editHabit(editHabitDTO, userId);
 
         assertEquals(response.getBody(), assertResponse.getBody());
         assertEquals(response.getStatusCode(), assertResponse.getStatusCode());
@@ -130,6 +134,10 @@ public class HabitServiceTest {
 
     @Test
     public void shouldDeleteHabitSuccessfully(){
+        User user = new User();
+        UUID userId = UUID.randomUUID();
+        user.setId(userId);
+
         Habit habit = new Habit();
         UUID habitId = UUID.randomUUID();
         habit.setId(habitId);
@@ -137,7 +145,7 @@ public class HabitServiceTest {
 
         when(habitRepository.findById(habitId)).thenReturn(Optional.of(habit));
 
-        ResponseEntity<Map<String, String>> assertResponse = habitService.deleteHabit(habitId);
+        ResponseEntity<Map<String, String>> assertResponse = habitService.deleteHabit(habitId, userId);
 
         assertEquals(response.getBody(), assertResponse.getBody());
         assertEquals(response.getStatusCode(), assertResponse.getStatusCode());

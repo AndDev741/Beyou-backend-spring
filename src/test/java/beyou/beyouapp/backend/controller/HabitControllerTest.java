@@ -47,7 +47,7 @@ public class HabitControllerTest {
 
         when(habitService.getHabits(userId)).thenReturn(new ArrayList<>(habits));
 
-        mockMvc.perform(get("/habit/{userId}", userId))
+        mockMvc.perform(get("/habit"))
                 .andExpect(status().isOk());
     }
 
@@ -56,13 +56,13 @@ public class HabitControllerTest {
         UUID userId = UUID.randomUUID();
         List<UUID> categories = new ArrayList<>(List.of(UUID.randomUUID()));
 
-        CreateHabitDTO createHabitDTO = new CreateHabitDTO(userId, 
+        CreateHabitDTO createHabitDTO = new CreateHabitDTO( 
         "name", "", "", "", 2, 2, 
         categories, 0, 0);
 
         ResponseEntity<Map<String, String>> successResponse = ResponseEntity.ok().body(Map.of("success", "Habit saved successfully"));
 
-        when(habitService.createHabit(any(CreateHabitDTO.class))).thenReturn(successResponse);
+        when(habitService.createHabit(any(CreateHabitDTO.class), userId)).thenReturn(successResponse);
 
         mockMvc.perform(post("/habit")
         .accept(MediaType.APPLICATION_JSON)

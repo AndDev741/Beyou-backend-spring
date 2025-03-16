@@ -58,13 +58,13 @@ public class CategoryControllerTest {
         user.setId(userID);
 
         CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO(
-                userID.toString(), "name", "icon", "desc",
+                "name", "icon", "desc",
                 0, 0);
         Category category = new Category(categoryRequestDTO, user);
 
         ResponseEntity<Map<String, Object>> successResponse = ResponseEntity.ok(Map.of("success", category));
 
-        when(categoryService.createCategory(any(CategoryRequestDTO.class)))
+        when(categoryService.createCategory(any(CategoryRequestDTO.class), userID))
                 .thenReturn(successResponse);
 
         mockMvc.perform(post("/category")
@@ -77,13 +77,17 @@ public class CategoryControllerTest {
 
     @Test
     void shouldEditCategorySuccessfully() throws Exception {
+        UUID userID = UUID.randomUUID();
+        User user = new User();
+        user.setId(userID);
+
         CategoryEditRequestDTO categoryEditRequestDTO = new CategoryEditRequestDTO("id",
                 "name", "icon", "description");
         Category category = new Category();
 
         ResponseEntity<Map<String, Object>> successResponse = ResponseEntity.ok(Map.of("success", category));
 
-        when(categoryService.editCategory(any(CategoryEditRequestDTO.class)))
+        when(categoryService.editCategory(any(CategoryEditRequestDTO.class), userID))
                 .thenReturn(successResponse);
 
         mockMvc.perform(put("/category")
@@ -95,10 +99,14 @@ public class CategoryControllerTest {
 
     @Test
     void shouldDeleteCategorySuccessfully() throws Exception {
+        UUID userID = UUID.randomUUID();
+        User user = new User();
+        user.setId(userID);
+
         String categoryId = "randomId";
         ResponseEntity<Map<String, String>> response = ResponseEntity.ok().body(Map.of("success", "Category deleted successfully"));
 
-        when(categoryService.deleteCategory(anyString()))
+        when(categoryService.deleteCategory(anyString(), userID))
                 .thenReturn(response);
 
         mockMvc.perform(delete("/category/{categoryId}", categoryId))

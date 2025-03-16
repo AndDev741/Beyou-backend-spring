@@ -94,7 +94,7 @@ public class UserServiceTest {
 
         ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(response, userLoginDTO);
 
-        UserResponseDTO userResponseDTO = new UserResponseDTO(user.getId(), user.getName(),
+        UserResponseDTO userResponseDTO = new UserResponseDTO(user.getName(),
                 user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
                 user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount());
 
