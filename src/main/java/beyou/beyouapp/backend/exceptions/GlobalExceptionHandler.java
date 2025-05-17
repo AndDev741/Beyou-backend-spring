@@ -1,6 +1,9 @@
 package beyou.beyouapp.backend.exceptions;
 
 import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
+import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
+import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
+import beyou.beyouapp.backend.exceptions.task.TaskNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -49,6 +52,21 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(CategoryNotFound.class)
     public ResponseEntity<Map<String, String>> handleCategoryNotFoundException(CategoryNotFound ex){
+        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(HabitNotFound.class)
+    public ResponseEntity<Map<String, String>> handleHabitNotFoundException(HabitNotFound ex){
+        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(TaskNotFound.class)
+    public ResponseEntity<Map<String, String>> handleTaskNotFoundException(TaskNotFound ex){
+        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(DiaryRoutineNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleRoutineNotFoundException(DiaryRoutineNotFoundException ex){
         return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
     }
 
