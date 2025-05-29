@@ -6,7 +6,7 @@ import java.util.UUID;
 public record DiaryRoutineResponseDTO(UUID id, String name, String iconId, List<RoutineSectionResponseDTO> routineSections) {
 
     public record RoutineSectionResponseDTO(UUID id, String name, String iconId, String startTime, String endTime,
-                                            List<TaskGroupResponseDTO> taskGroups, List<HabitGroupResponseDTO> habitGroups) {
+                                            List<TaskGroupResponseDTO> taskGroup, List<HabitGroupResponseDTO> habitGroup) {
 
         public record TaskGroupResponseDTO(UUID id, UUID taskId, String startTime) {
         }
