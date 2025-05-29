@@ -10,17 +10,22 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSect
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
+import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO.RoutineSectionResponseDTO.HabitGroupResponseDTO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class DiaryRoutineService {
 
@@ -30,32 +35,40 @@ public class DiaryRoutineService {
     private final HabitService habitService;
 
     @Transactional(readOnly = true)
-    public DiaryRoutineResponseDTO getDiaryRoutineById(UUID id) {
+    public DiaryRoutineResponseDTO getDiaryRoutineById(UUID id, UUID userId) {
         DiaryRoutine diaryRoutine = diaryRoutineRepository.findById(id)
                 .orElseThrow(() -> new DiaryRoutineNotFoundException(id));
+        if(!diaryRoutine.getUser().getId().equals(userId)){
+            throw new DiaryRoutineNotFoundException(id);
+        }
         return mapToResponseDTO(diaryRoutine);
     }
 
     @Transactional(readOnly = true)
-    public List<DiaryRoutineResponseDTO> getAllDiaryRoutines() {
-        return diaryRoutineRepository.findAll().stream()
+    public List<DiaryRoutineResponseDTO> getAllDiaryRoutines(UUID userId) {
+        return diaryRoutineRepository.findAllByUserId(userId).stream()
                 .map(this::mapToResponseDTO)
                 .collect(Collectors.toList());
     }
 
     @Transactional
-    public DiaryRoutineResponseDTO createDiaryRoutine(DiaryRoutineRequestDTO dto) {
+    public DiaryRoutineResponseDTO createDiaryRoutine(DiaryRoutineRequestDTO dto, User user) {
         validateRequestDTO(dto);
         DiaryRoutine diaryRoutine = mapToEntity(dto);
+        diaryRoutine.setUser(user);
         DiaryRoutine saved = diaryRoutineRepository.save(diaryRoutine);
         return mapToResponseDTO(saved);
     }
 
     @Transactional
-    public DiaryRoutineResponseDTO updateDiaryRoutine(UUID id, DiaryRoutineRequestDTO dto) {
+    public DiaryRoutineResponseDTO updateDiaryRoutine(UUID id, DiaryRoutineRequestDTO dto, UUID userId) {
         validateRequestDTO(dto);
         DiaryRoutine existing = diaryRoutineRepository.findById(id)
                 .orElseThrow(() -> new DiaryRoutineNotFoundException(id));
+
+        if(!existing.getUser().getId().equals(userId)){
+            throw new DiaryRoutineNotFoundException(id);
+        }
 
         existing.setName(dto.name());
         existing.setIconId(dto.iconId());
@@ -68,10 +81,13 @@ public class DiaryRoutineService {
     }
 
     @Transactional
-    public void deleteDiaryRoutine(UUID id) {
-        if (!diaryRoutineRepository.existsById(id)) {
+    public void deleteDiaryRoutine(UUID id, UUID userId) {
+        Optional<DiaryRoutine> diaryRoutineToDelete = diaryRoutineRepository.findById(id);
+
+        if (diaryRoutineToDelete.isEmpty() || !diaryRoutineToDelete.get().getUser().getId().equals(userId)) {
             throw new DiaryRoutineNotFoundException(id);
         }
+
         diaryRoutineRepository.deleteById(id);
     }
 

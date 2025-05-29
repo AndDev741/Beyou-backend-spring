@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.habit.Habit;
+import beyou.beyouapp.backend.domain.routine.Routine;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
@@ -66,7 +67,8 @@ public class User implements UserDetails {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Habit> habits;
 
-    private List<String> routines;
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Routine> routines;
 
     private List<String> goals;
 

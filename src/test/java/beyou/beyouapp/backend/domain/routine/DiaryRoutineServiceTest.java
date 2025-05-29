@@ -16,6 +16,8 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDT
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
+import beyou.beyouapp.backend.user.User;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,10 +55,14 @@ class DiaryRoutineServiceTest {
     private Task mockedTask;
     private Habit mockedHabit;
     private UUID routineId;
+    private UUID userId;
 
     @BeforeEach
     void setUp() {
         routineId = UUID.randomUUID();
+        userId = UUID.randomUUID();
+        User user = new User();
+        user.setId(userId);
 
         validRequestDTO = new DiaryRoutineRequestDTO(
                 "Rotina Diária",
@@ -76,6 +82,7 @@ class DiaryRoutineServiceTest {
         diaryRoutine.setId(routineId);
         diaryRoutine.setName(validRequestDTO.name());
         diaryRoutine.setIconId(validRequestDTO.iconId());
+        diaryRoutine.setUser(user);
         RoutineSection section = new RoutineSection();
         section.setId(UUID.randomUUID());
         section.setName(validRequestDTO.routineSections().get(0).name());
@@ -117,7 +124,7 @@ class DiaryRoutineServiceTest {
         when(taskService.getTask(any(UUID.class))).thenReturn(mockedTask);
         when(habitService.getHabit(any(UUID.class))).thenReturn(mockedHabit);
 
-        DiaryRoutineResponseDTO response = diaryRoutineService.createDiaryRoutine(validRequestDTO);
+        DiaryRoutineResponseDTO response = diaryRoutineService.createDiaryRoutine(validRequestDTO, new User());
 
         assertNotNull(response);
         assertEquals(routineId, response.id());
@@ -138,7 +145,7 @@ class DiaryRoutineServiceTest {
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> diaryRoutineService.createDiaryRoutine(invalidDTO));
+                () -> diaryRoutineService.createDiaryRoutine(invalidDTO, new User()));
         assertEquals("DiaryRoutine name cannot be null or empty", exception.getMessage());
         verify(diaryRoutineRepository, never()).save(any());
     }
@@ -160,7 +167,7 @@ class DiaryRoutineServiceTest {
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> diaryRoutineService.createDiaryRoutine(invalidDTO));
+                () -> diaryRoutineService.createDiaryRoutine(invalidDTO, new User()));
         assertEquals("End time must be after start time for routine section: Manhã Produtiva",
                 exception.getMessage());
         verify(diaryRoutineRepository, never()).save(any());
@@ -171,7 +178,7 @@ class DiaryRoutineServiceTest {
     void shouldGetDiaryRoutineByIdSuccessfully() {
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
 
-        DiaryRoutineResponseDTO response = diaryRoutineService.getDiaryRoutineById(routineId);
+        DiaryRoutineResponseDTO response = diaryRoutineService.getDiaryRoutineById(routineId, userId);
 
         assertNotNull(response);
         assertEquals(routineId, response.id());
@@ -186,7 +193,7 @@ class DiaryRoutineServiceTest {
 
         DiaryRoutineNotFoundException exception = assertThrows(
                 DiaryRoutineNotFoundException.class,
-                () -> diaryRoutineService.getDiaryRoutineById(routineId));
+                () -> diaryRoutineService.getDiaryRoutineById(routineId, userId));
         assertEquals("DiaryRoutine not found with id: " + routineId, exception.getMessage());
         verify(diaryRoutineRepository, times(1)).findById(routineId);
     }
@@ -194,14 +201,14 @@ class DiaryRoutineServiceTest {
     @Test
     @DisplayName("Should get all diary routines successfully")
     void shouldGetAllDiaryRoutinesSuccessfully() {
-        when(diaryRoutineRepository.findAll()).thenReturn(List.of(diaryRoutine));
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(diaryRoutine));
 
-        List<DiaryRoutineResponseDTO> response = diaryRoutineService.getAllDiaryRoutines();
+        List<DiaryRoutineResponseDTO> response = diaryRoutineService.getAllDiaryRoutines(userId);
 
         assertNotNull(response);
         assertEquals(1, response.size());
         assertEquals(routineId, response.get(0).id());
-        verify(diaryRoutineRepository, times(1)).findAll();
+        verify(diaryRoutineRepository, times(1)).findAllByUserId(userId);
     }
 
     @Test
@@ -218,11 +225,13 @@ class DiaryRoutineServiceTest {
                                 LocalTime.of(18, 0),
                                 List.of(),
                                 List.of())));
-
+        User user = new User();
+        user.setId(userId);
         DiaryRoutine updatedRoutine = new DiaryRoutine();
         updatedRoutine.setId(routineId);
         updatedRoutine.setName(updatedDTO.name());
         updatedRoutine.setIconId(updatedDTO.iconId());
+        updatedRoutine.setUser(user);
         RoutineSection updatedSection = new RoutineSection();
         updatedSection.setId(UUID.randomUUID());
         updatedSection.setName(updatedDTO.routineSections().get(0).name());
@@ -235,7 +244,7 @@ class DiaryRoutineServiceTest {
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
         when(diaryRoutineRepository.save(any(DiaryRoutine.class))).thenReturn(updatedRoutine);
 
-        DiaryRoutineResponseDTO response = diaryRoutineService.updateDiaryRoutine(routineId, updatedDTO);
+        DiaryRoutineResponseDTO response = diaryRoutineService.updateDiaryRoutine(routineId, updatedDTO, userId);
 
         assertNotNull(response);
         assertEquals(routineId, response.id());
@@ -253,7 +262,7 @@ class DiaryRoutineServiceTest {
 
         DiaryRoutineNotFoundException exception = assertThrows(
                 DiaryRoutineNotFoundException.class,
-                () -> diaryRoutineService.updateDiaryRoutine(routineId, validRequestDTO));
+                () -> diaryRoutineService.updateDiaryRoutine(routineId, validRequestDTO, userId));
         assertEquals("DiaryRoutine not found with id: " + routineId, exception.getMessage());
         verify(diaryRoutineRepository, times(1)).findById(routineId);
         verify(diaryRoutineRepository, never()).save(any());
@@ -264,7 +273,7 @@ class DiaryRoutineServiceTest {
     void shouldDeleteDiaryRoutineSuccessfully() {
         when(diaryRoutineRepository.existsById(routineId)).thenReturn(true);
 
-        diaryRoutineService.deleteDiaryRoutine(routineId);
+        diaryRoutineService.deleteDiaryRoutine(routineId, userId);
 
         verify(diaryRoutineRepository, times(1)).existsById(routineId);
         verify(diaryRoutineRepository, times(1)).deleteById(routineId);
@@ -277,7 +286,7 @@ class DiaryRoutineServiceTest {
 
         DiaryRoutineNotFoundException exception = assertThrows(
                 DiaryRoutineNotFoundException.class,
-                () -> diaryRoutineService.deleteDiaryRoutine(routineId));
+                () -> diaryRoutineService.deleteDiaryRoutine(routineId, userId));
         assertEquals("DiaryRoutine not found with id: " + routineId, exception.getMessage());
         verify(diaryRoutineRepository, times(1)).existsById(routineId);
         verify(diaryRoutineRepository, never()).deleteById(any());
