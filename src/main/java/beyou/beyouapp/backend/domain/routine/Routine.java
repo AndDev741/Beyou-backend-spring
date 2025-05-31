@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.user.User;
 
 @Entity
@@ -33,5 +34,10 @@ public abstract class Routine {
     @JsonIgnore
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @OneToOne
+    @JsonIgnore
+    @JoinColumn(name = "schedule_id", nullable = true)
+    private Schedule schedule;
 
 }

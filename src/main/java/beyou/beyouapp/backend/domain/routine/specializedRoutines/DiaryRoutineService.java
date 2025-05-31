@@ -37,17 +37,44 @@ public class DiaryRoutineService {
     @Transactional(readOnly = true)
     public DiaryRoutineResponseDTO getDiaryRoutineById(UUID id, UUID userId) {
         DiaryRoutine diaryRoutine = diaryRoutineRepository.findById(id)
-                .orElseThrow(() -> new DiaryRoutineNotFoundException(id));
+                .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
         if(!diaryRoutine.getUser().getId().equals(userId)){
-            throw new DiaryRoutineNotFoundException(id);
+            throw new DiaryRoutineNotFoundException("The user trying to get its different of the one in the object");
         }
         return mapToResponseDTO(diaryRoutine);
+    }
+
+    @Transactional(readOnly = true)
+    public DiaryRoutine getDiaryRoutineByScheduleId(UUID scheduleId, UUID userId) {
+        DiaryRoutine diaryRoutine = diaryRoutineRepository.findByScheduleId(scheduleId)
+                .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
+
+        if(!diaryRoutine.getUser().getId().equals(userId)){
+            throw new DiaryRoutineNotFoundException("The user trying to get its different of the one in the object");
+        }
+        return diaryRoutine;
+    }
+
+    @Transactional(readOnly = true)
+    public DiaryRoutine getDiaryRoutineModelById(UUID id, UUID userId) {
+        DiaryRoutine diaryRoutine = diaryRoutineRepository.findById(id)
+                .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
+        if(!diaryRoutine.getUser().getId().equals(userId)){
+            throw new DiaryRoutineNotFoundException("The user trying to get its different of the one in the object");
+        }
+        return diaryRoutine;
     }
 
     @Transactional(readOnly = true)
     public List<DiaryRoutineResponseDTO> getAllDiaryRoutines(UUID userId) {
         return diaryRoutineRepository.findAllByUserId(userId).stream()
                 .map(this::mapToResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<DiaryRoutine> getAllDiaryRoutinesModels(UUID userId) {
+        return diaryRoutineRepository.findAllByUserId(userId).stream()
                 .collect(Collectors.toList());
     }
 
@@ -64,10 +91,10 @@ public class DiaryRoutineService {
     public DiaryRoutineResponseDTO updateDiaryRoutine(UUID id, DiaryRoutineRequestDTO dto, UUID userId) {
         validateRequestDTO(dto);
         DiaryRoutine existing = diaryRoutineRepository.findById(id)
-                .orElseThrow(() -> new DiaryRoutineNotFoundException(id));
+                .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
 
         if(!existing.getUser().getId().equals(userId)){
-            throw new DiaryRoutineNotFoundException(id);
+            throw new DiaryRoutineNotFoundException("The user trying to get its different of the one in the object");
         }
 
         existing.setName(dto.name());
@@ -81,11 +108,16 @@ public class DiaryRoutineService {
     }
 
     @Transactional
+    public void updateSchedule(DiaryRoutine routine){
+        diaryRoutineRepository.save(routine);
+    }
+
+    @Transactional
     public void deleteDiaryRoutine(UUID id, UUID userId) {
         Optional<DiaryRoutine> diaryRoutineToDelete = diaryRoutineRepository.findById(id);
 
         if (diaryRoutineToDelete.isEmpty() || !diaryRoutineToDelete.get().getUser().getId().equals(userId)) {
-            throw new DiaryRoutineNotFoundException(id);
+            throw new DiaryRoutineNotFoundException("The user trying to get its different of the one in the object");
         }
 
         diaryRoutineRepository.deleteById(id);
