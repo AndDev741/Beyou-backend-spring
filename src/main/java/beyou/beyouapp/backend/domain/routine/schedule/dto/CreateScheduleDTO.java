@@ -8,6 +8,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
 public record CreateScheduleDTO(
-    @NotEmpty Set<@Pattern(regexp = "^(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)$") String> days,
+    @NotEmpty Set<@Pattern(regexp = "^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$") String> days,
     @NotNull UUID routineId
 ) {}

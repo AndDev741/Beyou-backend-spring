@@ -36,7 +36,6 @@ public abstract class Routine {
     private User user;
 
     @OneToOne
-    @JsonIgnore
     @JoinColumn(name = "schedule_id", nullable = true)
     private Schedule schedule;
 

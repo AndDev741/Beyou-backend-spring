@@ -3,7 +3,9 @@ package beyou.beyouapp.backend.domain.routine.specializedRoutines.dto;
 import java.util.List;
 import java.util.UUID;
 
-public record DiaryRoutineResponseDTO(UUID id, String name, String iconId, List<RoutineSectionResponseDTO> routineSections) {
+import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
+
+public record DiaryRoutineResponseDTO(UUID id, String name, String iconId, List<RoutineSectionResponseDTO> routineSections, Schedule schedule) {
 
     public record RoutineSectionResponseDTO(UUID id, String name, String iconId, String startTime, String endTime,
                                             List<TaskGroupResponseDTO> taskGroup, List<HabitGroupResponseDTO> habitGroup) {

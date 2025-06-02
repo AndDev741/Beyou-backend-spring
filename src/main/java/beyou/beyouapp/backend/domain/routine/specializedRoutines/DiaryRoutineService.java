@@ -134,8 +134,8 @@ public class DiaryRoutineService {
             if (section.name() == null || section.name().trim().isEmpty()) {
                 throw new IllegalArgumentException("Routine section name cannot be null or empty");
             }
-            if (section.starTime() != null && section.endTime() != null
-                    && section.endTime().isBefore(section.starTime())) {
+            if (section.startTime() != null && section.endTime() != null
+                    && section.endTime().isBefore(section.startTime())) {
                 throw new IllegalArgumentException(
                         "End time must be after start time for routine section: " + section.name());
             }
@@ -156,7 +156,7 @@ public class DiaryRoutineService {
             RoutineSection section = new RoutineSection();
             section.setName(dto.name());
             section.setIconId(dto.iconId());
-            section.setStartTime(dto.starTime());
+            section.setStartTime(dto.startTime());
             section.setEndTime(dto.endTime());
             section.setRoutine(diaryRoutine);
 
@@ -220,7 +220,8 @@ public class DiaryRoutineService {
                 entity.getId(),
                 entity.getName(),
                 entity.getIconId(),
-                sectionDTOs);
+                sectionDTOs,
+                entity.getSchedule());
     }
 
     // TODO: Add methods for gamification, e.g., calculatePoints(UUID routineId) to
