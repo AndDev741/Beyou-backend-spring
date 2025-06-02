@@ -87,7 +87,7 @@ class DiaryRoutineServiceTest {
         section.setId(UUID.randomUUID());
         section.setName(validRequestDTO.routineSections().get(0).name());
         section.setIconId(validRequestDTO.routineSections().get(0).iconId());
-        section.setStartTime(validRequestDTO.routineSections().get(0).starTime());
+        section.setStartTime(validRequestDTO.routineSections().get(0).startTime());
         section.setEndTime(validRequestDTO.routineSections().get(0).endTime());
         TaskGroup taskGroup = new TaskGroup();
         taskGroup.setId(UUID.randomUUID());
@@ -236,7 +236,7 @@ class DiaryRoutineServiceTest {
         updatedSection.setId(UUID.randomUUID());
         updatedSection.setName(updatedDTO.routineSections().get(0).name());
         updatedSection.setIconId(updatedDTO.routineSections().get(0).iconId());
-        updatedSection.setStartTime(updatedDTO.routineSections().get(0).starTime());
+        updatedSection.setStartTime(updatedDTO.routineSections().get(0).startTime());
         updatedSection.setEndTime(updatedDTO.routineSections().get(0).endTime());
         updatedSection.setRoutine(updatedRoutine);
         updatedRoutine.setRoutineSections(List.of(updatedSection));
