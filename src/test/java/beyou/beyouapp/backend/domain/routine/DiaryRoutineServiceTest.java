@@ -93,10 +93,10 @@ class DiaryRoutineServiceTest {
         taskGroup.setId(UUID.randomUUID());
 
         mockedTask = new Task();
-        mockedTask.setId(validRequestDTO.routineSections().get(0).taskGroup().get(0).TaskId());
+        mockedTask.setId(validRequestDTO.routineSections().get(0).taskGroup().get(0).taskId());
 
         Task task = new Task();
-        task.setId(validRequestDTO.routineSections().get(0).taskGroup().get(0).TaskId());
+        task.setId(validRequestDTO.routineSections().get(0).taskGroup().get(0).taskId());
         taskGroup.setTask(task);
         taskGroup.setStartTime(validRequestDTO.routineSections().get(0).taskGroup().get(0).startTime());
         taskGroup.setRoutineSection(section);

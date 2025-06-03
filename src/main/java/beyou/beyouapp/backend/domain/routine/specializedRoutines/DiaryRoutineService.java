@@ -162,7 +162,8 @@ public class DiaryRoutineService {
 
             List<TaskGroup> taskGroups = dto.taskGroup() != null ? dto.taskGroup().stream().map(taskDto -> {
                 TaskGroup taskGroup = new TaskGroup();
-                Task task = taskService.getTask(taskDto.TaskId());
+                log.info(null == taskDto.taskId() ? "Task ID is null" : "Task ID: {}", taskDto.taskId());
+                Task task = taskService.getTask(taskDto.taskId());
 
                 taskGroup.setTask(task);
                 taskGroup.setStartTime(taskDto.startTime());
