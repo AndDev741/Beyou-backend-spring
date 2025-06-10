@@ -18,8 +18,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -121,6 +124,28 @@ public class DiaryRoutineService {
         }
 
         diaryRoutineRepository.deleteById(id);
+    }
+
+    @Transactional
+    public DiaryRoutineResponseDTO getTodayRoutineScheduled(UUID userId){
+        List<DiaryRoutine> diaryRoutines = diaryRoutineRepository.findAllByUserId(userId);
+
+        DiaryRoutine todaysRoutine = null;
+        String dayOfWeek = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+        log.info("Day: {} ", dayOfWeek);
+        for (DiaryRoutine diaryRoutine : diaryRoutines) {
+            if(diaryRoutine.getSchedule().getDays().contains(dayOfWeek)){
+                log.info("Routine {} are scheduled for today", diaryRoutine.getName());
+                todaysRoutine = diaryRoutine;
+            }
+        }
+
+        if(todaysRoutine == null){
+            throw new DiaryRoutineNotFoundException("No Routine are scheduled for today");
+        }else{
+            return mapToResponseDTO(todaysRoutine);
+        }
+
     }
 
     private void validateRequestDTO(DiaryRoutineRequestDTO dto) {

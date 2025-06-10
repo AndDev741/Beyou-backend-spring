@@ -71,4 +71,10 @@ public class RoutineController {
         diaryRoutineService.deleteDiaryRoutine(id, userAuth.getId());
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/today")
+    public ResponseEntity<DiaryRoutineResponseDTO> getTodayRoutineScheduled(){
+        User userAuth = authenticatedUser.getAuthenticatedUser();
+        return ResponseEntity.ok().body(diaryRoutineService.getTodayRoutineScheduled(userAuth.getId()));
+    }
 }
