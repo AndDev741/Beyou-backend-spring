@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.routine;
 
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
+import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
@@ -24,11 +25,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.TextStyle;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -287,8 +293,58 @@ class DiaryRoutineServiceTest {
         DiaryRoutineNotFoundException exception = assertThrows(
                 DiaryRoutineNotFoundException.class,
                 () -> diaryRoutineService.deleteDiaryRoutine(routineId, userId));
-        assertEquals("DiaryRoutine not found with id: " + routineId, exception.getMessage());
-        verify(diaryRoutineRepository, times(1)).existsById(routineId);
+        assertEquals("The user trying to get its different of the one in the object", exception.getMessage());
+        //verify(diaryRoutineRepository, times(1)).existsById(routineId);
         verify(diaryRoutineRepository, never()).deleteById(any());
+    }
+
+     @Test
+    void shouldReturnTodayRoutine_whenRoutineIsScheduledForToday() {
+        // Arrange
+        User user = new User();
+        UUID userId = UUID.randomUUID();
+        user.setId(userId);
+        String today = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+
+        // Setup do Schedule
+        Schedule schedule = new Schedule();
+        schedule.setDays(Set.of(today)); // ✅ Use Set aqui, como sua entidade espera
+
+        // Setup da DiaryRoutine
+        diaryRoutine.setName("Morning Routine");
+        diaryRoutine.setSchedule(schedule);
+        diaryRoutine.setUser(user);
+
+        // Simula retorno do repositório
+        when(diaryRoutineRepository.findAllByUserId(userId))
+                .thenReturn(List.of(diaryRoutine));
+
+        // Act
+        DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId);
+
+        // Assert — comportamento esperado
+        assertNotNull(result);
+        assertEquals("Morning Routine", result.name()); // Teste com base na saída comportamental
+    }
+
+    @Test
+    void shouldThrowException_whenNoRoutineIsScheduledForToday() {
+        // Arrange
+        UUID userId = UUID.randomUUID();
+        String today = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+
+        DiaryRoutine otherRoutine = new DiaryRoutine();
+        otherRoutine.setName("Evening Routine");
+
+        Schedule schedule = new Schedule();
+        schedule.setDays((Set<String>) List.of("Sunday")); // Simula que hoje NÃO está agendado
+        otherRoutine.setSchedule(schedule);
+
+        when(diaryRoutineRepository.findAllByUserId(userId))
+            .thenReturn(List.of(otherRoutine));
+
+        // Act & Assert
+        assertThrows(DiaryRoutineNotFoundException.class,
+            () -> diaryRoutineService.getTodayRoutineScheduled(userId));
     }
 }

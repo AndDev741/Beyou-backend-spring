@@ -26,7 +26,7 @@ public abstract class BaseCheck {
 
     private LocalTime checkTime;
 
-    private boolean checked;
+    private boolean checked = false;
 
     private double xpGenerated;
 }
