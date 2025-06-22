@@ -105,4 +105,8 @@ public class TaskService {
             return ResponseEntity.badRequest().body(Map.of("error", "Error trying to delete task"));
         }
     }
+
+    public Task editTask(Task taskToEdit){
+        return taskRepository.save(taskToEdit);
+    }
 }

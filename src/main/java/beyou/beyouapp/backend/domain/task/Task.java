@@ -43,9 +43,9 @@ public class Task {
 
     String iconId;
 
-    Number importance;
+    Integer importance;
 
-    Number dificulty;
+    Integer dificulty;
 
     @ManyToMany
     @JoinTable(

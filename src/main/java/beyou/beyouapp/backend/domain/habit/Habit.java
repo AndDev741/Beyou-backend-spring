@@ -62,10 +62,10 @@ public class Habit {
     private List<String> routines;
 
     @Column(nullable = false)
-    private int importance;
+    private Integer importance;
 
     @Column(nullable = false)
-    private int dificulty;
+    private Integer dificulty;
 
     @Column
     @Size(max = 256, message="The max of characters in motivation Phrase are 256")
@@ -78,10 +78,10 @@ public class Habit {
     private int level;
 
     @Column(nullable = false)
-    private double nextLevelXp;
+    private Double nextLevelXp;
 
     @Column(nullable = false)
-    private double actualBaseXp;
+    private Double actualBaseXp;
 
     @Column(nullable = true)
     private int constance;

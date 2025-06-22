@@ -19,10 +19,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(
-    name = "schedules",
-    uniqueConstraints = @UniqueConstraint(columnNames = {"schedule_id", "day"})
-)
+@Table(name = "schedules")
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter

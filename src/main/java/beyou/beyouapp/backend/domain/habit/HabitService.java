@@ -111,4 +111,8 @@ public class HabitService {
             return ResponseEntity.badRequest().body(Map.of("error", "errorTringDelete"));
         }
     }
+
+    public Habit editEntity(Habit habitToEdit){
+        return habitRepository.save(habitToEdit);
+    }
 }

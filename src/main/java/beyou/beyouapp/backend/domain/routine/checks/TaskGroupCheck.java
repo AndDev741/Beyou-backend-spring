@@ -5,6 +5,9 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.TaskGroup;
 
 @Entity
@@ -15,6 +18,7 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.TaskGroup;
 public class TaskGroupCheck extends BaseCheck {
 
     @ManyToOne
+    @JsonIgnore
     @JoinColumn(name = "task_group_id", nullable = false)
     private TaskGroup taskGroup;
 }
