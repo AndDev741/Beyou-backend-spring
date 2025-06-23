@@ -1,8 +1,11 @@
 package beyou.beyouapp.backend.domain.routine.specializedRoutines.dto;
 
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 
-public record HabitGroupDTO(UUID habitId, LocalTime startTime)  {
+import beyou.beyouapp.backend.domain.routine.checks.HabitGroupCheck;
+
+public record HabitGroupDTO(UUID id, UUID habitId, LocalTime startTime, List<HabitGroupCheck> habitGroupCheck)  {
 
 }

@@ -189,6 +189,10 @@ public class DiaryRoutineService {
     private List<RoutineSection> mapToRoutineSections(List<RoutineSectionRequestDTO> dtos, DiaryRoutine diaryRoutine) {
         return dtos.stream().map(dto -> {
             RoutineSection section = new RoutineSection();
+            log.info("ID OF SECTION ITEM =» {}", dto.id());
+            if(dto.id() != null){
+                section.setId(dto.id());
+            }
             section.setName(dto.name());
             section.setIconId(dto.iconId());
             section.setStartTime(dto.startTime());
@@ -200,6 +204,15 @@ public class DiaryRoutineService {
                 log.info(null == taskDto.taskId() ? "Task ID is null" : "Task ID: {}", taskDto.taskId());
                 Task task = taskService.getTask(taskDto.taskId());
 
+                if(taskDto.id() != null){
+                    taskGroup.setId(taskDto.id());
+                }
+                
+                if (taskDto.taskGroupCheck() != null) {
+                    List<TaskGroupCheck> checks = taskGroup.getTaskGroupChecks(); 
+                    checks.addAll(taskDto.taskGroupCheck());
+                    taskGroup.setTaskGroupChecks(checks);
+                }                
                 taskGroup.setTask(task);
                 taskGroup.setStartTime(taskDto.startTime());
                 taskGroup.setRoutineSection(section);
@@ -213,6 +226,21 @@ public class DiaryRoutineService {
                 HabitGroup habitGroup = new HabitGroup();
                 Habit habit = habitService.getHabit(habitDto.habitId());
 
+                for (RoutineSection routineSection : diaryRoutine.getRoutineSections()) {
+                    List<HabitGroup> actualHabitGroups = routineSection.getHabitGroups();
+                    for (int i = 0; i < actualHabitGroups.size(); i++) {
+                        actualHabitGroups.get(i).getHabitGroupChecks().clear();
+                    }
+                }
+
+                if(habitDto.id() != null){
+                    habitGroup.setId(habitDto.id());
+                }
+                if (habitDto.habitGroupCheck() != null) {
+                    List<HabitGroupCheck> checks = habitGroup.getHabitGroupChecks();
+                    checks.addAll(habitDto.habitGroupCheck());
+                    habitGroup.setHabitGroupChecks(checks);
+                }
                 habitGroup.setHabit(habit);
                 habitGroup.setStartTime(habitDto.startTime());
                 habitGroup.setRoutineSection(section);

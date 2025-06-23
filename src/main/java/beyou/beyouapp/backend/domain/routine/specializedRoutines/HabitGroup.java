@@ -20,6 +20,6 @@ public class HabitGroup extends ItemGroup {
     @JoinColumn(name = "habit_id", nullable = false)
     private Habit habit;
 
-    @OneToMany(mappedBy = "habitGroup", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "habitGroup", cascade = CascadeType.ALL, orphanRemoval = false)
     private List<HabitGroupCheck> habitGroupChecks;
 }
