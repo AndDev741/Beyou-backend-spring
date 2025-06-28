@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 import java.time.LocalTime;
 import java.util.List;
@@ -17,6 +18,7 @@ import beyou.beyouapp.backend.domain.routine.Routine;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@ToString
 public class RoutineSection {
 
     @Id
@@ -32,10 +34,10 @@ public class RoutineSection {
 
     private LocalTime endTime;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "routineSection", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TaskGroup> taskGroups;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "routineSection", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<HabitGroup> habitGroups;
 
     @ManyToOne
