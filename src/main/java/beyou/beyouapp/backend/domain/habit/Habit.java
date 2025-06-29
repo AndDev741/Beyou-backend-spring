@@ -28,6 +28,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @Getter
@@ -35,6 +36,7 @@ import lombok.Setter;
 @Table
 @AllArgsConstructor
 @NoArgsConstructor
+@ToString
 public class Habit {
     @Id
     @UuidGenerator
@@ -95,6 +97,7 @@ public class Habit {
     @ManyToOne
     @JsonIgnore
     @JoinColumn(name = "user_id", nullable = false)
+    @ToString.Exclude
     private User user;
 
     @PrePersist

@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
+
 import java.util.List;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.routine.checks.TaskGroupCheck;
@@ -14,6 +16,7 @@ import beyou.beyouapp.backend.domain.routine.checks.TaskGroupCheck;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@ToString
 public class TaskGroup extends ItemGroup {
 
     @ManyToOne

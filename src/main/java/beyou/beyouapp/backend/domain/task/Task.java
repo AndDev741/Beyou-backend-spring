@@ -25,12 +25,14 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @Getter
 @Setter
 @Table
 @NoArgsConstructor
+@ToString
 public class Task {
     @Id
     @GeneratedValue
@@ -63,6 +65,7 @@ public class Task {
     @ManyToOne
     @JsonIgnore
     @JoinColumn(name = "user_id", nullable = false)
+    @ToString.Exclude
     private User user;
 
      @PrePersist

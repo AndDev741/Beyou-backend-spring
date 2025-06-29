@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 import java.time.LocalTime;
 import java.util.List;
@@ -17,6 +18,7 @@ import beyou.beyouapp.backend.domain.routine.Routine;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@ToString
 public class RoutineSection {
 
     @Id
@@ -40,5 +42,6 @@ public class RoutineSection {
 
     @ManyToOne
     @JoinColumn(name = "routine_id")
+    @ToString.Exclude
     private Routine routine;
 }

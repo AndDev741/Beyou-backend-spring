@@ -12,6 +12,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 import java.sql.Date;
 import java.time.LocalDate;
@@ -24,6 +25,7 @@ import java.util.UUID;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@ToString
 public class Category {
      @Id
      @GeneratedValue
@@ -43,10 +45,12 @@ public class Category {
 
      @JsonIgnore
      @ManyToMany(mappedBy = "categories")
+     @ToString.Exclude
      private List<Habit> habits;
 
      @JsonIgnore
      @ManyToMany(mappedBy = "categories")
+     @ToString.Exclude
      private List<Task> tasks;
      private List<String> goals;
 
