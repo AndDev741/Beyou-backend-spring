@@ -44,9 +44,9 @@ public class ScheduleService {
         DiaryRoutine routine = diaryRoutineService.getDiaryRoutineModelById(scheduleDTO.routineId(), userId);
         Schedule schedule = new Schedule();
 
-        if (hasScheduleConflict(routine.getId(), userId, scheduleDTO.days())) {
-            log.info("Schedule already in use by another routine, removing");
-        }
+        // if (hasScheduleConflict(routine.getId(), userId, scheduleDTO.days())) {
+        //     log.info("Schedule already in use by another routine, removing");
+        // }
 
         schedule.setDays(scheduleDTO.days());
 
@@ -64,9 +64,9 @@ public class ScheduleService {
         Schedule schedule = scheduleRepository.findById(updatedSchedule.scheduleId())
         .orElseThrow(() -> new ScheduleNotFoundException("Schedule not found by ID: " + updatedSchedule.scheduleId()));
 
-        if (hasScheduleConflict(routine.getId(), userId, updatedSchedule.days())) {
-            log.warn("Schedule already in use by another routine, removing");
-        }
+        // if (hasScheduleConflict(routine.getId(), userId, updatedSchedule.days())) {
+        //     log.warn("Schedule already in use by another routine, removing");
+        // }
 
         schedule.setDays(updatedSchedule.days());
 

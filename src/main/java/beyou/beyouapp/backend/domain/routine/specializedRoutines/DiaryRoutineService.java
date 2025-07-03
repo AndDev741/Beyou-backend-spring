@@ -144,7 +144,7 @@ public class DiaryRoutineService {
         String dayOfWeek = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
         log.info("Day: {} ", dayOfWeek);
         for (DiaryRoutine diaryRoutine : diaryRoutines) {
-            if(diaryRoutine.getSchedule().getDays().contains(dayOfWeek)){
+            if(diaryRoutine.getSchedule() != null && diaryRoutine.getSchedule().getDays().contains(dayOfWeek)){
                 log.info("Routine {} are scheduled for today", diaryRoutine.getName());
                 todaysRoutine = diaryRoutine;
             }
