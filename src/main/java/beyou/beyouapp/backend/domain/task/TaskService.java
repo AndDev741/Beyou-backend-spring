@@ -80,6 +80,7 @@ public class TaskService {
             categoriesToAdd.add(categoryService.getCategory(categoryId)));
         }
         taskToEdit.setCategories(categoriesToAdd);
+        taskToEdit.setOneTimeTask(editTaskRequestDTO.oneTimeTask());
 
         try{
             taskRepository.save(taskToEdit);

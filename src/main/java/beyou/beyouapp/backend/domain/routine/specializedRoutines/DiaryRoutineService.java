@@ -436,6 +436,12 @@ public class DiaryRoutineService {
                 }
 
                 taskService.editTask(taskChecked);
+                if (taskChecked.isOneTimeTask()) {
+                    for (RoutineSection section : routine.getRoutineSections()) {
+                        section.getTaskGroups().removeIf(group -> group.getId().equals(check.getTaskGroup().getId()));
+                    }
+                    taskService.deleteTask(taskChecked.getId(), userId);
+                }
                 DiaryRoutine routineUpdated = diaryRoutineRepository.save(routine);
                 return mapToResponseDTO(routineUpdated);
             }else{

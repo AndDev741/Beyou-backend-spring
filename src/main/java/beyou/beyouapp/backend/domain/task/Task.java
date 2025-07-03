@@ -49,6 +49,9 @@ public class Task {
 
     Integer dificulty;
 
+    @Column(nullable = false)
+    private boolean oneTimeTask = false;
+
     @ManyToMany
     @JoinTable(
     name = "task_category",
@@ -88,5 +91,6 @@ public class Task {
         if(createTaskDTO.difficulty() != null) this.dificulty = createTaskDTO.difficulty();
         if(categories.isPresent()) this.categories = categories.get();
         this.user = user;
+        this.oneTimeTask = createTaskDTO.oneTimeTask();
     }
 }
