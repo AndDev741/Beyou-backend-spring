@@ -49,8 +49,9 @@ public class Task {
 
     Integer dificulty;
 
-    @Column(nullable = false)
     private boolean oneTimeTask = false;
+
+    private LocalDate markedToDelete;
 
     @ManyToMany
     @JoinTable(
