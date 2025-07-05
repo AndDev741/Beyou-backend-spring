@@ -49,6 +49,10 @@ public class Task {
 
     Integer dificulty;
 
+    private boolean oneTimeTask = false;
+
+    private LocalDate markedToDelete;
+
     @ManyToMany
     @JoinTable(
     name = "task_category",
@@ -88,5 +92,6 @@ public class Task {
         if(createTaskDTO.difficulty() != null) this.dificulty = createTaskDTO.difficulty();
         if(categories.isPresent()) this.categories = categories.get();
         this.user = user;
+        this.oneTimeTask = createTaskDTO.oneTimeTask();
     }
 }

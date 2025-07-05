@@ -15,7 +15,8 @@ public record CreateTaskRequestDTO(
     String iconId,
     Integer importance,
     Integer difficulty,
-    List<UUID> categoriesId
+    List<UUID> categoriesId,
+    boolean oneTimeTask
 ) {
     
 }
