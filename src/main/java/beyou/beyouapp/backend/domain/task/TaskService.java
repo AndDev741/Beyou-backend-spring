@@ -5,7 +5,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -14,12 +16,14 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
 import beyou.beyouapp.backend.exceptions.task.TaskNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
@@ -47,26 +51,41 @@ public class TaskService {
         return taskRepository.findAllByUserId(userId).orElseThrow(() -> new UserNotFound("User not found when tried to get tasks"));
     }
 
-    private void deleteAllMarked (List<Task> tasks, UUID userId) {
+    @Transactional
+    private void deleteAllMarked(List<Task> tasks, UUID userId) {
+        LocalDate today = LocalDate.now();
         
-        List<UUID> deletedTasks = new ArrayList<>();
-        tasks.forEach(task -> {
-            if(task.getMarkedToDelete() != null && task.getMarkedToDelete().isBefore(LocalDate.now())){
-               taskRepository.delete(task);
-               deletedTasks.add(task.getId());
-            }
-        });
+        List<Task> tasksToDelete = tasks.stream()
+            .filter(task -> task.getMarkedToDelete() != null && task.getMarkedToDelete().isBefore(today))
+            .collect(Collectors.toList());
 
-        if(!deletedTasks.isEmpty()){
-            List<DiaryRoutine> diaryRoutines = diaryRoutineRepository.findAllByUserId(userId);
-            diaryRoutines.forEach(diaryRoutine -> {
-                diaryRoutine.getRoutineSections().forEach(section -> {
-                    section.getTaskGroups().removeIf(group -> deletedTasks.contains(group.getTask().getId()));
-                });
-            });
+        if (tasksToDelete.isEmpty()) return;
+
+        taskRepository.deleteAll(tasksToDelete);
+
+        Set<UUID> deletedTaskIds = tasksToDelete.stream()
+            .map(Task::getId)
+            .collect(Collectors.toSet());
+
+        List<DiaryRoutine> diaryRoutines = diaryRoutineRepository.findAllByUserId(userId);
+        for (DiaryRoutine diaryRoutine : diaryRoutines) {
+            boolean modified = false;
+
+            for (RoutineSection section : diaryRoutine.getRoutineSections()) {
+                boolean removed = section.getTaskGroups().removeIf(
+                    group -> deletedTaskIds.contains(group.getTask().getId())
+                );
+                if (removed) {
+                    modified = true;
+                }
+            }
+
+            if (modified) {
+                diaryRoutineRepository.save(diaryRoutine);
+            }
         }
-        
     }
+
 
     public ResponseEntity<Map<String, String>> createTask(CreateTaskRequestDTO createTaskDTO, UUID userId){
         User user = userRepository.findById(userId).orElseThrow(() -> 
