@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.routine.Routine;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
@@ -70,7 +71,8 @@ public class User implements UserDetails {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Routine> routines;
 
-    private List<String> goals;
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Goal> goals;
 
     private Date createdAt;
 

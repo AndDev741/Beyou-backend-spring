@@ -1,12 +1,17 @@
-package beyou.beyouapp.backend.controller.category;
+package beyou.beyouapp.backend.controller;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.category.CategoryRepository;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.user.User;
+import jakarta.transaction.Transactional;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -16,6 +21,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.ArrayList;
@@ -23,15 +31,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
+@Transactional
 @AutoConfigureMockMvc(addFilters = false)
 @ExtendWith(MockitoExtension.class)
+@ActiveProfiles("test")
 public class CategoryControllerTest {
     @Autowired
     private MockMvc mockMvc;
@@ -39,24 +47,37 @@ public class CategoryControllerTest {
     @MockBean
     private CategoryService categoryService;
 
+    @MockBean
+    private CategoryRepository categoryRepository;
+
+    User user = new User();
+    UUID userID = UUID.randomUUID();
+    Category category = new Category();
+    @BeforeEach
+    void setUp() {
+        categoryRepository.deleteAll();
+        user.setId(userID);
+
+        CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO(
+                "name", "icon", "desc",
+                0, 0);
+        category = new Category(categoryRequestDTO, user);
+        categoryService.createCategory(categoryRequestDTO, userID);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
+    }
+
     @Test
     void shouldGetCategoriesSuccessfully() throws Exception {
-        UUID userId = UUID.randomUUID();
+        List<CategoryResponseDTO> categories = List.of(new CategoryResponseDTO(category.getId(), category.getName(), "", "", null, 0, 0, 0, 0, null));
 
-        List<CategoryResponseDTO> categories = List.of(new CategoryResponseDTO(null, userId.toString(), "", "", null, 0, 0, 0, 0, null));
+        when(categoryService.getAllCategories(userID)).thenReturn(new ArrayList<>(categories));
 
-        when(categoryService.getAllCategories(userId)).thenReturn(new ArrayList<>(categories));
-
-        mockMvc.perform(get("/category/{userId}", userId))
+        mockMvc.perform(get("/category"))
                 .andExpect(status().isOk());
     }
 
     @Test
     void shouldCreateCategorySuccessfully() throws Exception {
-        UUID userID = UUID.randomUUID();
-        User user = new User();
-        user.setId(userID);
-
         CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO(
                 "name", "icon", "desc",
                 0, 0);
@@ -64,7 +85,7 @@ public class CategoryControllerTest {
 
         ResponseEntity<Map<String, Object>> successResponse = ResponseEntity.ok(Map.of("success", category));
 
-        when(categoryService.createCategory(any(CategoryRequestDTO.class), userID))
+        when(categoryService.createCategory(categoryRequestDTO, userID))
                 .thenReturn(successResponse);
 
         mockMvc.perform(post("/category")
@@ -77,17 +98,12 @@ public class CategoryControllerTest {
 
     @Test
     void shouldEditCategorySuccessfully() throws Exception {
-        UUID userID = UUID.randomUUID();
-        User user = new User();
-        user.setId(userID);
-
         CategoryEditRequestDTO categoryEditRequestDTO = new CategoryEditRequestDTO("id",
                 "name", "icon", "description");
-        Category category = new Category();
 
         ResponseEntity<Map<String, Object>> successResponse = ResponseEntity.ok(Map.of("success", category));
 
-        when(categoryService.editCategory(any(CategoryEditRequestDTO.class), userID))
+        when(categoryService.editCategory(categoryEditRequestDTO, userID))
                 .thenReturn(successResponse);
 
         mockMvc.perform(put("/category")
@@ -99,14 +115,10 @@ public class CategoryControllerTest {
 
     @Test
     void shouldDeleteCategorySuccessfully() throws Exception {
-        UUID userID = UUID.randomUUID();
-        User user = new User();
-        user.setId(userID);
-
         String categoryId = "randomId";
         ResponseEntity<Map<String, String>> response = ResponseEntity.ok().body(Map.of("success", "Category deleted successfully"));
 
-        when(categoryService.deleteCategory(anyString(), userID))
+        when(categoryService.deleteCategory(categoryId, userID))
                 .thenReturn(response);
 
         mockMvc.perform(delete("/category/{categoryId}", categoryId))

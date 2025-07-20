@@ -3,26 +3,48 @@ package beyou.beyouapp.backend.controller;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+
+import beyou.beyouapp.backend.user.UserRepository;
+import beyou.beyouapp.backend.user.UserService;
+import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@Transactional
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 public class AuthenticationControllerTest {
     @Autowired
     MockMvc mockMvc;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private UserService userService;
+
+    @BeforeEach
+    void setup() {
+        userRepository.deleteAll(); // Clean before all tests
+        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "123456", false);
+        userService.registerUser(register);
+    }
+
     @Test
-    public void shouldPassSuccessfullyIfUserAreAuthenticated() throws Exception {
+    public void shouldPassIfUserIsAuthenticated() throws Exception {
         Cookie jwt = simulateLogin().getResponse().getCookie("jwt");
 
         mockMvc.perform(get("/auth/verify")
@@ -36,13 +58,12 @@ public class AuthenticationControllerTest {
                 .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success.id").exists())
+                .andExpect(jsonPath("$.success.name").exists())
                 .andExpect(jsonPath("$.success.email").value("testebeyou@gmail.com"))
                 .andExpect(cookie().exists("jwt"));
     }
 
     @Test
-    @Transactional
     public void shouldRegisterAUserSuccessfully() throws Exception {
         mockMvc.perform(post("/auth/register")
                 .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"123456\", " +
@@ -81,9 +102,11 @@ public class AuthenticationControllerTest {
 
     @Test
     public void shouldReturnAErrorMessageOfEmailAlreadyInUseIfTryingToRegisterAEmailAlreadyRegistered() throws Exception {
+        String jsonRequest = "{\"name\": \"required\", \"email\": \"testebeyou@gmail.com\", \"password\": \"123456\", " +
+                        "\"isGoogleAccount\": false}";
+        System.out.println("[LOG] JsonRequest => " + jsonRequest);
         mockMvc.perform(post("/auth/register")
-                .content("{\"name\": \"okok\", \"email\": \"email@gmail.com\", \"password\": \"123456\", " +
-                        "\"isGoogleAccount\": false}")
+                .content(jsonRequest)
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
                 .andExpect(jsonPath("$.error").value("Email already in use"));
@@ -110,7 +133,7 @@ public class AuthenticationControllerTest {
     }
 
     @Test
-    public void shouldReturnAErrorMessageOfMissingNEmailIfTryingToRegisterWithoutAEmail() throws Exception {
+    public void shouldReturnErrorWhenEmailIsMissingIfTryingToRegisterWithoutAEmail() throws Exception {
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"namename\", \"email\": \"\", \"password\": \"123456\", " +

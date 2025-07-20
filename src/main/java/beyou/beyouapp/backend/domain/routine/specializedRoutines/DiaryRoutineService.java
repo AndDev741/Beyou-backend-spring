@@ -207,12 +207,12 @@ public class DiaryRoutineService {
                 if(taskDto.id() != null){
                     taskGroup.setId(taskDto.id());
                 }
-
+                
                 if (taskDto.taskGroupCheck() != null) {
-                    List<TaskGroupCheck> checks = taskGroup.getTaskGroupChecks();
+                    List<TaskGroupCheck> checks = taskGroup.getTaskGroupChecks(); 
                     checks.addAll(taskDto.taskGroupCheck());
                     taskGroup.setTaskGroupChecks(checks);
-                }
+                }                
                 taskGroup.setTask(task);
                 taskGroup.setStartTime(taskDto.startTime());
                 taskGroup.setRoutineSection(section);
@@ -242,7 +242,7 @@ public class DiaryRoutineService {
                 //     }
                 // }
 
-
+               
                 habitGroup.setHabit(habit);
                 habitGroup.setStartTime(habitDto.startTime());
                 habitGroup.setRoutineSection(section);
@@ -384,7 +384,7 @@ public class DiaryRoutineService {
                     XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(habitChecked.getLevel() + 1);
                     habitChecked.setActualBaseXp(xpForActualLevel.getXp());
                     habitChecked.setNextLevelXp(xpForNextLevel.getXp());
-                }
+                }            
                 //1 more for the constance
                 habitChecked.setConstance(habitChecked.getConstance() + 1);
 
@@ -416,7 +416,7 @@ public class DiaryRoutineService {
                 DiaryRoutine routineUpdated = diaryRoutineRepository.save(routine);
                 return mapToResponseDTO(routineUpdated);
             }
-
+            
         }
 
         if(taskGroupToCheck != null){
@@ -430,18 +430,40 @@ public class DiaryRoutineService {
                     .filter(taskCheck -> taskCheck.getCheckDate().equals(LocalDate.now()))
                     .findFirst()
                     .get();
-
-                    taskGroupToCheck.getTaskGroupChecks().remove(existingCheck);
+                taskGroupToCheck.getTaskGroupChecks().remove(existingCheck);
                 if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
                     removeXpFromCategories(taskChecked.getCategories(), existingCheck.getXpGenerated());
                 }
 
                 taskService.editTask(taskChecked);
 
+                existingCheck.setCheckDate(LocalDate.now());
+                existingCheck.setCheckTime(LocalTime.now());
+                existingCheck.setChecked(false);
+                existingCheck.setXpGenerated(0);
+                taskGroupToCheck.getTaskGroupChecks().add(existingCheck);
+
                 DiaryRoutine routineUpdated = diaryRoutineRepository.save(routine);
                 return mapToResponseDTO(routineUpdated);
             }else{
                 //Calculate the exp (Think in a good algorithm later on)
+
+                TaskGroupCheck taskGroupCheck = null;
+
+                if(taskGroupToCheck.getTaskGroupChecks().stream()
+                    .filter(taskCheck -> taskCheck.getCheckDate().equals(LocalDate.now()))
+                    .findFirst()
+                    .isPresent()){
+                        log.info("[LOG] TaskGroup already have check for today, overriting this one => {}", taskGroupToCheck);
+                        taskGroupCheck = taskGroupToCheck.getTaskGroupChecks().stream()
+                            .filter(taskCheck -> taskCheck.getCheckDate().equals(LocalDate.now()))
+                            .findFirst()
+                            .get();
+                        taskGroupToCheck.getTaskGroupChecks().remove(taskGroupCheck);
+                        check = taskGroupCheck;
+                }
+
+
                 int dificulty = taskChecked.getDificulty() != null ? taskChecked.getDificulty() : 1;
                 int importance = taskChecked.getImportance() != null ? taskChecked.getImportance() : 1;
                 Double newXp = (double) (10 * dificulty * importance);
@@ -463,11 +485,6 @@ public class DiaryRoutineService {
                 taskGroupToCheck.getTaskGroupChecks().add(check);
 
                 taskService.editTask(taskChecked);
-
-                if (taskChecked.isOneTimeTask()) {
-                    log.info("[LOG] Marking to delete one time task => ", taskChecked.getId());
-                    taskChecked.setMarkedToDelete(LocalDate.now());
-                }
                 for (RoutineSection section : routine.getRoutineSections()) {
                     List<TaskGroup> taskGroups = section.getTaskGroups();
                     for (int i = 0; i < taskGroups.size(); i++) {
