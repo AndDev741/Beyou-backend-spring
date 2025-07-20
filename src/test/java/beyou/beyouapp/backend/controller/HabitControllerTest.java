@@ -123,4 +123,8 @@ public class HabitControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.success").value("Habit deleted successfully"));
     }
+
+    //Exceptions
+
+    
 }
