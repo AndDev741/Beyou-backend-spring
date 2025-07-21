@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -44,27 +45,35 @@ public class HabitServiceTest {
     @InjectMocks
     private HabitService habitService;
 
-    @Test
-    public void shouldGetHabitSuccessfully(){
-        UUID habitId = UUID.randomUUID();
-        Habit mockHabit = new Habit();
+    Habit habit = new Habit();
+    UUID habitId = UUID.randomUUID();
+    User user = new User();
+    UUID userId = UUID.randomUUID();
+    Category newCategory = new Category();
+    List<UUID> categories = new ArrayList<>(List.of(UUID.randomUUID()));
+    @BeforeEach
+    public void setup(){
+        user.setId(userId);
+        habit.setId(habitId);
+        habit.setUser(user);
+        habit.setName("Test");
         
-        when(habitRepository.findById(habitId)).thenReturn(Optional.of(mockHabit));
+    }
+
+    @Test
+    public void shouldGetHabitSuccessfully(){  
+        when(habitRepository.findById(habitId)).thenReturn(Optional.of(habit));
 
         Habit testHabit = habitService.getHabit(habitId);
 
-        assertEquals(mockHabit, testHabit);
+        assertEquals(habit, testHabit);
+        assertEquals(habit.getName(), "Test");
     }
 
     @Test
     public void shouldGetAllHabitsSuccessfully(){
-        User user = new User();
-        UUID userId = UUID.randomUUID();
-        user.setId(userId);
+        ArrayList<Habit> habits = new ArrayList<>(List.of(habit));
 
-        ArrayList<Habit> habits = new ArrayList<>(List.of());
-
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(habitRepository.findAllByUserId(userId)).thenReturn(habits);
 
         ArrayList<Habit> assertResponse = habitService.getHabits(userId);
@@ -74,13 +83,6 @@ public class HabitServiceTest {
 
     @Test
     public void shouldCreateHabitSuccessfully(){
-        User user = new User();
-        UUID userId = UUID.randomUUID();
-        user.setId(userId);
-
-        Category newCategory = new Category();
-        List<UUID> categories = new ArrayList<>(List.of(UUID.randomUUID()));
-
         CreateHabitDTO createHabitDTO = new CreateHabitDTO( 
         "name", "", "", "", 2, 2, 
         categories, 0, 0);
@@ -101,22 +103,6 @@ public class HabitServiceTest {
 
     @Test
     public void shouldEditHabitSuccessfully(){
-        User user = new User();
-        UUID userId = UUID.randomUUID();
-        user.setId(userId);
-
-        Habit habit = new Habit();
-        UUID habitId = UUID.randomUUID();
-        habit.setId(habitId);
-        habit.setName("initialName");
-
-        UUID categoryId = UUID.randomUUID();
-        Category newCategory = new Category();
-        newCategory.setId(categoryId);
-        habit.setCategories(List.of(newCategory));
-
-        List<UUID> categories = new ArrayList<>(List.of(categoryId));
-
         EditHabitDTO editHabitDTO = new EditHabitDTO(habitId, "editedName", 
         "", "", "", 0, 0, categories);
         ResponseEntity<Map<String, String>> response = ResponseEntity.ok().body(Map.of("success", "Habit edited successfully"));
@@ -134,13 +120,6 @@ public class HabitServiceTest {
 
     @Test
     public void shouldDeleteHabitSuccessfully(){
-        User user = new User();
-        UUID userId = UUID.randomUUID();
-        user.setId(userId);
-
-        Habit habit = new Habit();
-        UUID habitId = UUID.randomUUID();
-        habit.setId(habitId);
         ResponseEntity<Map<String, String>> response = ResponseEntity.ok().body(Map.of("success", "habit deleted successfully"));
 
         when(habitRepository.findById(habitId)).thenReturn(Optional.of(habit));
