@@ -13,8 +13,13 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+
+import beyou.beyouapp.backend.user.UserRepository;
+import beyou.beyouapp.backend.user.UserService;
+import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -24,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Import({SecurityConfig.class})
 @SpringBootTest
+@ActiveProfiles("test")
 public class SecurityConfigTest {
 
     @Autowired
@@ -32,9 +38,20 @@ public class SecurityConfigTest {
     @Autowired
     PasswordEncoder passwordEncoder;
 
+    @Autowired
+    UserRepository  userRepository;
+
+    @Autowired
+    UserService userService;
+
     @BeforeEach
     void setUp(){
         MockitoAnnotations.openMocks(this);
+
+        userRepository.deleteAll(); // Clean before all tests
+        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "123456", false);
+        userService.registerUser(register);
+    
     }
 
 
@@ -59,7 +76,7 @@ public class SecurityConfigTest {
     public void shouldAllowAccessToProtectedEndpointIfAuthenticated() throws Exception {
         Cookie jwtCookie = simulateLogin().getResponse().getCookie("jwt");
 
-        mockMvc.perform(get("/user")
+        mockMvc.perform(get("/category")
                         .cookie(jwtCookie))
                 .andExpect(status().isOk());
     }
