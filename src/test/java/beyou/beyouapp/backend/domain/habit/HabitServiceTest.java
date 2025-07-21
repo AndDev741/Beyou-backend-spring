@@ -17,6 +17,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.ActiveProfiles;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
@@ -29,6 +30,7 @@ import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
+@ActiveProfiles("test")
 public class HabitServiceTest {
     @Mock
     private HabitRepository habitRepository;
