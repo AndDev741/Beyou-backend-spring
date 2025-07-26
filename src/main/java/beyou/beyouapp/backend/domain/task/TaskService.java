@@ -101,11 +101,12 @@ public class TaskService {
         
         Task taskToCreate = new Task(createTaskDTO, Optional.of(categoriesToAdd), user);
 
-        try{
+        try {
             taskRepository.save(taskToCreate);
             return ResponseEntity.ok().body(Map.of("success", "Task created Successfully"));
-        }catch(Exception e){
-            return ResponseEntity.badRequest().body(Map.of("error", "Error tying to create the task"));
+        } catch (Exception e) {
+            log.error("Error trying to create task", e);
+            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to create task"));
         }
     }
 
@@ -143,7 +144,7 @@ public class TaskService {
 
     public ResponseEntity<Map<String, String>> deleteTask(UUID taskId, UUID userId){
         Task taskToDelete = getTask(taskId);
-        log.info("[LOG] Deleting task => ", taskToDelete);
+        log.info("[LOG] Deleting task => {}", taskToDelete);
         if(!taskToDelete.getUser().getId().equals(userId)){
             throw new TaskNotFound("The task isn't of the user on context");
         }
