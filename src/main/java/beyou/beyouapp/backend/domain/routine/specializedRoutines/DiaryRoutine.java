@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import beyou.beyouapp.backend.domain.routine.Routine;
@@ -22,5 +23,5 @@ import beyou.beyouapp.backend.domain.routine.Routine;
 public class DiaryRoutine extends Routine {
 
     @OneToMany(mappedBy = "routine", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<RoutineSection> routineSections;
+    private List<RoutineSection> routineSections  = new ArrayList<>();
 }
