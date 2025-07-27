@@ -8,6 +8,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,10 +36,10 @@ public class RoutineSection {
     private LocalTime endTime;
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<TaskGroup> taskGroups;
+    private List<TaskGroup> taskGroups = new ArrayList<>();
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<HabitGroup> habitGroups;
+    private List<HabitGroup> habitGroups = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name = "routine_id")

@@ -18,6 +18,9 @@ import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.HabitGroupRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -115,6 +118,7 @@ class DiaryRoutineServiceTest {
         taskGroup.setTask(task);
         taskGroup.setStartTime(validRequestDTO.routineSections().get(0).taskGroup().get(0).startTime());
         taskGroup.setRoutineSection(section);
+        taskGroup.setTaskGroupChecks(new ArrayList<>());
         HabitGroup habitGroup = new HabitGroup();
         habitGroup.setId(UUID.randomUUID());
 
@@ -126,8 +130,9 @@ class DiaryRoutineServiceTest {
         habitGroup.setHabit(habit);
         habitGroup.setStartTime(validRequestDTO.routineSections().get(0).habitGroup().get(0).startTime());
         habitGroup.setRoutineSection(section);
-        section.setTaskGroups(List.of(taskGroup));
-        section.setHabitGroups(List.of(habitGroup));
+        habitGroup.setHabitGroupChecks(new ArrayList<>(new ArrayList<>()));
+        section.setTaskGroups(new ArrayList<>(List.of(taskGroup)));
+        section.setHabitGroups(new ArrayList<>(List.of(habitGroup)));
         section.setRoutine(diaryRoutine);
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(section)));
     }
@@ -389,5 +394,49 @@ class DiaryRoutineServiceTest {
         // Act & Assert
         assertThrows(DiaryRoutineNotFoundException.class,
                 () -> diaryRoutineService.getTodayRoutineScheduled(userId));
+    }
+
+    @Test
+    void shouldThrowException_whenNoItemGroupInRequest() {
+        // Arrange
+        CheckGroupRequestDTO requestDTO = new CheckGroupRequestDTO(routineId, null, null);
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+
+        // Act & Assert
+        assertThrows(RuntimeException.class,
+                () -> diaryRoutineService.checkGroup(requestDTO, userId));
+    }
+
+    @Test
+    void shouldCheckHabitGroup_whenNoExistingCheck() {
+        // Arrange
+        HabitGroup habitGroup = diaryRoutine.getRoutineSections().get(0).getHabitGroups().get(0);
+        Habit habit = habitGroup.getHabit();
+        habit.setDificulty(1);
+        habit.setImportance(1);
+        habit.setXp(0.0);
+        habit.setNextLevelXp(Double.MAX_VALUE);
+        habit.setConstance(0);
+        habit.setCategories(new ArrayList<>());
+
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+        when(diaryRoutineRepository.save(diaryRoutine)).thenReturn(diaryRoutine);
+
+        CheckGroupRequestDTO requestDTO = new CheckGroupRequestDTO(
+                routineId,
+                new TaskGroupRequestDTO(null, null),
+                new HabitGroupRequestDTO(habitGroup.getId(), null));
+
+        // Act
+        DiaryRoutineResponseDTO response = diaryRoutineService.checkGroup(requestDTO, userId);
+
+        // Assert
+        var habitGroups = response.routineSections().get(0).habitGroup();
+        assertEquals(1, habitGroups.size());
+        var checks = habitGroups.get(0).habitGroupChecks();
+        assertEquals(1, checks.size());
+        var check = checks.get(0);
+        assertTrue(check.isChecked());
+        assertEquals(LocalDate.now(), check.getCheckDate());
     }
 }

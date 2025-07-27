@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.util.ArrayList;
 import java.util.List;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.routine.checks.HabitGroupCheck;
@@ -24,5 +25,5 @@ public class HabitGroup extends ItemGroup {
     private Habit habit;
 
     @OneToMany(mappedBy = "habitGroup", cascade = CascadeType.ALL, orphanRemoval = false)
-    private List<HabitGroupCheck> habitGroupChecks;
+    private List<HabitGroupCheck> habitGroupChecks = new ArrayList<>();;
 }
