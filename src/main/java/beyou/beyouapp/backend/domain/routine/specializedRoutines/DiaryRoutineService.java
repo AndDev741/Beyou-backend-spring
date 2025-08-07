@@ -294,215 +294,239 @@ public class DiaryRoutineService {
                 entity.getSchedule());
     }
 
-    public DiaryRoutineResponseDTO checkGroup(CheckGroupRequestDTO checkGroupRequestDTO, UUID userId){
-        DiaryRoutine routine = getDiaryRoutineModelById(checkGroupRequestDTO.routineId(), userId);
-
-        HabitGroup habitGroupToCheck = null;
-
-        TaskGroup taskGroupToCheck = null;
-
+    public DiaryRoutineResponseDTO checkAndUncheckGroup(CheckGroupRequestDTO checkGroupRequestDTO, UUID userId){
         if(checkGroupRequestDTO.habitGroupDTO() != null){
-            for(RoutineSection section : routine.getRoutineSections()){
-                List<HabitGroup> habitGroups = section.getHabitGroups();
-                for (int i = 0; i < habitGroups.size(); i++) {
-                    HabitGroup current = habitGroups.get(i);
-                    if (current.getId().equals(checkGroupRequestDTO.habitGroupDTO().habitGroupId())) {
-                        log.info("[LOG] Found the habitGroup => {}", current);
-                        habitGroupToCheck = current;
-                    }
-                }
-            }
+            HabitGroup habitGroupToCheckOrUncheck = findHabitGroupByDTO(checkGroupRequestDTO);
+            checkOrUncheckHabitGroup(habitGroupToCheckOrUncheck);
+
+            //After all the updates, return the fresh state of routine with all the modification
+            return getDiaryRoutineById(checkGroupRequestDTO.routineId(), userId);
         }else if(checkGroupRequestDTO.taskGroupDTO() != null){
-            for(RoutineSection section : routine.getRoutineSections()){
-                List<TaskGroup> taskGroups = section.getTaskGroups();
-                for (int i = 0; i < taskGroups.size(); i++) {
-                    TaskGroup current = taskGroups.get(i);
-                    if (current.getId().equals(checkGroupRequestDTO.taskGroupDTO().taskGroupId())) {
-                        log.info("[LOG] Found the TaskGroup  => {}", current);
-                        taskGroupToCheck = current;
-                    }
-                }
-            }
+            TaskGroup taskGroupToCheckOrUncheck = findTaskGroupByDTO(checkGroupRequestDTO);
+            checkOrUncheckTaskGroup(taskGroupToCheckOrUncheck);
+
+            //After all the updates, return the fresh state of routine with all the modification
+            return getDiaryRoutineById(checkGroupRequestDTO.routineId(), userId);
         }else{
             throw new RuntimeException("No Item group found in the request");
         }
-
-        log.info("[LOG] Item group found => {}", habitGroupToCheck == null ? taskGroupToCheck : habitGroupToCheck);
-
-        if(habitGroupToCheck != null){
-            Habit habitChecked = habitGroupToCheck.getHabit();
-            HabitGroupCheck check = new HabitGroupCheck();
-
-            if (habitGroupToCheck.getHabitGroupChecks().stream()
-                    .anyMatch(habitCheck -> habitCheck.getCheckDate().equals(LocalDate.now()) && habitCheck.isChecked())) {
-                // Uncheck: Remove check, subtract XP, adjust constance
-                HabitGroupCheck existingCheck = habitGroupToCheck.getHabitGroupChecks().stream()
-                    .filter(habitCheck -> habitCheck.getCheckDate().equals(LocalDate.now()))
-                    .findFirst()
-                    .get();
-                log.info("[LOG] Starting Uncheck for HabitGroupCheck => {}", existingCheck);
-                habitGroupToCheck.getHabitGroupChecks().remove(existingCheck);
-                habitChecked.setXp(habitChecked.getXp() - existingCheck.getXpGenerated());
-                habitChecked.setConstance(habitChecked.getConstance() - 1);
-
-                removeXpFromCategories(habitChecked.getCategories(), existingCheck.getXpGenerated());
-                habitService.editEntity(habitChecked);
-
-                existingCheck.setCheckDate(LocalDate.now());
-                existingCheck.setCheckTime(LocalTime.now());
-                existingCheck.setChecked(false);
-                existingCheck.setXpGenerated(0);
-                habitGroupToCheck.getHabitGroupChecks().add(existingCheck);
-
-                DiaryRoutine routineUpdated = diaryRoutineRepository.save(routine);
-                log.info("[LOG] Routine Updated after uncheck => {}", routineUpdated);
-                return mapToResponseDTO(routineUpdated);
-            }else{
-                //Calculate the exp (Think in a good algorithm later on)
-                log.info("[LOG] Starting Check");
-
-                HabitGroupCheck habitGroupCheck = null;
-
-                if(habitGroupToCheck.getHabitGroupChecks().stream()
-                    .filter(habitCheck -> habitCheck.getCheckDate().equals(LocalDate.now()))
-                    .findFirst()
-                    .isPresent()){
-                        log.info("[LOG] HabitGroup already have check for today, overriting this one 0> {}", habitGroupCheck);
-                        habitGroupCheck = habitGroupToCheck.getHabitGroupChecks().stream()
-                            .filter(habitCheck -> habitCheck.getCheckDate().equals(LocalDate.now()))
-                            .findFirst()
-                            .get();
-                        habitGroupToCheck.getHabitGroupChecks().remove(habitGroupCheck);
-                        check = habitGroupCheck;
-                }
-
-                Double newXp = (double) (10 * habitChecked.getDificulty() * habitChecked.getImportance());
-                habitChecked.setXp(newXp + habitChecked.getXp());
-                if(newXp > habitChecked.getNextLevelXp()){
-                    habitChecked.setLevel(habitChecked.getLevel() + 1);
-                    XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(habitChecked.getLevel());
-                    XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(habitChecked.getLevel() + 1);
-                    habitChecked.setActualBaseXp(xpForActualLevel.getXp());
-                    habitChecked.setNextLevelXp(xpForNextLevel.getXp());
-                }            
-                //1 more for the constance
-                habitChecked.setConstance(habitChecked.getConstance() + 1);
-
-                //Update categories xp
-                List<Category> categories = habitChecked.getCategories();
-                updateCategoriesXpAndLevel(categories, newXp);
-
-                //Set check object
-                check.setCheckDate(LocalDate.now());
-                check.setCheckTime(LocalTime.now());
-                check.setChecked(true);
-                check.setXpGenerated(newXp);
-                check.setHabitGroup(habitGroupToCheck);
-
-                habitGroupToCheck.getHabitGroupChecks().add(check);
-
-                //Update entities
-                habitService.editEntity(habitChecked);
-                for (RoutineSection section : routine.getRoutineSections()) {
-                    List<HabitGroup> habitGroups = section.getHabitGroups();
-                    for (int i = 0; i < habitGroups.size(); i++) {
-                        HabitGroup current = habitGroups.get(i);
-                        if (current.getId().equals(habitGroupToCheck.getId())) {
-                            habitGroups.set(i, habitGroupToCheck);
-                        }
-                    }
-                }
-
-                DiaryRoutine routineUpdated = diaryRoutineRepository.save(routine);
-                return mapToResponseDTO(routineUpdated);
-            }
-            
-        }
-
-        if(taskGroupToCheck != null){
-            Task taskChecked = taskGroupToCheck.getTask();
-            TaskGroupCheck check = new TaskGroupCheck();
-
-            if (taskGroupToCheck.getTaskGroupChecks().stream()
-                    .anyMatch(taskCheck -> taskCheck.getCheckDate().equals(LocalDate.now()) && taskCheck.isChecked())) {
-                // Uncheck: Remove check, subtract XP, adjust constance
-                TaskGroupCheck existingCheck = taskGroupToCheck.getTaskGroupChecks().stream()
-                    .filter(taskCheck -> taskCheck.getCheckDate().equals(LocalDate.now()))
-                    .findFirst()
-                    .get();
-                taskGroupToCheck.getTaskGroupChecks().remove(existingCheck);
-                if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
-                    removeXpFromCategories(taskChecked.getCategories(), existingCheck.getXpGenerated());
-                }
-
-                taskService.editTask(taskChecked);
-
-                existingCheck.setCheckDate(LocalDate.now());
-                existingCheck.setCheckTime(LocalTime.now());
-                existingCheck.setChecked(false);
-                existingCheck.setXpGenerated(0);
-                taskGroupToCheck.getTaskGroupChecks().add(existingCheck);
-
-                DiaryRoutine routineUpdated = diaryRoutineRepository.save(routine);
-                return mapToResponseDTO(routineUpdated);
-            }else{
-                //Calculate the exp (Think in a good algorithm later on)
-
-                TaskGroupCheck taskGroupCheck = null;
-
-                if(taskGroupToCheck.getTaskGroupChecks().stream()
-                    .filter(taskCheck -> taskCheck.getCheckDate().equals(LocalDate.now()))
-                    .findFirst()
-                    .isPresent()){
-                        log.info("[LOG] TaskGroup already have check for today, overriting this one => {}", taskGroupToCheck);
-                        taskGroupCheck = taskGroupToCheck.getTaskGroupChecks().stream()
-                            .filter(taskCheck -> taskCheck.getCheckDate().equals(LocalDate.now()))
-                            .findFirst()
-                            .get();
-                        taskGroupToCheck.getTaskGroupChecks().remove(taskGroupCheck);
-                        check = taskGroupCheck;
-                }
-
-
-                int dificulty = taskChecked.getDificulty() != null ? taskChecked.getDificulty() : 1;
-                int importance = taskChecked.getImportance() != null ? taskChecked.getImportance() : 1;
-                Double newXp = (double) (10 * dificulty * importance);
-
-                //Set check object
-                check.setCheckDate(LocalDate.now());
-                check.setCheckTime(LocalTime.now());
-                check.setChecked(true);
-                check.setXpGenerated(0);
-                check.setTaskGroup(taskGroupToCheck);
-
-                if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
-                    log.info("Task have category");
-                    check.setXpGenerated(newXp);
-                    List<Category> categories = taskChecked.getCategories();
-                    updateCategoriesXpAndLevel(categories, newXp);
-                }
-
-                taskGroupToCheck.getTaskGroupChecks().add(check);
-
-                taskService.editTask(taskChecked);
-                for (RoutineSection section : routine.getRoutineSections()) {
-                    List<TaskGroup> taskGroups = section.getTaskGroups();
-                    for (int i = 0; i < taskGroups.size(); i++) {
-                        TaskGroup current = taskGroups.get(i);
-                        if (current.getId().equals(taskGroupToCheck.getId())) {
-                            taskGroups.set(i, taskGroupToCheck);
-                        }
-                    }
-                }
-                DiaryRoutine routineUpdated = diaryRoutineRepository.save(routine);
-                return mapToResponseDTO(routineUpdated);
-            }
-            }
-
-        return null;
     }
 
-    private void updateCategoriesXpAndLevel(List<Category> categories, Double newXp){
+    protected HabitGroup findHabitGroupByDTO(CheckGroupRequestDTO habitGroupToCheckOrUncheck) {
+        DiaryRoutine routine = diaryRoutineRepository.findById(habitGroupToCheckOrUncheck.routineId()).orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
+
+        return routine.getRoutineSections().stream()
+            .flatMap(section -> section.getHabitGroups().stream())
+            .filter(habitGroup -> habitGroup.getId().equals(habitGroupToCheckOrUncheck.habitGroupDTO().habitGroupId()))
+            .findFirst()
+            .orElse(null);
+    }
+
+    protected void checkOrUncheckHabitGroup(HabitGroup habitGroupToCheckOrUncheck) {
+        // Check if the habit group is already checked for today
+        boolean isCheckedToday = habitGroupToCheckOrUncheck.getHabitGroupChecks().stream()
+        .peek(hc -> log.info("Evaluating check: date={}, checked={}", hc.getCheckDate(), hc.isChecked()))
+        .anyMatch(habitCheck -> habitCheck.getCheckDate().equals(LocalDate.now()) && habitCheck.isChecked());
+
+        if(isCheckedToday){
+            // Uncheck: Remove check, subtract XP, adjust constance
+            uncheckHabitGroup(habitGroupToCheckOrUncheck);
+        }else{
+            //Calculate the exp (Think in a good algorithm later on)
+            checkHabitGroup(habitGroupToCheckOrUncheck);
+        }
+    }
+
+    protected void checkHabitGroup(HabitGroup habitGroupToCheckOrUncheck){
+        DiaryRoutine routine = (DiaryRoutine) habitGroupToCheckOrUncheck.getRoutineSection().getRoutine();
+        log.info("[LOG] Starting Check");
+        Habit habitChecked = habitGroupToCheckOrUncheck.getHabit();
+        HabitGroupCheck check = null;
+
+        check = checkIfHabitGroupIsAlreadyCheckedAndOverride(habitGroupToCheckOrUncheck);
+
+        Double newXp = (double) (10 * habitChecked.getDificulty() * habitChecked.getImportance());
+        habitChecked.setXp(newXp + habitChecked.getXp());
+        if(newXp > habitChecked.getNextLevelXp()){
+            habitChecked.setLevel(habitChecked.getLevel() + 1);
+            XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(habitChecked.getLevel());
+            XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(habitChecked.getLevel() + 1);
+            habitChecked.setActualBaseXp(xpForActualLevel.getXp());
+            habitChecked.setNextLevelXp(xpForNextLevel.getXp());
+        }            
+        //1 more for the constance
+        habitChecked.setConstance(habitChecked.getConstance() + 1);
+
+        //Update categories xp
+        List<Category> categories = habitChecked.getCategories();
+        updateCategoriesXpAndLevel(categories, newXp);
+
+        //Set check object
+        check.setCheckDate(LocalDate.now());
+        check.setCheckTime(LocalTime.now());
+        check.setChecked(true);
+        check.setXpGenerated(newXp);
+        check.setHabitGroup(habitGroupToCheckOrUncheck);
+
+        habitGroupToCheckOrUncheck.getHabitGroupChecks().add(check);
+
+        //Update entities
+        habitService.editEntity(habitChecked);
+        for (RoutineSection section : routine.getRoutineSections()) {
+            List<HabitGroup> habitGroups = section.getHabitGroups();
+            for (int i = 0; i < habitGroups.size(); i++) {
+                HabitGroup current = habitGroups.get(i);
+                if (current.getId().equals(habitGroupToCheckOrUncheck.getId())) {
+                    habitGroups.set(i, habitGroupToCheckOrUncheck);
+                }
+            }
+        }
+        diaryRoutineRepository.save(routine);
+    }
+
+    private HabitGroupCheck checkIfHabitGroupIsAlreadyCheckedAndOverride(HabitGroup habitGroup){
+        Optional<HabitGroupCheck> existingCheck = habitGroup.getHabitGroupChecks().stream()
+            .filter(tc -> tc.getCheckDate().equals(LocalDate.now()))
+            .findFirst();
+
+        if (existingCheck.isPresent()) {
+            log.info("[LOG] TaskGroup already have check for today, overriting this one => {}", habitGroup);
+            habitGroup.getHabitGroupChecks().remove(existingCheck.get());
+            return existingCheck.get();
+        }
+        return new HabitGroupCheck();
+    }
+
+    protected void uncheckHabitGroup(HabitGroup habitGroupToUncheck){
+        DiaryRoutine routine = (DiaryRoutine) habitGroupToUncheck.getRoutineSection().getRoutine();
+        HabitGroupCheck existingCheck = habitGroupToUncheck.getHabitGroupChecks().stream()
+                .filter(habitCheck -> habitCheck.getCheckDate().equals(LocalDate.now()))
+                .findFirst()
+                .get();
+        Habit habitToCheck = habitGroupToUncheck.getHabit();
+        log.info("[LOG] Starting Uncheck for HabitGroupCheck => {}", existingCheck);
+
+        habitGroupToUncheck.getHabitGroupChecks().remove(existingCheck);
+        habitToCheck.setXp(habitToCheck.getXp() - existingCheck.getXpGenerated());
+        habitToCheck.setConstance(habitToCheck.getConstance() - 1);
+
+        removeXpFromCategories(habitToCheck.getCategories(), existingCheck.getXpGenerated());
+        habitService.editEntity(habitToCheck);
+
+        existingCheck.setCheckDate(LocalDate.now());
+        existingCheck.setCheckTime(LocalTime.now());
+        existingCheck.setChecked(false);
+        existingCheck.setXpGenerated(0);
+        habitGroupToUncheck.getHabitGroupChecks().add(existingCheck);
+        diaryRoutineRepository.save(routine);
+    }
+
+    protected TaskGroup findTaskGroupByDTO(CheckGroupRequestDTO taskGroupToCheckOrUncheck){
+        DiaryRoutine routine = diaryRoutineRepository.findById(taskGroupToCheckOrUncheck.routineId()).orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
+
+        return routine.getRoutineSections().stream()
+            .flatMap(section -> section.getTaskGroups().stream())
+            .filter(taskGroup -> taskGroup.getId().equals(taskGroupToCheckOrUncheck.taskGroupDTO().taskGroupId()))
+            .findFirst()
+            .orElse(null);
+    }
+
+    protected void checkOrUncheckTaskGroup(TaskGroup taskGroupToCheckOrUncheck) {
+        // Check if the habit group is already checked for today
+        boolean isCheckedToday = taskGroupToCheckOrUncheck.getTaskGroupChecks().stream()
+        .anyMatch(habitCheck -> habitCheck.getCheckDate().equals(LocalDate.now()) && habitCheck.isChecked());
+
+        if(isCheckedToday){
+            // Uncheck: Remove check, subtract XP, adjust constance
+            uncheckTaskGroup(taskGroupToCheckOrUncheck);
+        }else{
+            //Calculate the exp (Think in a good algorithm later on)
+            checkTaskGroup(taskGroupToCheckOrUncheck);
+        }
+    }
+
+    protected void checkTaskGroup(TaskGroup taskGroupToCheck){
+        DiaryRoutine routine = (DiaryRoutine) taskGroupToCheck.getRoutineSection().getRoutine();
+        log.info("[LOG] Starting Check");
+        Task taskChecked = taskGroupToCheck.getTask();
+        TaskGroupCheck check = new TaskGroupCheck();
+
+        check = checkIfTaskGroupIsAlreadyCheckedAndOverrideCheck(taskGroupToCheck);
+
+        int dificulty = taskChecked.getDificulty() != null ? taskChecked.getDificulty() : 1;
+        int importance = taskChecked.getImportance() != null ? taskChecked.getImportance() : 1;
+        Double newXp = (double) (10 * dificulty * importance);
+
+        //Set check object
+        check.setCheckDate(LocalDate.now());
+        check.setCheckTime(LocalTime.now());
+        check.setChecked(true);
+        check.setXpGenerated(0);
+        check.setTaskGroup(taskGroupToCheck);
+
+        //Update categories
+        if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
+            log.info("Task have category");
+            check.setXpGenerated(newXp);
+            List<Category> categories = taskChecked.getCategories();
+            updateCategoriesXpAndLevel(categories, newXp);
+        }        
+
+        //Update entities
+        taskGroupToCheck.getTaskGroupChecks().add(check);
+        taskService.editTask(taskChecked);
+        for (RoutineSection section : routine.getRoutineSections()) {
+            List<TaskGroup> taskGroups = section.getTaskGroups();
+            for (int i = 0; i < taskGroups.size(); i++) {
+                TaskGroup current = taskGroups.get(i);
+                if (current.getId().equals(taskGroupToCheck.getId())) {
+                    taskGroups.set(i, taskGroupToCheck);
+                }
+            }
+        }
+        diaryRoutineRepository.save(routine);
+    }
+
+    protected void uncheckTaskGroup(TaskGroup taskGroupUnchecked){
+        DiaryRoutine routine = (DiaryRoutine) taskGroupUnchecked.getRoutineSection().getRoutine();
+        log.info("[LOG] Starting unchecking");
+        Task taskChecked = taskGroupUnchecked.getTask();
+
+        TaskGroupCheck existingCheck = taskGroupUnchecked.getTaskGroupChecks().stream()
+            .filter(taskCheck -> taskCheck.getCheckDate().equals(LocalDate.now()))
+            .findFirst()
+            .get();
+
+        //Clean the check and remove the xp generated in the categories
+        taskGroupUnchecked.getTaskGroupChecks().remove(existingCheck);
+        if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
+            removeXpFromCategories(taskChecked.getCategories(), existingCheck.getXpGenerated());
+        }
+
+        taskService.editTask(taskChecked);
+
+        existingCheck.setCheckDate(LocalDate.now());
+        existingCheck.setCheckTime(LocalTime.now());
+        existingCheck.setChecked(false);
+        existingCheck.setXpGenerated(0);
+        taskGroupUnchecked.getTaskGroupChecks().add(existingCheck);
+        diaryRoutineRepository.save(routine);
+    }
+
+    private TaskGroupCheck checkIfTaskGroupIsAlreadyCheckedAndOverrideCheck(TaskGroup taskGroup){
+        Optional<TaskGroupCheck> existingCheck = taskGroup.getTaskGroupChecks().stream()
+            .filter(tc -> tc.getCheckDate().equals(LocalDate.now()))
+            .findFirst();
+
+        if (existingCheck.isPresent()) {
+            log.info("[LOG] TaskGroup already have check for today, overriting this one => {}", taskGroup);
+            taskGroup.getTaskGroupChecks().remove(existingCheck.get());
+            return existingCheck.get();
+        }
+        return new TaskGroupCheck();
+    }
+
+    protected void updateCategoriesXpAndLevel(List<Category> categories, Double newXp){
         for(Category category : categories){
             category.setXp(category.getXp() + newXp);
 
@@ -518,7 +542,7 @@ public class DiaryRoutineService {
         }
     }
 
-    private void removeXpFromCategories(List<Category> categories, Double xpToRemove){
+    protected void removeXpFromCategories(List<Category> categories, Double xpToRemove){
         for(Category category : categories){
             log.info("[LOG] Xp to remove => {}", xpToRemove);
             category.setXp(category.getXp() - xpToRemove);

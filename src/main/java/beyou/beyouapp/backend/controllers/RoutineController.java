@@ -83,6 +83,6 @@ public class RoutineController {
     public ResponseEntity<DiaryRoutineResponseDTO> checkItem(@RequestBody CheckGroupRequestDTO checkGroupRequestDTO){
         log.info("Initializing check request");
         User userAuth = authenticatedUser.getAuthenticatedUser();
-        return ResponseEntity.ok().body(diaryRoutineService.checkGroup(checkGroupRequestDTO, userAuth.getId()));
+        return ResponseEntity.ok().body(diaryRoutineService.checkAndUncheckGroup(checkGroupRequestDTO, userAuth.getId()));
     }
 }

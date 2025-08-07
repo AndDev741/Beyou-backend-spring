@@ -404,7 +404,7 @@ class DiaryRoutineServiceTest {
 
         // Act & Assert
         assertThrows(RuntimeException.class,
-                () -> diaryRoutineService.checkGroup(requestDTO, userId));
+                () -> diaryRoutineService.checkAndUncheckGroup(requestDTO, userId));
     }
 
     @Test
@@ -420,7 +420,6 @@ class DiaryRoutineServiceTest {
         habit.setCategories(new ArrayList<>());
 
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
-        when(diaryRoutineRepository.save(diaryRoutine)).thenReturn(diaryRoutine);
 
         CheckGroupRequestDTO requestDTO = new CheckGroupRequestDTO(
                 routineId,
@@ -428,7 +427,7 @@ class DiaryRoutineServiceTest {
                 new HabitGroupRequestDTO(habitGroup.getId(), null));
 
         // Act
-        DiaryRoutineResponseDTO response = diaryRoutineService.checkGroup(requestDTO, userId);
+        DiaryRoutineResponseDTO response = diaryRoutineService.checkAndUncheckGroup(requestDTO, userId);
 
         // Assert
         var habitGroups = response.routineSections().get(0).habitGroup();
