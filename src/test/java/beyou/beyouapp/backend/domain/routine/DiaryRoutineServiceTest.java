@@ -400,8 +400,7 @@ class DiaryRoutineServiceTest {
     void shouldThrowException_whenNoItemGroupInRequest() {
         // Arrange
         CheckGroupRequestDTO requestDTO = new CheckGroupRequestDTO(routineId, null, null);
-        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
-
+        
         // Act & Assert
         assertThrows(RuntimeException.class,
                 () -> diaryRoutineService.checkAndUncheckGroup(requestDTO, userId));
