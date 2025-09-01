@@ -2,8 +2,11 @@ package beyou.beyouapp.backend.domain.task;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +23,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
 import beyou.beyouapp.backend.exceptions.task.TaskNotFound;
@@ -38,6 +42,9 @@ public class TaskServiceTest {
 
     @Mock
     UserRepository userRepository;
+
+    @Mock
+    DiaryRoutineRepository diaryRoutineRepository;
 
     @InjectMocks
     TaskService taskService;
@@ -145,6 +152,27 @@ public class TaskServiceTest {
         ResponseEntity<Map<String, String>> deleteTaskResponse = taskService.deleteTask(taskId, userId);
 
         assertEquals(ResponseEntity.ok(Map.of("success", "Task deleted Successfully!")), deleteTaskResponse);
+    }
+
+    @Test
+    public void shouldDelete1DayAfterTheMarkedToDeleteDate(){
+        user.setId(userId);
+        Task taskToDelete = new Task();
+        taskToDelete.setId(taskId);
+        taskToDelete.setUser(user);
+        taskToDelete.setOneTimeTask(true);
+        taskToDelete.setMarkedToDelete(LocalDate.now().minusDays(1));
+
+        when(taskRepository.findAllByUserId(userId)).thenReturn(Optional.of(List.of(taskToDelete)));
+        when(taskRepository.findAllByUserId(userId))
+            .thenReturn(Optional.of(List.of(taskToDelete)))  // 1ª call
+            .thenReturn(Optional.of(new ArrayList<>()));    // 2ª call
+
+        List<Task> result = taskService.getAllTasks(userId);
+
+        verify(taskRepository, times(2)).findAllByUserId(userId);
+        verify(taskRepository, times(1)).deleteAll(List.of(taskToDelete));
+        assertEquals(new ArrayList<>(), result);
     }
 
     //Exceptions

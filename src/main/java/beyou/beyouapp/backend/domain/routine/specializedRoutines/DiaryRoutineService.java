@@ -470,7 +470,12 @@ public class DiaryRoutineService {
             check.setXpGenerated(newXp);
             List<Category> categories = taskChecked.getCategories();
             updateCategoriesXpAndLevel(categories, newXp);
-        }        
+        }
+        
+        //Mark to delete if one time task
+        if(taskChecked.isOneTimeTask()){
+            taskChecked.setMarkedToDelete(LocalDate.now());
+        }
 
         //Update entities
         taskGroupToCheck.getTaskGroupChecks().add(check);
@@ -501,6 +506,11 @@ public class DiaryRoutineService {
         taskGroupUnchecked.getTaskGroupChecks().remove(existingCheck);
         if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
             removeXpFromCategories(taskChecked.getCategories(), existingCheck.getXpGenerated());
+        }
+
+        //Remove marked to delete if has
+        if(taskChecked.isOneTimeTask()){
+            taskChecked.setMarkedToDelete(null);
         }
 
         taskService.editTask(taskChecked);
