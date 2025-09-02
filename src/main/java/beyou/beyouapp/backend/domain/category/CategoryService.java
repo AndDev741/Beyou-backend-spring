@@ -9,6 +9,7 @@ import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 
 @Service
+@Slf4j
 public class CategoryService {
     @Autowired
     private CategoryRepository categoryRepository;
@@ -112,4 +114,37 @@ public class CategoryService {
             return ResponseEntity.badRequest().body(Map.of("error", "Error trying to delete the category"));
         }
     }
+
+    public void updateCategoriesXpAndLevel(List<Category> categories, Double newXp){
+        for(Category category : categories){
+            category.setXp(category.getXp() + newXp);
+
+            if(category.getXp() > category.getNextLevelXp() || category.getXp() == category.getNextLevelXp()){
+                category.setLevel(category.getLevel() + 1);
+                XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(category.getLevel());
+                XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(category.getLevel() + 1);
+                category.setActualLevelXp(xpForActualLevel.getXp());
+                category.setNextLevelXp(xpForNextLevel.getXp());
+            }
+
+            categoryRepository.save(category);
+        }
+    }
+
+    public void removeXpFromCategories(List<Category> categories, Double xpToRemove){
+        for(Category category : categories){
+            log.info("[LOG] Xp to remove => {}", xpToRemove);
+            category.setXp(category.getXp() - xpToRemove);
+            if(category.getXp() < category.getActualLevelXp() && category.getXp() > 0 ){
+                category.setLevel(category.getLevel() - 1);
+                XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(category.getLevel());
+                XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(category.getLevel() + 1);
+                category.setActualLevelXp(xpForActualLevel.getXp());
+                category.setNextLevelXp(xpForNextLevel.getXp());
+            }
+
+            categoryRepository.save(category);
+        }
+    }
+
 }

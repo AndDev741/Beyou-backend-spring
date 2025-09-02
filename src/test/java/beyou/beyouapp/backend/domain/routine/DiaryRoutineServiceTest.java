@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.routine;
 
+import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
@@ -55,6 +56,9 @@ class DiaryRoutineServiceTest {
 
     @Mock
     private HabitService habitService;
+
+    @Mock
+    private CategoryService categoryService;
 
     @InjectMocks
     private DiaryRoutineService diaryRoutineService;

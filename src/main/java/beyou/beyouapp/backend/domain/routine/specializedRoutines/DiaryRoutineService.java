@@ -1,7 +1,7 @@
 package beyou.beyouapp.backend.domain.routine.specializedRoutines;
 
 import beyou.beyouapp.backend.domain.category.Category;
-import beyou.beyouapp.backend.domain.category.CategoryRepository;
+import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.domain.habit.Habit;
@@ -45,7 +45,7 @@ public class DiaryRoutineService {
     private final TaskService taskService;
     private final HabitService habitService;
     private final XpByLevelRepository xpByLevelRepository;
-    private final CategoryRepository categoryRepository;
+    private final CategoryService categoryService;
 
     @Transactional(readOnly = true)
     public DiaryRoutineResponseDTO getDiaryRoutineById(UUID id, UUID userId) {
@@ -359,7 +359,7 @@ public class DiaryRoutineService {
 
         //Update categories xp
         List<Category> categories = habitChecked.getCategories();
-        updateCategoriesXpAndLevel(categories, newXp);
+        categoryService.updateCategoriesXpAndLevel(categories, newXp);
 
         //Set check object
         check.setCheckDate(LocalDate.now());
@@ -410,7 +410,7 @@ public class DiaryRoutineService {
         habitToCheck.setXp(habitToCheck.getXp() - existingCheck.getXpGenerated());
         habitToCheck.setConstance(habitToCheck.getConstance() - 1);
 
-        removeXpFromCategories(habitToCheck.getCategories(), existingCheck.getXpGenerated());
+        categoryService.removeXpFromCategories(habitToCheck.getCategories(), existingCheck.getXpGenerated());
         habitService.editEntity(habitToCheck);
 
         existingCheck.setCheckDate(LocalDate.now());
@@ -469,7 +469,7 @@ public class DiaryRoutineService {
             log.info("Task have category");
             check.setXpGenerated(newXp);
             List<Category> categories = taskChecked.getCategories();
-            updateCategoriesXpAndLevel(categories, newXp);
+            categoryService.updateCategoriesXpAndLevel(categories, newXp);
         }
         
         //Mark to delete if one time task
@@ -505,7 +505,7 @@ public class DiaryRoutineService {
         //Clean the check and remove the xp generated in the categories
         taskGroupUnchecked.getTaskGroupChecks().remove(existingCheck);
         if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
-            removeXpFromCategories(taskChecked.getCategories(), existingCheck.getXpGenerated());
+            categoryService.removeXpFromCategories(taskChecked.getCategories(), existingCheck.getXpGenerated());
         }
 
         //Remove marked to delete if has
@@ -534,37 +534,5 @@ public class DiaryRoutineService {
             return existingCheck.get();
         }
         return new TaskGroupCheck();
-    }
-
-    protected void updateCategoriesXpAndLevel(List<Category> categories, Double newXp){
-        for(Category category : categories){
-            category.setXp(category.getXp() + newXp);
-
-            if(category.getXp() > category.getNextLevelXp() || category.getXp() == category.getNextLevelXp()){
-                category.setLevel(category.getLevel() + 1);
-                XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(category.getLevel());
-                XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(category.getLevel() + 1);
-                category.setActualLevelXp(xpForActualLevel.getXp());
-                category.setNextLevelXp(xpForNextLevel.getXp());
-            }
-
-            categoryRepository.save(category);
-        }
-    }
-
-    protected void removeXpFromCategories(List<Category> categories, Double xpToRemove){
-        for(Category category : categories){
-            log.info("[LOG] Xp to remove => {}", xpToRemove);
-            category.setXp(category.getXp() - xpToRemove);
-            if(category.getXp() < category.getActualLevelXp() && category.getXp() > 0 ){
-                category.setLevel(category.getLevel() - 1);
-                XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(category.getLevel());
-                XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(category.getLevel() + 1);
-                category.setActualLevelXp(xpForActualLevel.getXp());
-                category.setNextLevelXp(xpForNextLevel.getXp());
-            }
-
-            categoryRepository.save(category);
-        }
     }
 }
