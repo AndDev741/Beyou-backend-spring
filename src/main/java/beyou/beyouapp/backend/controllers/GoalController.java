@@ -55,4 +55,16 @@ public class GoalController {
         User user = authenticatedUser.getAuthenticatedUser();
         return goalService.deleteGoal(goalId, user.getId());
     }
+
+    @PutMapping("/complete")
+    public ResponseEntity<Map<String, String>> setAsComplete(@RequestBody UUID goalId) {
+        User user = authenticatedUser.getAuthenticatedUser();
+        
+        try {
+            goalService.checkGoal(goalId, user.getId());
+            return ResponseEntity.ok(Map.of("success", "Goal checked successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to complete goal"));
+        } 
+    }
 }

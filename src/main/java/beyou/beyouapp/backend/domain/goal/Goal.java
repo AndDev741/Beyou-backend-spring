@@ -77,7 +77,7 @@ public class Goal {
     private LocalDate endDate;
 
     @Column(nullable = false)
-    private Integer xpReward;
+    private double xpReward;
 
     @ManyToOne
     @JsonIgnore
@@ -92,6 +92,9 @@ public class Goal {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private GoalTerm term;
+
+    @Column(nullable = false)
+    private LocalDate completeDate;
 
     public Goal(CreateGoalRequestDTO dto, List<Category> categories, User user) {
         this.name = dto.name();

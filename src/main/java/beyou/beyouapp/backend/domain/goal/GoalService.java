@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.goal;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,7 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
+import beyou.beyouapp.backend.domain.goal.util.GoalXpCalculator;
 import beyou.beyouapp.backend.exceptions.goal.GoalNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
@@ -106,5 +108,44 @@ public class GoalService {
 
     public Goal editEntity(Goal goal) {
         return goalRepository.save(goal);
+    }
+
+    public Goal checkGoal(UUID goalId, UUID userId) {
+        Goal goal = getGoal(goalId);
+        if (!goal.getUser().getId().equals(userId)) {
+            throw new GoalNotFound("The goal isn't of the user in context");
+        }
+
+        double xp = GoalXpCalculator.calculateXp(goal);
+        goal.setXpReward(xp);
+
+        if(goal.getComplete() == null || !goal.getComplete()){
+            setGoalAsCompleted(goal, xp);
+        }else{
+            removeCompletedOfAGoal(goal, xp);
+        }
+
+        try {
+            goalRepository.save(goal);
+            return goal;
+        } catch (Exception e) {
+           throw new RuntimeException(e);
+        }
+    } 
+
+    private void setGoalAsCompleted(Goal goal, double xpReward){
+        goal.setComplete(true);   
+        goal.setStatus(GoalStatus.COMPLETED);
+        goal.setCompleteDate(LocalDate.now());
+
+        categoryService.updateCategoriesXpAndLevel(goal.getCategories(), xpReward); 
+    }
+
+  private void removeCompletedOfAGoal(Goal goal, double xpReward){
+        goal.setComplete(false);
+        goal.setStatus(GoalStatus.IN_PROGRESS);
+        goal.setCompleteDate(null);
+
+        categoryService.removeXpFromCategories(goal.getCategories(), xpReward);
     }
 }
