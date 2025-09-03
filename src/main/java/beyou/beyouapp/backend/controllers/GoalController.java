@@ -67,4 +67,16 @@ public class GoalController {
             return ResponseEntity.badRequest().body(Map.of("error", "Error trying to complete goal"));
         } 
     }
+
+    @PutMapping("/increase")
+    public ResponseEntity<Map<String, String>> increaseCurrentValue(@RequestBody UUID goalId) {
+        User user = authenticatedUser.getAuthenticatedUser();
+        
+        try {
+            goalService.increaseCurrentValue(goalId, user.getId());
+            return ResponseEntity.ok(Map.of("success", "Current value increased successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to increase current value"));
+        } 
+    }
 }

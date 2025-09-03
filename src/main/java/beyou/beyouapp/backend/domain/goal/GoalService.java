@@ -64,9 +64,8 @@ public class GoalService {
 
     public ResponseEntity<Map<String, String>> editGoal(EditGoalRequestDTO dto, UUID userId) {
         Goal goal = getGoal(dto.goalId());
-        if (!goal.getUser().getId().equals(userId)) {
-            throw new GoalNotFound("The goal isn't of the user in context");
-        }
+        checkIfGoalIsFromTheUserInContext(goal, userId);
+
         goal.setName(dto.name());
         goal.setIconId(dto.iconId());
         goal.setDescription(dto.description());
@@ -95,9 +94,8 @@ public class GoalService {
 
     public ResponseEntity<Map<String, String>> deleteGoal(UUID goalId, UUID userId) {
         Goal goal = getGoal(goalId);
-        if (!goal.getUser().getId().equals(userId)) {
-            throw new GoalNotFound("The goal isn't of the user in context");
-        }
+        checkIfGoalIsFromTheUserInContext(goal, userId);
+
         try {
             goalRepository.delete(goal);
             return ResponseEntity.ok(Map.of("success", "Goal deleted successfully"));
@@ -112,9 +110,7 @@ public class GoalService {
 
     public Goal checkGoal(UUID goalId, UUID userId) {
         Goal goal = getGoal(goalId);
-        if (!goal.getUser().getId().equals(userId)) {
-            throw new GoalNotFound("The goal isn't of the user in context");
-        }
+        checkIfGoalIsFromTheUserInContext(goal, userId);
 
         double xp = GoalXpCalculator.calculateXp(goal);
         goal.setXpReward(xp);
@@ -141,11 +137,31 @@ public class GoalService {
         categoryService.updateCategoriesXpAndLevel(goal.getCategories(), xpReward); 
     }
 
-  private void removeCompletedOfAGoal(Goal goal, double xpReward){
+    private void removeCompletedOfAGoal(Goal goal, double xpReward){
         goal.setComplete(false);
         goal.setStatus(GoalStatus.IN_PROGRESS);
         goal.setCompleteDate(null);
 
         categoryService.removeXpFromCategories(goal.getCategories(), xpReward);
     }
+
+    public Goal increaseCurrentValue (UUID goalId, UUID userId) {
+        Goal goal = getGoal(goalId);
+        checkIfGoalIsFromTheUserInContext(goal, userId);
+
+        goal.setCurrentValue(goal.getCurrentValue() + 1);
+        try {
+            goalRepository.save(goal);
+            return goal;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void checkIfGoalIsFromTheUserInContext(Goal goal, UUID userId) {
+        if (!goal.getUser().getId().equals(userId)) {
+            throw new GoalNotFound("The goal isn't of the user in context");
+        }
+    }
+
 }
