@@ -57,6 +57,9 @@ public class goalServiceTest {
 
         goal.setId(goalId);
         goal.setName("Test 1");
+        goal.setTargetValue(10.0);
+        goal.setStartDate(LocalDate.now().minusDays(2));
+        goal.setEndDate(LocalDate.now());
         user.setId(userId);
         goal.setUser(user);
         
@@ -253,5 +256,31 @@ public class goalServiceTest {
 
         assertEquals(goal, result);
         verify(goalRepository, times(1)).save(goal);
+    }
+
+    @Test
+    void shouldMarkAsCompleteSuccessfully() {
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        Goal response = goalService.checkGoal(goalId, userId);
+
+        assertEquals(true, response.getComplete());
+        assertEquals( GoalStatus.COMPLETED, response.getStatus());
+        assertEquals(LocalDate.now(), response.getCompleteDate());
+    }
+
+    @Test
+    void shouldRemoveCompleteSuccessfully() {
+        goal.setComplete(true);
+
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        Goal response = goalService.checkGoal(goalId, userId);
+
+        assertEquals(false, response.getComplete());
+        assertEquals( GoalStatus.IN_PROGRESS, response.getStatus());
+        assertEquals(null, response.getCompleteDate());
     }
 }

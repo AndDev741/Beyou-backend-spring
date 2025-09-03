@@ -118,4 +118,17 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value("Goal deleted"));
     }
+
+    @Test
+    void shouldMarkAsCompletedSuccessfully() throws Exception {
+        UUID goalId = UUID.randomUUID();
+        when(goalService.checkGoal(goalId, userId)).thenReturn(new Goal());
+
+        mockMvc.perform(put("/goal/complete")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(goalId))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value("Goal checked successfully"));
+    }
 }
