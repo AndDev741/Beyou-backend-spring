@@ -283,4 +283,20 @@ public class goalServiceTest {
         assertEquals( GoalStatus.IN_PROGRESS, response.getStatus());
         assertEquals(null, response.getCompleteDate());
     }
+
+    @Test
+    void shouldIncrementTheCurrentValueSuccessfully() {
+
+        goal.setCurrentValue(15.0);
+
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        Goal response = goalService.increaseCurrentValue(goalId, userId);
+
+        assertEquals(16.0, response.getCurrentValue());
+
+
+    }
+
 }

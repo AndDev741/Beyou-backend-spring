@@ -131,4 +131,17 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value("Goal checked successfully"));
     }
+
+    @Test
+    void shouldIncreaseTheCurrentValueSuccessfully() throws Exception {
+        UUID goalId = UUID.randomUUID();
+        when(goalService.increaseCurrentValue(goalId, userId)).thenReturn(new Goal());
+
+        mockMvc.perform(put("/goal/increase")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(goalId))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value("Current value increased successfully"));
+    }
 }
