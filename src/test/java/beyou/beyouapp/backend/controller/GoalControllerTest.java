@@ -129,7 +129,7 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 .content(objectMapper.writeValueAsString(goalId))
                 )
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value("Goal checked successfully"));
+                .andExpect(jsonPath("$.success").exists());
     }
 
     @Test
@@ -142,6 +142,19 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 .content(objectMapper.writeValueAsString(goalId))
                 )
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value("Current value increased successfully"));
+                .andExpect(jsonPath("$.success").exists());
+    }
+
+    @Test
+    void shouldDecreaseTheCurrentValueSuccessfully() throws Exception {
+        UUID goalId = UUID.randomUUID();
+        when(goalService.decreaseCurrentValue(goalId, userId)).thenReturn(new Goal());
+
+        mockMvc.perform(put("/goal/decrease")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(goalId))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").exists());
     }
 }

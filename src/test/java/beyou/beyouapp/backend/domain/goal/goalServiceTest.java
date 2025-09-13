@@ -299,4 +299,18 @@ public class goalServiceTest {
 
     }
 
+    @Test
+    void shouldDecrementTheCurrentValueSuccessfully() {
+
+        goal.setCurrentValue(15.0);
+
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        Goal response = goalService.decreaseCurrentValue(goalId, userId);
+
+        assertEquals(14.0, response.getCurrentValue());
+
+    }
+
 }

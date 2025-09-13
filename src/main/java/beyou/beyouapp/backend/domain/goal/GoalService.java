@@ -158,6 +158,19 @@ public class GoalService {
         }
     }
 
+    public Goal decreaseCurrentValue (UUID goalId, UUID userId) {
+        Goal goal = getGoal(goalId);
+        checkIfGoalIsFromTheUserInContext(goal, userId);
+
+        goal.setCurrentValue(goal.getCurrentValue() - 1);
+        try {
+            goalRepository.save(goal);
+            return goal;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public void checkIfGoalIsFromTheUserInContext(Goal goal, UUID userId) {
         if (!goal.getUser().getId().equals(userId)) {
             throw new GoalNotFound("The goal isn't of the user in context");

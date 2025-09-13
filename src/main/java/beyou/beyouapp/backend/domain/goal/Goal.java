@@ -93,7 +93,6 @@ public class Goal {
     @Column(nullable = false)
     private GoalTerm term;
 
-    @Column(nullable = false)
     private LocalDate completeDate;
 
     public Goal(CreateGoalRequestDTO dto, List<Category> categories, User user) {
