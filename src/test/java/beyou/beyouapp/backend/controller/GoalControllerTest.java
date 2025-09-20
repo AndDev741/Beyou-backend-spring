@@ -128,8 +128,7 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(goalId))
                 )
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").exists());
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -141,8 +140,7 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(goalId))
                 )
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").exists());
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -154,7 +152,6 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(goalId))
                 )
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").exists());
+                .andExpect(status().isOk());
     }
 }

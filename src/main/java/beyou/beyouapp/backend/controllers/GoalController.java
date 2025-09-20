@@ -57,38 +57,35 @@ public class GoalController {
     }
 
     @PutMapping("/complete")
-    public ResponseEntity<Map<String, Object>> setAsComplete(@RequestBody UUID goalId) {
+    public Goal setAsComplete(@RequestBody UUID goalId) {
         User user = authenticatedUser.getAuthenticatedUser();
         
         try {
-             Goal goal = goalService.checkGoal(goalId, user.getId());
-            return ResponseEntity.ok(Map.of("success", goal));
+            return goalService.checkGoal(goalId, user.getId());
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to complete goal"));
+            throw new RuntimeException(e);
         } 
     }
 
     @PutMapping("/increase")
-    public ResponseEntity<Map<String, Object>> increaseCurrentValue(@RequestBody UUID goalId) {
+    public Goal increaseCurrentValue(@RequestBody UUID goalId) {
         User user = authenticatedUser.getAuthenticatedUser();
         
         try {
-            Goal goal = goalService.increaseCurrentValue(goalId, user.getId());
-            return ResponseEntity.ok(Map.of("success", goal));
+            return goalService.increaseCurrentValue(goalId, user.getId());
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to increase current value"));
+            throw new RuntimeException(e);
         } 
     }
 
     @PutMapping("/decrease")
-    public ResponseEntity<Map<String, Object>> decreaseCurrentValue(@RequestBody UUID goalId) {
+    public Goal decreaseCurrentValue(@RequestBody UUID goalId) {
         User user = authenticatedUser.getAuthenticatedUser();
         
         try {
-            Goal goal = goalService.decreaseCurrentValue(goalId, user.getId());
-            return ResponseEntity.ok(Map.of("success", goal));
+            return goalService.decreaseCurrentValue(goalId, user.getId());
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to increase current value"));
+            throw new RuntimeException(e);
         } 
     }
 }
