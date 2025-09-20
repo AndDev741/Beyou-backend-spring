@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -187,12 +188,14 @@ public class DiaryRoutineService {
     }
 
     private List<RoutineSection> mapToRoutineSections(List<RoutineSectionRequestDTO> dtos, DiaryRoutine diaryRoutine) {
+        AtomicInteger index = new AtomicInteger(0);
         return dtos.stream().map(dto -> {
             RoutineSection section = new RoutineSection();
             log.info("ID OF SECTION ITEM =» {}", dto.id());
             if(dto.id() != null){
                 section.setId(dto.id());
             }
+            section.setOrderIndex(index.getAndIncrement());
             section.setName(dto.name());
             section.setIconId(dto.iconId());
             section.setStartTime(dto.startTime());

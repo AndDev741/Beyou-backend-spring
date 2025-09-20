@@ -45,4 +45,7 @@ public class RoutineSection {
     @JoinColumn(name = "routine_id")
     @ToString.Exclude
     private Routine routine;
+
+    @Column()
+    private int orderIndex;
 }
