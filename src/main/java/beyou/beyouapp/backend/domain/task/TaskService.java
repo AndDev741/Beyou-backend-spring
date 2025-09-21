@@ -59,14 +59,17 @@ public class TaskService {
             .filter(task -> task.getMarkedToDelete() != null && task.getMarkedToDelete().isBefore(today))
             .collect(Collectors.toList());
 
+        log.info("Tasks to be deleted => {}", tasksToDelete);
+
         if (tasksToDelete.isEmpty()) return;
-
-        taskRepository.deleteAll(tasksToDelete);
-
+        
         Set<UUID> deletedTaskIds = tasksToDelete.stream()
             .map(Task::getId)
             .collect(Collectors.toSet());
+        
+        log.info("Deleted task ids => {}", deletedTaskIds);
 
+        //First remove from routines
         List<DiaryRoutine> diaryRoutines = diaryRoutineRepository.findAllByUserId(userId);
         for (DiaryRoutine diaryRoutine : diaryRoutines) {
             boolean modified = false;
@@ -75,15 +78,21 @@ public class TaskService {
                 boolean removed = section.getTaskGroups().removeIf(
                     group -> deletedTaskIds.contains(group.getTask().getId())
                 );
+                log.info("Task group to delete is part of section => {}", removed);
+
                 if (removed) {
                     modified = true;
                 }
             }
 
             if (modified) {
+                log.info("Diary routine modified => {}", diaryRoutine);
                 diaryRoutineRepository.save(diaryRoutine);
             }
         }
+
+        //Then delete from the respotisory
+        taskRepository.deleteAll(tasksToDelete);
     }
 
 

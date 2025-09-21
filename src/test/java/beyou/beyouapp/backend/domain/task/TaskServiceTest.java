@@ -23,7 +23,10 @@ import org.springframework.test.context.ActiveProfiles;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.TaskGroup;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
 import beyou.beyouapp.backend.exceptions.task.TaskNotFound;
@@ -157,21 +160,39 @@ public class TaskServiceTest {
     @Test
     public void shouldDelete1DayAfterTheMarkedToDeleteDate(){
         user.setId(userId);
+        DiaryRoutine diaryRoutine = new DiaryRoutine();
+        diaryRoutine.setUser(user);
+        RoutineSection routineSection = new RoutineSection();
+        routineSection.setId(UUID.randomUUID());
+
         Task taskToDelete = new Task();
         taskToDelete.setId(taskId);
         taskToDelete.setUser(user);
         taskToDelete.setOneTimeTask(true);
         taskToDelete.setMarkedToDelete(LocalDate.now().minusDays(1));
 
+        TaskGroup taskGroup = new TaskGroup();
+        taskGroup.setId(UUID.randomUUID());
+        taskGroup.setTask(taskToDelete);
+        taskGroup.setRoutineSection(routineSection);
+        List<TaskGroup> taskGroups = new ArrayList<>(List.of(taskGroup));
+        routineSection.setTaskGroups(taskGroups);
+
+        diaryRoutine.setRoutineSections(List.of(routineSection));
+
         when(taskRepository.findAllByUserId(userId)).thenReturn(Optional.of(List.of(taskToDelete)));
         when(taskRepository.findAllByUserId(userId))
             .thenReturn(Optional.of(List.of(taskToDelete)))  // 1ª call
             .thenReturn(Optional.of(new ArrayList<>()));    // 2ª call
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(diaryRoutine));
 
         List<Task> result = taskService.getAllTasks(userId);
 
         verify(taskRepository, times(2)).findAllByUserId(userId);
         verify(taskRepository, times(1)).deleteAll(List.of(taskToDelete));
+        verify(diaryRoutineRepository, times(1)).findAllByUserId(userId);
+        verify(diaryRoutineRepository, times(1)).save(diaryRoutine);
+
         assertEquals(new ArrayList<>(), result);
     }
 
