@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.security.TokenService;
+import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import jakarta.servlet.http.Cookie;
@@ -16,6 +17,7 @@ import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class UserService {
@@ -85,6 +87,25 @@ public class UserService {
             return ResponseEntity.ok(Map.of("success", "User deleted successfully"));
         }catch(Exception e){
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    public ResponseEntity<Map<String, String>> editUser(UserEditDTO userEdit, UUID userId){
+        Optional<User> userOpt = userRepository.findById(userId);
+        if(userOpt.isPresent()){
+            User user = userOpt.get();
+            user.setName(userEdit.name());
+            user.setPerfilPhoto(userEdit.photo());
+            user.setPerfilPhrase(userEdit.phrase());
+            user.setPerfilPhraseAuthor(userEdit.phrase_author());
+            try{
+                userRepository.save(user);
+                return ResponseEntity.ok(Map.of("success", "User edited successfully"));
+            }catch(Exception e){
+                return ResponseEntity.badRequest().body(Map.of("error", "Error trying to edit user"));
+            }
+        }else{
+            return ResponseEntity.badRequest().body(Map.of("error", "User not found"));
         }
     }
 
