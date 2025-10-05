@@ -96,7 +96,7 @@ public class UserServiceTest {
 
         UserResponseDTO userResponseDTO = new UserResponseDTO(user.getName(),
                 user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
-                user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount());
+                user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount(), user.getWidgetsIdInUse());
 
         assertEquals(ResponseEntity.ok().body(Map.of("success", userResponseDTO)) ,loginResponse);
     }

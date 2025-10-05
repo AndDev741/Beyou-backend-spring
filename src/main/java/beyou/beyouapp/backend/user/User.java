@@ -81,6 +81,8 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)
     private UserRole userRole;
 
+    private List<String> widgetsIdInUse;
+
     @PrePersist
     protected void onUserCreate(){
         LocalDate now = LocalDate.now();

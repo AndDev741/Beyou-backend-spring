@@ -29,4 +29,10 @@ public class UserController {
         User user = authenticatedUser.getAuthenticatedUser();
         return userService.editUser(userEdit, user.getId());
     }
+
+    @PutMapping("/widgets")
+    public ResponseEntity<Map<String, String>> editWidgets(@RequestBody UserEditDTO userEdit){
+        User user = authenticatedUser.getAuthenticatedUser();
+        return userService.editWidgets(userEdit.widgetsId(), user.getId());
+    }
 }

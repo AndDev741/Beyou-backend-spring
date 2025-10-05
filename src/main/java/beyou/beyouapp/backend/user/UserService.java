@@ -14,6 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -51,7 +52,7 @@ public class UserService {
                 addJwtTokenToResponse(response, token);
                 UserResponseDTO userResponse = new UserResponseDTO(user.getName(),
                         user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
-                        user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount());
+                        user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount(), user.getWidgetsIdInUse());
                 return ResponseEntity.ok().body(Map.of("success", userResponse));
             }
         }
@@ -103,6 +104,22 @@ public class UserService {
                 return ResponseEntity.ok(Map.of("success", "User edited successfully"));
             }catch(Exception e){
                 return ResponseEntity.badRequest().body(Map.of("error", "Error trying to edit user"));
+            }
+        }else{
+            return ResponseEntity.badRequest().body(Map.of("error", "User not found"));
+        }
+    }
+
+    public ResponseEntity<Map<String, String>> editWidgets(List<String> widgetsId, UUID userId){
+        Optional<User> userOpt = userRepository.findById(userId);
+        if(userOpt.isPresent()){
+            User user = userOpt.get();
+            user.setWidgetsIdInUse(widgetsId);
+            try{
+                userRepository.save(user);
+                return ResponseEntity.ok(Map.of("success", "Widgets edited successfully"));
+            }catch(Exception e){
+                return ResponseEntity.badRequest().body(Map.of("error", "Error trying to edit widgets"));
             }
         }else{
             return ResponseEntity.badRequest().body(Map.of("error", "User not found"));
