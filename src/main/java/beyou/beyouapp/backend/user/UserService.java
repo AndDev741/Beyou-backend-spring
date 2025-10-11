@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
@@ -91,7 +92,7 @@ public class UserService {
         }
     }
 
-    public ResponseEntity<Map<String, String>> editUser(UserEditDTO userEdit, UUID userId){
+    public User editUser(UserEditDTO userEdit, UUID userId){
         Optional<User> userOpt = userRepository.findById(userId);
         if(userOpt.isPresent()){
             User user = userOpt.get();
@@ -100,29 +101,29 @@ public class UserService {
             user.setPerfilPhrase(userEdit.phrase());
             user.setPerfilPhraseAuthor(userEdit.phrase_author());
             try{
-                userRepository.save(user);
-                return ResponseEntity.ok(Map.of("success", "User edited successfully"));
+                User saved = userRepository.save(user);
+                return saved;
             }catch(Exception e){
-                return ResponseEntity.badRequest().body(Map.of("error", "Error trying to edit user"));
+               throw e;
             }
         }else{
-            return ResponseEntity.badRequest().body(Map.of("error", "User not found"));
+            throw new UserNotFound("User not found by id");
         }
     }
 
-    public ResponseEntity<Map<String, String>> editWidgets(List<String> widgetsId, UUID userId){
+    public User editWidgets(List<String> widgetsId, UUID userId){
         Optional<User> userOpt = userRepository.findById(userId);
         if(userOpt.isPresent()){
             User user = userOpt.get();
             user.setWidgetsIdInUse(widgetsId);
             try{
-                userRepository.save(user);
-                return ResponseEntity.ok(Map.of("success", "Widgets edited successfully"));
+                User savedUser = userRepository.save(user);
+                return savedUser;
             }catch(Exception e){
-                return ResponseEntity.badRequest().body(Map.of("error", "Error trying to edit widgets"));
+                throw e;
             }
         }else{
-            return ResponseEntity.badRequest().body(Map.of("error", "User not found"));
+            throw new UserNotFound("User not found by id");
         }
     }
 

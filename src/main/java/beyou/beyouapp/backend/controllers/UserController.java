@@ -27,12 +27,22 @@ public class UserController {
     @PutMapping("/edit")
     public ResponseEntity<Map<String, String>> editUser(@RequestBody UserEditDTO userEdit){
         User user = authenticatedUser.getAuthenticatedUser();
-        return userService.editUser(userEdit, user.getId());
+        try {
+            userService.editUser(userEdit, user.getId());
+            return ResponseEntity.ok(Map.of("success", "User edited successfully"));
+        }catch(Exception e){
+            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to edit user")); 
+        }
     }
 
     @PutMapping("/widgets")
     public ResponseEntity<Map<String, String>> editWidgets(@RequestBody UserEditDTO userEdit){
         User user = authenticatedUser.getAuthenticatedUser();
-        return userService.editWidgets(userEdit.widgetsId(), user.getId());
+        try{
+            userService.editWidgets(userEdit.widgetsId(), user.getId());
+            return ResponseEntity.ok(Map.of("success", "Widgets edited successfully"));
+        }catch(Exception e){
+            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to edit widgets"));
+        }
     }
 }
