@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.security.TokenService;
+import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import jakarta.servlet.http.HttpServletResponse;
@@ -18,8 +19,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
@@ -42,10 +45,20 @@ public class UserServiceTest {
     @InjectMocks
     private UserService userService;
 
+    User user = new User();
+    UUID userId = UUID.randomUUID();
     @BeforeEach
     void setUp(){
         SecurityContextHolder.clearContext();
         MockitoAnnotations.openMocks(this);
+
+        user.setId(userId);
+        user.setName("AndDev741");
+        user.setEmail("myemail@gmail.com");
+        user.setPerfilPhoto("url.com");
+        user.setPerfilPhrase("life is good");
+        user.setPerfilPhraseAuthor("lg?");
+        user.setWidgetsIdInUse(List.of("widget4, widget5"));
     }
 
     @Test
@@ -113,6 +126,39 @@ public class UserServiceTest {
             assertEquals(ResponseEntity.ok(Map.of("success", "User deleted successfully")),
                     response);
         }
+    }
+
+    @Test
+    public void shouldEditTheUserInfoSuccessfully() {
+        //Arrange
+        UserEditDTO userEditDTO = new UserEditDTO("new Name", "newphoto.com", "new PHRASE", "phrase author", List.of());
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+        //ACT
+        User editedUser = userService.editUser(userEditDTO, userId);
+
+        //Assert
+        assertEquals(editedUser.getName(), userEditDTO.name());
+        assertEquals(editedUser.getPerfilPhoto(), userEditDTO.photo());
+        assertEquals(editedUser.getPerfilPhrase(), userEditDTO.phrase());
+        assertEquals(editedUser.getPerfilPhraseAuthor(), userEditDTO.phrase_author());
+    }
+
+    @Test
+    public void shouldEditTheWidgetsSuccessfully() {
+        //Arrange
+        UserEditDTO userEditDTO = new UserEditDTO(null, null, null, null, List.of("widget1E, widget2E"));
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+        //ACT
+
+        User editedUser = userService.editWidgets(userEditDTO.widgetsId(), userId);
+       
+        //Assert
+        assertEquals(editedUser.getWidgetsIdInUse(), userEditDTO.widgetsId());
+
     }
 
     //Exceptions in UserService
