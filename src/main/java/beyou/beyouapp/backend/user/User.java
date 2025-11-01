@@ -83,6 +83,8 @@ public class User implements UserDetails {
 
     private List<String> widgetsIdInUse;
 
+    private String themeInUse;
+
     @PrePersist
     protected void onUserCreate(){
         LocalDate now = LocalDate.now();

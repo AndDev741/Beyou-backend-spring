@@ -109,7 +109,7 @@ public class UserServiceTest {
 
         UserResponseDTO userResponseDTO = new UserResponseDTO(user.getName(),
                 user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
-                user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount(), user.getWidgetsIdInUse());
+                user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount(), user.getWidgetsIdInUse(), user.getThemeInUse());
 
         assertEquals(ResponseEntity.ok().body(Map.of("success", userResponseDTO)) ,loginResponse);
     }
@@ -131,7 +131,7 @@ public class UserServiceTest {
     @Test
     public void shouldEditTheUserInfoSuccessfully() {
         //Arrange
-        UserEditDTO userEditDTO = new UserEditDTO("new Name", "newphoto.com", "new PHRASE", "phrase author", List.of());
+        UserEditDTO userEditDTO = new UserEditDTO("new Name", "newphoto.com", "new PHRASE", "phrase author", List.of(), "light");
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(userRepository.save(user)).thenReturn(user);
@@ -148,7 +148,7 @@ public class UserServiceTest {
     @Test
     public void shouldEditTheWidgetsSuccessfully() {
         //Arrange
-        UserEditDTO userEditDTO = new UserEditDTO(null, null, null, null, List.of("widget1E, widget2E"));
+        UserEditDTO userEditDTO = new UserEditDTO(null, null, null, null, List.of("widget1E, widget2E"), null);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(userRepository.save(user)).thenReturn(user);

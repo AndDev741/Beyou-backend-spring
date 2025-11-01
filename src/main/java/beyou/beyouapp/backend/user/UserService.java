@@ -53,7 +53,7 @@ public class UserService {
                 addJwtTokenToResponse(response, token);
                 UserResponseDTO userResponse = new UserResponseDTO(user.getName(),
                         user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
-                        user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount(), user.getWidgetsIdInUse());
+                        user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount(), user.getWidgetsIdInUse(), user.getThemeInUse());
                 return ResponseEntity.ok().body(Map.of("success", userResponse));
             }
         }
@@ -96,10 +96,11 @@ public class UserService {
         Optional<User> userOpt = userRepository.findById(userId);
         if(userOpt.isPresent()){
             User user = userOpt.get();
-            user.setName(userEdit.name());
-            user.setPerfilPhoto(userEdit.photo());
-            user.setPerfilPhrase(userEdit.phrase());
-            user.setPerfilPhraseAuthor(userEdit.phrase_author());
+            user.setName(userEdit.name() != null ? userEdit.name() : user.getName());
+            user.setPerfilPhoto(userEdit.photo() != null ? userEdit.photo() : user.getPerfilPhoto());
+            user.setPerfilPhrase(userEdit.phrase() != null ? userEdit.phrase() : user.getPerfilPhrase());
+            user.setPerfilPhraseAuthor(userEdit.phrase_author() != null ? userEdit.phrase_author() : user.getPerfilPhraseAuthor());
+            user.setThemeInUse(userEdit.theme() != null ? userEdit.theme() : user.getThemeInUse());
             try{
                 User saved = userRepository.save(user);
                 return saved;

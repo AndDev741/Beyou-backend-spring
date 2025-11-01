@@ -7,7 +7,8 @@ public record UserEditDTO(
     String photo,
     String phrase,
     String phrase_author,
-    List<String> widgetsId 
+    List<String> widgetsId,
+    String theme
 ) {
     
 }
