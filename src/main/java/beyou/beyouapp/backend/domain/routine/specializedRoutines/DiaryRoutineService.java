@@ -200,6 +200,7 @@ public class DiaryRoutineService {
             section.setIconId(dto.iconId());
             section.setStartTime(dto.startTime());
             section.setEndTime(dto.endTime());
+            section.setFavorite(dto.favorite());
             section.setRoutine(diaryRoutine);
 
             List<TaskGroup> taskGroups = dto.taskGroup() != null ? dto.taskGroup().stream().map(taskDto -> {
@@ -286,7 +287,8 @@ public class DiaryRoutineService {
                     section.getStartTime() != null ? section.getStartTime().format(TIME_FORMATTER) : null,
                     section.getEndTime() != null ? section.getEndTime().format(TIME_FORMATTER) : null,
                     taskGroupDTOs,
-                    habitGroupDTOs);
+                    habitGroupDTOs,
+                    section.getFavorite() != null ? section.getFavorite() : false);
         }).collect(Collectors.toList());
 
         return new DiaryRoutineResponseDTO(

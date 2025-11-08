@@ -98,7 +98,9 @@ class DiaryRoutineServiceTest {
                                                 UUID.randomUUID(),
                                                 UUID.randomUUID(),
                                                 LocalTime.of(6, 15),
-                                                null))))));
+                                                null)),
+                                        false
+                                        ))));
 
         diaryRoutine = new DiaryRoutine();
         diaryRoutine.setId(routineId);
@@ -188,7 +190,9 @@ class DiaryRoutineServiceTest {
                                 LocalTime.of(12, 0),
                                 LocalTime.of(6, 0),
                                 List.of(),
-                                List.of())));
+                                List.of(),
+                                false
+                                )));
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
@@ -260,7 +264,8 @@ class DiaryRoutineServiceTest {
                                                 UUID.randomUUID(),
                                                 UUID.randomUUID(),
                                                 LocalTime.of(6, 15),
-                                                null))
+                                                null)),
+                                        false
                 ))));
 
         User user = new User();

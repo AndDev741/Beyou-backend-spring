@@ -10,7 +10,7 @@ import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 public record DiaryRoutineResponseDTO(UUID id, String name, String iconId, List<RoutineSectionResponseDTO> routineSections, Schedule schedule) {
 
     public record RoutineSectionResponseDTO(UUID id, String name, String iconId, String startTime, String endTime,
-                                            List<TaskGroupResponseDTO> taskGroup, List<HabitGroupResponseDTO> habitGroup) {
+                                            List<TaskGroupResponseDTO> taskGroup, List<HabitGroupResponseDTO> habitGroup, boolean favorite) {
 
         public record TaskGroupResponseDTO(UUID id, UUID taskId, String startTime, List<TaskGroupCheck> taskGroupChecks) {
         }

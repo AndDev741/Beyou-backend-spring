@@ -48,4 +48,7 @@ public class RoutineSection {
 
     @Column()
     private int orderIndex;
+
+    @Column
+    private Boolean favorite;
 }

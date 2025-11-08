@@ -23,6 +23,6 @@ public class TaskGroup extends ItemGroup {
     @JoinColumn(name = "task_id", nullable = false)
     private Task task;
     
-    @OneToMany(mappedBy = "taskGroup", cascade = CascadeType.ALL, orphanRemoval = false)
+    @OneToMany(mappedBy = "taskGroup", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TaskGroupCheck> taskGroupChecks;
 }
