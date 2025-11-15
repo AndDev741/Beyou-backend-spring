@@ -4,7 +4,6 @@ import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
-import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelAlgorithm;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import jakarta.validation.Valid;
@@ -20,9 +19,6 @@ import java.util.Map;
 public class CategoryController {
     @Autowired
     CategoryService categoryService;
-
-    @Autowired
-    XpByLevelAlgorithm xpByLevelAlgorithm;
 
     @Autowired
     AuthenticatedUser authenticatedUser;
@@ -50,10 +46,5 @@ public class CategoryController {
     public ResponseEntity<Map<String, String>> deleteCategory(@PathVariable String categoryId){
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return categoryService.deleteCategory(categoryId, userAuth.getId());
-    }
-
-    @GetMapping(value = "/execute")
-    public void executeLevelAlgorithm(){
-        xpByLevelAlgorithm.runXpAlgorithm();
     }
 }
