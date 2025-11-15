@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -25,6 +26,17 @@ public class UserServiceGoogleOAuth {
     TokenService tokenService;
     @Autowired
     UserRepository userRepository;
+
+    @Value("${google.secrets.clientId}")
+    String GOOGLE_CLIENT_ID;
+    @Value("${google.secrets.clientSecret}")
+    String GOOGLE_CLIENT_SECRET;
+    @Value("${frontend.url}")
+    String FRONTEND_URL;
+    @Value("${google.url.oauth}")
+    String OAUTH_GOOGLE_URL;
+    @Value("${google.url.userInfo}")
+    String USER_INFO_GOOGLE_URL;
 
     public ResponseEntity<Map<String, Object>> googleAuth(String code, HttpServletResponse response){
         String googleAccessToken = getOAuthAccessTokenGoogle(code);
@@ -46,29 +58,32 @@ public class UserServiceGoogleOAuth {
             return ResponseEntity.ok().body(Map.of("success", userResponseDTO));
         }else{
             User newUser = new User(googleUser);
-            userRepository.save(newUser);
-            return ResponseEntity.ok().body(Map.of("successRegister", "User registered successfully"));
+            User user = userRepository.save(newUser);
+
+            String jwtToken = tokenService.generateToken(user);
+            addJwtTokenToResponse(response, jwtToken);
+            UserResponseDTO userResponseDTO = new UserResponseDTO(user.getName(),
+                    user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
+                    user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount(), user.getWidgetsIdInUse(), user.getThemeInUse());
+            return ResponseEntity.ok().body(Map.of("success", userResponseDTO));
         }
     }
 
     private String getOAuthAccessTokenGoogle(String code){
-        String clientId = "1036463666928-d3i3phfhglrl00l489tm3fccarm6p6nq.apps.googleusercontent.com";
-        String clientSecret = "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";
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders httpHeaders = new HttpHeaders();
         httpHeaders.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
         MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
         params.add("code", code);
-        params.add("redirect_uri", "http://localhost:3000/");
-        params.add("client_id", clientId);
-        params.add("client_secret", clientSecret);
+        params.add("redirect_uri", FRONTEND_URL);
+        params.add("client_id", GOOGLE_CLIENT_ID);
+        params.add("client_secret", GOOGLE_CLIENT_SECRET);
         params.add("grant_type", "authorization_code");
 
         HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(params, httpHeaders);
-        String url = "https://oauth2.googleapis.com/token";
         try{
-            String response = restTemplate.postForObject(url, requestEntity, String.class);
+            String response = restTemplate.postForObject(OAUTH_GOOGLE_URL, requestEntity, String.class);
             ObjectMapper mapper = new ObjectMapper();
             Map<String, String> tokenResponse = mapper.readValue(response, new TypeReference<Map<String, String>>() {});
 
@@ -89,8 +104,7 @@ public class UserServiceGoogleOAuth {
 
         HttpEntity<String> requestEntity = new HttpEntity<>(httpHeaders);
 
-        String url = "https://www.googleapis.com/oauth2/v2/userinfo";
-        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, requestEntity, String.class);
+        ResponseEntity<String> response = restTemplate.exchange(USER_INFO_GOOGLE_URL, HttpMethod.GET, requestEntity, String.class);
         
         try{
             ObjectMapper objectMapper = new ObjectMapper();

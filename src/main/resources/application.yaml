@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: backend
+
+  server:
+    port: 8099
+
+  datasource:
+    url: jdbc:postgresql://localhost:5490/beyou
+    username: postgres
+    password: 1516
+
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+#      ddl-auto: create-drop  # Uncomment this line to recreate the tables when starting
+
+api:
+  security:
+    token:
+      secret: ${TOKEN_SECRET}
+
+google:
+  secrets:
+    clientId: ${GOOGLE_CLIENT_ID}
+    clientSecret: ${GOOGLE_CLIENT_SECRET}
+  url:
+    oauth: ${OAUTH_GOOGLE_URL}
+    userInfo: ${USER_INFO_GOOGLE_URL}
+
+frontend:
+    url: ${FRONTEND_URL}
