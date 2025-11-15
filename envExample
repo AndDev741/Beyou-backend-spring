@@ -1,0 +1,9 @@
+TOKEN_SECRET=
+
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+FRONTEND_URL="http://localhost:3000/"
+OAUTH_GOOGLE_URL="https://oauth2.googleapis.com/token"
+USER_INFO_GOOGLE_URL="https://www.googleapis.com/oauth2/v2/userinfo"
+
