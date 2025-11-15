@@ -152,7 +152,8 @@ public class DiaryRoutineService {
         }
 
         if(todaysRoutine == null){
-            throw new DiaryRoutineNotFoundException("No Routine are scheduled for today");
+            log.warn("NO ROUTINES SCHEDULED FOR TODAY");
+            return null;
         }else{
             return mapToResponseDTO(todaysRoutine);
         }
