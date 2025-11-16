@@ -82,7 +82,7 @@ class ScheduleServiceTest {
     void testCreate() {
         UUID userId = UUID.randomUUID();
         UUID routineId = UUID.randomUUID();
-        Set<WeekDay> days = Set.of(WeekDay.MONDAY, WeekDay.WEDNESDAY);
+        Set<WeekDay> days = Set.of(WeekDay.Monday, WeekDay.Wednesday);
         CreateScheduleDTO dto = new CreateScheduleDTO(days, routineId);
 
         DiaryRoutine routine = new DiaryRoutine();
@@ -103,7 +103,7 @@ class ScheduleServiceTest {
         UUID userId = UUID.randomUUID();
         UUID routineId = UUID.randomUUID();
         UUID scheduleId = UUID.randomUUID();
-        Set<WeekDay> days = Set.of(WeekDay.FRIDAY);
+        Set<WeekDay> days = Set.of(WeekDay.Friday);
         UpdateScheduleDTO dto = new UpdateScheduleDTO(scheduleId, days, routineId);
 
         DiaryRoutine routine = new DiaryRoutine();
@@ -111,7 +111,7 @@ class ScheduleServiceTest {
 
         Schedule schedule = new Schedule();
         schedule.setId(scheduleId);
-        schedule.setDays(Set.of(WeekDay.MONDAY));
+        schedule.setDays(Set.of(WeekDay.Monday));
 
         when(diaryRoutineService.getDiaryRoutineModelById(routineId, userId)).thenReturn(routine);
         when(scheduleRepository.findById(scheduleId)).thenReturn(Optional.of(schedule));
@@ -128,7 +128,7 @@ class ScheduleServiceTest {
         UUID scheduleId = UUID.randomUUID();
         UUID routineId = UUID.randomUUID();
 
-        UpdateScheduleDTO dto = new UpdateScheduleDTO(scheduleId, Set.of(WeekDay.MONDAY), routineId);
+        UpdateScheduleDTO dto = new UpdateScheduleDTO(scheduleId, Set.of(WeekDay.Monday), routineId);
 
         when(scheduleRepository.findById(scheduleId)).thenReturn(Optional.empty());
 

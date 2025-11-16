@@ -365,9 +365,8 @@ class DiaryRoutineServiceTest {
         user.setId(userId);
         String today = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
 
-        System.out.println("SCHEDULING FOR => " + today.toUpperCase());
         Schedule schedule = new Schedule();
-        schedule.setDays(Set.of(WeekDay.valueOf(today.toUpperCase())));
+        schedule.setDays(Set.of(WeekDay.valueOf(today)));
 
         diaryRoutine.setName("Morning Routine");
         diaryRoutine.setSchedule(schedule);
@@ -393,7 +392,7 @@ class DiaryRoutineServiceTest {
         otherRoutine.setName("Evening Routine");
 
         Schedule schedule = new Schedule();
-        schedule.setDays((Set<WeekDay>) Set.of(WeekDay.MONDAY)); // Will not work in Monday haha!
+        schedule.setDays((Set<WeekDay>) Set.of(WeekDay.Monday)); // Will not work in Monday haha!
         otherRoutine.setSchedule(schedule);
 
         when(diaryRoutineRepository.findAllByUserId(userId))

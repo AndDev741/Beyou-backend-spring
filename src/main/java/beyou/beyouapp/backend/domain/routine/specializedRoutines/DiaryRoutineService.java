@@ -8,6 +8,7 @@ import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.routine.checks.HabitGroupCheck;
 import beyou.beyouapp.backend.domain.routine.checks.TaskGroupCheck;
+import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO.RoutineSectionResponseDTO;
@@ -145,7 +146,7 @@ public class DiaryRoutineService {
         String dayOfWeek = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
         log.info("Day: {} ", dayOfWeek);
         for (DiaryRoutine diaryRoutine : diaryRoutines) {
-            if(diaryRoutine.getSchedule() != null && diaryRoutine.getSchedule().getDays().contains(dayOfWeek)){
+            if(diaryRoutine.getSchedule() != null && diaryRoutine.getSchedule().getDays().contains(WeekDay.valueOf(dayOfWeek))){
                 log.info("Routine {} are scheduled for today", diaryRoutine.getName());
                 todaysRoutine = diaryRoutine;
             }
