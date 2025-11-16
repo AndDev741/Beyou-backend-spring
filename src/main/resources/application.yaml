@@ -2,20 +2,20 @@ spring:
   application:
     name: backend
 
-  server:
-    port: 8099
+server:
+  port: 8099
 
-  datasource:
-    url: jdbc:postgresql://localhost:5490/beyou
-    username: postgres
-    password: 1516
+datasource:
+  url: jdbc:postgresql://localhost:5490/beyou
+  username: postgres
+  password: 1516
 
-  jpa:
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+jpa:
+  properties:
     hibernate:
-      ddl-auto: update
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+  hibernate:
+    ddl-auto: update
 #      ddl-auto: create-drop  # Uncomment this line to recreate the tables when starting
 
 api:
