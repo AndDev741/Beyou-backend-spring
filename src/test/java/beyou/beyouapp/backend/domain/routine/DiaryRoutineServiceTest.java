@@ -4,6 +4,7 @@ import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
+import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
@@ -364,16 +365,14 @@ class DiaryRoutineServiceTest {
         user.setId(userId);
         String today = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
 
-        // Setup do Schedule
+        System.out.println("SCHEDULING FOR => " + today.toUpperCase());
         Schedule schedule = new Schedule();
-        schedule.setDays(Set.of(today)); // ✅ Use Set aqui, como sua entidade espera
+        schedule.setDays(Set.of(WeekDay.valueOf(today.toUpperCase())));
 
-        // Setup da DiaryRoutine
         diaryRoutine.setName("Morning Routine");
         diaryRoutine.setSchedule(schedule);
         diaryRoutine.setUser(user);
 
-        // Simula retorno do repositório
         when(diaryRoutineRepository.findAllByUserId(userId))
                 .thenReturn(List.of(diaryRoutine));
 
@@ -386,7 +385,7 @@ class DiaryRoutineServiceTest {
     }
 
     @Test
-    void shouldThrowException_whenNoRoutineIsScheduledForToday() {
+    void shouldReturnNullWhenNoRoutineIsScheduledForToday() {
         // Arrange
         UUID userId = UUID.randomUUID();
 
@@ -394,15 +393,16 @@ class DiaryRoutineServiceTest {
         otherRoutine.setName("Evening Routine");
 
         Schedule schedule = new Schedule();
-        schedule.setDays((Set<String>) Set.of("Monday")); // Will not work in Monday haha!
+        schedule.setDays((Set<WeekDay>) Set.of(WeekDay.MONDAY)); // Will not work in Monday haha!
         otherRoutine.setSchedule(schedule);
 
         when(diaryRoutineRepository.findAllByUserId(userId))
                 .thenReturn(List.of(otherRoutine));
 
         // Act & Assert
-        assertThrows(DiaryRoutineNotFoundException.class,
-                () -> diaryRoutineService.getTodayRoutineScheduled(userId));
+        DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId);
+
+        assertNull(result);
     }
 
     @Test

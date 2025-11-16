@@ -3,6 +3,7 @@ package beyou.beyouapp.backend.domain.routine;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleRepository;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
+import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
@@ -81,7 +82,7 @@ class ScheduleServiceTest {
     void testCreate() {
         UUID userId = UUID.randomUUID();
         UUID routineId = UUID.randomUUID();
-        Set<String> days = Set.of("MONDAY", "WEDNESDAY");
+        Set<WeekDay> days = Set.of(WeekDay.MONDAY, WeekDay.WEDNESDAY);
         CreateScheduleDTO dto = new CreateScheduleDTO(days, routineId);
 
         DiaryRoutine routine = new DiaryRoutine();
@@ -102,7 +103,7 @@ class ScheduleServiceTest {
         UUID userId = UUID.randomUUID();
         UUID routineId = UUID.randomUUID();
         UUID scheduleId = UUID.randomUUID();
-        Set<String> days = Set.of("FRIDAY");
+        Set<WeekDay> days = Set.of(WeekDay.FRIDAY);
         UpdateScheduleDTO dto = new UpdateScheduleDTO(scheduleId, days, routineId);
 
         DiaryRoutine routine = new DiaryRoutine();
@@ -110,7 +111,7 @@ class ScheduleServiceTest {
 
         Schedule schedule = new Schedule();
         schedule.setId(scheduleId);
-        schedule.setDays(Set.of("MONDAY"));
+        schedule.setDays(Set.of(WeekDay.MONDAY));
 
         when(diaryRoutineService.getDiaryRoutineModelById(routineId, userId)).thenReturn(routine);
         when(scheduleRepository.findById(scheduleId)).thenReturn(Optional.of(schedule));
@@ -127,7 +128,7 @@ class ScheduleServiceTest {
         UUID scheduleId = UUID.randomUUID();
         UUID routineId = UUID.randomUUID();
 
-        UpdateScheduleDTO dto = new UpdateScheduleDTO(scheduleId, Set.of("MONDAY"), routineId);
+        UpdateScheduleDTO dto = new UpdateScheduleDTO(scheduleId, Set.of(WeekDay.MONDAY), routineId);
 
         when(scheduleRepository.findById(scheduleId)).thenReturn(Optional.empty());
 
