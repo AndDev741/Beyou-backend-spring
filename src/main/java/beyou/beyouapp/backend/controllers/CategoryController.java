@@ -11,7 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -24,7 +24,7 @@ public class CategoryController {
     AuthenticatedUser authenticatedUser;
 
     @GetMapping("")
-    public ArrayList<CategoryResponseDTO> getCategories(){
+    public List<CategoryResponseDTO> getCategories(){
         //Every user are in a separated thread on Spring
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return categoryService.getAllCategories(userAuth.getId());

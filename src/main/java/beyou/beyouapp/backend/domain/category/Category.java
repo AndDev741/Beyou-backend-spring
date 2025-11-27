@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.category;
 
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.user.User;
@@ -52,7 +53,11 @@ public class Category {
      @ManyToMany(mappedBy = "categories")
      @ToString.Exclude
      private List<Task> tasks;
-     private List<String> goals;
+
+     @JsonIgnore
+     @ManyToMany(mappedBy = "categories")
+     @ToString.Exclude
+     private List<Goal> goals;
 
      @Column(nullable = false)
      private double xp;
