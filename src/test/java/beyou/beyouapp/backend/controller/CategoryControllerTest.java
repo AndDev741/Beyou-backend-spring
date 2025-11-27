@@ -68,7 +68,7 @@ public class CategoryControllerTest {
 
     @Test
     void shouldGetCategoriesSuccessfully() throws Exception {
-        List<CategoryResponseDTO> categories = List.of(new CategoryResponseDTO(category.getId(), category.getName(), "", "", null, 0, 0, 0, 0, null));
+        List<CategoryResponseDTO> categories = List.of(new CategoryResponseDTO(category.getId(), category.getName(), "", "", null, null, null, 0, 0, 0, 0, null));
 
         when(categoryService.getAllCategories(userID)).thenReturn(new ArrayList<>(categories));
 

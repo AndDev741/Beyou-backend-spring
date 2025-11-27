@@ -20,10 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
@@ -85,10 +82,9 @@ public class CategoryServiceTest {
     public void shouldReturnAllTheCategoriesFromUser(){
         when(categoryRepository.findAllByUserId(userId)).thenReturn(Optional.of(new ArrayList<>()));
 
-        ArrayList<CategoryResponseDTO> categories = categoryService.getAllCategories(userId);
+        List<CategoryResponseDTO> categories = categoryService.getAllCategories(userId);
 
         assertNotNull(categories);
-        assertTrue(categories instanceof ArrayList);
     }
 
     @SuppressWarnings("null")
