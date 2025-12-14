@@ -1,6 +1,5 @@
 package beyou.beyouapp.backend.domain.routine.schedule;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
@@ -8,22 +7,18 @@ import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.exceptions.routine.ScheduleNotFoundException;
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
 
 @Slf4j
 @Service
+@AllArgsConstructor
 public class ScheduleService {
 
     private final ScheduleRepository scheduleRepository;
     private final DiaryRoutineService diaryRoutineService;
-
-    @Autowired
-    public ScheduleService(ScheduleRepository scheduleRepository, DiaryRoutineService diaryRoutineService) {
-        this.scheduleRepository = scheduleRepository;
-        this.diaryRoutineService = diaryRoutineService;
-    }
 
     public List<Schedule> findAll(UUID userId) {
         List<Schedule> schedules = new ArrayList<>();
@@ -44,9 +39,7 @@ public class ScheduleService {
         DiaryRoutine routine = diaryRoutineService.getDiaryRoutineModelById(scheduleDTO.routineId(), userId);
         Schedule schedule = new Schedule();
 
-        // if (hasScheduleConflict(routine.getId(), userId, scheduleDTO.days())) {
-        //     log.info("Schedule already in use by another routine, removing");
-        // }
+        checkAndReplaceScheduledRoutines(scheduleDTO.days(), userId);
 
         log.info("SAVINg DAYS => {}", scheduleDTO.days());
         schedule.setDays(scheduleDTO.days());
@@ -55,19 +48,16 @@ public class ScheduleService {
         log.info("ERROR NOT IN SAVING SCHEDULE");
         routine.setSchedule(scheduleSaved);
 
-        diaryRoutineService.updateSchedule(routine);
+        diaryRoutineService.saveRoutine(routine);
 
         return schedule;
     }
 
     public Schedule update(UpdateScheduleDTO updatedSchedule, UUID userId) {
-        DiaryRoutine routine = diaryRoutineService.getDiaryRoutineModelById(updatedSchedule.routineId(), userId);
         Schedule schedule = scheduleRepository.findById(updatedSchedule.scheduleId())
         .orElseThrow(() -> new ScheduleNotFoundException("Schedule not found by ID: " + updatedSchedule.scheduleId()));
 
-        // if (hasScheduleConflict(routine.getId(), userId, updatedSchedule.days())) {
-        //     log.warn("Schedule already in use by another routine, removing");
-        // }
+        checkAndReplaceScheduledRoutines(updatedSchedule.days(), userId);
 
         schedule.setDays(updatedSchedule.days());
 
@@ -87,10 +77,24 @@ public class ScheduleService {
         scheduleRepository.deleteById(id);
     }
 
-    private boolean hasScheduleConflict(UUID actualRoutineInProccess, UUID userId, Set<String> newScheduleDays) {
-        return diaryRoutineService.getAllDiaryRoutinesModels(userId)
-                .stream()
-                .anyMatch(r -> !r.getId().equals(actualRoutineInProccess) &&
-                        !Collections.disjoint(r.getSchedule().getDays(), newScheduleDays));
+    private void checkAndReplaceScheduledRoutines(Set<WeekDay> newDays, UUID userId){
+        var routines = diaryRoutineService.getAllDiaryRoutinesModels(userId);
+
+        for (var routine : routines){
+            Schedule schedule = routine.getSchedule();
+            if (schedule == null || schedule.getDays() == null) {
+                continue;
+            }
+
+            boolean hasOverlap = schedule.getDays().stream().anyMatch(newDays::contains);
+
+            if(!hasOverlap){
+                continue;
+            }
+            
+            log.info("[SERVICE] Removing days {} from routine {}", newDays, routine.getName());
+            schedule.getDays().removeAll(newDays);
+            scheduleRepository.save(schedule);
+        }
     }
 }
