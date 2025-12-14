@@ -123,7 +123,7 @@ public class DiaryRoutineService {
     }
 
     @Transactional
-    public void updateSchedule(DiaryRoutine routine){
+    public void saveRoutine(DiaryRoutine routine){
         diaryRoutineRepository.save(routine);
     }
 
