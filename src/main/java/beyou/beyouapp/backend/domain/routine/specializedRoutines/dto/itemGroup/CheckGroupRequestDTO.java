@@ -1,7 +1,9 @@
 package beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
-public record CheckGroupRequestDTO(UUID routineId, TaskGroupRequestDTO taskGroupDTO, HabitGroupRequestDTO habitGroupDTO) {
-    
+public record CheckGroupRequestDTO(UUID routineId, TaskGroupRequestDTO taskGroupDTO, HabitGroupRequestDTO habitGroupDTO,
+        LocalDate date) {
+
 }

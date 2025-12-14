@@ -407,7 +407,7 @@ class DiaryRoutineServiceTest {
     @Test
     void shouldThrowException_whenNoItemGroupInRequest() {
         // Arrange
-        CheckGroupRequestDTO requestDTO = new CheckGroupRequestDTO(routineId, null, null);
+        CheckGroupRequestDTO requestDTO = new CheckGroupRequestDTO(routineId, null, null, null);
         
         // Act & Assert
         assertThrows(RuntimeException.class,
@@ -431,7 +431,8 @@ class DiaryRoutineServiceTest {
         CheckGroupRequestDTO requestDTO = new CheckGroupRequestDTO(
                 routineId,
                 new TaskGroupRequestDTO(null, null),
-                new HabitGroupRequestDTO(habitGroup.getId(), null));
+                new HabitGroupRequestDTO(habitGroup.getId(), null),
+        null);
 
         // Act
         DiaryRoutineResponseDTO response = diaryRoutineService.checkAndUncheckGroup(requestDTO, userId);
@@ -444,5 +445,36 @@ class DiaryRoutineServiceTest {
         var check = checks.get(0);
         assertTrue(check.isChecked());
         assertEquals(LocalDate.now(), check.getCheckDate());
+    }
+
+    @Test
+    void shouldCheckHabitGroupUsingProvidedDate() {
+        HabitGroup habitGroup = diaryRoutine.getRoutineSections().get(0).getHabitGroups().get(0);
+        Habit habit = habitGroup.getHabit();
+        habit.setDificulty(1);
+        habit.setImportance(1);
+        habit.setXp(0.0);
+        habit.setNextLevelXp(Double.MAX_VALUE);
+        habit.setConstance(0);
+        habit.setCategories(new ArrayList<>());
+
+        LocalDate specificDate = LocalDate.of(2000, 1, 1);
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+
+        CheckGroupRequestDTO requestDTO = new CheckGroupRequestDTO(
+                routineId,
+                null,
+                new HabitGroupRequestDTO(habitGroup.getId(), null),
+                specificDate);
+
+        DiaryRoutineResponseDTO response = diaryRoutineService.checkAndUncheckGroup(requestDTO, userId);
+
+        var habitGroups = response.routineSections().get(0).habitGroup();
+        assertEquals(1, habitGroups.size());
+        var checks = habitGroups.get(0).habitGroupChecks();
+        assertEquals(1, checks.size());
+        var check = checks.get(0);
+        assertTrue(check.isChecked());
+        assertEquals(specificDate, check.getCheckDate());
     }
 }
