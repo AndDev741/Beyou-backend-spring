@@ -95,7 +95,7 @@ class ScheduleServiceTest {
         Schedule result = scheduleService.create(dto, userId);
 
         assertEquals(days, result.getDays());
-        verify(diaryRoutineService).updateSchedule(any(DiaryRoutine.class));
+        verify(diaryRoutineService).saveRoutine(any(DiaryRoutine.class));
     }
 
     @Test
@@ -166,5 +166,69 @@ class ScheduleServiceTest {
         assertThrows(ScheduleNotFoundException.class, () -> {
             scheduleService.delete(scheduleId, userId);
         });
+    }
+
+    @Test
+    void shouldRemoveOverlappingDaysFromOtherSchedulesOnCreate() {
+        UUID userId = UUID.randomUUID();
+        UUID routineId = UUID.randomUUID();
+        Set<WeekDay> newDays = Set.of(WeekDay.Monday, WeekDay.Tuesday);
+
+        Schedule nonOverlappingSchedule = new Schedule();
+        nonOverlappingSchedule.setDays(new HashSet<>(Set.of(WeekDay.Wednesday)));
+        DiaryRoutine routineWithoutOverlap = new DiaryRoutine();
+        routineWithoutOverlap.setSchedule(nonOverlappingSchedule);
+
+        Schedule overlappingSchedule = new Schedule();
+        overlappingSchedule.setDays(new HashSet<>(Set.of(WeekDay.Monday, WeekDay.Friday)));
+        DiaryRoutine routineWithOverlap = new DiaryRoutine();
+        routineWithOverlap.setSchedule(overlappingSchedule);
+
+        DiaryRoutine routineForCreate = new DiaryRoutine();
+        routineForCreate.setId(routineId);
+
+        when(diaryRoutineService.getAllDiaryRoutinesModels(userId))
+                .thenReturn(List.of(routineWithoutOverlap, routineWithOverlap));
+        when(diaryRoutineService.getDiaryRoutineModelById(routineId, userId)).thenReturn(routineForCreate);
+        when(scheduleRepository.save(any(Schedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CreateScheduleDTO dto = new CreateScheduleDTO(newDays, routineId);
+        scheduleService.create(dto, userId);
+
+        assertEquals(Set.of(WeekDay.Friday), overlappingSchedule.getDays());
+        verify(scheduleRepository, atLeast(2)).save(any(Schedule.class)); // one for overlap, one for new schedule
+    }
+
+    @Test
+    void shouldIgnoreNullSchedulesWhenReplacingDays() {
+        UUID userId = UUID.randomUUID();
+        UUID routineId = UUID.randomUUID();
+        Set<WeekDay> newDays = Set.of(WeekDay.Monday);
+
+        DiaryRoutine routineWithNullSchedule = new DiaryRoutine();
+
+        DiaryRoutine routineWithNullDays = new DiaryRoutine();
+        Schedule scheduleWithNullDays = new Schedule();
+        scheduleWithNullDays.setDays(null);
+        routineWithNullDays.setSchedule(scheduleWithNullDays);
+
+        Schedule overlappingSchedule = new Schedule();
+        overlappingSchedule.setDays(new HashSet<>(Set.of(WeekDay.Monday, WeekDay.Tuesday)));
+        DiaryRoutine routineWithOverlap = new DiaryRoutine();
+        routineWithOverlap.setSchedule(overlappingSchedule);
+
+        DiaryRoutine routineForCreate = new DiaryRoutine();
+        routineForCreate.setId(routineId);
+
+        when(diaryRoutineService.getAllDiaryRoutinesModels(userId))
+                .thenReturn(List.of(routineWithNullSchedule, routineWithNullDays, routineWithOverlap));
+        when(diaryRoutineService.getDiaryRoutineModelById(routineId, userId)).thenReturn(routineForCreate);
+        when(scheduleRepository.save(any(Schedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CreateScheduleDTO dto = new CreateScheduleDTO(newDays, routineId);
+        scheduleService.create(dto, userId);
+
+        assertEquals(Set.of(WeekDay.Tuesday), overlappingSchedule.getDays());
+        verify(scheduleRepository, atLeast(2)).save(any(Schedule.class));
     }
 }
