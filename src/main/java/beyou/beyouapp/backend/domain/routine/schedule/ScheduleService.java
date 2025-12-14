@@ -48,10 +48,11 @@ public class ScheduleService {
         //     log.info("Schedule already in use by another routine, removing");
         // }
 
+        log.info("SAVINg DAYS => {}", scheduleDTO.days());
         schedule.setDays(scheduleDTO.days());
-
+        log.info("SCHEDULE AFTER DAYS => {}", schedule);
         Schedule scheduleSaved = scheduleRepository.save(schedule);
-
+        log.info("ERROR NOT IN SAVING SCHEDULE");
         routine.setSchedule(scheduleSaved);
 
         diaryRoutineService.updateSchedule(routine);
