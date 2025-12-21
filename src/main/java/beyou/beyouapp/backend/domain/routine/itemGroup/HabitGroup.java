@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.domain.routine.specializedRoutines;
+package beyou.beyouapp.backend.domain.routine.itemGroup;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

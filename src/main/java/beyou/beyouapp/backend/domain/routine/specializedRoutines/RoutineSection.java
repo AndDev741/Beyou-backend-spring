@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.UUID;
 
 import beyou.beyouapp.backend.domain.routine.Routine;
+import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
+import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 
 @Entity
 @Getter
