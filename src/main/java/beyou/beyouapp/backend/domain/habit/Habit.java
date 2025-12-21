@@ -74,16 +74,16 @@ public class Habit {
     private String motivationalPhrase;
 
     @Column(nullable = false)
-    private double xp;
+    private double xp = 0;
 
     @Column(nullable = false)
-    private int level;
+    private int level = 0;
 
     @Column(nullable = false)
-    private Double nextLevelXp;
+    private Double nextLevelXp = 0D;
 
     @Column(nullable = false)
-    private Double actualBaseXp;
+    private Double actualBaseXp = 0D;
 
     @Column(nullable = true)
     private int constance;

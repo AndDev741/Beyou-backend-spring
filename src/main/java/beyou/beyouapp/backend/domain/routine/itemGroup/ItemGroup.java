@@ -1,8 +1,9 @@
-package beyou.beyouapp.backend.domain.routine.specializedRoutines;
+package beyou.beyouapp.backend.domain.routine.itemGroup;
 
 import java.time.LocalTime;
 import java.util.UUID;
 
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;

@@ -9,7 +9,7 @@ import lombok.ToString;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.TaskGroup;
+import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 
 @Entity
 @Getter
