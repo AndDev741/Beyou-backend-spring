@@ -5,6 +5,7 @@ import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
+import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.task.Task;
@@ -60,10 +61,10 @@ public class CategoryService {
                         .collect(Collectors.toMap(Task::getId, Task::getName)),
                 category.getGoals().stream()
                         .collect(Collectors.toMap(Goal::getId, Goal::getName)),
-                category.getXp(),
-                category.getNextLevelXp(),
-                category.getActualLevelXp(),
-                category.getLevel(),
+                category.getXpProgress().getXp(),
+                category.getXpProgress().getNextLevelXp(),
+                category.getXpProgress().getActualLevelXp(),
+                category.getXpProgress().getLevel(),
                 category.getCreatedAt()
         );
     }
@@ -76,8 +77,9 @@ public class CategoryService {
         XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.level());
 
         Category newCategory = new Category(categoryRequestDTO, user);
-        newCategory.setNextLevelXp(xpForNextLevel.getXp());
-        newCategory.setActualLevelXp(xpForActualLevel.getXp());
+        XpProgress xpProgress = new XpProgress();
+        xpProgress.setNextLevelXp(xpForNextLevel.getXp());
+        xpProgress.setActualLevelXp(xpForActualLevel.getXp());
 
         try{
             categoryRepository.save(newCategory);
@@ -124,35 +126,20 @@ public class CategoryService {
     }
 
     public void updateCategoriesXpAndLevel(List<Category> categories, Double newXp){
-        for(Category category : categories){
-            category.setXp(category.getXp() + newXp);
-
-            if(category.getXp() > category.getNextLevelXp() || category.getXp() == category.getNextLevelXp()){
-                category.setLevel(category.getLevel() + 1);
-                XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(category.getLevel());
-                XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(category.getLevel() + 1);
-                category.setActualLevelXp(xpForActualLevel.getXp());
-                category.setNextLevelXp(xpForNextLevel.getXp());
-            }
-
-            categoryRepository.save(category);
-        }
+        categories.forEach(c -> 
+            c.gainXp(
+                newXp,
+                level -> xpByLevelRepository.findByLevel(level)
+            )
+        );
     }
 
     public void removeXpFromCategories(List<Category> categories, Double xpToRemove){
-        for(Category category : categories){
-            log.info("[LOG] Xp to remove => {}", xpToRemove);
-            category.setXp(category.getXp() - xpToRemove);
-            if(category.getXp() < category.getActualLevelXp() && category.getXp() > 0 ){
-                category.setLevel(category.getLevel() - 1);
-                XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(category.getLevel());
-                XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(category.getLevel() + 1);
-                category.setActualLevelXp(xpForActualLevel.getXp());
-                category.setNextLevelXp(xpForNextLevel.getXp());
-            }
-
-            categoryRepository.save(category);
-        }
+        categories.forEach(c -> 
+            c.loseXp(xpToRemove, 
+                level -> xpByLevelRepository.findByLevel(level)
+            )
+        );
     }
 
 }

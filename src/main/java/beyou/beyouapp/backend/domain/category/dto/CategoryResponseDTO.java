@@ -1,7 +1,6 @@
 package beyou.beyouapp.backend.domain.category.dto;
 
 import java.sql.Date;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 

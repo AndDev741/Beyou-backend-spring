@@ -1,6 +1,8 @@
 package beyou.beyouapp.backend.domain.category;
 
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
+import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.task.Task;
@@ -19,6 +21,7 @@ import java.sql.Date;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Entity
 @Table(name = "categories")
@@ -59,17 +62,8 @@ public class Category {
      @ToString.Exclude
      private List<Goal> goals;
 
-     @Column(nullable = false)
-     private double xp;
-
-     @Column
-     private double nextLevelXp;
-
-     @Column
-     private double actualLevelXp;
-
-     @Column(nullable = false)
-     private int level;
+     @Embedded
+     private XpProgress xpProgress = new XpProgress();
 
      private Date createdAt;
      private Date updatedAt;
@@ -97,7 +91,15 @@ public class Category {
           this.name = categoryRequestDTO.name();
           this.iconId = categoryRequestDTO.icon();
           this.description = categoryRequestDTO.description();
-          this.level = categoryRequestDTO.level();
-          this.xp = categoryRequestDTO.xp();
+          this.xpProgress.setLevel( categoryRequestDTO.level());
+          this.xpProgress.setXp(categoryRequestDTO.xp());
+     }
+
+     public void gainXp(double xp, Function<Integer, XpByLevel> provider){
+          xpProgress.addXp(xp, provider);
+     }
+
+     public void loseXp(double xp, Function<Integer, XpByLevel> provider){
+          xpProgress.removeXp(xp, provider);
      }
 }
