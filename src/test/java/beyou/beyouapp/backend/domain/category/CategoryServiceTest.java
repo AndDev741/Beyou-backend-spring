@@ -61,8 +61,8 @@ public class CategoryServiceTest {
 
         category = new Category(categoryRequestDTO, user);
         category.setId(categoryId);
-        category.setNextLevelXp(xpByLevel2.getXp());
-        category.setActualLevelXp(xpByLevel.getXp());
+        category.getXpProgress().setNextLevelXp(xpByLevel2.getXp());
+        category.getXpProgress().setActualLevelXp(xpByLevel.getXp());
     }
 
     @Test
@@ -74,7 +74,7 @@ public class CategoryServiceTest {
 
         assertEquals(category, assertCategory);
         assertEquals(category.getName(), assertCategory.getName());
-        assertEquals(category.getLevel(), assertCategory.getLevel());
+        assertEquals(category.getXpProgress().getLevel(), assertCategory.getXpProgress().getLevel());
         assertEquals(category.getUser(), assertCategory.getUser());
     }
 
@@ -93,7 +93,7 @@ public class CategoryServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(new User()));
         when(xpByLevelRepository.findByLevel(0 + 1)).thenReturn(xpByLevel2);
         when(xpByLevelRepository.findByLevel(0)).thenReturn(xpByLevel);
-
+        
         ResponseEntity<Map<String, Object>> response = categoryService.createCategory(categoryRequestDTO, userId);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
