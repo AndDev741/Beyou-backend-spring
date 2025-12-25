@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.domain.habit;
+package beyou.beyouapp.backend.unit.habit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -16,12 +16,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
+import beyou.beyouapp.backend.domain.habit.Habit;
+import beyou.beyouapp.backend.domain.habit.HabitMapper;
+import beyou.beyouapp.backend.domain.habit.HabitRepository;
+import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
@@ -30,8 +33,7 @@ import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
-@ActiveProfiles("test")
-public class HabitServiceTest {
+public class HabitServiceUnitTest {
     @Mock
     private HabitRepository habitRepository;
 

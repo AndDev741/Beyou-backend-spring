@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.security;
+package beyou.beyouapp.backend.integration.security;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.transaction.Transactional;
@@ -17,6 +17,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import beyou.beyouapp.backend.security.SecurityConfig;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
@@ -30,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({SecurityConfig.class})
 @SpringBootTest
 @ActiveProfiles("test")
-public class SecurityConfigTest {
+public class SecurityConfigIntegrationTest {
 
     @Autowired
     MockMvc mockMvc;

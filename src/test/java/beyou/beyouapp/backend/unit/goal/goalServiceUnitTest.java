@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.domain.goal;
+package beyou.beyouapp.backend.unit.goal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -18,6 +18,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.goal.Goal;
+import beyou.beyouapp.backend.domain.goal.GoalMapper;
+import beyou.beyouapp.backend.domain.goal.GoalRepository;
+import beyou.beyouapp.backend.domain.goal.GoalService;
+import beyou.beyouapp.backend.domain.goal.GoalStatus;
+import beyou.beyouapp.backend.domain.goal.GoalTerm;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
@@ -34,7 +40,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.ArgumentMatchers.any;
 
 @ExtendWith(MockitoExtension.class)
-public class goalServiceTest {
+public class goalServiceUnitTest {
     @Mock
     private GoalRepository goalRepository;
 

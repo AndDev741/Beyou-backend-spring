@@ -1,13 +1,14 @@
-package beyou.beyouapp.backend.domain.goal;
+package beyou.beyouapp.backend.unit.goal;
 
 import org.junit.jupiter.api.Test;
 
+import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.goal.util.GoalXpCalculator;
 
 import java.time.LocalDate;
 import static org.junit.jupiter.api.Assertions.*;
 
-public class XpCalculatorTest {
+public class GoalXpCalculatorUnitTest {
 
     private Goal buildGoal(double targetValue, LocalDate start, LocalDate end, boolean completeBefore) {
         Goal goal = new Goal();

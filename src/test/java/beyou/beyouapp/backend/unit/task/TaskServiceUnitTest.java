@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.domain.task;
+package beyou.beyouapp.backend.unit.task;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -18,7 +18,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
 import org.junit.jupiter.api.BeforeEach;
 
 import beyou.beyouapp.backend.domain.category.Category;
@@ -27,6 +26,10 @@ import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
+import beyou.beyouapp.backend.domain.task.Task;
+import beyou.beyouapp.backend.domain.task.TaskMapper;
+import beyou.beyouapp.backend.domain.task.TaskRepository;
+import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
@@ -36,8 +39,7 @@ import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
-@ActiveProfiles("test")
-public class TaskServiceTest {
+public class TaskServiceUnitTest {
     @Mock
     TaskRepository taskRepository;
 

@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.domain.routine;
+package beyou.beyouapp.backend.unit.schedule;
 
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleRepository;
@@ -9,16 +9,19 @@ import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.exceptions.routine.ScheduleNotFoundException;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-class ScheduleServiceTest {
+@ExtendWith(MockitoExtension.class)
+class ScheduleServiceUnitTest {
 
     @Mock
     private ScheduleRepository scheduleRepository;
@@ -28,11 +31,6 @@ class ScheduleServiceTest {
 
     @InjectMocks
     private ScheduleService scheduleService;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
 
     @Test
     void shouldReturnAllSchedulesForUser() {
@@ -113,7 +111,6 @@ class ScheduleServiceTest {
         schedule.setId(scheduleId);
         schedule.setDays(Set.of(WeekDay.Monday));
 
-        when(diaryRoutineService.getDiaryRoutineModelById(routineId, userId)).thenReturn(routine);
         when(scheduleRepository.findById(scheduleId)).thenReturn(Optional.of(schedule));
         when(scheduleRepository.save(schedule)).thenReturn(schedule);
 

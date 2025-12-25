@@ -1,5 +1,6 @@
-package beyou.beyouapp.backend.security;
+package beyou.beyouapp.backend.integration.security;
 
+import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @ActiveProfiles("test")
-public class TokenServiceTest {
+public class TokenServiceIntegrationTest {
     @Autowired
     private TokenService tokenService;
 

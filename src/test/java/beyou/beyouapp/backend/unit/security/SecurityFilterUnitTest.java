@@ -1,6 +1,8 @@
-package beyou.beyouapp.backend.security;
+package beyou.beyouapp.backend.unit.security;
 
 import beyou.beyouapp.backend.exceptions.JwtCookieNotFoundException;
+import beyou.beyouapp.backend.security.SecurityFilter;
+import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import jakarta.servlet.FilterChain;
@@ -8,15 +10,12 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -26,9 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
-@SpringBootTest
-@ActiveProfiles("test")
-public class SecurityFilterTest {
+@ExtendWith(MockitoExtension.class)
+public class SecurityFilterUnitTest {
     @Mock
     private TokenService tokenService;
 
@@ -50,15 +48,8 @@ public class SecurityFilterTest {
     @InjectMocks
     private SecurityFilter securityFilter;
 
-    @BeforeEach
-    void setUp(){
-        SecurityContextHolder.clearContext();
-        MockitoAnnotations.openMocks(this);
-    }
-
     @Test
     public void shouldPassThroughTheFunctionSuccessfully() throws ServletException, IOException {
-        when(response.getWriter()).thenReturn(printWriter);
         when(request.getRequestURI()).thenReturn("/");
         when(request.getCookies()).thenReturn(new Cookie[]{new Cookie("jwt", "valid")});
         when(tokenService.validateToken("valid")).thenReturn(ResponseEntity.ok("user@gmail.com"));

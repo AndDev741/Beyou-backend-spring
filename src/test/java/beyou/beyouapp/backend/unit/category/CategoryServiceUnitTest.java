@@ -1,5 +1,9 @@
-package beyou.beyouapp.backend.domain.category;
+package beyou.beyouapp.backend.unit.category;
 
+import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.category.CategoryMapper;
+import beyou.beyouapp.backend.domain.category.CategoryRepository;
+import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
@@ -13,21 +17,20 @@ import jakarta.transaction.Transactional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest
-@ActiveProfiles("test")
-public class CategoryServiceTest {
+@ExtendWith(MockitoExtension.class)
+public class CategoryServiceUnitTest {
     @Mock
     private CategoryRepository categoryRepository;
 
@@ -110,7 +113,6 @@ public class CategoryServiceTest {
         CategoryEditRequestDTO categoryEditRequestDTO = new CategoryEditRequestDTO(categoryId.toString(),
                 "name", "icon", "description");
 
-        when(categoryRepository.findByUserId(userId)).thenReturn(Optional.of(new Category()));
         when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category));
 
         ResponseEntity<Map<String, Object>> response = categoryService.editCategory(categoryEditRequestDTO, userId);

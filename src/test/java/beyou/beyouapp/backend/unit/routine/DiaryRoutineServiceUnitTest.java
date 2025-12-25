@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.domain.routine;
+package beyou.beyouapp.backend.unit.routine;
 
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.habit.Habit;
@@ -48,7 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class DiaryRoutineServiceTest {
+class DiaryRoutineServiceUnitTest {
 
     @Mock
     private DiaryRoutineRepository diaryRoutineRepository;
