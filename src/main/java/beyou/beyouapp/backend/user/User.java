@@ -78,6 +78,15 @@ public class User implements UserDetails {
 
     private Date updatedAt;
 
+    @Column(nullable = true)
+    private double xp = 0;
+
+    private int level = 0;
+
+    private Double nextLevelXp = 0D;
+
+    private Double actualBaseXp = 0D;
+
     @Enumerated(EnumType.STRING)
     private UserRole userRole;
 
@@ -92,6 +101,10 @@ public class User implements UserDetails {
         setUpdatedAt(Date.valueOf(now));
         setUserRole(UserRole.USER);
         setConstance(0);
+        setXp(0);
+        setNextLevelXp(0D);
+        setLevel(0);
+        setActualBaseXp(0D);
     }
 
     @PreUpdate

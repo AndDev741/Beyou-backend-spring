@@ -1,5 +1,5 @@
 package beyou.beyouapp.backend.controllers;
-import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
+import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 
@@ -31,7 +31,7 @@ public class HabitController{
     private AuthenticatedUser authenticatedUser;
 
     @GetMapping("")
-    public ArrayList<Habit> getHabits(){
+    public List<HabitResponseDTO> getHabits(){
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return habitService.getHabits(userAuth.getId());
     }

@@ -8,13 +8,14 @@ import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.routine.checks.HabitGroupCheck;
 import beyou.beyouapp.backend.domain.routine.checks.TaskGroupCheck;
+import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
+import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO.RoutineSectionResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO.RoutineSectionResponseDTO.TaskGroupResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
@@ -34,7 +35,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,6 +48,7 @@ public class DiaryRoutineService {
     private final HabitService habitService;
     private final XpByLevelRepository xpByLevelRepository;
     private final CategoryService categoryService;
+    private final DiaryRoutineMapper mapper;
 
     @Transactional(readOnly = true)
     public DiaryRoutineResponseDTO getDiaryRoutineById(UUID id, UUID userId) {
@@ -96,7 +97,7 @@ public class DiaryRoutineService {
     @Transactional
     public DiaryRoutineResponseDTO createDiaryRoutine(DiaryRoutineRequestDTO dto, User user) {
         validateRequestDTO(dto);
-        DiaryRoutine diaryRoutine = mapToEntity(dto);
+        DiaryRoutine diaryRoutine = mapper.toEntity(dto);
         diaryRoutine.setUser(user);
         DiaryRoutine saved = diaryRoutineRepository.save(diaryRoutine);
         return mapToResponseDTO(saved);
@@ -115,7 +116,7 @@ public class DiaryRoutineService {
         existing.setName(dto.name());
         existing.setIconId(dto.iconId());
         existing.getRoutineSections().clear();
-        List<RoutineSection> newSections = mapToRoutineSections(dto.routineSections(), existing);
+        List<RoutineSection> newSections = mapper.mapToRoutineSections(dto.routineSections(), existing);
         existing.getRoutineSections().addAll(newSections);
 
         DiaryRoutine updated = diaryRoutineRepository.save(existing);
@@ -161,6 +162,20 @@ public class DiaryRoutineService {
 
     }
 
+    public void updateRoutineXpAndLevel(DiaryRoutine diaryRoutine, Double newXp){
+        diaryRoutine.setXp(diaryRoutine.getXp() + newXp);
+
+        if(diaryRoutine.getXp() >= diaryRoutine.getNextLevelXp()){
+            diaryRoutine.setLevel(diaryRoutine.getLevel() + 1);
+            XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(diaryRoutine.getLevel());
+            XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(diaryRoutine.getLevel() + 1);
+            diaryRoutine.setActualBaseXp(xpForActualLevel.getXp());
+            diaryRoutine.setNextLevelXp(xpForNextLevel.getXp());
+        }
+
+        diaryRoutineRepository.save(diaryRoutine);
+    }
+
     private void validateRequestDTO(DiaryRoutineRequestDTO dto) {
         if (dto.name() == null || dto.name().trim().isEmpty()) {
             throw new IllegalArgumentException("DiaryRoutine name cannot be null or empty");
@@ -178,87 +193,6 @@ public class DiaryRoutineService {
                         "End time must be after start time for routine section: " + section.name());
             }
         }
-    }
-
-    private DiaryRoutine mapToEntity(DiaryRoutineRequestDTO dto) {
-        DiaryRoutine diaryRoutine = new DiaryRoutine();
-        diaryRoutine.setName(dto.name());
-        diaryRoutine.setIconId(dto.iconId());
-        List<RoutineSection> sections = mapToRoutineSections(dto.routineSections(), diaryRoutine);
-        diaryRoutine.setRoutineSections(sections);
-        return diaryRoutine;
-    }
-
-    private List<RoutineSection> mapToRoutineSections(List<RoutineSectionRequestDTO> dtos, DiaryRoutine diaryRoutine) {
-        AtomicInteger index = new AtomicInteger(0);
-        return dtos.stream().map(dto -> {
-            RoutineSection section = new RoutineSection();
-            log.info("ID OF SECTION ITEM =» {}", dto.id());
-            if(dto.id() != null){
-                section.setId(dto.id());
-            }
-            section.setOrderIndex(index.getAndIncrement());
-            section.setName(dto.name());
-            section.setIconId(dto.iconId());
-            section.setStartTime(dto.startTime());
-            section.setEndTime(dto.endTime());
-            section.setFavorite(dto.favorite());
-            section.setRoutine(diaryRoutine);
-
-            List<TaskGroup> taskGroups = dto.taskGroup() != null ? dto.taskGroup().stream().map(taskDto -> {
-                TaskGroup taskGroup = new TaskGroup();
-                log.info(null == taskDto.taskId() ? "Task ID is null" : "Task ID: {}", taskDto.taskId());
-                Task task = taskService.getTask(taskDto.taskId());
-
-                if(taskDto.id() != null){
-                    taskGroup.setId(taskDto.id());
-                }
-                
-                if (taskDto.taskGroupCheck() != null) {
-                    List<TaskGroupCheck> checks = taskGroup.getTaskGroupChecks(); 
-                    checks.addAll(taskDto.taskGroupCheck());
-                    taskGroup.setTaskGroupChecks(checks);
-                }                
-                taskGroup.setTask(task);
-                taskGroup.setStartTime(taskDto.startTime());
-                taskGroup.setRoutineSection(section);
-
-                return taskGroup;
-            }).collect(Collectors.toList()) : List.of();
-
-            section.setTaskGroups(taskGroups);
-
-            List<HabitGroup> habitGroups = dto.habitGroup() != null ? dto.habitGroup().stream().map(habitDto -> {
-                HabitGroup habitGroup = new HabitGroup();
-                Habit habit = habitService.getHabit(habitDto.habitId());
-
-                 if(habitDto.id() != null){
-                    habitGroup.setId(habitDto.id());
-                }
-
-                if (habitDto.habitGroupCheck() != null) {
-                    List<HabitGroupCheck> checks = habitGroup.getHabitGroupChecks();
-                    checks.addAll(habitDto.habitGroupCheck());
-                    habitGroup.setHabitGroupChecks(checks);
-                }
-                // for (RoutineSection routineSection : diaryRoutine.getRoutineSections()) {
-                //     List<HabitGroup> actualHabitGroups = routineSection.getHabitGroups();
-                //     for (int i = 0; i < actualHabitGroups.size(); i++) {
-                //         actualHabitGroups.get(i).getHabitGroupChecks().clear();
-                //     }
-                // }
-
-               
-                habitGroup.setHabit(habit);
-                habitGroup.setStartTime(habitDto.startTime());
-                habitGroup.setRoutineSection(section);
-
-                return habitGroup;
-            }).collect(Collectors.toList()) : List.of();
-            section.setHabitGroups(habitGroups);
-
-            return section;
-        }).collect(Collectors.toList());
     }
 
     private DiaryRoutineResponseDTO mapToResponseDTO(DiaryRoutine entity) {
@@ -354,13 +288,13 @@ public class DiaryRoutineService {
         check = checkIfHabitGroupIsAlreadyCheckedAndOverride(habitGroupToCheckOrUncheck, date);
 
         Double newXp = (double) (10 * habitChecked.getDificulty() * habitChecked.getImportance());
-        habitChecked.setXp(newXp + habitChecked.getXp());
-        if(newXp > habitChecked.getNextLevelXp()){
-            habitChecked.setLevel(habitChecked.getLevel() + 1);
-            XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(habitChecked.getLevel());
-            XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(habitChecked.getLevel() + 1);
-            habitChecked.setActualBaseXp(xpForActualLevel.getXp());
-            habitChecked.setNextLevelXp(xpForNextLevel.getXp());
+        habitChecked.getXpProgress().setXp(newXp + habitChecked.getXpProgress().getXp());
+        if(newXp > habitChecked.getXpProgress().getNextLevelXp()){
+            habitChecked.getXpProgress().setLevel(habitChecked.getXpProgress().getLevel() + 1);
+            XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(habitChecked.getXpProgress().getLevel());
+            XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(habitChecked.getXpProgress().getLevel() + 1);
+            habitChecked.getXpProgress().setActualLevelXp(xpForActualLevel.getXp());
+            habitChecked.getXpProgress().setNextLevelXp(xpForNextLevel.getXp());
         }            
         //1 more for the constance
         habitChecked.setConstance(habitChecked.getConstance() + 1);
@@ -415,7 +349,7 @@ public class DiaryRoutineService {
         log.info("[LOG] Starting Uncheck for HabitGroupCheck => {}", existingCheck);
 
         habitGroupToUncheck.getHabitGroupChecks().remove(existingCheck);
-        habitToCheck.setXp(habitToCheck.getXp() - existingCheck.getXpGenerated());
+        habitToCheck.getXpProgress().setXp(habitToCheck.getXpProgress().getXp() - existingCheck.getXpGenerated());
         habitToCheck.setConstance(habitToCheck.getConstance() - 1);
 
         categoryService.removeXpFromCategories(habitToCheck.getCategories(), existingCheck.getXpGenerated());

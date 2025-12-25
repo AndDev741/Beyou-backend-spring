@@ -13,38 +13,45 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
+import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class HabitService {
     @Autowired
-    private HabitRepository habitRepository;
+    private final HabitRepository habitRepository;
 
     @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
 
     @Autowired
-    private XpByLevelRepository xpByLevelRepository;
+    private final XpByLevelRepository xpByLevelRepository;
 
     @Autowired
-    private CategoryService categoryService;
+    private final CategoryService categoryService;
+
+    @Autowired
+    private final HabitMapper habitMapper;
 
     public Habit getHabit(UUID habitId){
         return habitRepository.findById(habitId)
         .orElseThrow(() -> new HabitNotFound("Habit not found"));
     }
 
-    public ArrayList<Habit> getHabits(UUID userId){
-        try{
-            return habitRepository.findAllByUserId(userId);
-        }catch(Exception e){
-            throw e;
-        }
+    public List<HabitResponseDTO> getHabits(UUID userId){
+        ArrayList<Habit> habits = habitRepository.findAllByUserId(userId);
+        return habits.stream()
+                .map(habitMapper::toResponseDTO)
+                .toList();
     }
 
     public ResponseEntity<Map<String, String>> createHabit(CreateHabitDTO createHabitDTO, UUID userId){
@@ -61,7 +68,7 @@ public class HabitService {
             categories.add(category);
         }
 
-        Habit newHabit = new Habit(createHabitDTO, categories, nextLevelXp.getXp(), actualBaseXp.getXp(), user);
+        Habit newHabit = habitMapper.toEntity(createHabitDTO, categories, actualBaseXp, nextLevelXp, user);
 
         try{
             habitRepository.save(newHabit);
@@ -76,12 +83,6 @@ public class HabitService {
         if(!habitToEdit.getUser().getId().equals(userId)){
             throw new HabitNotFound("The habit is not from the user in context");
         }
-        habitToEdit.setName(editHabitDTO.name());
-        habitToEdit.setDescription(editHabitDTO.description());
-        habitToEdit.setIconId(editHabitDTO.iconId());
-        habitToEdit.setMotivationalPhrase(editHabitDTO.motivationalPhrase());
-        habitToEdit.setImportance(editHabitDTO.importance());
-        habitToEdit.setDificulty(editHabitDTO.dificulty());
 
         List<Category> categoriesEdit = new ArrayList<>();
         int numberOfCategories = editHabitDTO.categoriesId().size();
@@ -90,7 +91,7 @@ public class HabitService {
             categoriesEdit.add(category);
         }
         
-        habitToEdit.setCategories(categoriesEdit);
+        habitMapper.updateEntity(habitToEdit, editHabitDTO, categoriesEdit);
         try{
             habitRepository.save(habitToEdit);
             return ResponseEntity.ok().body(Map.of("success", "Habit edited successfully"));

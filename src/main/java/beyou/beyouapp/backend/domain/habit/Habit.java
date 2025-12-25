@@ -11,9 +11,11 @@ import org.hibernate.annotations.UuidGenerator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.user.User;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -73,17 +75,8 @@ public class Habit {
     @Size(max = 256, message="The max of characters in motivation Phrase are 256")
     private String motivationalPhrase;
 
-    @Column(nullable = false)
-    private double xp = 0;
-
-    @Column(nullable = false)
-    private int level = 0;
-
-    @Column(nullable = false)
-    private Double nextLevelXp = 0D;
-
-    @Column(nullable = false)
-    private Double actualBaseXp = 0D;
+    @Embedded
+    private XpProgress xpProgress = new XpProgress();
 
     @Column(nullable = true)
     private int constance;
@@ -118,13 +111,13 @@ public class Habit {
         setIconId(createHabitDTO.iconId());
         setMotivationalPhrase(createHabitDTO.motivationalPhrase());
         setCategories(categories);
-        setXp(createHabitDTO.xp());
-        setLevel(createHabitDTO.level());
+        xpProgress.setXp(createHabitDTO.xp());
+        xpProgress.setLevel(createHabitDTO.level());
         setImportance(createHabitDTO.importance());
         setDificulty(createHabitDTO.dificulty());
         setConstance(0);
-        setNextLevelXp(nextLevelXp);
-        setActualBaseXp(actualBaseXp);
+        xpProgress.setNextLevelXp(nextLevelXp);
+        xpProgress.setActualLevelXp(actualBaseXp);
         setUser(user);
     }
     

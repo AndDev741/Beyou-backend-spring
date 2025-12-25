@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -19,36 +18,37 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRep
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
+import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
 import beyou.beyouapp.backend.exceptions.task.TaskNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class TaskService {
-    TaskRepository taskRepository;
-    UserRepository userRepository;
-    CategoryService categoryService;
-    DiaryRoutineRepository diaryRoutineRepository;
-
-    public TaskService(TaskRepository taskRepository, UserRepository userRepository, CategoryService categoryService, DiaryRoutineRepository diaryRoutineRepository){
-        this.taskRepository = taskRepository;
-        this.userRepository = userRepository;
-        this.categoryService = categoryService;
-        this.diaryRoutineRepository = diaryRoutineRepository;
-    }
+    private final TaskRepository taskRepository;
+    private final UserRepository userRepository;
+    private final CategoryService categoryService;
+    private final DiaryRoutineRepository diaryRoutineRepository;
+    private final TaskMapper taskMapper;
 
     public Task getTask(UUID taskId){
         return taskRepository.findById(taskId).orElseThrow(() -> new TaskNotFound("Task not found"));
     }
 
-    public List<Task> getAllTasks(UUID userId){
+    public List<TaskResponseDTO> getAllTasks(UUID userId){
         List<Task> tasks = taskRepository.findAllByUserId(userId).orElseThrow(() -> new UserNotFound("User not found when tried to get tasks"));
         deleteAllMarked(tasks, userId);
-        return taskRepository.findAllByUserId(userId).orElseThrow(() -> new UserNotFound("User not found when tried to get tasks"));
+        return taskRepository.findAllByUserId(userId)
+                .orElseThrow(() -> new UserNotFound("User not found when tried to get tasks"))
+                .stream()
+                .map(taskMapper::toResponseDTO)
+                .toList();
     }
 
     @Transactional
@@ -108,7 +108,7 @@ public class TaskService {
             categoriesToAdd.add(categoryService.getCategory(categoryId)));
         }
         
-        Task taskToCreate = new Task(createTaskDTO, Optional.of(categoriesToAdd), user);
+        Task taskToCreate = taskMapper.toEntity(createTaskDTO, categoriesToAdd, user);
 
         try {
             taskRepository.save(taskToCreate);
@@ -138,8 +138,7 @@ public class TaskService {
             categoriesId.forEach(categoryId -> 
             categoriesToAdd.add(categoryService.getCategory(categoryId)));
         }
-        taskToEdit.setCategories(categoriesToAdd);
-        taskToEdit.setOneTimeTask(editTaskRequestDTO.oneTimeTask());
+        taskMapper.updateEntity(taskToEdit, editTaskRequestDTO, categoriesToAdd);
 
         try{
             taskRepository.save(taskToEdit);

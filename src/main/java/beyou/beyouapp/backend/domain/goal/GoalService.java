@@ -1,7 +1,6 @@
 package beyou.beyouapp.backend.domain.goal;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -13,36 +12,35 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
+import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
 import beyou.beyouapp.backend.domain.goal.util.GoalXpCalculator;
 import beyou.beyouapp.backend.exceptions.goal.GoalNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class GoalService {
     private final GoalRepository goalRepository;
     private final UserRepository userRepository;
     private final CategoryService categoryService;
-
-    public GoalService(GoalRepository goalRepository,
-                       UserRepository userRepository,
-                       CategoryService categoryService) {
-        this.goalRepository = goalRepository;
-        this.userRepository = userRepository;
-        this.categoryService = categoryService;
-    }
+    private final GoalMapper goalMapper;
 
     public Goal getGoal(UUID goalId) {
         return goalRepository.findById(goalId)
                 .orElseThrow(() -> new GoalNotFound("Goal not found"));
     }
 
-    public List<Goal> getAllGoals(UUID userId) {
+    public List<GoalResponseDTO> getAllGoals(UUID userId) {
         return goalRepository.findAllByUserId(userId)
-                .orElseThrow(() -> new UserNotFound("User not found when trying to get goals"));
+                .orElseThrow(() -> new UserNotFound("User not found when trying to get goals"))
+                .stream()
+                .map(goalMapper::toResponseDTO)
+                .toList();
     }
 
     public ResponseEntity<Map<String, String>> createGoal(CreateGoalRequestDTO dto, UUID userId) {
@@ -53,7 +51,7 @@ public class GoalService {
                 .map(categoryService::getCategory)
                 .toList();
         
-        Goal goal = new Goal(dto, categories, user);
+        Goal goal = goalMapper.toEntity(dto, categories, user);
         try {
             goalRepository.save(goal);
             return ResponseEntity.ok(Map.of("success", "Goal created successfully"));
@@ -66,23 +64,10 @@ public class GoalService {
         Goal goal = getGoal(dto.goalId());
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
-        goal.setName(dto.name());
-        goal.setIconId(dto.iconId());
-        goal.setDescription(dto.description());
-        goal.setTargetValue(dto.targetValue());
-        goal.setUnit(dto.unit());
-        goal.setCurrentValue(dto.currentValue());
-        goal.setComplete(dto.complete());
-        goal.setCategories(new ArrayList<>(
-            dto.categoriesId().stream()
+        List<Category> categories = dto.categoriesId().stream()
                 .map(categoryService::getCategory)
-                .toList()
-        ));
-        goal.setMotivation(dto.motivation());
-        goal.setStartDate(dto.startDate());
-        goal.setEndDate(dto.endDate());
-        goal.setStatus(dto.status());
-        goal.setTerm(dto.term());
+                .toList();
+        goalMapper.updateEntity(goal, dto, categories);
         try {
             goalRepository.save(goal);
             return ResponseEntity.ok(Map.of("success", "Goal edited successfully"));
@@ -108,7 +93,7 @@ public class GoalService {
         return goalRepository.save(goal);
     }
 
-    public Goal checkGoal(UUID goalId, UUID userId) {
+    public GoalResponseDTO checkGoal(UUID goalId, UUID userId) {
         Goal goal = getGoal(goalId);
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
@@ -123,7 +108,7 @@ public class GoalService {
 
         try {
             goalRepository.save(goal);
-            return goal;
+            return goalMapper.toResponseDTO(goal);
         } catch (Exception e) {
            throw new RuntimeException(e);
         }
@@ -145,27 +130,27 @@ public class GoalService {
         categoryService.removeXpFromCategories(goal.getCategories(), xpReward);
     }
 
-    public Goal increaseCurrentValue (UUID goalId, UUID userId) {
+    public GoalResponseDTO increaseCurrentValue (UUID goalId, UUID userId) {
         Goal goal = getGoal(goalId);
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
         goal.setCurrentValue(goal.getCurrentValue() + 1);
         try {
             goalRepository.save(goal);
-            return goal;
+            return goalMapper.toResponseDTO(goal);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    public Goal decreaseCurrentValue (UUID goalId, UUID userId) {
+    public GoalResponseDTO decreaseCurrentValue (UUID goalId, UUID userId) {
         Goal goal = getGoal(goalId);
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
         goal.setCurrentValue(goal.getCurrentValue() - 1);
         try {
             goalRepository.save(goal);
-            return goal;
+            return goalMapper.toResponseDTO(goal);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

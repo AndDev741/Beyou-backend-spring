@@ -5,14 +5,11 @@ import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
-import beyou.beyouapp.backend.domain.common.XpProgress;
-import beyou.beyouapp.backend.domain.goal.Goal;
-import beyou.beyouapp.backend.domain.habit.Habit;
-import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,20 +17,26 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class CategoryService {
     @Autowired
-    private CategoryRepository categoryRepository;
+    private final CategoryRepository categoryRepository;
 
     @Autowired
-    private XpByLevelRepository xpByLevelRepository;
+    private final XpByLevelRepository xpByLevelRepository;
 
     @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
+
+    @Autowired
+    private final CategoryMapper categoryMapper;
 
     public Category getCategory(UUID categoryId){
         return categoryRepository.findById(categoryId)
@@ -45,28 +48,8 @@ public class CategoryService {
                 .orElseThrow(() -> new UserNotFound(""));
 
         return categories.stream()
-                .map(this::mapToDto)
+                .map(categoryMapper::toResponseDTO)
                 .toList();
-    }
-
-    private CategoryResponseDTO mapToDto(Category category){
-        return new CategoryResponseDTO(
-                category.getId(),
-                category.getName(),
-                category.getDescription(),
-                category.getIconId(),
-                category.getHabits().stream()
-                        .collect(Collectors.toMap(Habit::getId, Habit::getName)),
-                category.getTasks().stream()
-                        .collect(Collectors.toMap(Task::getId, Task::getName)),
-                category.getGoals().stream()
-                        .collect(Collectors.toMap(Goal::getId, Goal::getName)),
-                category.getXpProgress().getXp(),
-                category.getXpProgress().getNextLevelXp(),
-                category.getXpProgress().getActualLevelXp(),
-                category.getXpProgress().getLevel(),
-                category.getCreatedAt()
-        );
     }
 
     public ResponseEntity<Map<String, Object>> createCategory(CategoryRequestDTO categoryRequestDTO, UUID userId){
@@ -76,10 +59,7 @@ public class CategoryService {
         XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.level() + 1);
         XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.level());
 
-        Category newCategory = new Category(categoryRequestDTO, user);
-        XpProgress xpProgress = new XpProgress();
-        xpProgress.setNextLevelXp(xpForNextLevel.getXp());
-        xpProgress.setActualLevelXp(xpForActualLevel.getXp());
+        Category newCategory = categoryMapper.toEntity(categoryRequestDTO, user, xpForActualLevel, xpForNextLevel);
 
         try{
             categoryRepository.save(newCategory);
@@ -96,9 +76,7 @@ public class CategoryService {
             throw new CategoryNotFound("This category are not from the user in context");
         }
 
-        categoryToEdit.setName(categoryEditRequestDTO.name());
-        categoryToEdit.setDescription(categoryEditRequestDTO.description());
-        categoryToEdit.setIconId(categoryEditRequestDTO.icon());
+        categoryMapper.updateEntity(categoryToEdit, categoryEditRequestDTO);
 
         categoryRepository.save(categoryToEdit);
 

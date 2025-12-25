@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.goal.GoalService;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
+import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 
@@ -33,7 +33,7 @@ public class GoalController {
     }
 
     @GetMapping
-    public List<Goal> getGoals() {
+    public List<GoalResponseDTO> getGoals() {
         User user = authenticatedUser.getAuthenticatedUser();
         return goalService.getAllGoals(user.getId());
     }
@@ -57,7 +57,7 @@ public class GoalController {
     }
 
     @PutMapping("/complete")
-    public Goal setAsComplete(@RequestBody UUID goalId) {
+    public GoalResponseDTO setAsComplete(@RequestBody UUID goalId) {
         User user = authenticatedUser.getAuthenticatedUser();
         
         try {
@@ -68,7 +68,7 @@ public class GoalController {
     }
 
     @PutMapping("/increase")
-    public Goal increaseCurrentValue(@RequestBody UUID goalId) {
+    public GoalResponseDTO increaseCurrentValue(@RequestBody UUID goalId) {
         User user = authenticatedUser.getAuthenticatedUser();
         
         try {
@@ -79,7 +79,7 @@ public class GoalController {
     }
 
     @PutMapping("/decrease")
-    public Goal decreaseCurrentValue(@RequestBody UUID goalId) {
+    public GoalResponseDTO decreaseCurrentValue(@RequestBody UUID goalId) {
         User user = authenticatedUser.getAuthenticatedUser();
         
         try {

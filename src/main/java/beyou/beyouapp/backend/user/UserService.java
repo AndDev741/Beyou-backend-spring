@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
+import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
@@ -31,6 +33,9 @@ public class UserService {
 
     @Autowired
     private TokenService tokenService;
+
+    @Autowired
+    private XpByLevelRepository xpByLevelRepository;
 
     public ResponseEntity<String> verifyAuthentication(){
         return ResponseEntity.ok().body("authenticated");
@@ -127,6 +132,22 @@ public class UserService {
             throw new UserNotFound("User not found by id");
         }
     }
+
+    public void updateUserXpAndLevel(User user, Double newXp){
+
+        user.setXp(user.getXp() + newXp);
+
+        if(user.getXp() >= user.getNextLevelXp()){
+            user.setLevel(user.getLevel() + 1);
+            XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(user.getLevel());
+            XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(user.getLevel() + 1);
+            user.setActualBaseXp(xpForActualLevel.getXp());
+            user.setNextLevelXp(xpForNextLevel.getXp());
+        }
+
+        userRepository.save(user);
+        
+    } 
 
     private void addJwtTokenToResponse(HttpServletResponse response, String token){
         Cookie cookie = new Cookie("jwt", token);

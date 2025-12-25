@@ -39,4 +39,12 @@ public abstract class Routine {
     @JoinColumn(name = "schedule_id", nullable = true)
     private Schedule schedule;
 
+    private double xp = 0;
+
+    private int level = 0;
+
+    private Double nextLevelXp = 0D;
+
+    private Double actualBaseXp = 0D;
+
 }

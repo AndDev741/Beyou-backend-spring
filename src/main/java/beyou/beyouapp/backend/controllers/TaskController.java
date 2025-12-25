@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
+import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 
@@ -33,7 +33,7 @@ public class TaskController {
     }
 
     @GetMapping
-    public List<Task> getTasks(){
+    public List<TaskResponseDTO> getTasks(){
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return taskService.getAllTasks(userAuth.getId());
     }
