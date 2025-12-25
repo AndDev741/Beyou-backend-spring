@@ -30,11 +30,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskRepository;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
+import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
+import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 
 @SpringBootTest
@@ -51,31 +52,41 @@ public class TaskControllerTest {
     @MockBean
     private TaskRepository taskRepository;
 
+    @MockBean
+    private AuthenticatedUser authenticatedUser;
+
     private User user;
     private UUID userId;
-    private Task task;
-    private UUID taskId;
-
     @BeforeEach
     void setUp() {
         taskRepository.deleteAll();
         userId = UUID.randomUUID();
-        taskId = UUID.randomUUID();
         user = new User();
         user.setId(userId);
 
-        task = new Task();
-        task.setId(taskId);
-        task.setUser(user);
-
+        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
         SecurityContextHolder.getContext().setAuthentication(
-            new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities())
+                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities())
         );
     }
 
     @Test
     void shouldGetAllTasksSuccessfully() throws Exception {
-        List<Task> expectedTasks = new ArrayList<>(List.of(task));
+        UUID taskId = UUID.randomUUID();
+        TaskResponseDTO responseDTO = new TaskResponseDTO(
+                taskId,
+                "name",
+                "desc",
+                "icon",
+                1,
+                1,
+                Map.of(),
+                false,
+                null,
+                null,
+                null
+        );
+        List<TaskResponseDTO> expectedTasks = new ArrayList<>(List.of(responseDTO));
         when(taskService.getAllTasks(userId)).thenReturn(expectedTasks);
 
         mockMvc.perform(get("/task"))
@@ -107,6 +118,7 @@ public class TaskControllerTest {
 
     @Test
     void shouldEditTaskSuccessfully() throws Exception {
+        UUID taskId = UUID.randomUUID();
         EditTaskRequestDTO dto = new EditTaskRequestDTO(
             taskId,
             "Updated Task",
@@ -131,6 +143,7 @@ public class TaskControllerTest {
 
     @Test
     void shouldDeleteTaskSuccessfully() throws Exception {
+        UUID taskId = UUID.randomUUID();
         ResponseEntity<Map<String, String>> successResponse = ResponseEntity.ok()
             .body(Map.of("success", "Task deleted Successfully!"));
 

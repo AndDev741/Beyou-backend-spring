@@ -13,7 +13,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +24,7 @@ import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
+import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
@@ -44,7 +44,8 @@ public class HabitServiceTest {
     @Mock
     private CategoryService categoryService;
 
-    @InjectMocks
+    private HabitMapper habitMapper = new HabitMapper();
+
     private HabitService habitService;
 
     Habit habit = new Habit();
@@ -53,13 +54,17 @@ public class HabitServiceTest {
     UUID userId = UUID.randomUUID();
     Category newCategory = new Category();
     List<UUID> categories = new ArrayList<>(List.of(UUID.randomUUID()));
+
     @BeforeEach
     public void setup(){
         user.setId(userId);
         habit.setId(habitId);
         habit.setUser(user);
         habit.setName("Test");
-        
+        habit.setImportance(0);
+        habit.setDificulty(1);
+
+        habitService = new HabitService(habitRepository, userRepository, xpByLevelRepository, categoryService, habitMapper);
     }
 
     @Test
@@ -78,9 +83,9 @@ public class HabitServiceTest {
 
         when(habitRepository.findAllByUserId(userId)).thenReturn(habits);
 
-        ArrayList<Habit> assertResponse = habitService.getHabits(userId);
+        List<HabitResponseDTO> assertResponse = habitService.getHabits(userId);
 
-        assertEquals(habits, assertResponse);
+        assertEquals(1, assertResponse.size());
     }
 
     @Test

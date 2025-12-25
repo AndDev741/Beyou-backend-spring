@@ -15,11 +15,11 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
+import org.junit.jupiter.api.BeforeEach;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
@@ -29,6 +29,7 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRep
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
+import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
 import beyou.beyouapp.backend.exceptions.task.TaskNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
@@ -49,7 +50,8 @@ public class TaskServiceTest {
     @Mock
     DiaryRoutineRepository diaryRoutineRepository;
 
-    @InjectMocks
+    TaskMapper taskMapper = new TaskMapper();
+
     TaskService taskService;
 
     UUID taskId = UUID.randomUUID();
@@ -57,6 +59,11 @@ public class TaskServiceTest {
     List<Task> tasks = new ArrayList<Task>(List.of(newTask));
     UUID userId = UUID.randomUUID();
     User user = new User();
+
+    @BeforeEach
+    void setup() {
+        taskService = new TaskService(taskRepository, userRepository, categoryService, diaryRoutineRepository, taskMapper);
+    }
 
     @Test
     public void shouldGetTaskSuccessfully(){
@@ -74,9 +81,9 @@ public class TaskServiceTest {
 
         when(taskRepository.findAllByUserId(userId)).thenReturn(Optional.of(tasks));
 
-        List<Task> getTasks = taskService.getAllTasks(userId);
+        List<TaskResponseDTO> getTasks = taskService.getAllTasks(userId);
 
-        assertEquals(tasks.get(0), getTasks.get(0));
+        assertEquals(1, getTasks.size());
     }
 
     @Test
@@ -186,7 +193,7 @@ public class TaskServiceTest {
             .thenReturn(Optional.of(new ArrayList<>()));    // 2ª call
         when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(diaryRoutine));
 
-        List<Task> result = taskService.getAllTasks(userId);
+        List<TaskResponseDTO> result = taskService.getAllTasks(userId);
 
         verify(taskRepository, times(2)).findAllByUserId(userId);
         verify(taskRepository, times(1)).deleteAll(List.of(taskToDelete));

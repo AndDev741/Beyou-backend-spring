@@ -1,11 +1,12 @@
 package beyou.beyouapp.backend.controller;
 
-import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.goal.GoalService;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.GoalStatus;
 import beyou.beyouapp.backend.domain.goal.GoalTerm;
+import beyou.beyouapp.backend.domain.category.dto.CategoryMiniDTO;
+import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -65,13 +66,30 @@ private final ObjectMapper objectMapper = new ObjectMapper()
 
     @Test
     void shouldGetGoalsSuccessfully() throws Exception {
-        Goal goal = new Goal();
-        goal.setId(UUID.randomUUID());
+        UUID goalId = UUID.randomUUID();
+        GoalResponseDTO goal = new GoalResponseDTO(
+                goalId,
+                "name",
+                "icon",
+                "desc",
+                1.0,
+                "u",
+                0.0,
+                false,
+                Map.<UUID, CategoryMiniDTO>of(),
+                "mot",
+                LocalDate.now(),
+                LocalDate.now().plusDays(1),
+                0.0,
+                GoalStatus.NOT_STARTED,
+                GoalTerm.SHORT_TERM,
+                null
+        );
         when(goalService.getAllGoals(userId)).thenReturn(List.of(goal));
 
         mockMvc.perform(get("/goal"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(goal.getId().toString()));
+                .andExpect(jsonPath("$[0].id").value(goal.id().toString()));
     }
 
     @Test
@@ -122,36 +140,94 @@ private final ObjectMapper objectMapper = new ObjectMapper()
     @Test
     void shouldMarkAsCompletedSuccessfully() throws Exception {
         UUID goalId = UUID.randomUUID();
-        when(goalService.checkGoal(goalId, userId)).thenReturn(new Goal());
+        GoalResponseDTO responseDTO = new GoalResponseDTO(
+                goalId,
+                "name",
+                "icon",
+                "desc",
+                1.0,
+                "u",
+                0.0,
+                true,
+                Map.<UUID, CategoryMiniDTO>of(),
+                "mot",
+                LocalDate.now(),
+                LocalDate.now().plusDays(1),
+                0.0,
+                GoalStatus.COMPLETED,
+                GoalTerm.SHORT_TERM,
+                LocalDate.now()
+        );
+        when(goalService.checkGoal(goalId, userId)).thenReturn(responseDTO);
 
         mockMvc.perform(put("/goal/complete")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(goalId))
                 )
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(goalId.toString()))
+                .andExpect(jsonPath("$.complete").value(true));
     }
 
     @Test
     void shouldIncreaseTheCurrentValueSuccessfully() throws Exception {
         UUID goalId = UUID.randomUUID();
-        when(goalService.increaseCurrentValue(goalId, userId)).thenReturn(new Goal());
+        GoalResponseDTO responseDTO = new GoalResponseDTO(
+                goalId,
+                "name",
+                "icon",
+                "desc",
+                1.0,
+                "u",
+                1.0,
+                false,
+                Map.<UUID, CategoryMiniDTO>of(),
+                "mot",
+                LocalDate.now(),
+                LocalDate.now().plusDays(1),
+                0.0,
+                GoalStatus.IN_PROGRESS,
+                GoalTerm.SHORT_TERM,
+                null
+        );
+        when(goalService.increaseCurrentValue(goalId, userId)).thenReturn(responseDTO);
 
         mockMvc.perform(put("/goal/increase")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(goalId))
                 )
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentValue").value(1.0));
     }
 
     @Test
     void shouldDecreaseTheCurrentValueSuccessfully() throws Exception {
         UUID goalId = UUID.randomUUID();
-        when(goalService.decreaseCurrentValue(goalId, userId)).thenReturn(new Goal());
+        GoalResponseDTO responseDTO = new GoalResponseDTO(
+                goalId,
+                "name",
+                "icon",
+                "desc",
+                1.0,
+                "u",
+                -1.0,
+                false,
+                Map.<UUID, CategoryMiniDTO>of(),
+                "mot",
+                LocalDate.now(),
+                LocalDate.now().plusDays(1),
+                0.0,
+                GoalStatus.IN_PROGRESS,
+                GoalTerm.SHORT_TERM,
+                null
+        );
+        when(goalService.decreaseCurrentValue(goalId, userId)).thenReturn(responseDTO);
 
         mockMvc.perform(put("/goal/decrease")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(goalId))
                 )
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentValue").value(-1.0));
     }
 }

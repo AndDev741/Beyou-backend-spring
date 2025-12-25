@@ -3,26 +3,27 @@ package beyou.beyouapp.backend.domain.routine;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
+import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
+import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineMapper;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.HabitGroupDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.HabitGroupRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
 import beyou.beyouapp.backend.user.User;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.HabitGroupRequestDTO;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -60,6 +61,9 @@ class DiaryRoutineServiceTest {
 
     @Mock
     private CategoryService categoryService;
+
+    @Mock
+    private DiaryRoutineMapper mapper;
 
     @InjectMocks
     private DiaryRoutineService diaryRoutineService;
@@ -148,8 +152,7 @@ class DiaryRoutineServiceTest {
     @DisplayName("Should create diary routine successfully")
     void shouldCreateDiaryRoutineSuccessfully() {
         when(diaryRoutineRepository.save(any(DiaryRoutine.class))).thenReturn(diaryRoutine);
-        when(taskService.getTask(any(UUID.class))).thenReturn(mockedTask);
-        when(habitService.getHabit(any(UUID.class))).thenReturn(mockedHabit);
+        when(mapper.toEntity(any(DiaryRoutineRequestDTO.class))).thenReturn(diaryRoutine);
 
         DiaryRoutineResponseDTO response = diaryRoutineService.createDiaryRoutine(validRequestDTO, new User());
 
@@ -421,8 +424,8 @@ class DiaryRoutineServiceTest {
         Habit habit = habitGroup.getHabit();
         habit.setDificulty(1);
         habit.setImportance(1);
-        habit.setXp(0.0);
-        habit.setNextLevelXp(Double.MAX_VALUE);
+        habit.getXpProgress().setXp(0.0);
+        habit.getXpProgress().setNextLevelXp(Double.MAX_VALUE);
         habit.setConstance(0);
         habit.setCategories(new ArrayList<>());
 
@@ -453,8 +456,8 @@ class DiaryRoutineServiceTest {
         Habit habit = habitGroup.getHabit();
         habit.setDificulty(1);
         habit.setImportance(1);
-        habit.setXp(0.0);
-        habit.setNextLevelXp(Double.MAX_VALUE);
+        habit.getXpProgress().setXp(0.0);
+        habit.getXpProgress().setNextLevelXp(Double.MAX_VALUE);
         habit.setConstance(0);
         habit.setCategories(new ArrayList<>());
 

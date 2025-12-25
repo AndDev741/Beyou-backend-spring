@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.goal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,7 +13,6 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
+import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.exceptions.goal.GoalNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
@@ -35,21 +36,23 @@ import static org.mockito.ArgumentMatchers.any;
 @ExtendWith(MockitoExtension.class)
 public class goalServiceTest {
     @Mock
-    GoalRepository goalRepository;
+    private GoalRepository goalRepository;
 
     @Mock
-    UserRepository userRepository;
+    private UserRepository userRepository;
 
     @Mock
-    CategoryService categoryService;
+    private CategoryService categoryService;
 
-    @InjectMocks
+    private GoalMapper goalMapper = new GoalMapper();
+
     GoalService goalService;
 
     UUID goalId = UUID.randomUUID();
     UUID userId = UUID.randomUUID();
     Goal goal = new Goal();
     User user = new User();
+
     @BeforeEach
     void setup() {
         goalRepository.deleteAll();
@@ -58,10 +61,14 @@ public class goalServiceTest {
         goal.setId(goalId);
         goal.setName("Test 1");
         goal.setTargetValue(10.0);
+        goal.setCurrentValue(0.0);
         goal.setStartDate(LocalDate.now().minusDays(2));
         goal.setEndDate(LocalDate.now());
+        goal.setCategories(new java.util.ArrayList<>());
         user.setId(userId);
         goal.setUser(user);
+
+        goalService = new GoalService(goalRepository, userRepository, categoryService, goalMapper);
         
     }
 
@@ -79,12 +86,11 @@ public class goalServiceTest {
     @Test
     void shouldGetAllGoalsOfTheUser() {
         when(goalRepository.findAllByUserId(userId)).thenReturn(Optional.of(List.of(goal)));
-
-        List<Goal> assertGoals = goalService.getAllGoals(userId);
+        List<GoalResponseDTO> assertGoals = goalService.getAllGoals(userId);
 
         verify(goalRepository, times(1)).findAllByUserId(userId);
         assertEquals(assertGoals.size(), 1);
-        assertEquals(assertGoals.get(0).getName(), goal.getName());
+        assertEquals(assertGoals.get(0).name(), goal.getName());
     }
 
     @Test
@@ -114,14 +120,17 @@ public class goalServiceTest {
                 LocalDate.now(), LocalDate.now().plusDays(1),
                 GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        Category cat = new Category(); cat.setId(dto.categoriesId().get(0));
+        Category cat = new Category();
+        cat.setId(dto.categoriesId().get(0));
         when(categoryService.getCategory(dto.categoriesId().get(0))).thenReturn(cat);
         when(goalRepository.save(any(Goal.class))).thenReturn(goal);
 
         ResponseEntity<Map<String, String>> response = goalService.createGoal(dto, userId);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Goal created successfully", response.getBody().get("success"));
+        Map<String, String> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("Goal created successfully", body.get("success"));
     }
 
     @Test
@@ -150,7 +159,9 @@ public class goalServiceTest {
         ResponseEntity<Map<String, String>> response = goalService.createGoal(dto, userId);
 
         assertEquals(400, response.getStatusCode().value());
-        assertEquals("Error trying to create goal", response.getBody().get("error"));
+        Map<String, String> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("Error trying to create goal", body.get("error"));
     }
 
     @Test
@@ -167,7 +178,9 @@ public class goalServiceTest {
         ResponseEntity<Map<String, String>> response = goalService.editGoal(dto, userId);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Goal edited successfully", response.getBody().get("success"));
+        Map<String, String> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("Goal edited successfully", body.get("success"));
     }
 
     @Test
@@ -187,7 +200,8 @@ public class goalServiceTest {
                 goalId, "n", "i", "d", 0.0, "u", 0.0,
                 false, List.of(), "", LocalDate.now(), LocalDate.now(),
                 GoalStatus.NOT_STARTED, GoalTerm.LONG_TERM);
-        User other = new User(); other.setId(UUID.randomUUID());
+        User other = new User();
+        other.setId(UUID.randomUUID());
         goal.setUser(other);
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
 
@@ -207,7 +221,9 @@ public class goalServiceTest {
         ResponseEntity<Map<String, String>> response = goalService.editGoal(dto, userId);
 
         assertEquals(400, response.getStatusCode().value());
-        assertEquals("Error trying to edit goal", response.getBody().get("error"));
+        Map<String, String> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("Error trying to edit goal", body.get("error"));
     }
 
     @Test
@@ -218,7 +234,9 @@ public class goalServiceTest {
 
         verify(goalRepository, times(1)).delete(goal);
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Goal deleted successfully", response.getBody().get("success"));
+        Map<String, String> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("Goal deleted successfully", body.get("success"));
     }
 
     @Test
@@ -230,7 +248,8 @@ public class goalServiceTest {
 
     @Test
     void shouldThrowGoalNotFound_whenDeleteGoalUserMismatch() {
-        User other = new User(); other.setId(UUID.randomUUID());
+        User other = new User();
+        other.setId(UUID.randomUUID());
         goal.setUser(other);
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
 
@@ -245,7 +264,9 @@ public class goalServiceTest {
         ResponseEntity<Map<String, String>> response = goalService.deleteGoal(goalId, userId);
 
         assertEquals(400, response.getStatusCode().value());
-        assertEquals("Error trying to delete goal", response.getBody().get("error"));
+        Map<String, String> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("Error trying to delete goal", body.get("error"));
     }
 
     @Test
@@ -263,11 +284,11 @@ public class goalServiceTest {
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
         when(goalRepository.save(goal)).thenReturn(goal);
 
-        Goal response = goalService.checkGoal(goalId, userId);
+        GoalResponseDTO response = goalService.checkGoal(goalId, userId);
 
-        assertEquals(true, response.getComplete());
-        assertEquals( GoalStatus.COMPLETED, response.getStatus());
-        assertEquals(LocalDate.now(), response.getCompleteDate());
+        assertEquals(true, response.complete());
+        assertEquals(GoalStatus.COMPLETED, response.status());
+        assertEquals(LocalDate.now(), response.completeDate());
     }
 
     @Test
@@ -277,11 +298,11 @@ public class goalServiceTest {
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
         when(goalRepository.save(goal)).thenReturn(goal);
 
-        Goal response = goalService.checkGoal(goalId, userId);
+        GoalResponseDTO response = goalService.checkGoal(goalId, userId);
 
-        assertEquals(false, response.getComplete());
-        assertEquals( GoalStatus.IN_PROGRESS, response.getStatus());
-        assertEquals(null, response.getCompleteDate());
+        assertEquals(false, response.complete());
+        assertEquals(GoalStatus.IN_PROGRESS, response.status());
+        assertEquals(null, response.completeDate());
     }
 
     @Test
@@ -292,10 +313,9 @@ public class goalServiceTest {
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
         when(goalRepository.save(goal)).thenReturn(goal);
 
-        Goal response = goalService.increaseCurrentValue(goalId, userId);
+        GoalResponseDTO response = goalService.increaseCurrentValue(goalId, userId);
 
-        assertEquals(16.0, response.getCurrentValue());
-
+        assertEquals(16.0, response.currentValue());
 
     }
 
@@ -307,9 +327,9 @@ public class goalServiceTest {
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
         when(goalRepository.save(goal)).thenReturn(goal);
 
-        Goal response = goalService.decreaseCurrentValue(goalId, userId);
+        GoalResponseDTO response = goalService.decreaseCurrentValue(goalId, userId);
 
-        assertEquals(14.0, response.getCurrentValue());
+        assertEquals(14.0, response.currentValue());
 
     }
 

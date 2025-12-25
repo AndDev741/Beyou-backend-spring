@@ -31,11 +31,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import beyou.beyouapp.backend.domain.habit.Habit;
-import beyou.beyouapp.backend.domain.habit.HabitRepository;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
+import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
+import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 
 @SpringBootTest
@@ -50,27 +50,26 @@ public class HabitControllerTest {
     private HabitService habitService;
 
     @MockBean
-    private HabitRepository repository;
+    private AuthenticatedUser authenticatedUser;
 
     User user = new User();
     UUID userID = UUID.randomUUID();
-    Habit habit = new Habit();
     UUID habitID = UUID.randomUUID();
 
     @BeforeEach
     private void setup() {
-        repository.deleteAll();
-
         user.setId(userID);
-        habit.setId(habitID);
-        habit.setUser(user);
 
+        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
     }
 
     @Test
     void shouldGetHabitsSuccessfully() throws Exception{
-        when(habitService.getHabits(userID)).thenReturn(new ArrayList<>(List.of(habit)));
+        HabitResponseDTO responseDTO = new HabitResponseDTO(
+            habitID, "name", "desc", "mot", "icon", 1, 1, List.of(), 0, 0, 0, 0, 0, null, null
+        );
+        when(habitService.getHabits(userID)).thenReturn(List.of(responseDTO));
 
         mockMvc.perform(get("/habit"))
                 .andExpect(status().isOk());

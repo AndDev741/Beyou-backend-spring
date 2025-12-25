@@ -37,6 +37,8 @@ public class CategoryServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    private CategoryMapper categoryMapper = new CategoryMapper();
+
     @InjectMocks
     private CategoryService categoryService;
 
@@ -63,6 +65,8 @@ public class CategoryServiceTest {
         category.setId(categoryId);
         category.getXpProgress().setNextLevelXp(xpByLevel2.getXp());
         category.getXpProgress().setActualLevelXp(xpByLevel.getXp());
+
+        categoryService = new CategoryService(categoryRepository, xpByLevelRepository, userRepository, categoryMapper);
     }
 
     @Test
