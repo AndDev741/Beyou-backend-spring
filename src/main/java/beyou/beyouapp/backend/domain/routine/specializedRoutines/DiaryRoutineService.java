@@ -13,14 +13,11 @@ import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO.RoutineSectionResponseDTO;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO.RoutineSectionResponseDTO.TaskGroupResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
 import beyou.beyouapp.backend.user.User;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO.RoutineSectionResponseDTO.HabitGroupResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -29,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
@@ -43,7 +39,6 @@ import java.util.stream.Collectors;
 public class DiaryRoutineService {
 
     private final DiaryRoutineRepository diaryRoutineRepository;
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private final TaskService taskService;
     private final HabitService habitService;
     private final XpByLevelRepository xpByLevelRepository;
@@ -57,7 +52,7 @@ public class DiaryRoutineService {
         if(!diaryRoutine.getUser().getId().equals(userId)){
             throw new DiaryRoutineNotFoundException("The user trying to get its different of the one in the object");
         }
-        return mapToResponseDTO(diaryRoutine);
+        return mapper.toResponse(diaryRoutine);
     }
 
     @Transactional(readOnly = true)
@@ -84,7 +79,7 @@ public class DiaryRoutineService {
     @Transactional(readOnly = true)
     public List<DiaryRoutineResponseDTO> getAllDiaryRoutines(UUID userId) {
         return diaryRoutineRepository.findAllByUserId(userId).stream()
-                .map(this::mapToResponseDTO)
+                .map(mapper::toResponse)
                 .collect(Collectors.toList());
     }
 
@@ -100,7 +95,7 @@ public class DiaryRoutineService {
         DiaryRoutine diaryRoutine = mapper.toEntity(dto);
         diaryRoutine.setUser(user);
         DiaryRoutine saved = diaryRoutineRepository.save(diaryRoutine);
-        return mapToResponseDTO(saved);
+        return mapper.toResponse(saved);
     }
 
     @Transactional
@@ -120,7 +115,7 @@ public class DiaryRoutineService {
         existing.getRoutineSections().addAll(newSections);
 
         DiaryRoutine updated = diaryRoutineRepository.save(existing);
-        return mapToResponseDTO(updated);
+        return mapper.toResponse(updated);
     }
 
     @Transactional
@@ -157,7 +152,7 @@ public class DiaryRoutineService {
             log.warn("NO ROUTINES SCHEDULED FOR TODAY");
             return null;
         }else{
-            return mapToResponseDTO(todaysRoutine);
+            return mapper.toResponse(todaysRoutine);
         }
 
     }
@@ -193,46 +188,6 @@ public class DiaryRoutineService {
                         "End time must be after start time for routine section: " + section.name());
             }
         }
-    }
-
-    private DiaryRoutineResponseDTO mapToResponseDTO(DiaryRoutine entity) {
-        List<RoutineSectionResponseDTO> sectionDTOs = entity.getRoutineSections().stream().map(section -> {
-            List<TaskGroupResponseDTO> taskGroupDTOs = section.getTaskGroups().stream()
-                    .map(taskGroup -> new TaskGroupResponseDTO(
-                            taskGroup.getId(),
-                            taskGroup.getTask().getId(),
-                            taskGroup.getStartTime() != null ? taskGroup.getStartTime().format(TIME_FORMATTER) : null,
-                            taskGroup.getTaskGroupChecks()
-                            ))
-                    .collect(Collectors.toList());
-
-            List<HabitGroupResponseDTO> habitGroupDTOs = section.getHabitGroups().stream()
-                    .map(habitGroup -> new HabitGroupResponseDTO(
-                            habitGroup.getId(),
-                            habitGroup.getHabit().getId(),
-                            habitGroup.getStartTime() != null ? habitGroup.getStartTime().format(TIME_FORMATTER)
-                                    : null,
-                            habitGroup.getHabitGroupChecks()
-                                    ))
-                    .collect(Collectors.toList());
-
-            return new RoutineSectionResponseDTO(
-                    section.getId(),
-                    section.getName(),
-                    section.getIconId(),
-                    section.getStartTime() != null ? section.getStartTime().format(TIME_FORMATTER) : null,
-                    section.getEndTime() != null ? section.getEndTime().format(TIME_FORMATTER) : null,
-                    taskGroupDTOs,
-                    habitGroupDTOs,
-                    section.getFavorite() != null ? section.getFavorite() : false);
-        }).collect(Collectors.toList());
-
-        return new DiaryRoutineResponseDTO(
-                entity.getId(),
-                entity.getName(),
-                entity.getIconId(),
-                sectionDTOs,
-                entity.getSchedule());
     }
 
     public DiaryRoutineResponseDTO checkAndUncheckGroup(CheckGroupRequestDTO checkGroupRequestDTO, UUID userId){
