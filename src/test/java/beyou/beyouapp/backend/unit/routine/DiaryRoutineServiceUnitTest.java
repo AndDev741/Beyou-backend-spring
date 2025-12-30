@@ -29,7 +29,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -62,10 +61,8 @@ class DiaryRoutineServiceUnitTest {
     @Mock
     private CategoryService categoryService;
 
-    @Mock
     private DiaryRoutineMapper mapper;
 
-    @InjectMocks
     private DiaryRoutineService diaryRoutineService;
 
     private DiaryRoutineRequestDTO validRequestDTO;
@@ -77,6 +74,7 @@ class DiaryRoutineServiceUnitTest {
 
     @BeforeEach
     void setUp() {
+        mapper = new DiaryRoutineMapper(taskService, habitService);
         routineId = UUID.randomUUID();
         userId = UUID.randomUUID();
         User user = new User();
@@ -146,13 +144,14 @@ class DiaryRoutineServiceUnitTest {
         section.setHabitGroups(new ArrayList<>(List.of(habitGroup)));
         section.setRoutine(diaryRoutine);
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(section)));
+
+        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, taskService, habitService, null, categoryService, mapper);
     }
 
     @Test
     @DisplayName("Should create diary routine successfully")
     void shouldCreateDiaryRoutineSuccessfully() {
         when(diaryRoutineRepository.save(any(DiaryRoutine.class))).thenReturn(diaryRoutine);
-        when(mapper.toEntity(any(DiaryRoutineRequestDTO.class))).thenReturn(diaryRoutine);
 
         DiaryRoutineResponseDTO response = diaryRoutineService.createDiaryRoutine(validRequestDTO, new User());
 
