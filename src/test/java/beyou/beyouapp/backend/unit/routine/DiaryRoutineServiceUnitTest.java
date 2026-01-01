@@ -1,8 +1,8 @@
 package beyou.beyouapp.backend.unit.routine;
 
-import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
+import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
@@ -17,9 +17,6 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutin
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.HabitGroupDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.HabitGroupRequestDTO;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
@@ -59,7 +56,7 @@ class DiaryRoutineServiceUnitTest {
     private HabitService habitService;
 
     @Mock
-    private CategoryService categoryService;
+    private CheckItemService checkItemService;
 
     private DiaryRoutineMapper mapper;
 
@@ -145,7 +142,7 @@ class DiaryRoutineServiceUnitTest {
         section.setRoutine(diaryRoutine);
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(section)));
 
-        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, taskService, habitService, null, categoryService, mapper);
+        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, null, mapper, checkItemService);
     }
 
     @Test
@@ -404,79 +401,5 @@ class DiaryRoutineServiceUnitTest {
         DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId);
 
         assertNull(result);
-    }
-
-    @Test
-    void shouldThrowException_whenNoItemGroupInRequest() {
-        // Arrange
-        CheckGroupRequestDTO requestDTO = new CheckGroupRequestDTO(routineId, null, null, null);
-        
-        // Act & Assert
-        assertThrows(RuntimeException.class,
-                () -> diaryRoutineService.checkAndUncheckGroup(requestDTO, userId));
-    }
-
-    @Test
-    void shouldCheckHabitGroup_whenNoExistingCheck() {
-        // Arrange
-        HabitGroup habitGroup = diaryRoutine.getRoutineSections().get(0).getHabitGroups().get(0);
-        Habit habit = habitGroup.getHabit();
-        habit.setDificulty(1);
-        habit.setImportance(1);
-        habit.getXpProgress().setXp(0.0);
-        habit.getXpProgress().setNextLevelXp(Double.MAX_VALUE);
-        habit.setConstance(0);
-        habit.setCategories(new ArrayList<>());
-
-        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
-
-        CheckGroupRequestDTO requestDTO = new CheckGroupRequestDTO(
-                routineId,
-                new TaskGroupRequestDTO(null, null),
-                new HabitGroupRequestDTO(habitGroup.getId(), null),
-        null);
-
-        // Act
-        DiaryRoutineResponseDTO response = diaryRoutineService.checkAndUncheckGroup(requestDTO, userId);
-
-        // Assert
-        var habitGroups = response.routineSections().get(0).habitGroup();
-        assertEquals(1, habitGroups.size());
-        var checks = habitGroups.get(0).habitGroupChecks();
-        assertEquals(1, checks.size());
-        var check = checks.get(0);
-        assertTrue(check.isChecked());
-        assertEquals(LocalDate.now(), check.getCheckDate());
-    }
-
-    @Test
-    void shouldCheckHabitGroupUsingProvidedDate() {
-        HabitGroup habitGroup = diaryRoutine.getRoutineSections().get(0).getHabitGroups().get(0);
-        Habit habit = habitGroup.getHabit();
-        habit.setDificulty(1);
-        habit.setImportance(1);
-        habit.getXpProgress().setXp(0.0);
-        habit.getXpProgress().setNextLevelXp(Double.MAX_VALUE);
-        habit.setConstance(0);
-        habit.setCategories(new ArrayList<>());
-
-        LocalDate specificDate = LocalDate.of(2000, 1, 1);
-        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
-
-        CheckGroupRequestDTO requestDTO = new CheckGroupRequestDTO(
-                routineId,
-                null,
-                new HabitGroupRequestDTO(habitGroup.getId(), null),
-                specificDate);
-
-        DiaryRoutineResponseDTO response = diaryRoutineService.checkAndUncheckGroup(requestDTO, userId);
-
-        var habitGroups = response.routineSections().get(0).habitGroup();
-        assertEquals(1, habitGroups.size());
-        var checks = habitGroups.get(0).habitGroupChecks();
-        assertEquals(1, checks.size());
-        var check = checks.get(0);
-        assertTrue(check.isChecked());
-        assertEquals(specificDate, check.getCheckDate());
     }
 }
