@@ -11,10 +11,10 @@ import lombok.Setter;
 @Getter
 @Setter
 public class XpProgress {
-    private double xp;
-    private int level;
-    private double actualLevelXp;
-    private double nextLevelXp;
+    private double xp = 0D;
+    private int level = 0;
+    private double actualLevelXp = 0D;
+    private double nextLevelXp = 0D;
 
     public void addXp(double amount, Function<Integer, XpByLevel> levelProvider){
         xp += amount;
