@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.user.User;
 
@@ -39,12 +40,15 @@ public abstract class Routine {
     @JoinColumn(name = "schedule_id", nullable = true)
     private Schedule schedule;
 
-    private double xp = 0;
+    @Embedded
+    private XpProgress xpProgress = new XpProgress();
 
-    private int level = 0;
-
-    private Double nextLevelXp = 0D;
-
-    private Double actualBaseXp = 0D;
+    @PrePersist
+    protected void onUserCreate(){
+        getXpProgress().setActualLevelXp(0);;
+        getXpProgress().setNextLevelXp(0D);
+        getXpProgress().setLevel(0);
+        getXpProgress().setXp(0D);
+    }
 
 }

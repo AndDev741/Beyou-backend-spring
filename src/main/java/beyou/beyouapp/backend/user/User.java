@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.routine.Routine;
@@ -78,14 +79,8 @@ public class User implements UserDetails {
 
     private Date updatedAt;
 
-    @Column(nullable = true)
-    private double xp = 0;
-
-    private int level = 0;
-
-    private Double nextLevelXp = 0D;
-
-    private Double actualBaseXp = 0D;
+    @Embedded
+    private XpProgress xpProgress = new XpProgress();
 
     @Enumerated(EnumType.STRING)
     private UserRole userRole;
@@ -101,10 +96,10 @@ public class User implements UserDetails {
         setUpdatedAt(Date.valueOf(now));
         setUserRole(UserRole.USER);
         setConstance(0);
-        setXp(0);
-        setNextLevelXp(0D);
-        setLevel(0);
-        setActualBaseXp(0D);
+        getXpProgress().setActualLevelXp(0);;
+        getXpProgress().setNextLevelXp(0D);
+        getXpProgress().setLevel(0);
+        getXpProgress().setXp(0D);
     }
 
     @PreUpdate
