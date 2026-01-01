@@ -142,7 +142,7 @@ class DiaryRoutineServiceUnitTest {
         section.setRoutine(diaryRoutine);
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(section)));
 
-        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, null, mapper, checkItemService);
+        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, mapper, checkItemService);
     }
 
     @Test

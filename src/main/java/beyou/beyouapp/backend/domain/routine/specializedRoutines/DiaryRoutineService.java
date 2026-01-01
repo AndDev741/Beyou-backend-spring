@@ -1,7 +1,5 @@
 package beyou.beyouapp.backend.domain.routine.specializedRoutines;
 
-import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
-import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
@@ -29,7 +27,6 @@ import java.util.stream.Collectors;
 public class DiaryRoutineService {
 
     private final DiaryRoutineRepository diaryRoutineRepository;
-    private final XpByLevelRepository xpByLevelRepository;
     private final DiaryRoutineMapper mapper;
     private final CheckItemService checkItemService;
 
@@ -143,20 +140,6 @@ public class DiaryRoutineService {
             return mapper.toResponse(todaysRoutine);
         }
 
-    }
-
-    public void updateRoutineXpAndLevel(DiaryRoutine diaryRoutine, Double newXp){
-        diaryRoutine.setXp(diaryRoutine.getXp() + newXp);
-
-        if(diaryRoutine.getXp() >= diaryRoutine.getNextLevelXp()){
-            diaryRoutine.setLevel(diaryRoutine.getLevel() + 1);
-            XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(diaryRoutine.getLevel());
-            XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(diaryRoutine.getLevel() + 1);
-            diaryRoutine.setActualBaseXp(xpForActualLevel.getXp());
-            diaryRoutine.setNextLevelXp(xpForNextLevel.getXp());
-        }
-
-        diaryRoutineRepository.save(diaryRoutine);
     }
 
     private void validateRequestDTO(DiaryRoutineRequestDTO dto) {
