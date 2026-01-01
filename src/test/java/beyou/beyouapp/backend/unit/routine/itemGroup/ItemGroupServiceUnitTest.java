@@ -42,9 +42,9 @@ class ItemGroupServiceUnitTest {
         habitGroup.setHabit(new Habit());
 
         DiaryRoutine routine = routineWithGroups(habitGroup, null);
-        when(diaryRoutineRepository.findById(habitGroup.getId())).thenReturn(Optional.of(routine));
+        when(diaryRoutineRepository.findById(habitGroup.getRoutineSection().getRoutine().getId())).thenReturn(Optional.of(routine));
 
-        HabitGroup result = itemGroupService.findHabitGroupByDTO(habitGroup.getId());
+        HabitGroup result = itemGroupService.findHabitGroupByDTO(habitGroup.getRoutineSection().getRoutine().getId(), habitGroup.getId());
 
         assertSame(habitGroup, result);
     }
@@ -60,20 +60,20 @@ class ItemGroupServiceUnitTest {
         otherGroup.setHabit(new Habit());
 
         DiaryRoutine routine = routineWithGroups(otherGroup, null);
-        when(diaryRoutineRepository.findById(habitGroup.getId())).thenReturn(Optional.of(routine));
+        when(diaryRoutineRepository.findById(routine.getId())).thenReturn(Optional.of(routine));
 
-        HabitGroup result = itemGroupService.findHabitGroupByDTO(habitGroup.getId());
+        HabitGroup result = itemGroupService.findHabitGroupByDTO(routine.getId(), habitGroup.getId());
 
         assertNull(result);
     }
 
     @Test
     void findHabitGroupByDTO_shouldThrowWhenRoutineNotFound() {
-        UUID habitGroupId = UUID.randomUUID();
-        when(diaryRoutineRepository.findById(habitGroupId)).thenReturn(Optional.empty());
+        UUID routineId = UUID.randomUUID();
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.empty());
 
         assertThrows(DiaryRoutineNotFoundException.class,
-                () -> itemGroupService.findHabitGroupByDTO(habitGroupId));
+                () -> itemGroupService.findHabitGroupByDTO(routineId, UUID.randomUUID()));
     }
 
     @Test
@@ -83,9 +83,9 @@ class ItemGroupServiceUnitTest {
         taskGroup.setTask(new Task());
 
         DiaryRoutine routine = routineWithGroups(null, taskGroup);
-        when(diaryRoutineRepository.findById(taskGroup.getId())).thenReturn(Optional.of(routine));
+        when(diaryRoutineRepository.findById(taskGroup.getRoutineSection().getRoutine().getId())).thenReturn(Optional.of(routine));
 
-        TaskGroup result = itemGroupService.findTaskGroupByDTO(taskGroup.getId());
+        TaskGroup result = itemGroupService.findTaskGroupByDTO(taskGroup.getRoutineSection().getRoutine().getId(), taskGroup.getId());
 
         assertSame(taskGroup, result);
     }
@@ -101,20 +101,20 @@ class ItemGroupServiceUnitTest {
         otherGroup.setTask(new Task());
 
         DiaryRoutine routine = routineWithGroups(null, otherGroup);
-        when(diaryRoutineRepository.findById(taskGroup.getId())).thenReturn(Optional.of(routine));
+        when(diaryRoutineRepository.findById(routine.getId())).thenReturn(Optional.of(routine));
 
-        TaskGroup result = itemGroupService.findTaskGroupByDTO(taskGroup.getId());
+        TaskGroup result = itemGroupService.findTaskGroupByDTO(routine.getId(), taskGroup.getId());
 
         assertNull(result);
     }
 
     @Test
     void findTaskGroupByDTO_shouldThrowWhenRoutineNotFound() {
-        UUID taskGroupId = UUID.randomUUID();
-        when(diaryRoutineRepository.findById(taskGroupId)).thenReturn(Optional.empty());
+        UUID routineId = UUID.randomUUID();
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.empty());
 
         assertThrows(DiaryRoutineNotFoundException.class,
-                () -> itemGroupService.findTaskGroupByDTO(taskGroupId));
+                () -> itemGroupService.findTaskGroupByDTO(routineId, UUID.randomUUID()));
     }
 
     private DiaryRoutine routineWithGroups(HabitGroup habitGroup, TaskGroup taskGroup) {

@@ -37,10 +37,10 @@ public class CheckItemService {
     public DiaryRoutine checkOrUncheckItemGroup(CheckGroupRequestDTO checkGroupDTO) {
         LocalDate date = checkGroupDTO.date() != null ? checkGroupDTO.date() : LocalDate.now();
         if(checkGroupDTO.habitGroupDTO() != null){
-            HabitGroup habitGroup = itemGroupService.findHabitGroupByDTO(checkGroupDTO.habitGroupDTO().habitGroupId());
+            HabitGroup habitGroup = itemGroupService.findHabitGroupByDTO(checkGroupDTO.routineId(), checkGroupDTO.habitGroupDTO().habitGroupId());
             return checkOrUncheckHabitGroup(habitGroup, date);
         }else if(checkGroupDTO.taskGroupDTO() != null){
-            TaskGroup taskGroup = itemGroupService.findTaskGroupByDTO(checkGroupDTO.taskGroupDTO().taskGroupId());
+            TaskGroup taskGroup = itemGroupService.findTaskGroupByDTO(checkGroupDTO.routineId(), checkGroupDTO.taskGroupDTO().taskGroupId());
             return checkOrUncheckTaskGroup(taskGroup, date);
         }else{
             throw new RuntimeException("No Item group found in the request");

@@ -63,7 +63,7 @@ class CheckItemServiceUnitTest {
         Habit habit = createHabit(2, 3, 0, 0, List.of(category));
         HabitGroup habitGroup = createHabitGroup(habit);
 
-        when(itemGroupService.findHabitGroupByDTO(habitGroup.getId())).thenReturn(habitGroup);
+        when(itemGroupService.findHabitGroupByDTO(habitGroup.getRoutineSection().getRoutine().getId(), habitGroup.getId())).thenReturn(habitGroup);
 
         DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
                 new CheckGroupRequestDTO(
@@ -97,7 +97,7 @@ class CheckItemServiceUnitTest {
         existingCheck.setXpGenerated(40);
         habitGroup.getHabitGroupChecks().add(existingCheck);
 
-        when(itemGroupService.findHabitGroupByDTO(habitGroup.getId())).thenReturn(habitGroup);
+        when(itemGroupService.findHabitGroupByDTO(habitGroup.getRoutineSection().getRoutine().getId(), habitGroup.getId())).thenReturn(habitGroup);
 
         DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
                 new CheckGroupRequestDTO(
@@ -124,7 +124,7 @@ class CheckItemServiceUnitTest {
         Task task = createTask(2, 3, true, List.of(category));
         TaskGroup taskGroup = createTaskGroup(task);
 
-        when(itemGroupService.findTaskGroupByDTO(taskGroup.getId())).thenReturn(taskGroup);
+        when(itemGroupService.findTaskGroupByDTO(taskGroup.getRoutineSection().getRoutine().getId(), taskGroup.getId())).thenReturn(taskGroup);
 
         DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
                 new CheckGroupRequestDTO(
@@ -158,7 +158,7 @@ class CheckItemServiceUnitTest {
         existingCheck.setXpGenerated(30);
         taskGroup.getTaskGroupChecks().add(existingCheck);
 
-        when(itemGroupService.findTaskGroupByDTO(taskGroup.getId())).thenReturn(taskGroup);
+        when(itemGroupService.findTaskGroupByDTO(taskGroup.getRoutineSection().getRoutine().getId(), taskGroup.getId())).thenReturn(taskGroup);
 
         DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
                 new CheckGroupRequestDTO(

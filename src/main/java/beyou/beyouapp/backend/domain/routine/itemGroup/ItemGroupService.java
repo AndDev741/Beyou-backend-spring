@@ -19,8 +19,8 @@ public class ItemGroupService {
     private final DiaryRoutineRepository diaryRoutineRepository;
 
     @ReadOnlyProperty
-    public HabitGroup findHabitGroupByDTO(UUID habitGroupId) {
-        DiaryRoutine routine = diaryRoutineRepository.findById(habitGroupId)
+    public HabitGroup findHabitGroupByDTO(UUID routineId, UUID habitGroupId) {
+        DiaryRoutine routine = diaryRoutineRepository.findById(routineId)
                 .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
 
         return routine.getRoutineSections().stream()
@@ -32,8 +32,8 @@ public class ItemGroupService {
     }
 
     @ReadOnlyProperty
-    public TaskGroup findTaskGroupByDTO(UUID taskGroupId) {
-        DiaryRoutine routine = diaryRoutineRepository.findById(taskGroupId)
+    public TaskGroup findTaskGroupByDTO(UUID routineId,UUID taskGroupId) {
+        DiaryRoutine routine = diaryRoutineRepository.findById(routineId)
                 .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
 
         return routine.getRoutineSections().stream()
