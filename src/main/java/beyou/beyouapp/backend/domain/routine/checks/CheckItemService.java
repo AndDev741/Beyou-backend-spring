@@ -8,10 +8,8 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import beyou.beyouapp.backend.domain.category.Category;
-import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
+import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.habit.Habit;
-import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroupService;
@@ -19,7 +17,6 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
-import beyou.beyouapp.backend.domain.task.TaskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,10 +25,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class CheckItemService {
 
-    private final HabitService habitService;
-    private final TaskService taskService;
     private final ItemGroupService itemGroupService;
-    private final XpByLevelRepository xpByLevelRepository;
+    private final XpCalculatorService xpCalculatorService;
 
     @Transactional
     public DiaryRoutine checkOrUncheckItemGroup(CheckGroupRequestDTO checkGroupDTO) {
@@ -87,15 +82,13 @@ public class CheckItemService {
 
         // Remove xp, decrease level if needed and remove constance
         habitGroupToUncheck.getHabitGroupChecks().remove(existingCheck);
-        habitToCheck.getXpProgress().removeXp(
-                existingCheck.getXpGenerated(),
-                level -> xpByLevelRepository.findByLevel(level));
+        xpCalculatorService.removeXpOfUserRoutineHabitAndCategoriesAndPersist(
+            existingCheck.getXpGenerated(),
+            routine, 
+            habitToCheck, 
+            habitToCheck.getCategories()
+        );
         habitToCheck.setConstance(habitToCheck.getConstance() - 1);
-
-        habitToCheck.getCategories().forEach(c -> c.getXpProgress().removeXp(
-                existingCheck.getXpGenerated(),
-                level -> xpByLevelRepository.findByLevel(level)));
-        habitService.editEntity(habitToCheck);
 
         existingCheck.setCheckDate(date);
         existingCheck.setCheckTime(LocalTime.now());
@@ -115,7 +108,6 @@ public class CheckItemService {
 
         int dificulty = taskChecked.getDificulty() != null ? taskChecked.getDificulty() : 1;
         int importance = taskChecked.getImportance() != null ? taskChecked.getImportance() : 1;
-        Double newXp = (double) (10 * dificulty * importance);
 
         //Set check object
         check.setCheckDate(date);
@@ -126,12 +118,12 @@ public class CheckItemService {
 
         //Update categories
         if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
-            log.info("Task have category");
+            Double newXp = (double) (10 * dificulty * importance);
             check.setXpGenerated(newXp);
-            taskChecked.getCategories().forEach(c -> 
-                c.getXpProgress().addXp(
-                    newXp,
-                    level -> xpByLevelRepository.findByLevel(level))
+            xpCalculatorService.addXpToUserRoutineAndCategoriesAndPersist(
+                newXp,
+                routine, 
+                taskChecked.getCategories()
             );
         }
         
@@ -142,7 +134,6 @@ public class CheckItemService {
 
         //Update entities
         taskGroupToCheck.getTaskGroupChecks().add(check);
-        taskService.editTask(taskChecked);
         for (RoutineSection section : routine.getRoutineSections()) {
             List<TaskGroup> taskGroups = section.getTaskGroups();
             for (int i = 0; i < taskGroups.size(); i++) {
@@ -164,17 +155,13 @@ public class CheckItemService {
         check = checkIfHabitGroupIsAlreadyCheckedAndOverride(habitGroupToCheckOrUncheck, date);
 
         Double newXp = (double) (10 * habitChecked.getDificulty() * habitChecked.getImportance());
-        habitChecked.getXpProgress().addXp(
-                newXp,
-                level -> xpByLevelRepository.findByLevel(level));
-        // 1 more for the constance
+        xpCalculatorService.addXpToUserRoutineHabitAndCategoriesAndPersist(
+            newXp, 
+            routine, 
+            habitChecked, 
+            habitChecked.getCategories()
+        );
         habitChecked.setConstance(habitChecked.getConstance() + 1);
-
-        // Update categories xp
-        List<Category> categories = habitChecked.getCategories();
-        categories.forEach(c -> c.getXpProgress().addXp(
-                newXp,
-                level -> xpByLevelRepository.findByLevel(level)));
 
         // Set check object
         check.setCheckDate(date);
@@ -185,8 +172,6 @@ public class CheckItemService {
 
         habitGroupToCheckOrUncheck.getHabitGroupChecks().add(check);
 
-        // Update entities
-        habitService.editEntity(habitChecked);
         for (RoutineSection section : routine.getRoutineSections()) {
             List<HabitGroup> habitGroups = section.getHabitGroups();
             for (int i = 0; i < habitGroups.size(); i++) {
@@ -212,10 +197,10 @@ public class CheckItemService {
         //Clean the check and remove the xp generated in the categories
         taskGroupUnchecked.getTaskGroupChecks().remove(existingCheck);
         if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
-            taskChecked.getCategories().forEach(c -> 
-                c.getXpProgress().removeXp(
-                    existingCheck.getXpGenerated(),
-                    level -> xpByLevelRepository.findByLevel(level))
+            xpCalculatorService.removeXpOfUserRoutineAndCategoriesAndPersist(
+                existingCheck.getXpGenerated(),
+                routine, 
+                taskChecked.getCategories()
             );
         }
 
@@ -223,8 +208,6 @@ public class CheckItemService {
         if(taskChecked.isOneTimeTask()){
             taskChecked.setMarkedToDelete(null);
         }
-
-        taskService.editTask(taskChecked);
 
         existingCheck.setCheckDate(date);
         existingCheck.setCheckTime(LocalTime.now());
