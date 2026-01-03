@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.goal.GoalMapper;
 import beyou.beyouapp.backend.domain.goal.GoalRepository;
@@ -27,11 +28,11 @@ import beyou.beyouapp.backend.domain.goal.GoalTerm;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
+import beyou.beyouapp.backend.domain.goal.util.GoalXpCalculator;
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.exceptions.goal.GoalNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
-import beyou.beyouapp.backend.user.UserRepository;
 import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDate;
@@ -45,10 +46,10 @@ public class goalServiceUnitTest {
     private GoalRepository goalRepository;
 
     @Mock
-    private UserRepository userRepository;
+    private CategoryService categoryService;
 
     @Mock
-    private CategoryService categoryService;
+    XpCalculatorService xpCalculatorService;
 
     private GoalMapper goalMapper = new GoalMapper();
 
@@ -62,7 +63,6 @@ public class goalServiceUnitTest {
     @BeforeEach
     void setup() {
         goalRepository.deleteAll();
-        userRepository.deleteAll();
 
         goal.setId(goalId);
         goal.setName("Test 1");
@@ -74,7 +74,7 @@ public class goalServiceUnitTest {
         user.setId(userId);
         goal.setUser(user);
 
-        goalService = new GoalService(goalRepository, userRepository, categoryService, goalMapper);
+        goalService = new GoalService(goalRepository, categoryService, goalMapper, xpCalculatorService);
         
     }
 
@@ -125,30 +125,17 @@ public class goalServiceUnitTest {
                 List.of(UUID.randomUUID()), "motivation",
                 LocalDate.now(), LocalDate.now().plusDays(1),
                 GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         Category cat = new Category();
         cat.setId(dto.categoriesId().get(0));
         when(categoryService.getCategory(dto.categoriesId().get(0))).thenReturn(cat);
         when(goalRepository.save(any(Goal.class))).thenReturn(goal);
 
-        ResponseEntity<Map<String, String>> response = goalService.createGoal(dto, userId);
+        ResponseEntity<Map<String, String>> response = goalService.createGoal(dto, user);
 
         assertEquals(200, response.getStatusCode().value());
         Map<String, String> body = response.getBody();
         assertNotNull(body);
         assertEquals("Goal created successfully", body.get("success"));
-    }
-
-    @Test
-    void shouldThrowUserNotFound_whenCreateGoalWithUnknownUser() {
-        CreateGoalRequestDTO dto = new CreateGoalRequestDTO(
-                "Name", "icon", "desc", 100.0, "unit", 0.0,
-                List.of(UUID.randomUUID()), "motivation",
-                LocalDate.now(), LocalDate.now().plusDays(1),
-                GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
-        when(userRepository.findById(userId)).thenReturn(Optional.empty());
-
-        assertThrows(UserNotFound.class, () -> goalService.createGoal(dto, userId));
     }
 
     @Test
@@ -158,11 +145,10 @@ public class goalServiceUnitTest {
                 List.of(UUID.randomUUID()), "motivation",
                 LocalDate.now(), LocalDate.now().plusDays(1),
                 GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(categoryService.getCategory(any(UUID.class))).thenReturn(new Category());
         doThrow(new RuntimeException()).when(goalRepository).save(any(Goal.class));
 
-        ResponseEntity<Map<String, String>> response = goalService.createGoal(dto, userId);
+        ResponseEntity<Map<String, String>> response = goalService.createGoal(dto, user);
 
         assertEquals(400, response.getStatusCode().value());
         Map<String, String> body = response.getBody();
@@ -288,27 +274,29 @@ public class goalServiceUnitTest {
     @Test
     void shouldMarkAsCompleteSuccessfully() {
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
-        when(goalRepository.save(goal)).thenReturn(goal);
+        double xp = GoalXpCalculator.calculateXp(goal);
 
         GoalResponseDTO response = goalService.checkGoal(goalId, userId);
 
         assertEquals(true, response.complete());
         assertEquals(GoalStatus.COMPLETED, response.status());
         assertEquals(LocalDate.now(), response.completeDate());
+        verify(xpCalculatorService, times(1)).addXpToUserGoalAndCategoriesAndPersist(xp, goal, goal.getCategories());
     }
 
     @Test
     void shouldRemoveCompleteSuccessfully() {
         goal.setComplete(true);
+        double xp = GoalXpCalculator.calculateXp(goal);
 
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
-        when(goalRepository.save(goal)).thenReturn(goal);
 
         GoalResponseDTO response = goalService.checkGoal(goalId, userId);
 
         assertEquals(false, response.complete());
         assertEquals(GoalStatus.IN_PROGRESS, response.status());
         assertEquals(null, response.completeDate());
+        verify(xpCalculatorService, times(1)).removeXpOfUserGoalAndCategoriesAndPersist(xp, goal, goal.getCategories());
     }
 
     @Test

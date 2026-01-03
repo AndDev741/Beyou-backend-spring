@@ -100,7 +100,7 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 LocalDate.now(), LocalDate.now().plusDays(1),
                 GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
         ResponseEntity<Map<String, String>> response = ResponseEntity.ok(Map.of("success", "Goal created"));
-        when(goalService.createGoal(dto, userId)).thenReturn(response);
+        when(goalService.createGoal(dto, user)).thenReturn(response);
 
         mockMvc.perform(post("/goal")
                 .contentType(MediaType.APPLICATION_JSON)
