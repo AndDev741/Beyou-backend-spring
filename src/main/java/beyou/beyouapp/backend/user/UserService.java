@@ -51,9 +51,21 @@ public class UserService {
             if(passwordEncoder.matches(userLoginDTO.password(), user.getPassword())){
                 String token = tokenService.generateToken(user);
                 addJwtTokenToResponse(response, token);
-                UserResponseDTO userResponse = new UserResponseDTO(user.getName(),
-                        user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
-                        user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount(), user.getWidgetsIdInUse(), user.getThemeInUse());
+                UserResponseDTO userResponse = new UserResponseDTO(
+                    user.getName(),
+                    user.getEmail(), 
+                    user.getPerfilPhrase(), 
+                    user.getPerfilPhraseAuthor(),
+                    user.getConstance(), 
+                    user.getPerfilPhoto(), 
+                    user.isGoogleAccount(), 
+                    user.getWidgetsIdInUse(),
+                    user.getThemeInUse(),
+                    user.getXpProgress().getXp(),
+                    user.getXpProgress().getActualLevelXp(),
+                    user.getXpProgress().getNextLevelXp(),
+                    user.getXpProgress().getLevel()
+                );
                 return ResponseEntity.ok().body(Map.of("success", userResponse));
             }
         }

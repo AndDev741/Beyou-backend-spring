@@ -98,10 +98,21 @@ public class UserServiceUnitTest {
 
             ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(response, userLoginDTO);
 
-            UserResponseDTO userResponseDTO = new UserResponseDTO(user.getName(),
-                    user.getEmail(), user.getPerfilPhrase(), user.getPerfilPhraseAuthor(),
-                    user.getConstance(), user.getPerfilPhoto(), user.isGoogleAccount(), user.getWidgetsIdInUse(),
-                    user.getThemeInUse());
+            UserResponseDTO userResponseDTO = new UserResponseDTO(
+                user.getName(),
+                user.getEmail(), 
+                user.getPerfilPhrase(), 
+                user.getPerfilPhraseAuthor(),
+                user.getConstance(), 
+                user.getPerfilPhoto(), 
+                user.isGoogleAccount(), 
+                user.getWidgetsIdInUse(),
+                user.getThemeInUse(),
+                user.getXpProgress().getXp(),
+                user.getXpProgress().getActualLevelXp(),
+                user.getXpProgress().getNextLevelXp(),
+                user.getXpProgress().getLevel()
+            );
 
             assertEquals(ResponseEntity.ok().body(Map.of("success", userResponseDTO)), loginResponse);
         }
