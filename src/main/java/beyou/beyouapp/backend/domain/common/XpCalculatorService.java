@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryRepository;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
+import beyou.beyouapp.backend.domain.goal.Goal;
+import beyou.beyouapp.backend.domain.goal.GoalRepository;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
@@ -31,6 +33,7 @@ public class XpCalculatorService {
     private final DiaryRoutineRepository diaryRoutineRepository;
     private final HabitRepository habitRepository;
     private final CategoryRepository categoryRepository;
+    private final GoalRepository goalRepository;
 
     public void addXpToUserRoutineHabitAndCategoriesAndPersist(Double newXp, DiaryRoutine routine, Habit habit,
             List<Category> categories) {
@@ -44,6 +47,13 @@ public class XpCalculatorService {
             List<Category> categories) {
         addUserXpAndPersist(newXp);
         addRoutineXpAndPersist(newXp, routine);
+        addCategoriesXpAndPersist(newXp, categories);
+    }
+
+    public void addXpToUserGoalAndCategoriesAndPersist(Double newXp, Goal goal,
+            List<Category> categories) {
+        addUserXpAndPersist(newXp);
+        addGoalXpAndPersist(newXp, goal);
         addCategoriesXpAndPersist(newXp, categories);
     }
 
@@ -61,6 +71,14 @@ public class XpCalculatorService {
         removeRoutineXpAndPersist(xpToRemove, routine);
         removeCategoriesXpAndPersist(xpToRemove, categories);
     }
+
+    public void removeXpOfUserGoalAndCategoriesAndPersist(Double newXp, Goal goal,
+            List<Category> categories) {
+        removeUserXpAndPersist(newXp);
+        removeGoalXpAndPersist(goal);
+        removeCategoriesXpAndPersist(newXp, categories);
+    }
+    
 
     private void addUserXpAndPersist(Double newXp) {
         User user = authenticatedUser.getAuthenticatedUser();
@@ -115,6 +133,28 @@ public class XpCalculatorService {
             categoryRepository.saveAll(categories);
         } catch (Exception e) {
             log.error("ERROR ADDING XP TO CATEGORIES -> {}", e.getMessage());
+            throw e;
+        }
+    }
+
+    private void addGoalXpAndPersist(Double newXp, Goal goal) {
+        goal.setXpReward(newXp);
+
+        try {
+            goalRepository.save(goal);
+        } catch (Exception e) {
+            log.error("ERROR ADDING XP TO GOAL -> {}", e.getMessage());
+            throw e;
+        }
+    }
+
+    private void removeGoalXpAndPersist(Goal goal) {
+        goal.setXpReward(0);
+
+        try {
+            goalRepository.save(goal);
+        } catch (Exception e) {
+            log.error("ERROR REMOVING XP TO GOAL -> {}", e.getMessage());
             throw e;
         }
     }

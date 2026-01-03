@@ -41,7 +41,7 @@ public class GoalController {
     @PostMapping
     public ResponseEntity<Map<String, String>> createGoal(@RequestBody CreateGoalRequestDTO dto) {
         User user = authenticatedUser.getAuthenticatedUser();
-        return goalService.createGoal(dto, user.getId());
+        return goalService.createGoal(dto, user);
     }
 
     @PutMapping

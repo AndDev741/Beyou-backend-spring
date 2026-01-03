@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
@@ -17,7 +18,7 @@ import beyou.beyouapp.backend.domain.goal.util.GoalXpCalculator;
 import beyou.beyouapp.backend.exceptions.goal.GoalNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
-import beyou.beyouapp.backend.user.UserRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -26,9 +27,9 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class GoalService {
     private final GoalRepository goalRepository;
-    private final UserRepository userRepository;
     private final CategoryService categoryService;
     private final GoalMapper goalMapper;
+    private final XpCalculatorService xpCalculatorService;
 
     public Goal getGoal(UUID goalId) {
         return goalRepository.findById(goalId)
@@ -43,10 +44,8 @@ public class GoalService {
                 .toList();
     }
 
-    public ResponseEntity<Map<String, String>> createGoal(CreateGoalRequestDTO dto, UUID userId) {
+    public ResponseEntity<Map<String, String>> createGoal(CreateGoalRequestDTO dto, User user) {
         log.info("[LOG] Creating Goal with DTO => {}", dto);
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFound("User not found when trying to create goal"));
         List<Category> categories = dto.categoriesId().stream()
                 .map(categoryService::getCategory)
                 .toList();
@@ -93,41 +92,36 @@ public class GoalService {
         return goalRepository.save(goal);
     }
 
+    @Transactional
     public GoalResponseDTO checkGoal(UUID goalId, UUID userId) {
         Goal goal = getGoal(goalId);
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
         double xp = GoalXpCalculator.calculateXp(goal);
-        goal.setXpReward(xp);
 
         if(goal.getComplete() == null || !goal.getComplete()){
-            setGoalAsCompleted(goal, xp);
+            setGoalAsCompletedAndAddXp(goal, xp);
         }else{
-            removeCompletedOfAGoal(goal, xp);
+            removeCompletedOfAGoalAndRemoveXp(goal, xp);
         }
 
-        try {
-            goalRepository.save(goal);
-            return goalMapper.toResponseDTO(goal);
-        } catch (Exception e) {
-           throw new RuntimeException(e);
-        }
+        return goalMapper.toResponseDTO(goal);
     } 
 
-    private void setGoalAsCompleted(Goal goal, double xpReward){
+    private void setGoalAsCompletedAndAddXp(Goal goal, double xpReward){
         goal.setComplete(true);   
         goal.setStatus(GoalStatus.COMPLETED);
         goal.setCompleteDate(LocalDate.now());
 
-        categoryService.updateCategoriesXpAndLevel(goal.getCategories(), xpReward); 
+        xpCalculatorService.addXpToUserGoalAndCategoriesAndPersist(xpReward, goal, goal.getCategories());
     }
 
-    private void removeCompletedOfAGoal(Goal goal, double xpReward){
+    private void removeCompletedOfAGoalAndRemoveXp(Goal goal, double xpReward){
         goal.setComplete(false);
         goal.setStatus(GoalStatus.IN_PROGRESS);
         goal.setCompleteDate(null);
 
-        categoryService.removeXpFromCategories(goal.getCategories(), xpReward);
+        xpCalculatorService.removeXpOfUserGoalAndCategoriesAndPersist(xpReward, goal, goal.getCategories());
     }
 
     public GoalResponseDTO increaseCurrentValue (UUID goalId, UUID userId) {
