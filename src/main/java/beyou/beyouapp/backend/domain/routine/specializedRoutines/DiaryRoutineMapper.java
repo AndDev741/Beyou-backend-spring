@@ -57,7 +57,12 @@ public class DiaryRoutineMapper {
                 entity.getName(),
                 entity.getIconId(),
                 sectionDTOs,
-                entity.getSchedule());
+                entity.getSchedule(),
+                entity.getXpProgress().getXp(),
+                entity.getXpProgress().getActualLevelXp(),
+                entity.getXpProgress().getNextLevelXp(),
+                entity.getXpProgress().getLevel()
+            );
     }
 
     public List<RoutineSection> mapToRoutineSections(List<RoutineSectionRequestDTO> dtos, DiaryRoutine diaryRoutine) {

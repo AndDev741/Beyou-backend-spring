@@ -96,7 +96,12 @@ class RoutineControllerTest {
                                         "06:15",
                                         List.of())),
                                 false)),
-                null);
+                null,
+                0,
+                0,
+                0,
+                0
+        );
 
         when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
         SecurityContextHolder.getContext().setAuthentication(
@@ -158,7 +163,12 @@ class RoutineControllerTest {
                 "Updated routine",
                 "icon-2",
                 responseDto.routineSections(),
-                null);
+                null,
+                0,
+                0,
+                0,
+                0
+        );
 
         when(diaryRoutineService.updateDiaryRoutine(routineId, requestDTO, userId)).thenReturn(updatedResponse);
 
