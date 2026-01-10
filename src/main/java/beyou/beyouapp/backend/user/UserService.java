@@ -8,29 +8,27 @@ import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.*;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class UserService {
-    @Autowired
-    private UserRepository userRepository;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private TokenService tokenService;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final TokenService tokenService;
+    private final UserMapper userMapper;
 
     public ResponseEntity<String> verifyAuthentication(){
         return ResponseEntity.ok().body("authenticated");
@@ -51,21 +49,7 @@ public class UserService {
             if(passwordEncoder.matches(userLoginDTO.password(), user.getPassword())){
                 String token = tokenService.generateToken(user);
                 addJwtTokenToResponse(response, token);
-                UserResponseDTO userResponse = new UserResponseDTO(
-                    user.getName(),
-                    user.getEmail(), 
-                    user.getPerfilPhrase(), 
-                    user.getPerfilPhraseAuthor(),
-                    user.getConstance(), 
-                    user.getPerfilPhoto(), 
-                    user.isGoogleAccount(), 
-                    user.getWidgetsIdInUse(),
-                    user.getThemeInUse(),
-                    user.getXpProgress().getXp(),
-                    user.getXpProgress().getActualLevelXp(),
-                    user.getXpProgress().getNextLevelXp(),
-                    user.getXpProgress().getLevel()
-                );
+                UserResponseDTO userResponse = userMapper.toResponseDTO(user);
                 return ResponseEntity.ok().body(Map.of("success", userResponse));
             }
         }
@@ -104,7 +88,7 @@ public class UserService {
         }
     }
 
-    public User editUser(UserEditDTO userEdit, UUID userId){
+    public UserResponseDTO editUser(UserEditDTO userEdit, UUID userId){
         Optional<User> userOpt = userRepository.findById(userId);
         if(userOpt.isPresent()){
             User user = userOpt.get();
@@ -113,27 +97,14 @@ public class UserService {
             user.setPerfilPhrase(userEdit.phrase() != null ? userEdit.phrase() : user.getPerfilPhrase());
             user.setPerfilPhraseAuthor(userEdit.phrase_author() != null ? userEdit.phrase_author() : user.getPerfilPhraseAuthor());
             user.setThemeInUse(userEdit.theme() != null ? userEdit.theme() : user.getThemeInUse());
+            user.setWidgetsIdInUse(userEdit.widgetsId() != null ? userEdit.widgetsId() : user.getWidgetsIdInUse());
+            user.setConstanceConfiguration(userEdit.constanceConfiguration() != null ? userEdit.constanceConfiguration() : user.getConstanceConfiguration());
+
             try{
                 User saved = userRepository.save(user);
-                return saved;
+                return userMapper.toResponseDTO(saved);
             }catch(Exception e){
                throw e;
-            }
-        }else{
-            throw new UserNotFound("User not found by id");
-        }
-    }
-
-    public User editWidgets(List<String> widgetsId, UUID userId){
-        Optional<User> userOpt = userRepository.findById(userId);
-        if(userOpt.isPresent()){
-            User user = userOpt.get();
-            user.setWidgetsIdInUse(widgetsId);
-            try{
-                User savedUser = userRepository.save(user);
-                return savedUser;
-            }catch(Exception e){
-                throw e;
             }
         }else{
             throw new UserNotFound("User not found by id");

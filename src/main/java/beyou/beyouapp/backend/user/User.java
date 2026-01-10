@@ -17,6 +17,8 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
+import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
+import beyou.beyouapp.backend.user.enums.UserRole;
 
 import java.time.LocalDate;
 import java.util.Collection;
@@ -89,6 +91,9 @@ public class User implements UserDetails {
 
     private String themeInUse;
 
+    @Enumerated(EnumType.STRING)
+    private ConstanceConfiguration constanceConfiguration;
+
     @PrePersist
     protected void onUserCreate(){
         LocalDate now = LocalDate.now();
@@ -100,6 +105,7 @@ public class User implements UserDetails {
         getXpProgress().setNextLevelXp(0D);
         getXpProgress().setLevel(0);
         getXpProgress().setXp(0D);
+        setConstanceConfiguration(ConstanceConfiguration.ANY);
     }
 
     @PreUpdate

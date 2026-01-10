@@ -1,8 +1,5 @@
 package beyou.beyouapp.backend.controllers;
 
-import java.util.Map;
-
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,9 +9,12 @@ import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
+import beyou.beyouapp.backend.user.dto.UserResponseDTO;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/user")
+@Slf4j
 public class UserController {
     private UserService userService;
     private AuthenticatedUser authenticatedUser;
@@ -24,25 +24,14 @@ public class UserController {
         this.authenticatedUser = authenticatedUser;
     }
 
-    @PutMapping("/edit")
-    public ResponseEntity<Map<String, String>> editUser(@RequestBody UserEditDTO userEdit){
+    @PutMapping()
+    public UserResponseDTO editUser(@RequestBody UserEditDTO userEdit){
         User user = authenticatedUser.getAuthenticatedUser();
         try {
-            userService.editUser(userEdit, user.getId());
-            return ResponseEntity.ok(Map.of("success", "User edited successfully"));
+            return userService.editUser(userEdit, user.getId());
         }catch(Exception e){
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to edit user")); 
-        }
-    }
-
-    @PutMapping("/widgets")
-    public ResponseEntity<Map<String, String>> editWidgets(@RequestBody UserEditDTO userEdit){
-        User user = authenticatedUser.getAuthenticatedUser();
-        try{
-            userService.editWidgets(userEdit.widgetsId(), user.getId());
-            return ResponseEntity.ok(Map.of("success", "Widgets edited successfully"));
-        }catch(Exception e){
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to edit widgets"));
+            log.info("Error trying to edit user: " + e.getMessage());
+            return null;
         }
     }
 }

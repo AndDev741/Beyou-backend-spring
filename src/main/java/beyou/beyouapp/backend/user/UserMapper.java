@@ -1,0 +1,28 @@
+package beyou.beyouapp.backend.user;
+
+import org.springframework.stereotype.Component;
+
+import beyou.beyouapp.backend.user.dto.UserResponseDTO;
+
+@Component
+public class UserMapper {
+    
+    public UserResponseDTO toResponseDTO(User user){
+        return new UserResponseDTO(
+            user.getName(),
+            user.getEmail(),
+            user.getPerfilPhrase(),
+            user.getPerfilPhraseAuthor(),
+            user.getConstance(),
+            user.getPerfilPhoto(),
+            user.isGoogleAccount(),
+            user.getWidgetsIdInUse(),
+            user.getThemeInUse(),
+            user.getXpProgress().getXp(),
+            user.getXpProgress().getActualLevelXp(),
+            user.getXpProgress().getNextLevelXp(),
+            user.getXpProgress().getLevel(),
+            user.getConstanceConfiguration()
+        );
+    }
+}

@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.user;
+package beyou.beyouapp.backend.user.enums;
 
 public enum UserRole {
     USER("beyou/beyouapp/backend/user");

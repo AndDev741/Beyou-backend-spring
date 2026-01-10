@@ -26,6 +26,8 @@ public class UserServiceGoogleOAuth {
     TokenService tokenService;
     @Autowired
     UserRepository userRepository;
+    @Autowired
+    UserMapper userMapper;
 
     @Value("${google.secrets.clientId}")
     String GOOGLE_CLIENT_ID;
@@ -52,21 +54,7 @@ public class UserServiceGoogleOAuth {
             User user =  optionalUser.get();
             String jwtToken = tokenService.generateToken(user);
             addJwtTokenToResponse(response, jwtToken);
-            UserResponseDTO userResponseDTO = new UserResponseDTO(
-                user.getName(),
-                user.getEmail(), 
-                user.getPerfilPhrase(), 
-                user.getPerfilPhraseAuthor(),
-                user.getConstance(), 
-                user.getPerfilPhoto(), 
-                user.isGoogleAccount(), 
-                user.getWidgetsIdInUse(), 
-                user.getThemeInUse(),
-                user.getXpProgress().getXp(),
-                user.getXpProgress().getActualLevelXp(),
-                user.getXpProgress().getNextLevelXp(),
-                user.getXpProgress().getLevel()
-            );
+            UserResponseDTO userResponseDTO = userMapper.toResponseDTO(user);
             return ResponseEntity.ok().body(Map.of("success", userResponseDTO));
         }else{
             User newUser = new User(googleUser);
@@ -74,21 +62,7 @@ public class UserServiceGoogleOAuth {
 
             String jwtToken = tokenService.generateToken(user);
             addJwtTokenToResponse(response, jwtToken);
-            UserResponseDTO userResponseDTO = new UserResponseDTO(
-                user.getName(),
-                user.getEmail(), 
-                user.getPerfilPhrase(), 
-                user.getPerfilPhraseAuthor(),
-                user.getConstance(), 
-                user.getPerfilPhoto(), 
-                user.isGoogleAccount(), 
-                user.getWidgetsIdInUse(), 
-                user.getThemeInUse(),
-                user.getXpProgress().getXp(),
-                user.getXpProgress().getActualLevelXp(),
-                user.getXpProgress().getNextLevelXp(),
-                user.getXpProgress().getLevel()
-            );
+            UserResponseDTO userResponseDTO = userMapper.toResponseDTO(user);
             return ResponseEntity.ok().body(Map.of("success", userResponseDTO));
         }
     }
