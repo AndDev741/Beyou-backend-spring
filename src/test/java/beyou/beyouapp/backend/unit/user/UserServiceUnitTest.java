@@ -2,17 +2,18 @@ package beyou.beyouapp.backend.unit.user;
 
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserMapper;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
+import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.ResponseEntity;
@@ -44,7 +45,8 @@ public class UserServiceUnitTest {
     @Mock
     TokenService tokenService;
 
-    @InjectMocks
+    UserMapper userMapper = new UserMapper();
+
     private UserService userService;
 
     User user = new User();
@@ -62,6 +64,8 @@ public class UserServiceUnitTest {
         user.setPerfilPhrase("life is good");
         user.setPerfilPhraseAuthor("lg?");
         user.setWidgetsIdInUse(List.of("widget4, widget5"));
+
+        userService = new UserService(userRepository, passwordEncoder, tokenService, userMapper);
     }
 
     @Nested
@@ -98,21 +102,7 @@ public class UserServiceUnitTest {
 
             ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(response, userLoginDTO);
 
-            UserResponseDTO userResponseDTO = new UserResponseDTO(
-                user.getName(),
-                user.getEmail(), 
-                user.getPerfilPhrase(), 
-                user.getPerfilPhraseAuthor(),
-                user.getConstance(), 
-                user.getPerfilPhoto(), 
-                user.isGoogleAccount(), 
-                user.getWidgetsIdInUse(),
-                user.getThemeInUse(),
-                user.getXpProgress().getXp(),
-                user.getXpProgress().getActualLevelXp(),
-                user.getXpProgress().getNextLevelXp(),
-                user.getXpProgress().getLevel()
-            );
+            UserResponseDTO userResponseDTO = userMapper.toResponseDTO(user);
 
             assertEquals(ResponseEntity.ok().body(Map.of("success", userResponseDTO)), loginResponse);
         }
@@ -152,35 +142,49 @@ public class UserServiceUnitTest {
         @Test
         public void shouldEditTheUserInfoSuccessfully() {
             // Arrange
-            UserEditDTO userEditDTO = new UserEditDTO("new Name", "newphoto.com", "new PHRASE", "phrase author",
-                    List.of(),
-                    "light");
+            UserEditDTO userEditDTO = new UserEditDTO(
+                "new Name", 
+                "newphoto.com", 
+                "new PHRASE", 
+                "phrase author",
+                List.of(),
+                "light",
+                ConstanceConfiguration.ANY
+                );
 
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(userRepository.save(user)).thenReturn(user);
             // ACT
-            User editedUser = userService.editUser(userEditDTO, userId);
+            UserResponseDTO editedUser = userService.editUser(userEditDTO, userId);
 
             // Assert
-            assertEquals(editedUser.getName(), userEditDTO.name());
-            assertEquals(editedUser.getPerfilPhoto(), userEditDTO.photo());
-            assertEquals(editedUser.getPerfilPhrase(), userEditDTO.phrase());
-            assertEquals(editedUser.getPerfilPhraseAuthor(), userEditDTO.phrase_author());
+            assertEquals(editedUser.name(), userEditDTO.name());
+            assertEquals(editedUser.photo(), userEditDTO.photo());
+            assertEquals(editedUser.phrase(), userEditDTO.phrase());
+            assertEquals(editedUser.phrase_author(), userEditDTO.phrase_author());
         }
 
         @Test
         public void shouldEditTheWidgetsSuccessfully() {
             // Arrange
-            UserEditDTO userEditDTO = new UserEditDTO(null, null, null, null, List.of("widget1E, widget2E"), null);
+            UserEditDTO userEditDTO = new UserEditDTO(
+                null, 
+                null, 
+                null, 
+                null, 
+                List.of("widget1E, widget2E"), 
+                null,
+                ConstanceConfiguration.ANY
+            );
 
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(userRepository.save(user)).thenReturn(user);
             // ACT
 
-            User editedUser = userService.editWidgets(userEditDTO.widgetsId(), userId);
+            UserResponseDTO editedUser = userService.editUser(userEditDTO, userId);
 
             // Assert
-            assertEquals(editedUser.getWidgetsIdInUse(), userEditDTO.widgetsId());
+            assertEquals(editedUser.widgetsId(), userEditDTO.widgetsId());
 
         }
     }
