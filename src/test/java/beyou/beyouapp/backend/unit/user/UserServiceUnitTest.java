@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.cglib.core.Local;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,7 +23,6 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 
 import java.time.LocalDate;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -256,7 +254,99 @@ public class UserServiceUnitTest {
             assertEquals(user.getCurrentConstance(LocalDate.of(2026, 1, 20)), 4);
             assertEquals(user.getMaxConstance(), 4);
         }
-        
+
+        @Test
+        public void shouldKeepStreakWhenUserDidNotCompleteTodayYet() {
+
+            Set<LocalDate> completedDates = Set.of(
+                LocalDate.of(2026, 1, 15),
+                LocalDate.of(2026, 1, 16),
+                LocalDate.of(2026, 1, 17),
+                LocalDate.of(2026, 1, 18)
+            );
+
+            user.setCompletedDays(completedDates);
+
+            int streak = user.getCurrentConstance(LocalDate.of(2026, 1, 19));
+
+            assertEquals(4, streak);
+        }
+
+        @Test
+        public void shouldResetStreakIfUserSkippedOneFullDay() {
+
+            Set<LocalDate> completedDates = Set.of(
+                LocalDate.of(2026, 1, 16),
+                LocalDate.of(2026, 1, 17)
+            );
+
+            user.setCompletedDays(completedDates);
+
+            int streak = user.getCurrentConstance(LocalDate.of(2026, 1, 19));
+
+            assertEquals(0, streak);
+        }
+
+        @Test
+        public void shouldCalculateStreakCorrectlyWithUnorderedDates() {
+
+            Set<LocalDate> completedDates = new HashSet<>();
+
+            completedDates.add(LocalDate.of(2026, 1, 20));
+            completedDates.add(LocalDate.of(2026, 1, 18));
+            completedDates.add(LocalDate.of(2026, 1, 19));
+
+            user.setCompletedDays(completedDates);
+
+            int streak = user.getCurrentConstance(LocalDate.of(2026, 1, 20));
+
+            assertEquals(3, streak);
+        }
+
+        @Test
+        public void shouldRecalculateStreakAfterRemovingMiddleDay() {
+
+            Set<LocalDate> completedDates = Set.of(
+                LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 1, 2),
+                LocalDate.of(2026, 1, 3),
+                LocalDate.of(2026, 1, 4),
+                LocalDate.of(2026, 1, 5)
+            );
+
+            user.setCompletedDays(new HashSet<>(completedDates));
+
+            userService.unmarkDayComplete(user, LocalDate.of(2026, 1, 3));
+
+            int streak = user.getCurrentConstance(LocalDate.of(2026, 1, 5));
+
+            assertEquals(2, streak);
+        }
+
+        @Test
+        public void shouldReturnZeroWhenNoCompletedDaysExist() {
+
+            user.setCompletedDays(new HashSet<>());
+
+            int streak = user.getCurrentConstance(LocalDate.now());
+
+            assertEquals(0, streak);
+        }
+
+        @Test
+        public void markDayCompletedShouldNotManipulateStreakDirectly() {
+
+            user.setCompletedDays(new HashSet<>());
+
+            LocalDate today = LocalDate.of(2026, 1, 20);
+
+            userService.markDayCompleted(user, today);
+
+            assertTrue(user.getCompletedDays().contains(today));
+            assertEquals(1, user.getCurrentConstance(today));
+        }
+
+
     }
 
     @Nested
