@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.routine.checks;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,6 +18,9 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
+import beyou.beyouapp.backend.security.AuthenticatedUser;
+import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,6 +31,8 @@ public class CheckItemService {
 
     private final ItemGroupService itemGroupService;
     private final XpCalculatorService xpCalculatorService;
+    private final AuthenticatedUser authenticatedUser;
+    private final UserService userService;
 
     @Transactional
     public DiaryRoutine checkOrUncheckItemGroup(CheckGroupRequestDTO checkGroupDTO) {
@@ -50,10 +56,18 @@ public class CheckItemService {
 
         if (isCheckedToday) {
             // Uncheck: Remove check, subtract XP, adjust constance
-            return uncheckHabitGroup(habitGroup, date);
+            DiaryRoutine routineUnchecked = uncheckHabitGroup(habitGroup, date);
+
+            decreaseUserConstanceIfNeeded(routineUnchecked, date);
+
+            return routineUnchecked;
         } else {
             // Calculate the exp (Think in a good algorithm later on)
-            return checkHabitGroup(habitGroup, date);
+            DiaryRoutine routineChecked = checkHabitGroup(habitGroup, date);
+
+            increaseUserConstanceIfNeeded(routineChecked, date);
+            
+            return routineChecked;
         }
     }
 
@@ -64,10 +78,18 @@ public class CheckItemService {
 
         if (isCheckedToday) {
             // Uncheck: Remove check, subtract XP, adjust constance
-            return uncheckTaskGroup(taskGroupToCheckOrUncheck, date);
+            DiaryRoutine routineUnchecked = uncheckTaskGroup(taskGroupToCheckOrUncheck, date);
+
+            decreaseUserConstanceIfNeeded(routineUnchecked, date);
+
+            return routineUnchecked;
         } else {
             // Calculate the exp (Think in a good algorithm later on)
-            return checkTaskGroup(taskGroupToCheckOrUncheck, date);
+            DiaryRoutine routineChecked = checkTaskGroup(taskGroupToCheckOrUncheck, date);
+
+            increaseUserConstanceIfNeeded(routineChecked, date);
+            
+            return routineChecked;
         }
     }
 
@@ -241,5 +263,102 @@ public class CheckItemService {
             return existingCheck.get();
         }
         return new TaskGroupCheck();
+    }
+
+    private void decreaseUserConstanceIfNeeded(DiaryRoutine routine, LocalDate date) {
+        User user = authenticatedUser.getAuthenticatedUser();
+        user.setCompletedDays(user.getCompletedDays() == null ? new HashSet<>() : user.getCompletedDays());
+
+        if(user.getCompletedDays().contains(date) == false) return ; //No constance to decrease today
+
+        if(user != null && user.getConstanceConfiguration() != null){
+            switch (user.getConstanceConfiguration()) {
+                case COMPLETE:
+                    if(!isAllHabitGroupsCompleted(routine, date) || !isAllTaskGroupsCompleted(routine, date)){
+                        log.info("[SERVICE] Unmarking constance for user {}, in constance config COMPLETE", user.getName());
+                        userService.unmarkDayComplete(user, date);
+                    }
+                    break;
+                default: //ANY
+                    if(!isAnyHabitGroupCompleted(routine, date) && !isAnyTaskGroupCompleted(routine, date)){
+                        log.info("[SERVICE] Decreasing constance for user {}, in constance config ANY", user.getName());
+                        userService.unmarkDayComplete(user, date);
+                    }
+                    break;
+            }
+        }
+    }
+
+    private void increaseUserConstanceIfNeeded(DiaryRoutine routine, LocalDate date) {
+        User user = authenticatedUser.getAuthenticatedUser();
+
+        user.setCompletedDays(user.getCompletedDays() == null ? new HashSet<>() : user.getCompletedDays());
+        if(user.getCompletedDays().contains(date) == true) return ; //Already increased today
+
+        if(user.getConstanceConfiguration() != null){
+            switch (user.getConstanceConfiguration()) {
+                case COMPLETE:
+                    if(isAllHabitGroupsCompleted(routine, date) && isAllTaskGroupsCompleted(routine, date)){
+                        log.info("[SERVICE] Increasing constance for user {}, in constance config COMPLETE", user.getName());
+                        userService.markDayCompleted(user, date);
+                    }
+                    break;
+                default: //ANY
+                    if(isAnyHabitGroupCompleted(routine, date) || isAnyTaskGroupCompleted(routine, date)){
+                        log.info("[SERVICE] Increasing constance for user {}, in constance config ANY", user.getName());
+                        userService.markDayCompleted(user, date);
+                    }
+                    break;
+            }
+        }
+    }
+
+    private boolean isAnyHabitGroupCompleted(DiaryRoutine routine, LocalDate date) {
+        return routine.getRoutineSections().stream()
+            .anyMatch(section -> section.getHabitGroups().stream()
+                .anyMatch(group -> isHabitGroupCompleted(group, date))
+            );
+    }
+
+    private boolean isAllHabitGroupsCompleted(DiaryRoutine routine, LocalDate date) {
+        return routine.getRoutineSections().stream()
+            .allMatch(section -> areAllHabitGroupsCompleted(section, date));
+    }
+
+    private boolean areAllHabitGroupsCompleted(RoutineSection section, LocalDate date) {
+        return section.getHabitGroups().stream()
+            .allMatch(group -> isHabitGroupCompleted(group, date));
+    }
+
+    private boolean isHabitGroupCompleted(HabitGroup group, LocalDate date) {
+        return group.getHabitGroupChecks().stream()
+            .anyMatch(check ->
+                check.getCheckDate().equals(date) && check.isChecked()
+            );
+    }
+
+    private boolean isAnyTaskGroupCompleted(DiaryRoutine routine, LocalDate date) {
+        return routine.getRoutineSections().stream()
+            .anyMatch(section -> section.getTaskGroups().stream()
+                .anyMatch(group -> isTaskGroupCompleted(group, date))
+            );
+
+    }
+
+    private boolean isAllTaskGroupsCompleted(DiaryRoutine routine, LocalDate date) {
+        return routine.getRoutineSections().stream()
+            .allMatch(section -> areAllTaskGroupsCompleted(section, date));
+    }
+
+    private boolean areAllTaskGroupsCompleted(RoutineSection section, LocalDate date) {
+        return section.getTaskGroups().stream()
+            .allMatch(group -> isTaskGroupCompleted(group, date));
+    }
+
+    private boolean isTaskGroupCompleted(TaskGroup group, LocalDate date) {
+        return group.getTaskGroupChecks().stream()
+            .anyMatch(check ->
+                check.getCheckDate().equals(date) && check.isChecked()
+            );
     }
 }
