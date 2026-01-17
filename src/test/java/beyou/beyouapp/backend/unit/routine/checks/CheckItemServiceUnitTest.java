@@ -6,14 +6,18 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -35,6 +39,10 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.C
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.HabitGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
+import beyou.beyouapp.backend.security.AuthenticatedUser;
+import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserService;
+import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 
 @ExtendWith(MockitoExtension.class)
 class CheckItemServiceUnitTest {
@@ -45,138 +53,220 @@ class CheckItemServiceUnitTest {
     @Mock
     private XpCalculatorService xpCalculatorService;
 
+    @Mock
+    AuthenticatedUser authenticatedUser;
+
+    @Mock
+    UserService userService;
+
     @InjectMocks
     private CheckItemService checkItemService;
 
-    @Test
-    void shouldCheckHabitGroupAndIncreaseXpAndConstance() {
-        LocalDate today = LocalDate.now();
-        Category category = createCategory(0);
-        Habit habit = createHabit(2, 3, 0, 0, List.of(category));
-        HabitGroup habitGroup = createHabitGroup(habit);
+    User user = new User();
 
-        UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
-        when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
+    @Nested
+    class CheckTests {
+        @BeforeEach
+        void setup() {
+            user.setCompletedDays(Set.of(LocalDate.now().minusDays(1))); // Simulating that the user has a constance of 1 day
+            when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+        }
+        
+        @Test
+        void shouldCheckHabitGroupAndIncreaseXpAndConstance() {
+            LocalDate today = LocalDate.now();
+            Category category = createCategory(0);
+            Habit habit = createHabit(2, 3, 0, 0, List.of(category));
+            HabitGroup habitGroup = createHabitGroup(habit);
 
-        DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
-                new CheckGroupRequestDTO(
-                        routineId,
-                        null,
-                        new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
-                        today));
+            UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
+            when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
 
-        assertSame(habitGroup.getRoutineSection().getRoutine(), routine);
-        assertEquals(1, habitGroup.getHabitGroupChecks().size());
-        HabitGroupCheck check = habitGroup.getHabitGroupChecks().get(0);
-        assertTrue(check.isChecked());
-        assertEquals(today, check.getCheckDate());
-        double expectedXp = 10 * habit.getDificulty() * habit.getImportance();
-        assertEquals(expectedXp, check.getXpGenerated());
-        assertEquals(1, habit.getConstance());
-        verify(xpCalculatorService).addXpToUserRoutineHabitAndCategoriesAndPersist(expectedXp, routine, habit, habit.getCategories());
+            DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
+                    new CheckGroupRequestDTO(
+                            routineId,
+                            null,
+                            new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
+                            today));
+
+            assertSame(habitGroup.getRoutineSection().getRoutine(), routine);
+            assertEquals(1, habitGroup.getHabitGroupChecks().size());
+            HabitGroupCheck check = habitGroup.getHabitGroupChecks().get(0);
+            assertTrue(check.isChecked());
+            assertEquals(today, check.getCheckDate());
+            double expectedXp = 10 * habit.getDificulty() * habit.getImportance();
+            assertEquals(expectedXp, check.getXpGenerated());
+            assertEquals(1, habit.getConstance());
+            verify(xpCalculatorService).addXpToUserRoutineHabitAndCategoriesAndPersist(expectedXp, routine, habit, habit.getCategories());
+        }
+
+        @Test
+        void shouldUncheckHabitGroupAndRollbackXp() {
+            LocalDate date = LocalDate.now();
+            Category category = createCategory(40);
+            Habit habit = createHabit(1, 1, 40, 2, List.of(category));
+            HabitGroup habitGroup = createHabitGroup(habit);
+            HabitGroupCheck existingCheck = new HabitGroupCheck();
+            existingCheck.setCheckDate(date);
+            existingCheck.setChecked(true);
+            existingCheck.setXpGenerated(40);
+            habitGroup.getHabitGroupChecks().add(existingCheck);
+            double xpGenerated = existingCheck.getXpGenerated();
+
+            UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
+            when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
+
+            DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
+                    new CheckGroupRequestDTO(
+                            routineId,
+                            null,
+                            new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
+                            date));
+
+            assertSame(habitGroup.getRoutineSection().getRoutine(), routine);
+            assertEquals(1, habitGroup.getHabitGroupChecks().size());
+            HabitGroupCheck check = habitGroup.getHabitGroupChecks().get(0);
+            assertFalse(check.isChecked());
+            assertEquals(0, check.getXpGenerated());
+            assertEquals(1, habit.getConstance());
+            verify(xpCalculatorService).removeXpOfUserRoutineHabitAndCategoriesAndPersist(xpGenerated, routine, habit, habit.getCategories());
+        }
+
+        @Test
+        void shouldCheckTaskGroupAndAddXpAndMarkToDelete() {
+            LocalDate today = LocalDate.now();
+            Category category = createCategory(0);
+            Task task = createTask(2, 3, true, List.of(category));
+            TaskGroup taskGroup = createTaskGroup(task);
+
+            UUID routineId = taskGroup.getRoutineSection().getRoutine().getId();
+            when(itemGroupService.findTaskGroupByDTO(routineId, taskGroup.getId())).thenReturn(taskGroup);
+
+            DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
+                    new CheckGroupRequestDTO(
+                            routineId,
+                            new TaskGroupRequestDTO(taskGroup.getId(), taskGroup.getStartTime()),
+                            null,
+                            today));
+
+            assertSame(taskGroup.getRoutineSection().getRoutine(), routine);
+            assertEquals(1, taskGroup.getTaskGroupChecks().size());
+            TaskGroupCheck check = taskGroup.getTaskGroupChecks().get(0);
+            assertTrue(check.isChecked());
+            assertEquals(today, check.getCheckDate());
+            double expectedXp = 10 * task.getDificulty() * task.getImportance();
+            assertEquals(expectedXp, check.getXpGenerated());
+            assertEquals(today, task.getMarkedToDelete());
+            verify(xpCalculatorService).addXpToUserRoutineAndCategoriesAndPersist(expectedXp, routine, task.getCategories());
+        }
+
+        @Test
+        void shouldUncheckTaskGroupAndRollbackXpAndUnmarkDeletion() {
+            LocalDate date = LocalDate.now();
+            Category category = createCategory(30);
+            Task task = createTask(1, 1, true, List.of(category));
+            task.setMarkedToDelete(date);
+            TaskGroup taskGroup = createTaskGroup(task);
+            TaskGroupCheck existingCheck = new TaskGroupCheck();
+            existingCheck.setCheckDate(date);
+            existingCheck.setChecked(true);
+            existingCheck.setXpGenerated(30);
+            taskGroup.getTaskGroupChecks().add(existingCheck);
+            double xpGenerated = existingCheck.getXpGenerated();
+
+            UUID routineId = taskGroup.getRoutineSection().getRoutine().getId();
+            when(itemGroupService.findTaskGroupByDTO(routineId, taskGroup.getId())).thenReturn(taskGroup);
+
+            DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
+                    new CheckGroupRequestDTO(
+                            routineId,
+                            new TaskGroupRequestDTO(taskGroup.getId(), taskGroup.getStartTime()),
+                            null,
+                            date));
+
+            assertSame(taskGroup.getRoutineSection().getRoutine(), routine);
+            assertEquals(1, taskGroup.getTaskGroupChecks().size());
+            TaskGroupCheck check = taskGroup.getTaskGroupChecks().get(0);
+            assertFalse(check.isChecked());
+            assertEquals(0, check.getXpGenerated());
+            assertNull(task.getMarkedToDelete());
+            verify(xpCalculatorService).removeXpOfUserRoutineAndCategoriesAndPersist(xpGenerated, routine, task.getCategories());
+        }
     }
 
-    @Test
-    void shouldUncheckHabitGroupAndRollbackXp() {
-        LocalDate date = LocalDate.now();
-        Category category = createCategory(40);
-        Habit habit = createHabit(1, 1, 40, 2, List.of(category));
-        HabitGroup habitGroup = createHabitGroup(habit);
-        HabitGroupCheck existingCheck = new HabitGroupCheck();
-        existingCheck.setCheckDate(date);
-        existingCheck.setChecked(true);
-        existingCheck.setXpGenerated(40);
-        habitGroup.getHabitGroupChecks().add(existingCheck);
-        double xpGenerated = existingCheck.getXpGenerated();
+    @Nested
+    class ConstanceTests {
+        @BeforeEach
+        void setup() {
+            user.setCompletedDays(Set.of(LocalDate.now().minusDays(1))); // Simulating that the user has a constance of 1 day
+            when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+        }
 
-        UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
-        when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
+        @Test
+        void shouldIncreaseUserConstanceWhenCheckingAnyTask() {
+            //ARRANGE
+            user.setConstanceConfiguration(ConstanceConfiguration.ANY);
+            LocalDate today = LocalDate.now();
+            Category category = createCategory(0);
+            Habit habit = createHabit(2, 3, 0, 0, List.of(category));
+            HabitGroup habitGroup = createHabitGroup(habit);
+            
+            UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
+            //ACT
+            when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
 
-        DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
-                new CheckGroupRequestDTO(
-                        routineId,
-                        null,
-                        new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
-                        date));
+            checkItemService.checkOrUncheckItemGroup(
+                    new CheckGroupRequestDTO(
+                            routineId,
+                            null,
+                            new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
+                            today));
 
-        assertSame(habitGroup.getRoutineSection().getRoutine(), routine);
-        assertEquals(1, habitGroup.getHabitGroupChecks().size());
-        HabitGroupCheck check = habitGroup.getHabitGroupChecks().get(0);
-        assertFalse(check.isChecked());
-        assertEquals(0, check.getXpGenerated());
-        assertEquals(1, habit.getConstance());
-        verify(xpCalculatorService).removeXpOfUserRoutineHabitAndCategoriesAndPersist(xpGenerated, routine, habit, habit.getCategories());
+            //ASSERT
+            verify(userService, times(1)).markDayCompleted(user, today);
+            verify(userService, times(0)).unmarkDayComplete(user, today);
+        }
+
+        @Test
+        void shouldIncreaseUserConstanceWhenCheckingAllTasks() {
+            //ARRANGE
+            user.setConstanceConfiguration(ConstanceConfiguration.COMPLETE);
+            LocalDate today = LocalDate.now();
+            Category category = createCategory(0);
+            Habit habit = createHabit(2, 3, 0, 0, List.of(category));
+            HabitGroup habitGroup = createHabitGroup(habit);
+            
+            UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
+            //ACT
+            when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
+
+            checkItemService.checkOrUncheckItemGroup(
+                    new CheckGroupRequestDTO(
+                            routineId,
+                            null,
+                            new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
+                            today));
+
+            //ASSERT
+            verify(userService, times(1)).markDayCompleted(user, today);
+            verify(userService, times(0)).unmarkDayComplete(user, today);
+        }
+
+        //TODO: Write more test cases
+
     }
 
-    @Test
-    void shouldCheckTaskGroupAndAddXpAndMarkToDelete() {
-        LocalDate today = LocalDate.now();
-        Category category = createCategory(0);
-        Task task = createTask(2, 3, true, List.of(category));
-        TaskGroup taskGroup = createTaskGroup(task);
+    @Nested
+    class ExceptionCases {
+        @Test
+        void shouldThrowWhenNoItemGroupProvided() {
+            CheckGroupRequestDTO request = new CheckGroupRequestDTO(UUID.randomUUID(), null, null, LocalDate.now());
 
-        UUID routineId = taskGroup.getRoutineSection().getRoutine().getId();
-        when(itemGroupService.findTaskGroupByDTO(routineId, taskGroup.getId())).thenReturn(taskGroup);
+            RuntimeException exception = assertThrows(RuntimeException.class,
+                    () -> checkItemService.checkOrUncheckItemGroup(request));
 
-        DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
-                new CheckGroupRequestDTO(
-                        routineId,
-                        new TaskGroupRequestDTO(taskGroup.getId(), taskGroup.getStartTime()),
-                        null,
-                        today));
-
-        assertSame(taskGroup.getRoutineSection().getRoutine(), routine);
-        assertEquals(1, taskGroup.getTaskGroupChecks().size());
-        TaskGroupCheck check = taskGroup.getTaskGroupChecks().get(0);
-        assertTrue(check.isChecked());
-        assertEquals(today, check.getCheckDate());
-        double expectedXp = 10 * task.getDificulty() * task.getImportance();
-        assertEquals(expectedXp, check.getXpGenerated());
-        assertEquals(today, task.getMarkedToDelete());
-        verify(xpCalculatorService).addXpToUserRoutineAndCategoriesAndPersist(expectedXp, routine, task.getCategories());
-    }
-
-    @Test
-    void shouldUncheckTaskGroupAndRollbackXpAndUnmarkDeletion() {
-        LocalDate date = LocalDate.now();
-        Category category = createCategory(30);
-        Task task = createTask(1, 1, true, List.of(category));
-        task.setMarkedToDelete(date);
-        TaskGroup taskGroup = createTaskGroup(task);
-        TaskGroupCheck existingCheck = new TaskGroupCheck();
-        existingCheck.setCheckDate(date);
-        existingCheck.setChecked(true);
-        existingCheck.setXpGenerated(30);
-        taskGroup.getTaskGroupChecks().add(existingCheck);
-        double xpGenerated = existingCheck.getXpGenerated();
-
-        UUID routineId = taskGroup.getRoutineSection().getRoutine().getId();
-        when(itemGroupService.findTaskGroupByDTO(routineId, taskGroup.getId())).thenReturn(taskGroup);
-
-        DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
-                new CheckGroupRequestDTO(
-                        routineId,
-                        new TaskGroupRequestDTO(taskGroup.getId(), taskGroup.getStartTime()),
-                        null,
-                        date));
-
-        assertSame(taskGroup.getRoutineSection().getRoutine(), routine);
-        assertEquals(1, taskGroup.getTaskGroupChecks().size());
-        TaskGroupCheck check = taskGroup.getTaskGroupChecks().get(0);
-        assertFalse(check.isChecked());
-        assertEquals(0, check.getXpGenerated());
-        assertNull(task.getMarkedToDelete());
-        verify(xpCalculatorService).removeXpOfUserRoutineAndCategoriesAndPersist(xpGenerated, routine, task.getCategories());
-    }
-
-    @Test
-    void shouldThrowWhenNoItemGroupProvided() {
-        CheckGroupRequestDTO request = new CheckGroupRequestDTO(UUID.randomUUID(), null, null, LocalDate.now());
-
-        RuntimeException exception = assertThrows(RuntimeException.class,
-                () -> checkItemService.checkOrUncheckItemGroup(request));
-
-        assertEquals("No Item group found in the request", exception.getMessage());
+            assertEquals("No Item group found in the request", exception.getMessage());
+        }
     }
 
     private Category createCategory(double xp) {
