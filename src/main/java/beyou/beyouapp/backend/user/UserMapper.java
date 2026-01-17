@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.user;
 
+import java.time.LocalDate;
+
 import org.springframework.stereotype.Component;
 
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
@@ -13,7 +15,7 @@ public class UserMapper {
             user.getEmail(),
             user.getPerfilPhrase(),
             user.getPerfilPhraseAuthor(),
-            user.getConstance(),
+            user.getCurrentConstance(LocalDate.now()),
             user.getPerfilPhoto(),
             user.isGoogleAccount(),
             user.getWidgetsIdInUse(),

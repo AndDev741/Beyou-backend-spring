@@ -22,8 +22,10 @@ import beyou.beyouapp.backend.user.enums.UserRole;
 
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.HashSet;
 import java.sql.Date;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -59,9 +61,9 @@ public class User implements UserDetails {
 
     private String perfilPhoto;
 
-    @NotNull
-    @Min(value = 0, message = "The constance cannot be negative")
-    private int constance;
+    Set<LocalDate> completedDays = new HashSet<>();
+
+    Integer maxConstance = 0;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Category> categories;
@@ -100,7 +102,7 @@ public class User implements UserDetails {
         setCreatedAt(Date.valueOf(now));
         setUpdatedAt(Date.valueOf(now));
         setUserRole(UserRole.USER);
-        setConstance(0);
+        setMaxConstance(0);
         getXpProgress().setActualLevelXp(0);;
         getXpProgress().setNextLevelXp(0D);
         getXpProgress().setLevel(0);
@@ -114,29 +116,36 @@ public class User implements UserDetails {
     }
 
     public User(UserRegisterDTO user){
-        LocalDate now = LocalDate.now();
         setName(user.name());
         setEmail(user.email());
         setPassword(user.password());
         setGoogleAccount(user.isGoogleAccount());
-        setUserRole(UserRole.USER);
-        setConstance(0);
-        setCreatedAt(Date.valueOf(now));
-        setUpdatedAt(Date.valueOf(now));
     }
 
     public User(GoogleUserDTO googleUser) {
-        LocalDate now = LocalDate.now();
         setName(googleUser.name());
         setEmail(googleUser.email());
         setPassword("GOOGLE_USER");
         setGoogleAccount(googleUser.isGoogleAccount());
         setPerfilPhoto(googleUser.perfilPhoto());
-        setUserRole(UserRole.USER);
-        setConstance(0);
-        setCreatedAt(Date.valueOf(now));
-        setUpdatedAt(Date.valueOf(now));
     }
+
+    public int getCurrentConstance(LocalDate referenceDate) {
+        if (completedDays == null || completedDays.isEmpty()) {
+            return 0;
+        }
+
+        int streak = 0;
+        LocalDate cursor = referenceDate;
+
+        while (completedDays.contains(cursor)) {
+            streak++;
+            cursor = cursor.minusDays(1);
+        }
+
+        return streak;
+    }
+
 
     //UserDetails methods
     @Override

@@ -9,13 +9,17 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -23,6 +27,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserService {
 
     private final UserRepository userRepository;
@@ -109,6 +114,28 @@ public class UserService {
         }else{
             throw new UserNotFound("User not found by id");
         }
+    }
+
+    @Transactional
+    public void markDayCompleted(User user, LocalDate date) {
+        log.info("[SERVICE] marking date {} as complete for user {}", date, user.getName());
+        user.getCompletedDays().add(date);
+
+        int currentStreak = user.getCurrentConstance(date);
+
+        if(currentStreak > user.getMaxConstance()){
+            log.info("[SERVICE] Current constance streak {} is greater than the old streak, saving", currentStreak);
+            user.setMaxConstance(currentStreak);
+        }
+
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void unmarkDayComplete(User user, LocalDate date){
+        user.getCompletedDays().remove(date);
+
+        userRepository.save(user);
     }
 
     private void addJwtTokenToResponse(HttpServletResponse response, String token){
