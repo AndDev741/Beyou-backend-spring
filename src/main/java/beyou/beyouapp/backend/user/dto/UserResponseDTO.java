@@ -18,6 +18,7 @@ public record UserResponseDTO(
         double actualLevelXp,
         double nextLevelXp,
         int level,
-        ConstanceConfiguration constanceConfiguration
+        ConstanceConfiguration constanceConfiguration,
+        boolean constanceIncreaseToday
 ) {
 }

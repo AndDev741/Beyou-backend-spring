@@ -21,6 +21,7 @@ import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import beyou.beyouapp.backend.user.enums.UserRole;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.HashSet;
 import java.sql.Date;
@@ -131,12 +132,26 @@ public class User implements UserDetails {
     }
 
     public int getCurrentConstance(LocalDate referenceDate) {
+
         if (completedDays == null || completedDays.isEmpty()) {
             return 0;
         }
 
+        // Último dia em que houve conclusão
+        LocalDate lastCompletedDay = completedDays.stream()
+                .max(LocalDate::compareTo)
+                .get();
+
+        long daysGap = ChronoUnit.DAYS.between(lastCompletedDay, referenceDate);
+
+        // Se passou mais de 1 dia, streak morreu
+        if (daysGap > 1) {
+            return 0;
+        }
+
+        // Começa a contar a partir do último dia válido
         int streak = 0;
-        LocalDate cursor = referenceDate;
+        LocalDate cursor = lastCompletedDay;
 
         while (completedDays.contains(cursor)) {
             streak++;

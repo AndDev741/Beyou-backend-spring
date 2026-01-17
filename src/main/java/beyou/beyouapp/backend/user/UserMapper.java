@@ -24,7 +24,8 @@ public class UserMapper {
             user.getXpProgress().getActualLevelXp(),
             user.getXpProgress().getNextLevelXp(),
             user.getXpProgress().getLevel(),
-            user.getConstanceConfiguration()
+            user.getConstanceConfiguration(),
+            user.getCompletedDays().contains(LocalDate.now())
         );
     }
 }
