@@ -16,18 +16,25 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.cglib.core.Local;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 
+import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(SpringExtension.class)
@@ -187,6 +194,69 @@ public class UserServiceUnitTest {
             assertEquals(editedUser.widgetsId(), userEditDTO.widgetsId());
 
         }
+    }
+
+    @Nested
+    class ConstanceLogic {
+        @Test
+        public void shouldGetCurrentConstanceByCompletedDates() {
+            //Arrange
+            Set<LocalDate> completedDates = new HashSet<>();
+            LocalDate newDate = LocalDate.of(2026, 1, 18);
+            completedDates.add(newDate);
+            user.setCompletedDays(completedDates);
+            
+            //Act
+            when(userRepository.save(user)).thenReturn(user);
+            userService.markDayCompleted(user, newDate);
+
+            //Assert
+            verify(userRepository, times(1)).save(user);
+            assertEquals(user.getCompletedDays().contains(newDate), true);
+            assertEquals(user.getCurrentConstance( LocalDate.of(2026, 1, 18)), 1);
+        }
+
+        @Test
+        public void shouldReturnTheCurrentConstanceByTheReferenceDate() {
+            //Arrange
+            Set<LocalDate> completedDates = new HashSet<>();
+            completedDates.add(LocalDate.of(2026, 1, 17)); 
+            completedDates.add(LocalDate.of(2026, 1, 18));
+            completedDates.add(LocalDate.of(2026, 1, 19));
+            user.setCompletedDays(completedDates);
+
+            LocalDate dateToRemove = LocalDate.of(2026, 1, 18);
+            //Act
+            when(userRepository.save(user)).thenReturn(user);
+            userService.unmarkDayComplete(user, dateToRemove);
+
+            //Assert
+            verify(userRepository, times(1)).save(user);
+            assertEquals(user.getCompletedDays().contains(dateToRemove), false);
+            assertEquals(user.getCurrentConstance(LocalDate.of(2026, 1, 19)), 1);
+        }
+
+        @Test
+        public void shouldChangeTheMaxConstanceIfGreaterThanTheCurrentMaxConstance(){
+            //Arrange
+            Set<LocalDate> completedDates = new HashSet<>();
+            completedDates.add(LocalDate.of(2026, 1, 17)); 
+            completedDates.add(LocalDate.of(2026, 1, 18));
+            completedDates.add(LocalDate.of(2026, 1, 19));
+            user.setCompletedDays(completedDates);
+            user.setMaxConstance(3);
+
+            LocalDate dateToAdd = LocalDate.of(2026, 1, 20);
+            //Act
+            when(userRepository.save(user)).thenReturn(user);
+            userService.markDayCompleted(user, dateToAdd);
+
+            //Assert
+            verify(userRepository, times(1)).save(user);
+            assertEquals(user.getCurrentConstance(LocalDate.of(2026, 1, 20)), 4);
+            assertEquals(user.getMaxConstance(), 4);
+        }
+        
     }
 
     @Nested
