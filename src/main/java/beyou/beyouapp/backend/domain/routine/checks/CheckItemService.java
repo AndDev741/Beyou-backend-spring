@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.routine.checks;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -9,7 +10,12 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
+import beyou.beyouapp.backend.domain.common.DTO.RefreshItemCheckedDTO;
+import beyou.beyouapp.backend.domain.common.DTO.RefreshObjectDTO;
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUserDTO;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
@@ -35,7 +41,7 @@ public class CheckItemService {
     private final UserService userService;
 
     @Transactional
-    public DiaryRoutine checkOrUncheckItemGroup(CheckGroupRequestDTO checkGroupDTO) {
+    public RefreshUiDTO checkOrUncheckItemGroup(CheckGroupRequestDTO checkGroupDTO) {
         LocalDate date = checkGroupDTO.date() != null ? checkGroupDTO.date() : LocalDate.now();
         if(checkGroupDTO.habitGroupDTO() != null){
             HabitGroup habitGroup = itemGroupService.findHabitGroupByDTO(checkGroupDTO.routineId(), checkGroupDTO.habitGroupDTO().habitGroupId());
@@ -48,7 +54,7 @@ public class CheckItemService {
         }
     }
 
-    private DiaryRoutine checkOrUncheckHabitGroup(HabitGroup habitGroup, LocalDate date) {
+    private RefreshUiDTO checkOrUncheckHabitGroup(HabitGroup habitGroup, LocalDate date) {
         // Check if the habit group is already checked for today
         boolean isCheckedToday = habitGroup.getHabitGroupChecks().stream()
                 .peek(hc -> log.info("Evaluating check: date={}, checked={}", hc.getCheckDate(), hc.isChecked()))
@@ -56,45 +62,30 @@ public class CheckItemService {
 
         if (isCheckedToday) {
             // Uncheck: Remove check, subtract XP, adjust constance
-            DiaryRoutine routineUnchecked = uncheckHabitGroup(habitGroup, date);
-
-            decreaseUserConstanceIfNeeded(routineUnchecked, date);
-
-            return routineUnchecked;
+            return uncheckHabitGroup(habitGroup, date);
         } else {
             // Calculate the exp (Think in a good algorithm later on)
-            DiaryRoutine routineChecked = checkHabitGroup(habitGroup, date);
-
-            increaseUserConstanceIfNeeded(routineChecked, date);
-            
-            return routineChecked;
+            return checkHabitGroup(habitGroup, date);
         }
     }
 
-    private DiaryRoutine checkOrUncheckTaskGroup(TaskGroup taskGroupToCheckOrUncheck, LocalDate date) {
+    private RefreshUiDTO checkOrUncheckTaskGroup(TaskGroup taskGroupToCheckOrUncheck, LocalDate date) {
         // Check if the habit group is already checked for today
         boolean isCheckedToday = taskGroupToCheckOrUncheck.getTaskGroupChecks().stream()
                 .anyMatch(habitCheck -> habitCheck.getCheckDate().equals(date) && habitCheck.isChecked());
 
         if (isCheckedToday) {
             // Uncheck: Remove check, subtract XP, adjust constance
-            DiaryRoutine routineUnchecked = uncheckTaskGroup(taskGroupToCheckOrUncheck, date);
-
-            decreaseUserConstanceIfNeeded(routineUnchecked, date);
-
-            return routineUnchecked;
+            return uncheckTaskGroup(taskGroupToCheckOrUncheck, date);
         } else {
             // Calculate the exp (Think in a good algorithm later on)
-            DiaryRoutine routineChecked = checkTaskGroup(taskGroupToCheckOrUncheck, date);
-
-            increaseUserConstanceIfNeeded(routineChecked, date);
-            
-            return routineChecked;
+            return checkTaskGroup(taskGroupToCheckOrUncheck, date);            
         }
     }
 
-    private DiaryRoutine uncheckHabitGroup(HabitGroup habitGroupToUncheck, LocalDate date) {
+    private RefreshUiDTO uncheckHabitGroup(HabitGroup habitGroupToUncheck, LocalDate date) {
         DiaryRoutine routine = (DiaryRoutine) habitGroupToUncheck.getRoutineSection().getRoutine();
+
         HabitGroupCheck existingCheck = habitGroupToUncheck.getHabitGroupChecks().stream()
                 .filter(habitCheck -> habitCheck.getCheckDate().equals(date))
                 .findFirst()
@@ -117,11 +108,20 @@ public class CheckItemService {
         existingCheck.setChecked(false);
         existingCheck.setXpGenerated(0);
         habitGroupToUncheck.getHabitGroupChecks().add(existingCheck);
-        return routine;
+        
+        decreaseUserConstanceIfNeeded(routine, date);
+
+        return buildRefreshDto(
+            date, 
+            habitToCheck, 
+            habitToCheck.getCategories(), 
+            new RefreshItemCheckedDTO(habitGroupToUncheck.getId(), existingCheck)
+        );
     }
 
-     protected DiaryRoutine checkTaskGroup(TaskGroup taskGroupToCheck, LocalDate date){
+     protected RefreshUiDTO checkTaskGroup(TaskGroup taskGroupToCheck, LocalDate date){
         DiaryRoutine routine = (DiaryRoutine) taskGroupToCheck.getRoutineSection().getRoutine();
+
         log.info("[LOG] Starting Check");
         Task taskChecked = taskGroupToCheck.getTask();
         TaskGroupCheck check = new TaskGroupCheck();
@@ -165,11 +165,23 @@ public class CheckItemService {
                 }
             }
         }
-        return routine;
+
+        increaseUserConstanceIfNeeded(routine, date);
+
+        return buildRefreshDto(
+                date, 
+                null, 
+                taskChecked.getCategories(),
+                new RefreshItemCheckedDTO(
+                    taskGroupToCheck.getId(),
+                    check
+                )
+            );
     }
 
-    private DiaryRoutine checkHabitGroup(HabitGroup habitGroupToCheckOrUncheck, LocalDate date) {
+    private RefreshUiDTO checkHabitGroup(HabitGroup habitGroupToCheckOrUncheck, LocalDate date) {
         DiaryRoutine routine = (DiaryRoutine) habitGroupToCheckOrUncheck.getRoutineSection().getRoutine();
+
         log.info("[LOG] Starting Check");
         Habit habitChecked = habitGroupToCheckOrUncheck.getHabit();
         HabitGroupCheck check = null;
@@ -203,11 +215,23 @@ public class CheckItemService {
                 }
             }
         }
-        return routine;
+
+        increaseUserConstanceIfNeeded(routine, date);
+
+        return buildRefreshDto(
+            date,
+            habitChecked, 
+            habitChecked.getCategories(),
+            new RefreshItemCheckedDTO(
+                habitGroupToCheckOrUncheck.getId(),
+                check
+            )
+        );
     }
 
-    private DiaryRoutine uncheckTaskGroup(TaskGroup taskGroupUnchecked, LocalDate date){
+    private RefreshUiDTO uncheckTaskGroup(TaskGroup taskGroupUnchecked, LocalDate date){
         DiaryRoutine routine = (DiaryRoutine) taskGroupUnchecked.getRoutineSection().getRoutine();
+        
         log.info("[LOG] Starting unchecking");
         Task taskChecked = taskGroupUnchecked.getTask();
 
@@ -236,7 +260,18 @@ public class CheckItemService {
         existingCheck.setChecked(false);
         existingCheck.setXpGenerated(0);
         taskGroupUnchecked.getTaskGroupChecks().add(existingCheck);
-        return routine;
+        
+        decreaseUserConstanceIfNeeded(routine, date);
+
+        return buildRefreshDto(
+            date, 
+            null, 
+            taskChecked.getCategories(),
+            new RefreshItemCheckedDTO(
+                taskGroupUnchecked.getId(),
+                existingCheck
+            )
+        );
     }
 
     private HabitGroupCheck checkIfHabitGroupIsAlreadyCheckedAndOverride(HabitGroup habitGroup, LocalDate date) {
@@ -269,7 +304,9 @@ public class CheckItemService {
         User user = authenticatedUser.getAuthenticatedUser();
         user.setCompletedDays(user.getCompletedDays() == null ? new HashSet<>() : user.getCompletedDays());
 
-        if(user.getCompletedDays().contains(date) == false) return ; //No constance to decrease today
+        log.info("[DEBUG] Checking date => {} in user dates {}", date, user.getCompletedDays());
+        if(!user.getCompletedDays().contains(date)) return ; //No constance to decrease today
+        log.info("[DEBUG] Date found");
 
         if(user != null && user.getConstanceConfiguration() != null){
             switch (user.getConstanceConfiguration()) {
@@ -360,5 +397,58 @@ public class CheckItemService {
             .anyMatch(check ->
                 check.getCheckDate().equals(date) && check.isChecked()
             );
+    }
+
+    private RefreshUiDTO buildRefreshDto(
+        LocalDate date, 
+        Habit habitToRefresh, 
+        List<Category> categoriesToRefresh, 
+        RefreshItemCheckedDTO refreshItemCheckedDTO
+    ) {
+
+        RefreshObjectDTO habitToRefreshDto = null;
+        if(habitToRefresh != null) {
+            habitToRefreshDto = new RefreshObjectDTO(
+                habitToRefresh.getId(),
+                habitToRefresh.getXpProgress().getXp(),
+                habitToRefresh.getXpProgress().getLevel(),
+                habitToRefresh.getXpProgress().getActualLevelXp(),
+                habitToRefresh.getXpProgress().getNextLevelXp()
+            );
+        }
+
+        List<RefreshObjectDTO> categoriesToRefreshDto = new ArrayList<RefreshObjectDTO>();
+        if(categoriesToRefresh != null){
+            categoriesToRefresh.forEach(c -> {
+                categoriesToRefreshDto.add(
+                    new RefreshObjectDTO(
+                        c.getId(),
+                        c.getXpProgress().getXp(),
+                        c.getXpProgress().getLevel(),
+                        c.getXpProgress().getActualLevelXp(),
+                        c.getXpProgress().getNextLevelXp()
+                    )
+                );
+            });
+        }
+
+        User userInContext = authenticatedUser.getAuthenticatedUser();
+        User freshUser = userService.findUserById(userInContext.getId());
+        RefreshUserDTO refreshUserDTO = new RefreshUserDTO(
+            freshUser.getCurrentConstance(date),
+            freshUser.getCompletedDays().contains(date),
+            freshUser.getMaxConstance(),
+            freshUser.getXpProgress().getXp(),
+            freshUser.getXpProgress().getLevel(),
+            freshUser.getXpProgress().getActualLevelXp(),
+            freshUser.getXpProgress().getNextLevelXp()
+        );
+
+        return new RefreshUiDTO(
+            refreshUserDTO,
+            categoriesToRefreshDto,
+            habitToRefreshDto,
+            refreshItemCheckedDTO
+        );
     }
 }

@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.routine.specializedRoutines;
 
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
@@ -162,8 +163,8 @@ public class DiaryRoutineService {
     }
 
     @Transactional
-    public DiaryRoutineResponseDTO checkAndUncheckGroup(CheckGroupRequestDTO checkGroupRequestDTO, UUID userId){
-        return mapper.toResponse(checkItemService.checkOrUncheckItemGroup(checkGroupRequestDTO));
+    public RefreshUiDTO checkAndUncheckGroup(CheckGroupRequestDTO checkGroupRequestDTO, UUID userId){
+        return checkItemService.checkOrUncheckItemGroup(checkGroupRequestDTO);
     }
 
 }

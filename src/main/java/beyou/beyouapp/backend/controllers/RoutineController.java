@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
@@ -80,7 +81,7 @@ public class RoutineController {
     }
 
     @PostMapping("/check")
-    public ResponseEntity<DiaryRoutineResponseDTO> checkItem(@RequestBody CheckGroupRequestDTO checkGroupRequestDTO){
+    public ResponseEntity<RefreshUiDTO> checkItem(@RequestBody CheckGroupRequestDTO checkGroupRequestDTO){
         log.info("Initializing check request");
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return ResponseEntity.ok().body(diaryRoutineService.checkAndUncheckGroup(checkGroupRequestDTO, userAuth.getId()));
