@@ -47,6 +47,11 @@ public class UserService {
         }
     }
 
+    public User findUserById (UUID userId) {
+        return userRepository.findById(userId)
+            .orElseThrow(() -> new UserNotFound("User not found by id"));
+    }
+
     public ResponseEntity<Map<String, Object>> doLogin(HttpServletResponse response, UserLoginDTO userLoginDTO){
         Optional<User> loginUser = userRepository.findByEmail(userLoginDTO.email());
         if(loginUser.isPresent()){

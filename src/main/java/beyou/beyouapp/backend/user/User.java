@@ -132,24 +132,21 @@ public class User implements UserDetails {
     }
 
     public int getCurrentConstance(LocalDate referenceDate) {
-
+        LocalDate dateToUse = referenceDate != null ? referenceDate : LocalDate.now();
         if (completedDays == null || completedDays.isEmpty()) {
             return 0;
         }
 
-        // Último dia em que houve conclusão
         LocalDate lastCompletedDay = completedDays.stream()
                 .max(LocalDate::compareTo)
                 .get();
 
-        long daysGap = ChronoUnit.DAYS.between(lastCompletedDay, referenceDate);
+        long daysGap = ChronoUnit.DAYS.between(lastCompletedDay, dateToUse);
 
-        // Se passou mais de 1 dia, streak morreu
         if (daysGap > 1) {
             return 0;
         }
 
-        // Começa a contar a partir do último dia válido
         int streak = 0;
         LocalDate cursor = lastCompletedDay;
 
