@@ -26,6 +26,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
+import beyou.beyouapp.backend.domain.common.XpProgress;
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
 import beyou.beyouapp.backend.domain.routine.checks.HabitGroupCheck;
@@ -68,8 +70,18 @@ class CheckItemServiceUnitTest {
     class CheckTests {
         @BeforeEach
         void setup() {
+            XpProgress xpProgress = new XpProgress(
+                0D,
+                0,
+                0D,
+                50D
+            );
             user.setCompletedDays(Set.of(LocalDate.now().minusDays(1))); // Simulating that the user has a constance of 1 day
+            user.setXpProgress(xpProgress);
+            user.setMaxConstance(2);
+
             when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+            when(userService.findUserById(user.getId())).thenReturn(user);
         }
         
         @Test
@@ -79,17 +91,18 @@ class CheckItemServiceUnitTest {
             Habit habit = createHabit(2, 3, 0, 0, List.of(category));
             HabitGroup habitGroup = createHabitGroup(habit);
 
-            UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
+            DiaryRoutine routine = (DiaryRoutine) habitGroup.getRoutineSection().getRoutine();
+            UUID routineId = routine.getId();
             when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
 
-            DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
+            RefreshUiDTO refreshUiDTO = checkItemService.checkOrUncheckItemGroup(
                     new CheckGroupRequestDTO(
                             routineId,
                             null,
                             new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
                             today));
 
-            assertSame(habitGroup.getRoutineSection().getRoutine(), routine);
+            assertSame(habitGroup.getId(), refreshUiDTO.refreshItemChecked().groupItemId());
             assertEquals(1, habitGroup.getHabitGroupChecks().size());
             HabitGroupCheck check = habitGroup.getHabitGroupChecks().get(0);
             assertTrue(check.isChecked());
@@ -113,17 +126,18 @@ class CheckItemServiceUnitTest {
             habitGroup.getHabitGroupChecks().add(existingCheck);
             double xpGenerated = existingCheck.getXpGenerated();
 
-            UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
+            DiaryRoutine routine = (DiaryRoutine) habitGroup.getRoutineSection().getRoutine();
+            UUID routineId = routine.getId();
             when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
 
-            DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
+            RefreshUiDTO refreshUiDTO = checkItemService.checkOrUncheckItemGroup(
                     new CheckGroupRequestDTO(
                             routineId,
                             null,
                             new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
                             date));
 
-            assertSame(habitGroup.getRoutineSection().getRoutine(), routine);
+            assertSame(habitGroup.getId(), refreshUiDTO.refreshItemChecked().groupItemId());
             assertEquals(1, habitGroup.getHabitGroupChecks().size());
             HabitGroupCheck check = habitGroup.getHabitGroupChecks().get(0);
             assertFalse(check.isChecked());
@@ -139,17 +153,19 @@ class CheckItemServiceUnitTest {
             Task task = createTask(2, 3, true, List.of(category));
             TaskGroup taskGroup = createTaskGroup(task);
 
-            UUID routineId = taskGroup.getRoutineSection().getRoutine().getId();
+            DiaryRoutine routine = (DiaryRoutine) taskGroup.getRoutineSection().getRoutine();
+            UUID routineId = routine.getId();
+
             when(itemGroupService.findTaskGroupByDTO(routineId, taskGroup.getId())).thenReturn(taskGroup);
 
-            DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
+            RefreshUiDTO refreshUiDTO = checkItemService.checkOrUncheckItemGroup(
                     new CheckGroupRequestDTO(
                             routineId,
                             new TaskGroupRequestDTO(taskGroup.getId(), taskGroup.getStartTime()),
                             null,
                             today));
 
-            assertSame(taskGroup.getRoutineSection().getRoutine(), routine);
+            assertSame(taskGroup.getId(), refreshUiDTO.refreshItemChecked().groupItemId());
             assertEquals(1, taskGroup.getTaskGroupChecks().size());
             TaskGroupCheck check = taskGroup.getTaskGroupChecks().get(0);
             assertTrue(check.isChecked());
@@ -174,17 +190,18 @@ class CheckItemServiceUnitTest {
             taskGroup.getTaskGroupChecks().add(existingCheck);
             double xpGenerated = existingCheck.getXpGenerated();
 
-            UUID routineId = taskGroup.getRoutineSection().getRoutine().getId();
+            DiaryRoutine routine = (DiaryRoutine) taskGroup.getRoutineSection().getRoutine();
+            UUID routineId = routine.getId();
             when(itemGroupService.findTaskGroupByDTO(routineId, taskGroup.getId())).thenReturn(taskGroup);
 
-            DiaryRoutine routine = checkItemService.checkOrUncheckItemGroup(
+            RefreshUiDTO refreshUiDTO = checkItemService.checkOrUncheckItemGroup(
                     new CheckGroupRequestDTO(
                             routineId,
                             new TaskGroupRequestDTO(taskGroup.getId(), taskGroup.getStartTime()),
                             null,
                             date));
 
-            assertSame(taskGroup.getRoutineSection().getRoutine(), routine);
+            assertSame(taskGroup.getId(), refreshUiDTO.refreshItemChecked().groupItemId());
             assertEquals(1, taskGroup.getTaskGroupChecks().size());
             TaskGroupCheck check = taskGroup.getTaskGroupChecks().get(0);
             assertFalse(check.isChecked());
@@ -198,8 +215,18 @@ class CheckItemServiceUnitTest {
     class ConstanceTests {
         @BeforeEach
         void setup() {
+            XpProgress xpProgress = new XpProgress(
+                0D,
+                0,
+                0D,
+                50D
+            );
             user.setCompletedDays(Set.of(LocalDate.now().minusDays(1))); // Simulating that the user has a constance of 1 day
+            user.setXpProgress(xpProgress);
+            user.setMaxConstance(2);
+
             when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+            when(userService.findUserById(user.getId())).thenReturn(user);
         }
 
         @Test

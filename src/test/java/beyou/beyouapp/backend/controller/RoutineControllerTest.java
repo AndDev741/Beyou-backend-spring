@@ -33,6 +33,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
@@ -41,6 +42,7 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.C
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.utils.RefreshUiDtoBuilder;
 
 @SpringBootTest
 @AutoConfigureMockMvc(addFilters = false)
@@ -63,6 +65,7 @@ class RoutineControllerTest {
     private UUID userId;
     private UUID routineId;
     private DiaryRoutineResponseDTO responseDto;
+    private RefreshUiDTO refreshUiDTO = RefreshUiDtoBuilder.mockedRefreshUiDTO();
 
     @BeforeEach
     void setUp() {
@@ -209,13 +212,25 @@ class RoutineControllerTest {
                 null,
                 LocalDate.now());
 
-        when(diaryRoutineService.checkAndUncheckGroup(checkRequest, userId)).thenReturn(responseDto);
+        when(diaryRoutineService.checkAndUncheckGroup(checkRequest, userId)).thenReturn(refreshUiDTO);
 
         mockMvc.perform(post("/routine/check")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(checkRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(routineId.toString()));
+                .andExpect(jsonPath("$.refreshUser.currentConstance").value(3))
+                .andExpect(jsonPath("$.refreshUser.alreadyIncreaseConstanceToday").value(false))
+                .andExpect(jsonPath("$.refreshUser.maxConstance").value(7))
+                .andExpect(jsonPath("$.refreshUser.xp").value(120.5))
+                .andExpect(jsonPath("$.refreshUser.level").value(2))
+                .andExpect(jsonPath("$.refreshUser.actualLevelXp").value(20.0))
+                .andExpect(jsonPath("$.refreshUser.nextLevelXp").value(130.0))
+                .andExpect(jsonPath("$.refreshCategories", hasSize(2)))
+                .andExpect(jsonPath("$.refreshCategories[0].id").value("11111111-1111-1111-1111-111111111111"))
+                .andExpect(jsonPath("$.refreshCategories[1].id").value("22222222-2222-2222-2222-222222222222"))
+                .andExpect(jsonPath("$.refreshHabit.id").value("33333333-3333-3333-3333-333333333333"))
+                .andExpect(jsonPath("$.refreshItemChecked.groupItemId").value("55555555-5555-5555-5555-555555555555"))
+                .andExpect(jsonPath("$.refreshItemChecked.check.checked").value(true));
 
         verify(diaryRoutineService).checkAndUncheckGroup(checkRequest, userId);
     }
