@@ -4,12 +4,16 @@ import java.util.function.Function;
 
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import jakarta.persistence.Embeddable;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Embeddable
 @Getter
 @Setter
+@AllArgsConstructor
+@NoArgsConstructor
 public class XpProgress {
     private double xp = 0D;
     private int level = 0;
