@@ -154,7 +154,8 @@ public class UserServiceUnitTest {
                 "phrase author",
                 List.of(),
                 "light",
-                ConstanceConfiguration.ANY
+                ConstanceConfiguration.ANY,
+                "en"
                 );
 
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -179,7 +180,8 @@ public class UserServiceUnitTest {
                 null, 
                 List.of("widget1E, widget2E"), 
                 null,
-                ConstanceConfiguration.ANY
+                ConstanceConfiguration.ANY,
+                "en"
             );
 
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));

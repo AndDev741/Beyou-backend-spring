@@ -80,7 +80,8 @@ public class UserControllerTest {
             "author", 
             List.of("widget1"), 
             "dark",
-            ConstanceConfiguration.ANY
+            ConstanceConfiguration.ANY,
+            "en"
         );
         when(userService.editUser(dto, userId)).thenReturn(userResponseDTO);
 
@@ -102,7 +103,8 @@ public class UserControllerTest {
             null, 
             List.of("widgetA", "widgetB"), 
             null,
-            ConstanceConfiguration.ANY
+            ConstanceConfiguration.ANY,
+            "en"
         );
        
         when(userService.editUser(dto, userId)).thenReturn(userResponseDTO);
