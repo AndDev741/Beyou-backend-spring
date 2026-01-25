@@ -2,7 +2,6 @@ package beyou.beyouapp.backend.domain.routine.checks;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -10,12 +9,10 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshItemCheckedDTO;
-import beyou.beyouapp.backend.domain.common.DTO.RefreshObjectDTO;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
-import beyou.beyouapp.backend.domain.common.DTO.RefreshUserDTO;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
@@ -39,6 +36,7 @@ public class CheckItemService {
     private final XpCalculatorService xpCalculatorService;
     private final AuthenticatedUser authenticatedUser;
     private final UserService userService;
+    private final RefreshUiDtoBuilder refreshUiDtoBuilder;
 
     @Transactional
     public RefreshUiDTO checkOrUncheckItemGroup(CheckGroupRequestDTO checkGroupDTO) {
@@ -111,7 +109,7 @@ public class CheckItemService {
         
         decreaseUserConstanceIfNeeded(routine, date);
 
-        return buildRefreshDto(
+        return refreshUiDtoBuilder.buildRefreshUiDto(
             date, 
             habitToCheck, 
             habitToCheck.getCategories(), 
@@ -168,7 +166,7 @@ public class CheckItemService {
 
         increaseUserConstanceIfNeeded(routine, date);
 
-        return buildRefreshDto(
+        return refreshUiDtoBuilder.buildRefreshUiDto(
                 date, 
                 null, 
                 taskChecked.getCategories(),
@@ -218,7 +216,7 @@ public class CheckItemService {
 
         increaseUserConstanceIfNeeded(routine, date);
 
-        return buildRefreshDto(
+        return refreshUiDtoBuilder.buildRefreshUiDto(
             date,
             habitChecked, 
             habitChecked.getCategories(),
@@ -263,7 +261,7 @@ public class CheckItemService {
         
         decreaseUserConstanceIfNeeded(routine, date);
 
-        return buildRefreshDto(
+        return refreshUiDtoBuilder.buildRefreshUiDto(
             date, 
             null, 
             taskChecked.getCategories(),
@@ -399,56 +397,4 @@ public class CheckItemService {
             );
     }
 
-    private RefreshUiDTO buildRefreshDto(
-        LocalDate date, 
-        Habit habitToRefresh, 
-        List<Category> categoriesToRefresh, 
-        RefreshItemCheckedDTO refreshItemCheckedDTO
-    ) {
-
-        RefreshObjectDTO habitToRefreshDto = null;
-        if(habitToRefresh != null) {
-            habitToRefreshDto = new RefreshObjectDTO(
-                habitToRefresh.getId(),
-                habitToRefresh.getXpProgress().getXp(),
-                habitToRefresh.getXpProgress().getLevel(),
-                habitToRefresh.getXpProgress().getActualLevelXp(),
-                habitToRefresh.getXpProgress().getNextLevelXp()
-            );
-        }
-
-        List<RefreshObjectDTO> categoriesToRefreshDto = new ArrayList<RefreshObjectDTO>();
-        if(categoriesToRefresh != null){
-            categoriesToRefresh.forEach(c -> {
-                categoriesToRefreshDto.add(
-                    new RefreshObjectDTO(
-                        c.getId(),
-                        c.getXpProgress().getXp(),
-                        c.getXpProgress().getLevel(),
-                        c.getXpProgress().getActualLevelXp(),
-                        c.getXpProgress().getNextLevelXp()
-                    )
-                );
-            });
-        }
-
-        User userInContext = authenticatedUser.getAuthenticatedUser();
-        User freshUser = userService.findUserById(userInContext.getId());
-        RefreshUserDTO refreshUserDTO = new RefreshUserDTO(
-            freshUser.getCurrentConstance(date),
-            freshUser.getCompletedDays().contains(date),
-            freshUser.getMaxConstance(),
-            freshUser.getXpProgress().getXp(),
-            freshUser.getXpProgress().getLevel(),
-            freshUser.getXpProgress().getActualLevelXp(),
-            freshUser.getXpProgress().getNextLevelXp()
-        );
-
-        return new RefreshUiDTO(
-            refreshUserDTO,
-            categoriesToRefreshDto,
-            habitToRefreshDto,
-            refreshItemCheckedDTO
-        );
-    }
 }

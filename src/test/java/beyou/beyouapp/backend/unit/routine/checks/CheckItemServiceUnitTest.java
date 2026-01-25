@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -25,8 +27,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.common.XpProgress;
+import beyou.beyouapp.backend.domain.common.DTO.RefreshItemCheckedDTO;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
@@ -61,6 +65,9 @@ class CheckItemServiceUnitTest {
     @Mock
     UserService userService;
 
+    @Mock
+    RefreshUiDtoBuilder refreshUiDtoBuilder;
+
     @InjectMocks
     private CheckItemService checkItemService;
 
@@ -81,7 +88,8 @@ class CheckItemServiceUnitTest {
             user.setMaxConstance(2);
 
             when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
-            when(userService.findUserById(user.getId())).thenReturn(user);
+            when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any()))
+            .thenAnswer(invocation -> new RefreshUiDTO(null, null, null, invocation.getArgument(3)));
         }
         
         @Test
@@ -129,6 +137,7 @@ class CheckItemServiceUnitTest {
             DiaryRoutine routine = (DiaryRoutine) habitGroup.getRoutineSection().getRoutine();
             UUID routineId = routine.getId();
             when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
+            
 
             RefreshUiDTO refreshUiDTO = checkItemService.checkOrUncheckItemGroup(
                     new CheckGroupRequestDTO(
@@ -226,8 +235,8 @@ class CheckItemServiceUnitTest {
             user.setMaxConstance(2);
 
             when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
-            when(userService.findUserById(user.getId())).thenReturn(user);
-        }
+            when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any()))
+            .thenAnswer(invocation -> new RefreshUiDTO(null, null, null, invocation.getArgument(3)));        }
 
         @Test
         void shouldIncreaseUserConstanceWhenCheckingAnyTask() {
