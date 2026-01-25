@@ -10,7 +10,9 @@ import org.springframework.stereotype.Service;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
@@ -30,6 +32,7 @@ public class GoalService {
     private final CategoryService categoryService;
     private final GoalMapper goalMapper;
     private final XpCalculatorService xpCalculatorService;
+    private final RefreshUiDtoBuilder refreshUiDtoBuilder;
 
     public Goal getGoal(UUID goalId) {
         return goalRepository.findById(goalId)
@@ -93,7 +96,7 @@ public class GoalService {
     }
 
     @Transactional
-    public GoalResponseDTO checkGoal(UUID goalId, UUID userId) {
+    public RefreshUiDTO checkGoal(UUID goalId, UUID userId) {
         Goal goal = getGoal(goalId);
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
@@ -105,7 +108,12 @@ public class GoalService {
             removeCompletedOfAGoalAndRemoveXp(goal, xp);
         }
 
-        return goalMapper.toResponseDTO(goal);
+        return refreshUiDtoBuilder.buildRefreshUiDto(
+            LocalDate.now(), 
+            null, 
+            goal.getCategories(), 
+            null
+        );
     } 
 
     private void setGoalAsCompletedAndAddXp(Goal goal, double xpReward){

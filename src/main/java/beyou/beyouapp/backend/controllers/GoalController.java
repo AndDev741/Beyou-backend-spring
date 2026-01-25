@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.goal.GoalService;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
@@ -57,7 +58,7 @@ public class GoalController {
     }
 
     @PutMapping("/complete")
-    public GoalResponseDTO setAsComplete(@RequestBody UUID goalId) {
+    public RefreshUiDTO setAsComplete(@RequestBody UUID goalId) {
         User user = authenticatedUser.getAuthenticatedUser();
         
         try {
