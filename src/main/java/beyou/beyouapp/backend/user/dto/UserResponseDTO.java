@@ -20,6 +20,7 @@ public record UserResponseDTO(
         int level,
         ConstanceConfiguration constanceConfiguration,
         boolean constanceIncreaseToday,
-        int maxConstance
+        int maxConstance,
+        String languageInUse
 ) {
 }

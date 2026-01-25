@@ -109,6 +109,7 @@ public class UserService {
             user.setThemeInUse(userEdit.theme() != null ? userEdit.theme() : user.getThemeInUse());
             user.setWidgetsIdInUse(userEdit.widgetsId() != null ? userEdit.widgetsId() : user.getWidgetsIdInUse());
             user.setConstanceConfiguration(userEdit.constanceConfiguration() != null ? userEdit.constanceConfiguration() : user.getConstanceConfiguration());
+            user.setLanguageInUse(userEdit.language() != null ? userEdit.language() : user.getLanguageInUse());
 
             try{
                 User saved = userRepository.save(user);

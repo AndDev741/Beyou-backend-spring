@@ -11,7 +11,8 @@ public record UserEditDTO(
     String phrase_author,
     List<String> widgetsId,
     String theme,
-    ConstanceConfiguration constanceConfiguration
+    ConstanceConfiguration constanceConfiguration,
+    String language
 ) {
     
 }

@@ -94,6 +94,8 @@ public class User implements UserDetails {
 
     private String themeInUse;
 
+    private String languageInUse;
+
     @Enumerated(EnumType.STRING)
     private ConstanceConfiguration constanceConfiguration;
 
