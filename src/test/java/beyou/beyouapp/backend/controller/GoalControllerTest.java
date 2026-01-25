@@ -6,6 +6,8 @@ import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.GoalStatus;
 import beyou.beyouapp.backend.domain.goal.GoalTerm;
 import beyou.beyouapp.backend.domain.category.dto.CategoryMiniDTO;
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUserDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
@@ -140,33 +142,32 @@ private final ObjectMapper objectMapper = new ObjectMapper()
     @Test
     void shouldMarkAsCompletedSuccessfully() throws Exception {
         UUID goalId = UUID.randomUUID();
-        GoalResponseDTO responseDTO = new GoalResponseDTO(
-                goalId,
-                "name",
-                "icon",
-                "desc",
-                1.0,
-                "u",
-                0.0,
-                true,
-                Map.<UUID, CategoryMiniDTO>of(),
-                "mot",
-                LocalDate.now(),
-                LocalDate.now().plusDays(1),
-                0.0,
-                GoalStatus.COMPLETED,
-                GoalTerm.SHORT_TERM,
-                LocalDate.now()
+        RefreshUserDTO refreshUserDTO = new RefreshUserDTO(
+                1,
+                false, 
+                2, 
+                10, 
+                1, 
+                0, 
+                100
         );
-        when(goalService.checkGoal(goalId, userId)).thenReturn(responseDTO);
+        RefreshUiDTO refreshUiDTO = new RefreshUiDTO(
+                refreshUserDTO,
+                null,
+                null,
+                null
+        );
+
+        when(goalService.checkGoal(goalId, userId)).thenReturn(refreshUiDTO);
 
         mockMvc.perform(put("/goal/complete")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(goalId))
                 )
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(goalId.toString()))
-                .andExpect(jsonPath("$.complete").value(true));
+                .andExpect(jsonPath("$.refreshUser.currentConstance").value(1))
+                .andExpect(jsonPath("$.refreshUser.alreadyIncreaseConstanceToday").value(false)
+        );
     }
 
     @Test

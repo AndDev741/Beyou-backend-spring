@@ -18,7 +18,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.goal.GoalMapper;
 import beyou.beyouapp.backend.domain.goal.GoalRepository;
@@ -51,6 +53,9 @@ public class goalServiceUnitTest {
     @Mock
     XpCalculatorService xpCalculatorService;
 
+    @Mock
+    RefreshUiDtoBuilder refreshUiDtoBuilder;
+
     private GoalMapper goalMapper = new GoalMapper();
 
     GoalService goalService;
@@ -74,8 +79,9 @@ public class goalServiceUnitTest {
         user.setId(userId);
         goal.setUser(user);
 
-        goalService = new GoalService(goalRepository, categoryService, goalMapper, xpCalculatorService);
-        
+        goalService = new GoalService(goalRepository, categoryService, goalMapper, xpCalculatorService,
+                refreshUiDtoBuilder);
+
     }
 
     @Test
@@ -276,11 +282,14 @@ public class goalServiceUnitTest {
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
         double xp = GoalXpCalculator.calculateXp(goal);
 
-        GoalResponseDTO response = goalService.checkGoal(goalId, userId);
+        when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any()))
+        .thenAnswer(invocation -> new RefreshUiDTO(null, invocation.getArgument(1), null, null));
 
-        assertEquals(true, response.complete());
-        assertEquals(GoalStatus.COMPLETED, response.status());
-        assertEquals(LocalDate.now(), response.completeDate());
+        RefreshUiDTO response = goalService.checkGoal(goalId, userId);
+
+        assertNotNull(response);
+        assertEquals(GoalStatus.COMPLETED, goal.getStatus());
+        assertEquals(LocalDate.now(), goal.getCompleteDate());
         verify(xpCalculatorService, times(1)).addXpToUserGoalAndCategoriesAndPersist(xp, goal, goal.getCategories());
     }
 
@@ -290,12 +299,15 @@ public class goalServiceUnitTest {
         double xp = GoalXpCalculator.calculateXp(goal);
 
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any()))
+        .thenAnswer(invocation -> new RefreshUiDTO(null, invocation.getArgument(1), null, null));
 
-        GoalResponseDTO response = goalService.checkGoal(goalId, userId);
+        RefreshUiDTO response = goalService.checkGoal(goalId, userId);
 
-        assertEquals(false, response.complete());
-        assertEquals(GoalStatus.IN_PROGRESS, response.status());
-        assertEquals(null, response.completeDate());
+        assertNotNull(response);
+        assertEquals(false, goal.getComplete());
+        assertEquals(GoalStatus.IN_PROGRESS, goal.getStatus());
+        assertEquals(null, goal.getCompleteDate());
         verify(xpCalculatorService, times(1)).removeXpOfUserGoalAndCategoriesAndPersist(xp, goal, goal.getCategories());
     }
 
