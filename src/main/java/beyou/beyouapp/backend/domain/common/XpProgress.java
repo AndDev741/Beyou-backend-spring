@@ -32,7 +32,7 @@ public class XpProgress {
     public void removeXp(double amount,  Function<Integer, XpByLevel> levelProvider){
         xp -= amount;
 
-        while (xp < actualLevelXp && xp > 0) {
+        while (xp < actualLevelXp && xp >= 0) {
             level--;
             recalculate(levelProvider);
         }
