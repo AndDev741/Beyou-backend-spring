@@ -13,7 +13,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
+import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.user.User;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
@@ -22,6 +24,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -62,8 +65,8 @@ public class Habit {
     inverseJoinColumns = @JoinColumn(name = "category_id"))
     private List<Category> categories;
 
-    @Column
-    private List<String> routines;
+    @OneToMany(mappedBy = "habit", cascade = CascadeType.ALL, orphanRemoval = false)
+    private List<HabitGroup> habitGroups;
 
     @Column(nullable = false)
     private Integer importance;

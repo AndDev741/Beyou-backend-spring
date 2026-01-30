@@ -6,12 +6,19 @@ import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
+import beyou.beyouapp.backend.domain.routine.Routine;
+import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.user.User;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 public class HabitMapper {
@@ -35,6 +42,18 @@ public class HabitMapper {
 
     public HabitResponseDTO toResponseDTO(Habit habit) {
         XpProgress xpProgress = habit.getXpProgress();
+
+        Map<UUID, String> routines = Optional.ofNullable(habit.getHabitGroups())
+            .orElse(List.of())
+            .stream()
+            .map(HabitGroup::getRoutineSection)
+            .map(RoutineSection::getRoutine)
+            .collect(Collectors.toMap(
+                Routine::getId, 
+                Routine::getName,
+                (a, b) -> a
+            ));
+
         return new HabitResponseDTO(
                 habit.getId(),
                 habit.getName(),
@@ -50,7 +69,8 @@ public class HabitMapper {
                 xpProgress != null ? xpProgress.getLevel() : 0,
                 habit.getConstance(),
                 habit.getCreatedAt() != null ? habit.getCreatedAt().toLocalDate() : null,
-                habit.getUpdatedAt() != null ? habit.getUpdatedAt().toLocalDate() : null
+                habit.getUpdatedAt() != null ? habit.getUpdatedAt().toLocalDate() : null,
+                routines
         );
     }
 }

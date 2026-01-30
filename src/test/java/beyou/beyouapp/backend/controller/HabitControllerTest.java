@@ -67,7 +67,7 @@ public class HabitControllerTest {
     @Test
     void shouldGetHabitsSuccessfully() throws Exception{
         HabitResponseDTO responseDTO = new HabitResponseDTO(
-            habitID, "name", "desc", "mot", "icon", 1, 1, List.of(), 0, 0, 0, 0, 0, null, null
+            habitID, "name", "desc", "mot", "icon", 1, 1, List.of(), 0, 0, 0, 0, 0, null, null, null
         );
         when(habitService.getHabits(userID)).thenReturn(List.of(responseDTO));
 
