@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.unit.user;
 
 import beyou.beyouapp.backend.security.TokenService;
+import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserMapper;
 import beyou.beyouapp.backend.user.UserRepository;
@@ -50,6 +51,9 @@ public class UserServiceUnitTest {
     @Mock
     TokenService tokenService;
 
+    @Mock
+    RefreshTokenService refreshTokenService;
+
     UserMapper userMapper = new UserMapper();
 
     private UserService userService;
@@ -70,7 +74,7 @@ public class UserServiceUnitTest {
         user.setPerfilPhraseAuthor("lg?");
         user.setWidgetsIdInUse(List.of("widget4, widget5"));
 
-        userService = new UserService(userRepository, passwordEncoder, tokenService, userMapper);
+        userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService, userMapper);
     }
 
     @Nested
@@ -103,7 +107,7 @@ public class UserServiceUnitTest {
 
             when(userRepository.findByEmail(userLoginDTO.email())).thenReturn(Optional.of(user));
             when(passwordEncoder.matches(userLoginDTO.password(), user.getPassword())).thenReturn(true);
-            when(tokenService.generateToken(user)).thenReturn("mockedToken");
+            when(tokenService.generateJwtToken(user)).thenReturn("mockedToken");
 
             ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(response, userLoginDTO);
 

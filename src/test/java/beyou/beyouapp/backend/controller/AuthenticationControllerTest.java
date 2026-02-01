@@ -45,10 +45,8 @@ public class AuthenticationControllerTest {
 
     @Test
     public void shouldPassIfUserIsAuthenticated() throws Exception {
-        Cookie jwt = simulateLogin().getResponse().getCookie("jwt");
-
         mockMvc.perform(get("/auth/verify")
-                .cookie(jwt))
+                .header("authorization", "Bearer " + simulateLogin().getResponse().getHeader("accessToken")))
                 .andExpect(status().isOk());
     }
 
@@ -60,7 +58,7 @@ public class AuthenticationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success.name").exists())
                 .andExpect(jsonPath("$.success.email").value("testebeyou@gmail.com"))
-                .andExpect(cookie().exists("jwt"));
+                .andExpect(cookie().exists("refreshToken"));
     }
 
     @Test
@@ -167,7 +165,7 @@ public class AuthenticationControllerTest {
                         .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(cookie().exists("jwt"))
+                .andExpect(header().exists("accessToken"))
                 .andReturn();
     }
 }

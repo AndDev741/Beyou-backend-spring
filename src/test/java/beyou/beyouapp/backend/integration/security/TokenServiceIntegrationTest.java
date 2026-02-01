@@ -21,7 +21,7 @@ public class TokenServiceIntegrationTest {
         User user= new User();
         user.setEmail("email@test.com");
 
-        String token = tokenService.generateToken(user);
+        String token = tokenService.generateJwtToken(user);
 
         assertNotNull(token);
         assertFalse(token.isEmpty());
@@ -35,7 +35,7 @@ public class TokenServiceIntegrationTest {
         User user = new User();
         user.setEmail("email@gmail.com");
 
-        String token = tokenService.generateToken(user);
+        String token = tokenService.generateJwtToken(user);
         ResponseEntity<String> response = tokenService.validateToken(token);
 
         assertEquals(ResponseEntity.ok(user.getEmail()), response);
