@@ -28,10 +28,15 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/auth/login", "/auth/register", "auth/google",
-                                "/swagger-ui/**", "/v3/api-docs/**",
-                                "/swagger-ui.html").permitAll()
-                        .anyRequest().authenticated()
+                        .requestMatchers(
+                            "/auth/login", 
+                            "/auth/register", 
+                            "/auth/google",
+                            "/auth/refresh",
+                            "/auth/logout"
+                        ).permitAll()
+                        .anyRequest()
+                        .authenticated()
                 )
                 .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
                 .logout(logout -> logout
@@ -54,6 +59,7 @@ public class SecurityConfig {
         config.setAllowCredentials(true);
         config.addAllowedOriginPattern("http://localhost:3000");
         config.addAllowedHeader("*");
+        config.addExposedHeader("accessToken");
         config.addAllowedMethod("*");
         config.addAllowedMethod("GET");
         config.addAllowedMethod("POST");

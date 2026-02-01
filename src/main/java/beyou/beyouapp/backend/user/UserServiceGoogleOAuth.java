@@ -1,14 +1,14 @@
 package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.security.TokenService;
+import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
-import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -21,13 +21,13 @@ import java.util.Map;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class UserServiceGoogleOAuth {
-    @Autowired
-    TokenService tokenService;
-    @Autowired
-    UserRepository userRepository;
-    @Autowired
-    UserMapper userMapper;
+
+    private final TokenService tokenService;
+    private final RefreshTokenService refreshTokenService;
+    private final UserRepository userRepository;
+    private final UserMapper userMapper;
 
     @Value("${google.secrets.clientId}")
     String GOOGLE_CLIENT_ID;
@@ -52,18 +52,23 @@ public class UserServiceGoogleOAuth {
 
         if(optionalUser.isPresent()){
             User user =  optionalUser.get();
-            String jwtToken = tokenService.generateToken(user);
-            addJwtTokenToResponse(response, jwtToken);
-            UserResponseDTO userResponseDTO = userMapper.toResponseDTO(user);
-            return ResponseEntity.ok().body(Map.of("success", userResponseDTO));
+
+            String jwtToken = tokenService.generateJwtToken(user);
+            String refreshToken = refreshTokenService.createRefreshToken(user);
+
+            tokenService.addJwtTokenToResponse(response, jwtToken, refreshToken);
+
+            return ResponseEntity.ok().body(Map.of("success",  userMapper.toResponseDTO(user)));
         }else{
             User newUser = new User(googleUser);
             User user = userRepository.save(newUser);
 
-            String jwtToken = tokenService.generateToken(user);
-            addJwtTokenToResponse(response, jwtToken);
-            UserResponseDTO userResponseDTO = userMapper.toResponseDTO(user);
-            return ResponseEntity.ok().body(Map.of("success", userResponseDTO));
+            String jwtToken = tokenService.generateJwtToken(user);
+            String refreshToken = refreshTokenService.createRefreshToken(user);
+
+            tokenService.addJwtTokenToResponse(response, jwtToken, refreshToken);
+
+            return ResponseEntity.ok().body(Map.of("success",  userMapper.toResponseDTO(user)));
         }
     }
 
@@ -113,16 +118,5 @@ public class UserServiceGoogleOAuth {
         }
     }
 
-    private void addJwtTokenToResponse(HttpServletResponse response, String token){
-        Cookie cookie = new Cookie("jwt", token);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(true);
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60);
-
-        response.addCookie(cookie);
-
-        response.setHeader(HttpHeaders.SET_COOKIE, "jwt=" + token + "; Max-Age=604800; Path=/; Secure; HttpOnly; SameSite=None");
-    }
 }
 

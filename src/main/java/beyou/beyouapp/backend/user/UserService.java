@@ -2,16 +2,15 @@ package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.security.TokenService;
+import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -33,6 +32,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
+    private final RefreshTokenService refreshTokenService;
     private final UserMapper userMapper;
 
     public ResponseEntity<String> verifyAuthentication(){
@@ -57,10 +57,12 @@ public class UserService {
         if(loginUser.isPresent()){
             User user = loginUser.get();
             if(passwordEncoder.matches(userLoginDTO.password(), user.getPassword())){
-                String token = tokenService.generateToken(user);
-                addJwtTokenToResponse(response, token);
-                UserResponseDTO userResponse = userMapper.toResponseDTO(user);
-                return ResponseEntity.ok().body(Map.of("success", userResponse));
+                String accessToken = tokenService.generateJwtToken(user);
+                String refreshToken = refreshTokenService.createRefreshToken(user);
+
+                tokenService.addJwtTokenToResponse(response, accessToken, refreshToken);
+
+                return ResponseEntity.ok().body(Map.of("success", userMapper.toResponseDTO(user)));
             }
         }
         return ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED).body(Map.of("error", "Email or password incorrect"));
@@ -144,15 +146,4 @@ public class UserService {
         userRepository.save(user);
     }
 
-    private void addJwtTokenToResponse(HttpServletResponse response, String token){
-        Cookie cookie = new Cookie("jwt", token);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(true);
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60);
-
-        response.addCookie(cookie);
-
-        response.setHeader(HttpHeaders.SET_COOKIE, "jwt=" + token + "; Max-Age=604800; Path=/; Secure; HttpOnly; SameSite=None");
-    }
 }

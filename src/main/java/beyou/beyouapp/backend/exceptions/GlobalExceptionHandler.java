@@ -3,6 +3,10 @@ package beyou.beyouapp.backend.exceptions;
 import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
 import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
+import beyou.beyouapp.backend.exceptions.security.JwtNotFoundException;
+import beyou.beyouapp.backend.exceptions.security.RefreshTokenDontMatchRaw;
+import beyou.beyouapp.backend.exceptions.security.RefreshTokenExpiredException;
+import beyou.beyouapp.backend.exceptions.security.RefreshTokenNotFoundException;
 import beyou.beyouapp.backend.exceptions.task.TaskNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import org.springframework.http.HttpStatus;
@@ -19,8 +23,23 @@ import java.util.Map;
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(JwtCookieNotFoundException.class)
-    public ResponseEntity<String> handleJwtCookieNotFoundException(JwtCookieNotFoundException ex){
+    @ExceptionHandler(JwtNotFoundException.class)
+    public ResponseEntity<String> handleJwtNotFoundException(JwtNotFoundException ex){
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
+    }
+
+    @ExceptionHandler(RefreshTokenExpiredException.class)
+    public ResponseEntity<String> handleRefreshTokenExpiredException(RefreshTokenExpiredException ex){
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
+    }
+
+    @ExceptionHandler(RefreshTokenNotFoundException.class)
+    public ResponseEntity<String> handleRefreshTokenNotFoundException(RefreshTokenNotFoundException ex){
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
+    }
+
+    @ExceptionHandler(RefreshTokenDontMatchRaw.class)
+    public ResponseEntity<String> handleRefreshTokenDontMatchRaw(RefreshTokenDontMatchRaw ex){
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
     }
 
