@@ -92,12 +92,14 @@ class DiaryRoutineServiceUnitTest {
                                                 UUID.randomUUID(),
                                                 UUID.randomUUID(),
                                                 LocalTime.of(6, 30),
+                                                LocalTime.of(7, 0),
                                                 null)),
 
                                         List.of(new HabitGroupDTO(
                                                 UUID.randomUUID(),
                                                 UUID.randomUUID(),
                                                 LocalTime.of(6, 15),
+                                                LocalTime.of(6, 45),
                                                 null)),
                                         false
                                         ))));
@@ -123,6 +125,7 @@ class DiaryRoutineServiceUnitTest {
         task.setId(validRequestDTO.routineSections().get(0).taskGroup().get(0).taskId());
         taskGroup.setTask(task);
         taskGroup.setStartTime(validRequestDTO.routineSections().get(0).taskGroup().get(0).startTime());
+        taskGroup.setEndTime(validRequestDTO.routineSections().get(0).taskGroup().get(0).endTime());
         taskGroup.setRoutineSection(section);
         taskGroup.setTaskGroupChecks(new ArrayList<>());
         HabitGroup habitGroup = new HabitGroup();
@@ -135,6 +138,7 @@ class DiaryRoutineServiceUnitTest {
         habit.setId(validRequestDTO.routineSections().get(0).habitGroup().get(0).habitId());
         habitGroup.setHabit(habit);
         habitGroup.setStartTime(validRequestDTO.routineSections().get(0).habitGroup().get(0).startTime());
+        habitGroup.setEndTime(validRequestDTO.routineSections().get(0).habitGroup().get(0).endTime());
         habitGroup.setRoutineSection(section);
         habitGroup.setHabitGroupChecks(new ArrayList<>(new ArrayList<>()));
         section.setTaskGroups(new ArrayList<>(List.of(taskGroup)));
@@ -203,6 +207,68 @@ class DiaryRoutineServiceUnitTest {
     }
 
     @Test
+    @DisplayName("Should throw IllegalArgumentException when item endTime is before item startTime")
+    void shouldThrowExceptionWhenItemEndTimeBeforeStartTime() {
+        DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(
+                "Rotina Diária",
+                "routine-icon-123",
+                List.of(
+                        new RoutineSectionRequestDTO(
+                                null,
+                                "Manhã Produtiva",
+                                "morning-icon-456",
+                                LocalTime.of(6, 0),
+                                LocalTime.of(12, 0),
+                                List.of(new TaskGroupDTO(
+                                        UUID.randomUUID(),
+                                        UUID.randomUUID(),
+                                        LocalTime.of(8, 0),
+                                        LocalTime.of(7, 0),
+                                        null)),
+                                List.of(),
+                                false
+                        )));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> diaryRoutineService.createDiaryRoutine(invalidDTO, new User()));
+        assertEquals("End time must be after start time for task in routine section: Manhã Produtiva",
+                exception.getMessage());
+        verify(diaryRoutineRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should throw IllegalArgumentException when item endTime is outside section bounds")
+    void shouldThrowExceptionWhenItemEndTimeOutsideSectionBounds() {
+        DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(
+                "Rotina Diária",
+                "routine-icon-123",
+                List.of(
+                        new RoutineSectionRequestDTO(
+                                null,
+                                "Manhã Produtiva",
+                                "morning-icon-456",
+                                LocalTime.of(6, 0),
+                                LocalTime.of(12, 0),
+                                List.of(),
+                                List.of(new HabitGroupDTO(
+                                        UUID.randomUUID(),
+                                        UUID.randomUUID(),
+                                        LocalTime.of(11, 0),
+                                        LocalTime.of(13, 0),
+                                        null)),
+                                false
+                        )));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> diaryRoutineService.createDiaryRoutine(invalidDTO, new User()));
+        assertEquals("End time must be within section bounds for habit in routine section: Manhã Produtiva",
+                exception.getMessage());
+        verify(diaryRoutineRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("Should get diary routine by ID successfully")
     void shouldGetDiaryRoutineByIdSuccessfully() {
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
@@ -258,12 +324,14 @@ class DiaryRoutineServiceUnitTest {
                                                 UUID.randomUUID(),
                                                 UUID.randomUUID(),
                                                 LocalTime.of(6, 30),
+                                                LocalTime.of(7, 0),
                                                 null)),
 
                                         List.of(new HabitGroupDTO(
                                                 UUID.randomUUID(),
                                                 UUID.randomUUID(),
                                                 LocalTime.of(6, 15),
+                                                LocalTime.of(6, 45),
                                                 null)),
                                         false
                 ))));
@@ -290,6 +358,7 @@ class DiaryRoutineServiceUnitTest {
         task.setId(validRequestDTO.routineSections().get(0).taskGroup().get(0).taskId());
         taskGroup.setTask(task);
         taskGroup.setStartTime(validRequestDTO.routineSections().get(0).taskGroup().get(0).startTime());
+        taskGroup.setEndTime(validRequestDTO.routineSections().get(0).taskGroup().get(0).endTime());
         taskGroup.setRoutineSection(updatedSection);
         HabitGroup habitGroup = new HabitGroup();
         habitGroup.setId(UUID.randomUUID());
@@ -301,6 +370,7 @@ class DiaryRoutineServiceUnitTest {
         habit.setId(validRequestDTO.routineSections().get(0).habitGroup().get(0).habitId());
         habitGroup.setHabit(habit);
         habitGroup.setStartTime(validRequestDTO.routineSections().get(0).habitGroup().get(0).startTime());
+        habitGroup.setEndTime(validRequestDTO.routineSections().get(0).habitGroup().get(0).endTime());
         habitGroup.setRoutineSection(updatedSection);
         updatedSection.setTaskGroups(List.of(taskGroup));
         updatedSection.setHabitGroups(List.of(habitGroup));

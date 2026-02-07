@@ -5,6 +5,7 @@ import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
 import beyou.beyouapp.backend.user.User;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
@@ -159,6 +161,49 @@ public class DiaryRoutineService {
                 throw new IllegalArgumentException(
                         "End time must be after start time for routine section: " + section.name());
             }
+            validateItemTimes(section);
+        }
+    }
+
+    private void validateItemTimes(RoutineSectionRequestDTO section) {
+        if (section.taskGroup() != null) {
+            section.taskGroup().forEach(taskGroup -> validateItemTimeBounds(
+                    section,
+                    taskGroup.startTime(),
+                    taskGroup.endTime(),
+                    "task"
+            ));
+        }
+        if (section.habitGroup() != null) {
+            section.habitGroup().forEach(habitGroup -> validateItemTimeBounds(
+                    section,
+                    habitGroup.startTime(),
+                    habitGroup.endTime(),
+                    "habit"
+            ));
+        }
+    }
+
+    private void validateItemTimeBounds(
+            RoutineSectionRequestDTO section,
+            LocalTime startTime,
+            LocalTime endTime,
+            String itemType
+    ) {
+        if (endTime == null && startTime == null) {
+            return;
+        }
+        if (startTime != null && endTime != null && endTime.isBefore(startTime)) {
+            throw new IllegalArgumentException(
+                    "End time must be after start time for " + itemType + " in routine section: " + section.name());
+        }
+        if (section.startTime() != null && startTime != null && startTime.isBefore(section.startTime())) {
+            throw new IllegalArgumentException(
+                    "Start time must be within section bounds for " + itemType + " in routine section: " + section.name());
+        }
+        if (section.endTime() != null && endTime != null && endTime.isAfter(section.endTime())) {
+            throw new IllegalArgumentException(
+                    "End time must be within section bounds for " + itemType + " in routine section: " + section.name());
         }
     }
 

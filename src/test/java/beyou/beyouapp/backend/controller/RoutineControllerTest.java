@@ -92,11 +92,13 @@ class RoutineControllerTest {
                                         UUID.randomUUID(),
                                         UUID.randomUUID(),
                                         "06:30",
+                                        "07:00",
                                         List.of())),
                                 List.of(new DiaryRoutineResponseDTO.RoutineSectionResponseDTO.HabitGroupResponseDTO(
                                         UUID.randomUUID(),
                                         UUID.randomUUID(),
                                         "06:15",
+                                        "06:45",
                                         List.of())),
                                 false)),
                 null,
@@ -137,7 +139,9 @@ class RoutineControllerTest {
 
         mockMvc.perform(get("/routine/{id}", routineId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(routineId.toString()));
+                .andExpect(jsonPath("$.id").value(routineId.toString()))
+                .andExpect(jsonPath("$.routineSections[0].taskGroup[0].endTime").value("07:00"))
+                .andExpect(jsonPath("$.routineSections[0].habitGroup[0].endTime").value("06:45"));
 
         verify(diaryRoutineService).getDiaryRoutineById(routineId, userId);
     }

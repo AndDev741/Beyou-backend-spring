@@ -6,6 +6,6 @@ import java.util.UUID;
 
 import beyou.beyouapp.backend.domain.routine.checks.TaskGroupCheck;
 
-public record TaskGroupDTO(UUID id, UUID taskId, LocalTime startTime, List<TaskGroupCheck> taskGroupCheck)  {
+public record TaskGroupDTO(UUID id, UUID taskId, LocalTime startTime, LocalTime endTime, List<TaskGroupCheck> taskGroupCheck)  {
 
 }

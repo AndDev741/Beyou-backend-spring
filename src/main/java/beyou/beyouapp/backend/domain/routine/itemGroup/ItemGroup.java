@@ -30,6 +30,8 @@ public abstract class ItemGroup {
 
     private LocalTime startTime;
 
+    private LocalTime endTime;
+
     @ManyToOne
     @JoinColumn(name = "routine_section_id")
     private RoutineSection routineSection;

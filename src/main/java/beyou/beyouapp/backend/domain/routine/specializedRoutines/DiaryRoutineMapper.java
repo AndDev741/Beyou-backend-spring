@@ -104,6 +104,7 @@ public class DiaryRoutineMapper {
             }
             taskGroup.setTask(task);
             taskGroup.setStartTime(taskDto.startTime());
+            taskGroup.setEndTime(taskDto.endTime());
             taskGroup.setRoutineSection(section);
 
             List<TaskGroupCheck> taskChecks = new ArrayList<>();
@@ -130,6 +131,7 @@ public class DiaryRoutineMapper {
             }
             habitGroup.setHabit(habit);
             habitGroup.setStartTime(habitDto.startTime());
+            habitGroup.setEndTime(habitDto.endTime());
             habitGroup.setRoutineSection(section);
 
             List<HabitGroupCheck> checks = new ArrayList<>();
@@ -151,6 +153,7 @@ public class DiaryRoutineMapper {
                         taskGroup.getId(),
                         taskGroup.getTask().getId(),
                         formatTime(taskGroup.getStartTime()),
+                        formatTime(taskGroup.getEndTime()),
                         taskGroup.getTaskGroupChecks()
                 ))
                 .collect(Collectors.toList());
@@ -160,6 +163,7 @@ public class DiaryRoutineMapper {
                         habitGroup.getId(),
                         habitGroup.getHabit().getId(),
                         formatTime(habitGroup.getStartTime()),
+                        formatTime(habitGroup.getEndTime()),
                         habitGroup.getHabitGroupChecks()
                 ))
                 .collect(Collectors.toList());

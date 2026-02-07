@@ -32,6 +32,7 @@ public record DiaryRoutineResponseDTO(
                 UUID id,
                 UUID taskId,
                 String startTime,
+                String endTime,
                 List<TaskGroupCheck> taskGroupChecks) {
         }
 
@@ -39,6 +40,7 @@ public record DiaryRoutineResponseDTO(
                 UUID id,
                 UUID habitId,
                 String startTime,
+                String endTime,
                 List<HabitGroupCheck> habitGroupChecks) {
         }
     }

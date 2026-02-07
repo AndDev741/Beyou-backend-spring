@@ -6,6 +6,6 @@ import java.util.UUID;
 
 import beyou.beyouapp.backend.domain.routine.checks.HabitGroupCheck;
 
-public record HabitGroupDTO(UUID id, UUID habitId, LocalTime startTime, List<HabitGroupCheck> habitGroupCheck)  {
+public record HabitGroupDTO(UUID id, UUID habitId, LocalTime startTime, LocalTime endTime, List<HabitGroupCheck> habitGroupCheck)  {
 
 }
