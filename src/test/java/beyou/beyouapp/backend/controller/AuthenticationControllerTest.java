@@ -71,6 +71,17 @@ public class AuthenticationControllerTest {
                 .andExpect(jsonPath("$.success").value("User registered successfully"));
     }
 
+    @Test
+    public void shouldRefreshToken() throws Exception {
+        MvcResult loginResult = simulateLogin();
+        Cookie refreshTokenCookie = loginResult.getResponse().getCookie("refreshToken");
+
+        mockMvc.perform(post("/auth/refresh")
+                .cookie(refreshTokenCookie))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("accessToken"));
+    }
+
     //Error Messages
 
     @Test
