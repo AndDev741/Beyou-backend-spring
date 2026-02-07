@@ -34,7 +34,8 @@ public class SecurityFilter extends OncePerRequestFilter {
             requestURI.equals("/auth/login") || 
             requestURI.equals("/auth/register") ||
             requestURI.startsWith("/auth/refresh")|| 
-            requestURI.startsWith("/auth/google")
+            requestURI.startsWith("/auth/google") ||
+            requestURI.startsWith("/auth/logout")
         ){
             filterChain.doFilter(request, response);
             return;
@@ -65,10 +66,7 @@ public class SecurityFilter extends OncePerRequestFilter {
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }else{
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.getWriter().write("User not found");
-                    response.getWriter().flush();
-                    SecurityContextHolder.clearContext();
+                    setResponseAsUnatuhorized(response, "User not found for the provided JWT");
                     return;
                 }
             }

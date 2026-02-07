@@ -48,7 +48,7 @@ public class RefreshTokenService {
 
     @Transactional
     public void refreshAccessToken(HttpServletRequest request, HttpServletResponse response){
-        String cookieValue = recoverToken(request);
+        String cookieValue = recoverToken(request, true);
 
         String[] parts = cookieValue.split("\\.");
         if(parts.length != 2){
@@ -60,13 +60,7 @@ public class RefreshTokenService {
         RefreshToken refreshToken = repository.findById(tokenId)
         .orElseThrow(() -> new RefreshTokenNotFoundException("Refresh token not found in database"));
 
-        if(!passwordEncoder.matches(rawToken, refreshToken.getTokenHash())) {
-            throw new RefreshTokenDontMatchRaw("Refresh token don't match with stored in database");
-        }
-
-        if(isTokenExpired(refreshToken) || refreshToken.getRevokedAt() != null){
-            throw new RefreshTokenExpiredException("Refresh token expired or already revoked");
-        }
+        isNotMatchingOrExpired(refreshToken, rawToken, true);
 
         refreshToken.setRevokedAt(Timestamp.from(Instant.now()));
         repository.save(refreshToken);
@@ -77,8 +71,71 @@ public class RefreshTokenService {
 
     }
 
+    public void revokeRefreshToken(HttpServletRequest request, HttpServletResponse response){
+        clearRefreshTokenCookie(response);
+        String cookieValue = recoverToken(request, false);
+        if(cookieValue == null){
+            return;
+        }
+        
+        String[] parts = cookieValue.split("\\.");
+        if(parts.length != 2){
+            return;
+        }
+
+        UUID tokenId = Optional.ofNullable(parts[0])
+                .map(idStr -> {
+                    try {
+                        return UUID.fromString(idStr);
+                    } catch (IllegalArgumentException e) {
+                        return null;
+                    }
+                })
+                .orElse(null);
+        if(tokenId == null) return;
+
+        String rawToken = parts[1];
+
+        Optional<RefreshToken> refreshToken = repository.findById(tokenId);
+
+        if(refreshToken.isEmpty()) return;
+
+        boolean isNotMatchingOrExpired = isNotMatchingOrExpired(refreshToken.get(), rawToken, false);
+        if(isNotMatchingOrExpired) return;
+
+        refreshToken.get().setRevokedAt(Timestamp.from(Instant.now()));
+        repository.save(refreshToken.get());
+    }
+
     public boolean isTokenExpired(RefreshToken token) {
         return token.getExpiresAt().before(Timestamp.from(Instant.now()));
+    }
+
+    public String recoverToken(HttpServletRequest request, boolean throwIfNotFound){
+        Optional<String> token = Optional.ofNullable(request.getCookies())
+                .flatMap(cookies -> Arrays.stream(cookies)
+                        .filter(cookie -> "refreshToken".equals(cookie.getName()))
+                        .findFirst())
+                .map(Cookie::getValue);
+
+        if(throwIfNotFound){
+            return token.orElseThrow(() -> new RefreshTokenNotFoundException("Refresh token not found in cookies"));
+        }else{
+            return token.orElse(null);
+        }
+    }
+
+    private boolean isNotMatchingOrExpired(RefreshToken refreshToken, String rawToken, boolean throwIfExpired){
+        if(!passwordEncoder.matches(rawToken, refreshToken.getTokenHash())) {
+            if(!throwIfExpired) return true;
+            throw new RefreshTokenDontMatchRaw("Refresh token don't match with stored in database");
+        }
+
+        if(isTokenExpired(refreshToken) || refreshToken.getRevokedAt() != null){
+            if(!throwIfExpired) return true;
+            throw new RefreshTokenExpiredException("Refresh token expired or already revoked");
+        }
+        return false;
     }
 
     private static String generateOpaqueToken() {
@@ -86,13 +143,15 @@ public class RefreshTokenService {
         secureRandom.nextBytes(randomBytes);
         return base64Encoder.encodeToString(randomBytes);
     }
-    
-    public String recoverToken(HttpServletRequest request){
-        return Optional.ofNullable(request.getCookies())
-                .flatMap(cookies -> Arrays.stream(cookies)
-                        .filter(cookie -> "refreshToken".equals(cookie.getName()))
-                        .findFirst())
-                .map(Cookie::getValue)
-                .orElseThrow(() -> new RefreshTokenNotFoundException("Refresh token not found"));
+
+    private void clearRefreshTokenCookie(HttpServletResponse response){
+        Cookie cookie = new Cookie("refreshToken", "");
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(0); // Expire immediately
+
+        response.addCookie(cookie);
     }
+
 }

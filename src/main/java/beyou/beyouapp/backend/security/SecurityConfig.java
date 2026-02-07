@@ -1,6 +1,5 @@
 package beyou.beyouapp.backend.security;
 
-import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -39,14 +38,6 @@ public class SecurityConfig {
                         .authenticated()
                 )
                 .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
-                .logout(logout -> logout
-                        .logoutUrl("/logout")
-                        .invalidateHttpSession(true)
-                        .clearAuthentication(true)
-                        .deleteCookies("jwt")
-                        .logoutSuccessHandler(((request, response, authentication) ->
-                                response.setStatus(HttpServletResponse.SC_OK)))
-                )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
         return http.build();
