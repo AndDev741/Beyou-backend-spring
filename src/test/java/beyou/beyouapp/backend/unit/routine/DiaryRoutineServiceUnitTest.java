@@ -181,9 +181,9 @@ class DiaryRoutineServiceUnitTest {
     }
 
     @Test
-    @DisplayName("Should throw IllegalArgumentException when endTime is before startTime")
-    void shouldThrowExceptionWhenEndTimeBeforeStartTime() {
-        DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(
+    @DisplayName("Should allow overnight routine section time range")
+    void shouldAllowOvernightSectionTimeRange() {
+        DiaryRoutineRequestDTO overnightDTO = new DiaryRoutineRequestDTO(
                 "Rotina Diária",
                 "routine-icon-123",
                 List.of(
@@ -191,19 +191,17 @@ class DiaryRoutineServiceUnitTest {
                                 null,
                                 "Manhã Produtiva",
                                 "morning-icon-456",
-                                LocalTime.of(12, 0),
+                                LocalTime.of(22, 0),
                                 LocalTime.of(6, 0),
                                 List.of(),
                                 List.of(),
                                 false
                                 )));
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> diaryRoutineService.createDiaryRoutine(invalidDTO, new User()));
-        assertEquals("End time must be after start time for routine section: Manhã Produtiva",
-                exception.getMessage());
-        verify(diaryRoutineRepository, never()).save(any());
+        when(diaryRoutineRepository.save(any(DiaryRoutine.class))).thenReturn(diaryRoutine);
+
+        assertDoesNotThrow(() -> diaryRoutineService.createDiaryRoutine(overnightDTO, new User()));
+        verify(diaryRoutineRepository, times(1)).save(any(DiaryRoutine.class));
     }
 
     @Test

@@ -29,6 +29,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DiaryRoutineService {
 
+    private static final int ITEM_TIME_TOLERANCE_MINUTES = 5;
+
     private final DiaryRoutineRepository diaryRoutineRepository;
     private final DiaryRoutineMapper mapper;
     private final CheckItemService checkItemService;
@@ -156,11 +158,6 @@ public class DiaryRoutineService {
             if (section.name() == null || section.name().trim().isEmpty()) {
                 throw new IllegalArgumentException("Routine section name cannot be null or empty");
             }
-            if (section.startTime() != null && section.endTime() != null
-                    && section.endTime().isBefore(section.startTime())) {
-                throw new IllegalArgumentException(
-                        "End time must be after start time for routine section: " + section.name());
-            }
             validateItemTimes(section);
         }
     }
@@ -193,18 +190,68 @@ public class DiaryRoutineService {
         if (endTime == null && startTime == null) {
             return;
         }
-        if (startTime != null && endTime != null && endTime.isBefore(startTime)) {
+
+        LocalTime sectionStart = section.startTime();
+        LocalTime sectionEnd = section.endTime();
+        boolean sectionOvernight = isOvernight(sectionStart, sectionEnd);
+
+        if (startTime != null && endTime != null && !sectionOvernight && endTime.isBefore(startTime)) {
             throw new IllegalArgumentException(
                     "End time must be after start time for " + itemType + " in routine section: " + section.name());
         }
-        if (section.startTime() != null && startTime != null && startTime.isBefore(section.startTime())) {
-            throw new IllegalArgumentException(
-                    "Start time must be within section bounds for " + itemType + " in routine section: " + section.name());
+
+        if (sectionStart != null && sectionEnd != null) {
+            if (startTime != null && !isWithinSectionWithTolerance(startTime, sectionStart, sectionEnd, sectionOvernight)) {
+                throw new IllegalArgumentException(
+                        "Start time must be within section bounds for " + itemType + " in routine section: " + section.name());
+            }
+            if (endTime != null && !isWithinSectionWithTolerance(endTime, sectionStart, sectionEnd, sectionOvernight)) {
+                throw new IllegalArgumentException(
+                        "End time must be within section bounds for " + itemType + " in routine section: " + section.name());
+            }
+        } else {
+            if (sectionStart != null && startTime != null && startTime.isBefore(sectionStart.minusMinutes(ITEM_TIME_TOLERANCE_MINUTES))) {
+                throw new IllegalArgumentException(
+                        "Start time must be within section bounds for " + itemType + " in routine section: " + section.name());
+            }
+            if (sectionEnd != null && endTime != null && endTime.isAfter(sectionEnd.plusMinutes(ITEM_TIME_TOLERANCE_MINUTES))) {
+                throw new IllegalArgumentException(
+                        "End time must be within section bounds for " + itemType + " in routine section: " + section.name());
+            }
         }
-        if (section.endTime() != null && endTime != null && endTime.isAfter(section.endTime())) {
-            throw new IllegalArgumentException(
-                    "End time must be within section bounds for " + itemType + " in routine section: " + section.name());
+    }
+
+    private boolean isOvernight(LocalTime startTime, LocalTime endTime) {
+        return startTime != null && endTime != null && endTime.isBefore(startTime);
+    }
+
+    private boolean isWithinSectionWithTolerance(
+            LocalTime time,
+            LocalTime sectionStart,
+            LocalTime sectionEnd,
+            boolean sectionOvernight
+    ) {
+        int timeMinutes = toMinutes(time);
+        int startMinutes = toMinutes(sectionStart);
+        int endMinutes = toMinutes(sectionEnd);
+
+        int minMinutes = startMinutes - ITEM_TIME_TOLERANCE_MINUTES;
+        int maxMinutes = endMinutes + ITEM_TIME_TOLERANCE_MINUTES;
+
+        if (!sectionOvernight) {
+            minMinutes = Math.max(0, minMinutes);
+            maxMinutes = Math.min(1439, maxMinutes);
+            return timeMinutes >= minMinutes && timeMinutes <= maxMinutes;
         }
+
+        int startWindow = Math.max(0, minMinutes);
+        int endWindow = Math.min(1439, maxMinutes);
+
+        return timeMinutes >= startWindow || timeMinutes <= endWindow;
+    }
+
+    private int toMinutes(LocalTime time) {
+        return time.getHour() * 60 + time.getMinute();
     }
 
     @Transactional
