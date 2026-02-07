@@ -39,6 +39,7 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutin
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
@@ -237,5 +238,25 @@ class RoutineControllerTest {
                 .andExpect(jsonPath("$.refreshItemChecked.check.checked").value(true));
 
         verify(diaryRoutineService).checkAndUncheckGroup(checkRequest, userId);
+    }
+
+    @Test
+    void shouldSkipItemGroup() throws Exception {
+        SkipGroupRequestDTO skipRequest = new SkipGroupRequestDTO(
+                routineId,
+                new TaskGroupRequestDTO(UUID.randomUUID(), null),
+                null,
+                LocalDate.now(),
+                true);
+
+        when(diaryRoutineService.skipOrUnskipGroup(skipRequest, userId)).thenReturn(refreshUiDTO);
+
+        mockMvc.perform(post("/routine/skip")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(skipRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.refreshUser.currentConstance").value(3));
+
+        verify(diaryRoutineService).skipOrUnskipGroup(skipRequest, userId);
     }
 }
