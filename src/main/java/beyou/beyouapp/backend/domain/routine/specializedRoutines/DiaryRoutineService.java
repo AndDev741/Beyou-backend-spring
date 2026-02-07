@@ -7,6 +7,7 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutin
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
 import beyou.beyouapp.backend.user.User;
 import lombok.RequiredArgsConstructor;
@@ -257,6 +258,11 @@ public class DiaryRoutineService {
     @Transactional
     public RefreshUiDTO checkAndUncheckGroup(CheckGroupRequestDTO checkGroupRequestDTO, UUID userId){
         return checkItemService.checkOrUncheckItemGroup(checkGroupRequestDTO);
+    }
+
+    @Transactional
+    public RefreshUiDTO skipOrUnskipGroup(SkipGroupRequestDTO skipGroupRequestDTO, UUID userId){
+        return checkItemService.skipOrUnskipItemGroup(skipGroupRequestDTO);
     }
 
 }

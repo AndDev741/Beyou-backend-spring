@@ -20,6 +20,7 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineSer
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import jakarta.validation.Valid;
@@ -85,5 +86,12 @@ public class RoutineController {
         log.info("Initializing check request");
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return ResponseEntity.ok().body(diaryRoutineService.checkAndUncheckGroup(checkGroupRequestDTO, userAuth.getId()));
+    }
+
+    @PostMapping("/skip")
+    public ResponseEntity<RefreshUiDTO> skipItem(@RequestBody SkipGroupRequestDTO skipGroupRequestDTO){
+        log.info("Initializing skip request");
+        User userAuth = authenticatedUser.getAuthenticatedUser();
+        return ResponseEntity.ok().body(diaryRoutineService.skipOrUnskipGroup(skipGroupRequestDTO, userAuth.getId()));
     }
 }

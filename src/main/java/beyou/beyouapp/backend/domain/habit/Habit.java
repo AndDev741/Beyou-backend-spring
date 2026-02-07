@@ -65,6 +65,8 @@ public class Habit {
     inverseJoinColumns = @JoinColumn(name = "category_id"))
     private List<Category> categories;
 
+    @JsonIgnore
+    @ToString.Exclude
     @OneToMany(mappedBy = "habit", cascade = CascadeType.ALL, orphanRemoval = false)
     private List<HabitGroup> habitGroups;
 

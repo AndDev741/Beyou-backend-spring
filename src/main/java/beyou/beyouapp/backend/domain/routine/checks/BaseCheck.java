@@ -28,5 +28,7 @@ public abstract class BaseCheck {
 
     private boolean checked = false;
 
+    private Boolean skipped = false;
+
     private double xpGenerated;
 }

@@ -5,6 +5,7 @@ import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,7 @@ import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroupService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
@@ -47,6 +49,30 @@ public class CheckItemService {
         }else if(checkGroupDTO.taskGroupDTO() != null){
             TaskGroup taskGroup = itemGroupService.findTaskGroupByDTO(checkGroupDTO.routineId(), checkGroupDTO.taskGroupDTO().taskGroupId());
             return checkOrUncheckTaskGroup(taskGroup, date);
+        }else{
+            throw new RuntimeException("No Item group found in the request");
+        }
+    }
+
+    @Transactional
+    public RefreshUiDTO skipOrUnskipItemGroup(SkipGroupRequestDTO skipGroupDTO) {
+        LocalDate date = skipGroupDTO.date() != null ? skipGroupDTO.date() : LocalDate.now();
+        if(skipGroupDTO.habitGroupDTO() != null){
+            HabitGroup habitGroup = itemGroupService.findHabitGroupByDTO(skipGroupDTO.routineId(), skipGroupDTO.habitGroupDTO().habitGroupId());
+            if (isHabitGroupChecked(habitGroup, date)) {
+                return buildNoOpRefresh(habitGroup.getId(), getHabitGroupChecked(habitGroup, date), date);
+            }
+            return skipGroupDTO.skip()
+                ? skipHabitGroup(habitGroup, date)
+                : unskipHabitGroup(habitGroup, date);
+        }else if(skipGroupDTO.taskGroupDTO() != null){
+            TaskGroup taskGroup = itemGroupService.findTaskGroupByDTO(skipGroupDTO.routineId(), skipGroupDTO.taskGroupDTO().taskGroupId());
+            if (isTaskGroupChecked(taskGroup, date)) {
+                return buildNoOpRefresh(taskGroup.getId(), getTaskGroupChecked(taskGroup, date), date);
+            }
+            return skipGroupDTO.skip()
+                ? skipTaskGroup(taskGroup, date)
+                : unskipTaskGroup(taskGroup, date);
         }else{
             throw new RuntimeException("No Item group found in the request");
         }
@@ -81,6 +107,155 @@ public class CheckItemService {
         }
     }
 
+    private boolean isHabitGroupChecked(HabitGroup habitGroup, LocalDate date) {
+        return habitGroup.getHabitGroupChecks().stream()
+                .anyMatch(check -> check.getCheckDate().equals(date) && check.isChecked());
+    }
+
+    private boolean isTaskGroupChecked(TaskGroup taskGroup, LocalDate date) {
+        return taskGroup.getTaskGroupChecks().stream()
+                .anyMatch(check -> check.getCheckDate().equals(date) && check.isChecked());
+    }
+
+    private HabitGroupCheck getHabitGroupChecked(HabitGroup habitGroup, LocalDate date) {
+        return habitGroup.getHabitGroupChecks().stream()
+                .filter(check -> check.getCheckDate().equals(date) && check.isChecked())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private TaskGroupCheck getTaskGroupChecked(TaskGroup taskGroup, LocalDate date) {
+        return taskGroup.getTaskGroupChecks().stream()
+                .filter(check -> check.getCheckDate().equals(date) && check.isChecked())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private RefreshUiDTO skipHabitGroup(HabitGroup habitGroup, LocalDate date) {
+        DiaryRoutine routine = (DiaryRoutine) habitGroup.getRoutineSection().getRoutine();
+        HabitGroupCheck check = upsertHabitGroupCheck(habitGroup, date, false, true, 0);
+        updateHabitGroupInRoutine(routine, habitGroup);
+        increaseUserConstanceIfNeeded(routine, date);
+
+        return refreshUiDtoBuilder.buildRefreshUiDto(
+                date,
+                null,
+                null,
+                new RefreshItemCheckedDTO(habitGroup.getId(), check)
+        );
+    }
+
+    private RefreshUiDTO unskipHabitGroup(HabitGroup habitGroup, LocalDate date) {
+        DiaryRoutine routine = (DiaryRoutine) habitGroup.getRoutineSection().getRoutine();
+        HabitGroupCheck check = upsertHabitGroupCheck(habitGroup, date, false, false, 0);
+        updateHabitGroupInRoutine(routine, habitGroup);
+        decreaseUserConstanceIfNeeded(routine, date);
+
+        return refreshUiDtoBuilder.buildRefreshUiDto(
+                date,
+                null,
+                null,
+                new RefreshItemCheckedDTO(habitGroup.getId(), check)
+        );
+    }
+
+    private RefreshUiDTO skipTaskGroup(TaskGroup taskGroup, LocalDate date) {
+        DiaryRoutine routine = (DiaryRoutine) taskGroup.getRoutineSection().getRoutine();
+        TaskGroupCheck check = upsertTaskGroupCheck(taskGroup, date, false, true, 0);
+        updateTaskGroupInRoutine(routine, taskGroup);
+        increaseUserConstanceIfNeeded(routine, date);
+
+        return refreshUiDtoBuilder.buildRefreshUiDto(
+                date,
+                null,
+                null,
+                new RefreshItemCheckedDTO(taskGroup.getId(), check)
+        );
+    }
+
+    private RefreshUiDTO unskipTaskGroup(TaskGroup taskGroup, LocalDate date) {
+        DiaryRoutine routine = (DiaryRoutine) taskGroup.getRoutineSection().getRoutine();
+        TaskGroupCheck check = upsertTaskGroupCheck(taskGroup, date, false, false, 0);
+        updateTaskGroupInRoutine(routine, taskGroup);
+        decreaseUserConstanceIfNeeded(routine, date);
+
+        return refreshUiDtoBuilder.buildRefreshUiDto(
+                date,
+                null,
+                null,
+                new RefreshItemCheckedDTO(taskGroup.getId(), check)
+        );
+    }
+
+    private RefreshUiDTO buildNoOpRefresh(UUID groupId, BaseCheck check, LocalDate date) {
+        return refreshUiDtoBuilder.buildRefreshUiDto(
+                date,
+                null,
+                null,
+                new RefreshItemCheckedDTO(groupId, check)
+        );
+    }
+
+    private HabitGroupCheck upsertHabitGroupCheck(
+            HabitGroup habitGroup,
+            LocalDate date,
+            boolean checked,
+            boolean skipped,
+            double xpGenerated
+    ) {
+        HabitGroupCheck check = checkIfHabitGroupIsAlreadyCheckedAndOverride(habitGroup, date);
+        check.setCheckDate(date);
+        check.setCheckTime(LocalTime.now());
+        check.setChecked(checked);
+        check.setSkipped(skipped);
+        check.setXpGenerated(xpGenerated);
+        check.setHabitGroup(habitGroup);
+        habitGroup.getHabitGroupChecks().add(check);
+        return check;
+    }
+
+    private TaskGroupCheck upsertTaskGroupCheck(
+            TaskGroup taskGroup,
+            LocalDate date,
+            boolean checked,
+            boolean skipped,
+            double xpGenerated
+    ) {
+        TaskGroupCheck check = checkIfTaskGroupIsAlreadyCheckedAndOverrideCheck(taskGroup, date);
+        check.setCheckDate(date);
+        check.setCheckTime(LocalTime.now());
+        check.setChecked(checked);
+        check.setSkipped(skipped);
+        check.setXpGenerated(xpGenerated);
+        check.setTaskGroup(taskGroup);
+        taskGroup.getTaskGroupChecks().add(check);
+        return check;
+    }
+
+    private void updateHabitGroupInRoutine(DiaryRoutine routine, HabitGroup habitGroup) {
+        for (RoutineSection section : routine.getRoutineSections()) {
+            List<HabitGroup> habitGroups = section.getHabitGroups();
+            for (int i = 0; i < habitGroups.size(); i++) {
+                HabitGroup current = habitGroups.get(i);
+                if (current.getId().equals(habitGroup.getId())) {
+                    habitGroups.set(i, habitGroup);
+                }
+            }
+        }
+    }
+
+    private void updateTaskGroupInRoutine(DiaryRoutine routine, TaskGroup taskGroup) {
+        for (RoutineSection section : routine.getRoutineSections()) {
+            List<TaskGroup> taskGroups = section.getTaskGroups();
+            for (int i = 0; i < taskGroups.size(); i++) {
+                TaskGroup current = taskGroups.get(i);
+                if (current.getId().equals(taskGroup.getId())) {
+                    taskGroups.set(i, taskGroup);
+                }
+            }
+        }
+    }
+
     private RefreshUiDTO uncheckHabitGroup(HabitGroup habitGroupToUncheck, LocalDate date) {
         DiaryRoutine routine = (DiaryRoutine) habitGroupToUncheck.getRoutineSection().getRoutine();
 
@@ -104,6 +279,7 @@ public class CheckItemService {
         existingCheck.setCheckDate(date);
         existingCheck.setCheckTime(LocalTime.now());
         existingCheck.setChecked(false);
+        existingCheck.setSkipped(false);
         existingCheck.setXpGenerated(0);
         habitGroupToUncheck.getHabitGroupChecks().add(existingCheck);
         
@@ -133,6 +309,7 @@ public class CheckItemService {
         check.setCheckDate(date);
         check.setCheckTime(LocalTime.now());
         check.setChecked(true);
+        check.setSkipped(false);
         check.setXpGenerated(0);
         check.setTaskGroup(taskGroupToCheck);
 
@@ -154,15 +331,7 @@ public class CheckItemService {
 
         //Update entities
         taskGroupToCheck.getTaskGroupChecks().add(check);
-        for (RoutineSection section : routine.getRoutineSections()) {
-            List<TaskGroup> taskGroups = section.getTaskGroups();
-            for (int i = 0; i < taskGroups.size(); i++) {
-                TaskGroup current = taskGroups.get(i);
-                if (current.getId().equals(taskGroupToCheck.getId())) {
-                    taskGroups.set(i, taskGroupToCheck);
-                }
-            }
-        }
+        updateTaskGroupInRoutine(routine, taskGroupToCheck);
 
         increaseUserConstanceIfNeeded(routine, date);
 
@@ -199,20 +368,12 @@ public class CheckItemService {
         check.setCheckDate(date);
         check.setCheckTime(LocalTime.now());
         check.setChecked(true);
+        check.setSkipped(false);
         check.setXpGenerated(newXp);
         check.setHabitGroup(habitGroupToCheckOrUncheck);
 
         habitGroupToCheckOrUncheck.getHabitGroupChecks().add(check);
-
-        for (RoutineSection section : routine.getRoutineSections()) {
-            List<HabitGroup> habitGroups = section.getHabitGroups();
-            for (int i = 0; i < habitGroups.size(); i++) {
-                HabitGroup current = habitGroups.get(i);
-                if (current.getId().equals(habitGroupToCheckOrUncheck.getId())) {
-                    habitGroups.set(i, habitGroupToCheckOrUncheck);
-                }
-            }
-        }
+        updateHabitGroupInRoutine(routine, habitGroupToCheckOrUncheck);
 
         increaseUserConstanceIfNeeded(routine, date);
 
@@ -256,6 +417,7 @@ public class CheckItemService {
         existingCheck.setCheckDate(date);
         existingCheck.setCheckTime(LocalTime.now());
         existingCheck.setChecked(false);
+        existingCheck.setSkipped(false);
         existingCheck.setXpGenerated(0);
         taskGroupUnchecked.getTaskGroupChecks().add(existingCheck);
         
@@ -362,13 +524,21 @@ public class CheckItemService {
 
     private boolean areAllHabitGroupsCompleted(RoutineSection section, LocalDate date) {
         return section.getHabitGroups().stream()
-            .allMatch(group -> isHabitGroupCompleted(group, date));
+            .allMatch(group -> isHabitGroupCompletedOrSkipped(group, date));
     }
 
     private boolean isHabitGroupCompleted(HabitGroup group, LocalDate date) {
         return group.getHabitGroupChecks().stream()
             .anyMatch(check ->
                 check.getCheckDate().equals(date) && check.isChecked()
+            );
+    }
+
+    private boolean isHabitGroupCompletedOrSkipped(HabitGroup group, LocalDate date) {
+        return group.getHabitGroupChecks().stream()
+            .anyMatch(check ->
+                check.getCheckDate().equals(date)
+                    && (check.isChecked() || Boolean.TRUE.equals(check.getSkipped()))
             );
     }
 
@@ -387,13 +557,21 @@ public class CheckItemService {
 
     private boolean areAllTaskGroupsCompleted(RoutineSection section, LocalDate date) {
         return section.getTaskGroups().stream()
-            .allMatch(group -> isTaskGroupCompleted(group, date));
+            .allMatch(group -> isTaskGroupCompletedOrSkipped(group, date));
     }
 
     private boolean isTaskGroupCompleted(TaskGroup group, LocalDate date) {
         return group.getTaskGroupChecks().stream()
             .anyMatch(check ->
                 check.getCheckDate().equals(date) && check.isChecked()
+            );
+    }
+
+    private boolean isTaskGroupCompletedOrSkipped(TaskGroup group, LocalDate date) {
+        return group.getTaskGroupChecks().stream()
+            .anyMatch(check ->
+                check.getCheckDate().equals(date)
+                    && (check.isChecked() || Boolean.TRUE.equals(check.getSkipped()))
             );
     }
 
