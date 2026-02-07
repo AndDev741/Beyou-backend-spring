@@ -82,6 +82,32 @@ public class AuthenticationControllerTest {
                 .andExpect(header().exists("accessToken"));
     }
 
+    @Test
+    public void shouldLogoutUserSuccessfullyAndNotAcceptOtherConnectionWithSameRefreshToken() throws Exception {
+        MvcResult loginResult = simulateLogin();
+        Cookie refreshTokenCookie = loginResult.getResponse().getCookie("refreshToken");
+
+        mockMvc.perform(post("/auth/logout")
+                .cookie(refreshTokenCookie))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Logged out successfully"))
+                .andExpect(cookie().value("refreshToken", ""))
+                .andExpect(cookie().maxAge("refreshToken", 0));
+
+        // Try to refresh token with the same refresh token after logout
+        mockMvc.perform(post("/auth/refresh")
+                .cookie(refreshTokenCookie))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().string("Refresh token expired or already revoked"));
+    }
+
+    @Test
+    public void shouldLogoutEvenWithoutARefreshToken() throws Exception {
+        mockMvc.perform(post("/auth/logout"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Logged out successfully"));
+    }
+
     //Error Messages
 
     @Test

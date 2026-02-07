@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -114,6 +115,24 @@ public class RefreshTokenServiceUnitTest {
 
             // Then
             assertEquals(true, isExpired);
+        }
+
+        @Test
+        void testRevokeRefreshToken() {
+            // Given
+            String cookieValue = tokenId.toString() + ".rawToken";
+
+            when(request.getCookies()).thenReturn(new Cookie[] { new Cookie("refreshToken", cookieValue) });
+            when(repository.findById(tokenId)).thenReturn(Optional.of(refreshToken));
+            when(passwordEncoder.matches("rawToken", refreshToken.getTokenHash())).thenReturn(true);
+
+            // When
+            refreshTokenService.revokeRefreshToken(request, response);
+
+            // Then
+            verify(repository).save(refreshToken);
+            verify(response)
+                    .addCookie(argThat(cookie -> cookie.getName().equals("refreshToken") && cookie.getMaxAge() == 0));
         }
 
     }

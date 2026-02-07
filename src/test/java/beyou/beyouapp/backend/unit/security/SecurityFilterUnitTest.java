@@ -98,7 +98,7 @@ public class SecurityFilterUnitTest {
         securityFilter.doFilterInternal(request, response, filterChain);
 
         verify(response).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        verify(printWriter).write("User not found");
+        verify(printWriter).write("User not found for the provided JWT");
         verify(filterChain, never()).doFilter(request, response);
 
     }
