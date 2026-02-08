@@ -1,7 +1,10 @@
 package beyou.beyouapp.backend.exceptions.category;
 
-public class CategoryNotFound extends RuntimeException {
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
+
+public class CategoryNotFound extends BusinessException {
     public CategoryNotFound(String message) {
-        super(message);
+        super(ErrorKey.CATEGORY_NOT_FOUND, message);
     }
 }

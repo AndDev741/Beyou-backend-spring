@@ -1,14 +1,9 @@
 package beyou.beyouapp.backend.exceptions;
 
-import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
-import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
-import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
 import beyou.beyouapp.backend.exceptions.security.JwtNotFoundException;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenDontMatchRaw;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenExpiredException;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenNotFoundException;
-import beyou.beyouapp.backend.exceptions.task.TaskNotFound;
-import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -43,50 +38,33 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
     }
 
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiErrorResponse> handleBusinessException(BusinessException ex){
+        ApiErrorResponse response = new ApiErrorResponse(ex.getErrorKey().name(), ex.getMessage(), null);
+        return ResponseEntity.badRequest().body(response);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> handleIllegalArgumentException(IllegalArgumentException ex){
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    public ResponseEntity<ApiErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex){
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.INVALID_REQUEST.name(), ex.getMessage(), null);
+        return ResponseEntity.badRequest().body(response);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex){
+    public ResponseEntity<ApiErrorResponse> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex){
         Map<String, String> errors = new HashMap<>();
 
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             errors.put(error.getField(), error.getDefaultMessage());
         }
 
-        return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.INVALID_REQUEST.name(), "Validation failed", errors);
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(HttpClientErrorException.class)
     public ResponseEntity<Map<String, String>> handleHttpClientErrorException(HttpClientErrorException ex){
         return ResponseEntity.badRequest().body(Map.of("error", "error trying login with google, try again"));
-    }
-
-    @ExceptionHandler(UserNotFound.class)
-    public ResponseEntity<Map<String, String>> handleUserNotFoundException(UserNotFound ex){
-        return ResponseEntity.badRequest().body(Map.of("error", "User Not Found"));
-    }
-
-    @ExceptionHandler(CategoryNotFound.class)
-    public ResponseEntity<Map<String, String>> handleCategoryNotFoundException(CategoryNotFound ex){
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
-    }
-
-    @ExceptionHandler(HabitNotFound.class)
-    public ResponseEntity<Map<String, String>> handleHabitNotFoundException(HabitNotFound ex){
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
-    }
-
-    @ExceptionHandler(TaskNotFound.class)
-    public ResponseEntity<Map<String, String>> handleTaskNotFoundException(TaskNotFound ex){
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
-    }
-
-    @ExceptionHandler(DiaryRoutineNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleRoutineNotFoundException(DiaryRoutineNotFoundException ex){
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
     }
 
 }

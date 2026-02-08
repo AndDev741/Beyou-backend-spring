@@ -8,6 +8,8 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutin
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
 import beyou.beyouapp.backend.user.User;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +43,7 @@ public class DiaryRoutineService {
         DiaryRoutine diaryRoutine = diaryRoutineRepository.findById(id)
                 .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
         if(!diaryRoutine.getUser().getId().equals(userId)){
-            throw new DiaryRoutineNotFoundException("The user trying to get its different of the one in the object");
+            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "The user trying to get its different of the one in the object");
         }
         return mapper.toResponse(diaryRoutine);
     }
@@ -52,7 +54,7 @@ public class DiaryRoutineService {
                 .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
 
         if(!diaryRoutine.getUser().getId().equals(userId)){
-            throw new DiaryRoutineNotFoundException("The user trying to get its different of the one in the object");
+            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "The user trying to get its different of the one in the object");
         }
         return diaryRoutine;
     }
@@ -62,7 +64,7 @@ public class DiaryRoutineService {
         DiaryRoutine diaryRoutine = diaryRoutineRepository.findById(id)
                 .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
         if(!diaryRoutine.getUser().getId().equals(userId)){
-            throw new DiaryRoutineNotFoundException("The user trying to get its different of the one in the object");
+            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "The user trying to get its different of the one in the object");
         }
         return diaryRoutine;
     }
@@ -96,7 +98,7 @@ public class DiaryRoutineService {
                 .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
 
         if(!existing.getUser().getId().equals(userId)){
-            throw new DiaryRoutineNotFoundException("The user trying to get its different of the one in the object");
+            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "The user trying to get its different of the one in the object");
         }
 
         existing.setName(dto.name());
@@ -119,7 +121,7 @@ public class DiaryRoutineService {
         Optional<DiaryRoutine> diaryRoutineToDelete = diaryRoutineRepository.findById(id);
 
         if (diaryRoutineToDelete.isEmpty() || !diaryRoutineToDelete.get().getUser().getId().equals(userId)) {
-            throw new DiaryRoutineNotFoundException("The user trying to get its different of the one in the object");
+            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "The user trying to get its different of the one in the object");
         }
 
         diaryRoutineRepository.deleteById(id);
@@ -150,14 +152,20 @@ public class DiaryRoutineService {
 
     private void validateRequestDTO(DiaryRoutineRequestDTO dto) {
         if (dto.name() == null || dto.name().trim().isEmpty()) {
-            throw new IllegalArgumentException("DiaryRoutine name cannot be null or empty");
+            throw new BusinessException(ErrorKey.ROUTINE_NAME_REQUIRED, "DiaryRoutine name cannot be null or empty");
         }
         if (dto.routineSections() == null) {
-            throw new IllegalArgumentException("Routine sections cannot be null");
+            throw new BusinessException(ErrorKey.ROUTINE_SECTION_REQUIRED, "Routine sections cannot be null");
+        }
+        if (dto.routineSections().isEmpty()) {
+            throw new BusinessException(ErrorKey.ROUTINE_SECTION_REQUIRED, "Routine sections cannot be empty");
         }
         for (var section : dto.routineSections()) {
             if (section.name() == null || section.name().trim().isEmpty()) {
-                throw new IllegalArgumentException("Routine section name cannot be null or empty");
+                throw new BusinessException(ErrorKey.ROUTINE_SECTION_NAME_REQUIRED, "Routine section name cannot be null or empty");
+            }
+            if (section.startTime() == null) {
+                throw new BusinessException(ErrorKey.ROUTINE_SECTION_START_REQUIRED, "Routine section start time cannot be null");
             }
             validateItemTimes(section);
         }
@@ -197,26 +205,31 @@ public class DiaryRoutineService {
         boolean sectionOvernight = isOvernight(sectionStart, sectionEnd);
 
         if (startTime != null && endTime != null && !sectionOvernight && endTime.isBefore(startTime)) {
-            throw new IllegalArgumentException(
+            throw new BusinessException(
+                    ErrorKey.ITEM_END_BEFORE_START,
                     "End time must be after start time for " + itemType + " in routine section: " + section.name());
         }
 
         if (sectionStart != null && sectionEnd != null) {
             if (startTime != null && !isWithinSectionWithTolerance(startTime, sectionStart, sectionEnd, sectionOvernight)) {
-                throw new IllegalArgumentException(
+                throw new BusinessException(
+                        ErrorKey.ITEM_START_OUT_OF_SECTION,
                         "Start time must be within section bounds for " + itemType + " in routine section: " + section.name());
             }
             if (endTime != null && !isWithinSectionWithTolerance(endTime, sectionStart, sectionEnd, sectionOvernight)) {
-                throw new IllegalArgumentException(
+                throw new BusinessException(
+                        ErrorKey.ITEM_END_OUT_OF_SECTION,
                         "End time must be within section bounds for " + itemType + " in routine section: " + section.name());
             }
         } else {
             if (sectionStart != null && startTime != null && startTime.isBefore(sectionStart.minusMinutes(ITEM_TIME_TOLERANCE_MINUTES))) {
-                throw new IllegalArgumentException(
+                throw new BusinessException(
+                        ErrorKey.ITEM_START_OUT_OF_SECTION,
                         "Start time must be within section bounds for " + itemType + " in routine section: " + section.name());
             }
             if (sectionEnd != null && endTime != null && endTime.isAfter(sectionEnd.plusMinutes(ITEM_TIME_TOLERANCE_MINUTES))) {
-                throw new IllegalArgumentException(
+                throw new BusinessException(
+                        ErrorKey.ITEM_END_OUT_OF_SECTION,
                         "End time must be within section bounds for " + itemType + " in routine section: " + section.name());
             }
         }

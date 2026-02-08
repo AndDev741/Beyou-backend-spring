@@ -5,6 +5,8 @@ import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
@@ -65,7 +67,7 @@ public class CategoryService {
             categoryRepository.save(newCategory);
             return ResponseEntity.ok().body(Map.of("success", "Category created successfully"));
         }catch(Exception e){
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying create the category"));
+            throw new BusinessException(ErrorKey.CATEGORY_CREATE_FAILED, "Error trying create the category");
         }
     }
 
@@ -73,14 +75,17 @@ public class CategoryService {
         Category categoryToEdit = getCategory(UUID.fromString(categoryEditRequestDTO.categoryId()));
         //If are not from the user in context
         if(!categoryToEdit.getUser().getId().equals(userId)){
-            throw new CategoryNotFound("This category are not from the user in context");
+            throw new BusinessException(ErrorKey.CATEGORY_NOT_OWNED, "This category are not from the user in context");
         }
 
         categoryMapper.updateEntity(categoryToEdit, categoryEditRequestDTO);
 
-        categoryRepository.save(categoryToEdit);
-
-        return ResponseEntity.ok().body(Map.of("success", categoryToEdit));
+        try{
+            categoryRepository.save(categoryToEdit);
+            return ResponseEntity.ok().body(Map.of("success", categoryToEdit));
+        }catch(Exception e){
+            throw new BusinessException(ErrorKey.CATEGORY_EDIT_FAILED, "Error trying to edit the category");
+        }
     }
 
     public ResponseEntity<Map<String, String>> deleteCategory(String categoryId, UUID userId){
@@ -88,18 +93,18 @@ public class CategoryService {
             Category category = categoryRepository.findById(UUID.fromString(categoryId))
                     .orElseThrow(() -> new CategoryNotFound("Category not found"));
             if(!category.getUser().getId().equals(userId)){
-                throw new CategoryNotFound("This category are not from the user in context");
+                throw new BusinessException(ErrorKey.CATEGORY_NOT_OWNED, "This category are not from the user in context");
             }
 
             categoryRepository.delete(category);
             return ResponseEntity.ok().body(Map.of("success", "Category deleted successfully"));
         }catch(DataIntegrityViolationException exception){
-            return ResponseEntity.badRequest().body(Map.of("error", "This category is used in some habit, please delete it first"));
+            throw new BusinessException(ErrorKey.CATEGORY_IN_USE, "This category is used in some habit, please delete it first");
         }catch(CategoryNotFound ex){
             throw new CategoryNotFound(ex.getMessage());
         }
         catch (Exception e){
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to delete the category"));
+            throw new BusinessException(ErrorKey.CATEGORY_DELETE_FAILED, "Error trying to delete the category");
         }
     }
 

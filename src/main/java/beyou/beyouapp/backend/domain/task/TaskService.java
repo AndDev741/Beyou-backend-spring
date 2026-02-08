@@ -19,6 +19,8 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.task.TaskNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
@@ -115,7 +117,7 @@ public class TaskService {
             return ResponseEntity.ok().body(Map.of("success", "Task created Successfully"));
         } catch (Exception e) {
             log.error("Error trying to create task", e);
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to create task"));
+            throw new BusinessException(ErrorKey.TASK_CREATE_FAILED, "Error trying to create task");
         }
     }
 
@@ -123,7 +125,7 @@ public class TaskService {
         Task taskToEdit = getTask(editTaskRequestDTO.taskId());
 
         if(!taskToEdit.getUser().getId().equals(userId)){
-            throw new TaskNotFound("The task isn't of the user on context");
+            throw new BusinessException(ErrorKey.TASK_NOT_OWNED, "The task isn't of the user on context");
         }
 
         taskToEdit.setName(editTaskRequestDTO.name());
@@ -146,7 +148,7 @@ public class TaskService {
         }catch(TaskNotFound e){
             throw e;
         }catch(Exception e){
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to edit task"));
+            throw new BusinessException(ErrorKey.TASK_EDIT_FAILED, "Error trying to edit task");
         }
     }
 
@@ -154,14 +156,14 @@ public class TaskService {
         Task taskToDelete = getTask(taskId);
         log.info("[LOG] Deleting task => {}", taskToDelete);
         if(!taskToDelete.getUser().getId().equals(userId)){
-            throw new TaskNotFound("The task isn't of the user on context");
+            throw new BusinessException(ErrorKey.TASK_NOT_OWNED, "The task isn't of the user on context");
         }
 
         try{
             taskRepository.delete(taskToDelete);
             return ResponseEntity.ok(Map.of("success", "Task deleted Successfully!"));
         }catch(Exception e){
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to delete task"));
+            throw new BusinessException(ErrorKey.TASK_DELETE_FAILED, "Error trying to delete task");
         }
     }
 

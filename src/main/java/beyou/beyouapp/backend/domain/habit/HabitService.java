@@ -16,6 +16,8 @@ import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
@@ -74,14 +76,14 @@ public class HabitService {
             habitRepository.save(newHabit);
             return ResponseEntity.ok().body(Map.of("success", "Habit saved successfully"));
         }catch(Exception e){
-            return ResponseEntity.badRequest().body(Map.of("error", "errorTryingCreateHabit"));
+            throw new BusinessException(ErrorKey.HABIT_CREATE_FAILED, "Error trying to create habit");
         }
     }
 
     public ResponseEntity<Map<String, String>> editHabit(EditHabitDTO editHabitDTO, UUID userId){
         Habit habitToEdit = getHabit(editHabitDTO.habitId());
         if(!habitToEdit.getUser().getId().equals(userId)){
-            throw new HabitNotFound("The habit is not from the user in context");
+            throw new BusinessException(ErrorKey.HABIT_NOT_OWNED, "The habit is not from the user in context");
         }
 
         List<Category> categoriesEdit = new ArrayList<>();
@@ -96,7 +98,7 @@ public class HabitService {
             habitRepository.save(habitToEdit);
             return ResponseEntity.ok().body(Map.of("success", "Habit edited successfully"));
         }catch(Exception e){
-            return ResponseEntity.badRequest().body(Map.of("error", "errorTryingToEdit"));
+            throw new BusinessException(ErrorKey.HABIT_EDIT_FAILED, "Error trying to edit habit");
         }
     }
 
@@ -104,12 +106,12 @@ public class HabitService {
         try{
             Habit habitToDelete = getHabit(habitId);
             if(!habitToDelete.getUser().getId().equals(userId)){
-                throw new HabitNotFound("The habit are not from the user in context");
+                throw new BusinessException(ErrorKey.HABIT_NOT_OWNED, "The habit are not from the user in context");
             }
             habitRepository.delete(habitToDelete);
             return ResponseEntity.ok().body(Map.of("success", "habit deleted successfully"));
         }catch(Exception e){
-            return ResponseEntity.badRequest().body(Map.of("error", "errorTringDelete"));
+            throw new BusinessException(ErrorKey.HABIT_DELETE_FAILED, "Error trying to delete habit");
         }
     }
 

@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +30,7 @@ public class ItemGroupService {
                 .filter(habitGroup -> habitGroup.getId()
                         .equals(habitGroupId))
                 .findFirst()
-                .orElse(null);
+                .orElseThrow(() -> new BusinessException(ErrorKey.ITEM_GROUP_REQUIRED, "Habit group not found in routine"));
     }
 
     @ReadOnlyProperty
@@ -40,6 +42,6 @@ public class ItemGroupService {
                 .flatMap(section -> section.getTaskGroups().stream())
                 .filter(taskGroup -> taskGroup.getId().equals(taskGroupId))
                 .findFirst()
-                .orElse(null);
+                .orElseThrow(() -> new BusinessException(ErrorKey.ITEM_GROUP_REQUIRED, "Task group not found in routine"));
     }
 }

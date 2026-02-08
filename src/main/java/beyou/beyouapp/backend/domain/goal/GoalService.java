@@ -17,6 +17,8 @@ import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
 import beyou.beyouapp.backend.domain.goal.util.GoalXpCalculator;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.goal.GoalNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
@@ -58,7 +60,7 @@ public class GoalService {
             goalRepository.save(goal);
             return ResponseEntity.ok(Map.of("success", "Goal created successfully"));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to create goal"));
+            throw new BusinessException(ErrorKey.GOAL_CREATE_FAILED, "Error trying to create goal");
         }
     }
 
@@ -75,7 +77,7 @@ public class GoalService {
             return ResponseEntity.ok(Map.of("success", "Goal edited successfully"));
         } catch (Exception e) {
             log.error("ERROR TRYING TO EDIT GOAL", e);
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to edit goal"));
+            throw new BusinessException(ErrorKey.GOAL_EDIT_FAILED, "Error trying to edit goal");
         }
     }
 
@@ -87,7 +89,7 @@ public class GoalService {
             goalRepository.delete(goal);
             return ResponseEntity.ok(Map.of("success", "Goal deleted successfully"));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Error trying to delete goal"));
+            throw new BusinessException(ErrorKey.GOAL_DELETE_FAILED, "Error trying to delete goal");
         }
     }
 
@@ -160,7 +162,7 @@ public class GoalService {
 
     public void checkIfGoalIsFromTheUserInContext(Goal goal, UUID userId) {
         if (!goal.getUser().getId().equals(userId)) {
-            throw new GoalNotFound("The goal isn't of the user in context");
+            throw new BusinessException(ErrorKey.GOAL_NOT_OWNED, "The goal isn't of the user in context");
         }
     }
 

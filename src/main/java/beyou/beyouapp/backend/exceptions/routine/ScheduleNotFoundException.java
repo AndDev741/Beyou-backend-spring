@@ -1,7 +1,10 @@
 package beyou.beyouapp.backend.exceptions.routine;
 
-public class ScheduleNotFoundException extends RuntimeException {
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
+
+public class ScheduleNotFoundException extends BusinessException {
     public ScheduleNotFoundException(String message){
-        super(message);
+        super(ErrorKey.SCHEDULE_NOT_FOUND, message);
     }
 }

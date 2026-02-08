@@ -23,6 +23,8 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserService;
@@ -50,7 +52,7 @@ public class CheckItemService {
             TaskGroup taskGroup = itemGroupService.findTaskGroupByDTO(checkGroupDTO.routineId(), checkGroupDTO.taskGroupDTO().taskGroupId());
             return checkOrUncheckTaskGroup(taskGroup, date);
         }else{
-            throw new RuntimeException("No Item group found in the request");
+            throw new BusinessException(ErrorKey.ITEM_GROUP_REQUIRED, "No Item group found in the request");
         }
     }
 
@@ -74,7 +76,7 @@ public class CheckItemService {
                 ? skipTaskGroup(taskGroup, date)
                 : unskipTaskGroup(taskGroup, date);
         }else{
-            throw new RuntimeException("No Item group found in the request");
+            throw new BusinessException(ErrorKey.ITEM_GROUP_REQUIRED, "No Item group found in the request");
         }
     }
 
