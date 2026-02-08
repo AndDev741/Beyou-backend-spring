@@ -104,10 +104,18 @@ public class UserService {
         Optional<User> userOpt = userRepository.findById(userId);
         if(userOpt.isPresent()){
             User user = userOpt.get();
-            user.setName(userEdit.name() != null ? userEdit.name() : user.getName());
-            user.setPerfilPhoto(userEdit.photo() != null ? userEdit.photo() : user.getPerfilPhoto());
-            user.setPerfilPhrase(userEdit.phrase() != null ? userEdit.phrase() : user.getPerfilPhrase());
-            user.setPerfilPhraseAuthor(userEdit.phrase_author() != null ? userEdit.phrase_author() : user.getPerfilPhraseAuthor());
+            if (userEdit.name() != null) {
+                user.setName(userEdit.name().trim());
+            }
+            if (userEdit.photo() != null) {
+                user.setPerfilPhoto(normalizeOptionalString(userEdit.photo()));
+            }
+            if (userEdit.phrase() != null) {
+                user.setPerfilPhrase(normalizeOptionalString(userEdit.phrase()));
+            }
+            if (userEdit.phrase_author() != null) {
+                user.setPerfilPhraseAuthor(normalizeOptionalString(userEdit.phrase_author()));
+            }
             user.setThemeInUse(userEdit.theme() != null ? userEdit.theme() : user.getThemeInUse());
             user.setWidgetsIdInUse(userEdit.widgetsId() != null ? userEdit.widgetsId() : user.getWidgetsIdInUse());
             user.setConstanceConfiguration(userEdit.constanceConfiguration() != null ? userEdit.constanceConfiguration() : user.getConstanceConfiguration());
@@ -122,6 +130,11 @@ public class UserService {
         }else{
             throw new UserNotFound("User not found by id");
         }
+    }
+
+    private String normalizeOptionalString(String value) {
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Transactional

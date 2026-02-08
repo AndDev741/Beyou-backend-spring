@@ -10,11 +10,10 @@ import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
-import lombok.extern.slf4j.Slf4j;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/user")
-@Slf4j
 public class UserController {
     private UserService userService;
     private AuthenticatedUser authenticatedUser;
@@ -25,13 +24,8 @@ public class UserController {
     }
 
     @PutMapping()
-    public UserResponseDTO editUser(@RequestBody UserEditDTO userEdit){
+    public UserResponseDTO editUser(@Valid @RequestBody UserEditDTO userEdit){
         User user = authenticatedUser.getAuthenticatedUser();
-        try {
-            return userService.editUser(userEdit, user.getId());
-        }catch(Exception e){
-            log.info("Error trying to edit user: " + e.getMessage());
-            return null;
-        }
+        return userService.editUser(userEdit, user.getId());
     }
 }

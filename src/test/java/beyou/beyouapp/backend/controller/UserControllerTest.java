@@ -118,6 +118,48 @@ public class UserControllerTest {
         verify(userService).editUser(dto, userId);
     }
 
+    @Test
+    void shouldReturnBadRequestWhenNameIsInvalid() throws Exception {
+        UserEditDTO dto = new UserEditDTO(
+            "a", 
+            null, 
+            null, 
+            null, 
+            null, 
+            null,
+            null,
+            null
+        );
+
+        mockMvc.perform(put("/user")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+            .andExpect(jsonPath("$.details.name").exists());
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenPhotoUrlIsInvalid() throws Exception {
+        UserEditDTO dto = new UserEditDTO(
+            null, 
+            "invalid-url", 
+            null, 
+            null, 
+            null, 
+            null,
+            null,
+            null
+        );
+
+        mockMvc.perform(put("/user")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+            .andExpect(jsonPath("$.details.photo").exists());
+    }
+
     //Exceptions
 
         // @Test
