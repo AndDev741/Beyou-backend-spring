@@ -19,6 +19,8 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSect
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
 import beyou.beyouapp.backend.user.User;
 
@@ -173,9 +175,10 @@ class DiaryRoutineServiceUnitTest {
                 "routine-icon-123",
                 validRequestDTO.routineSections());
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+        BusinessException exception = assertThrows(
+                BusinessException.class,
                 () -> diaryRoutineService.createDiaryRoutine(invalidDTO, new User()));
+        assertEquals(ErrorKey.ROUTINE_NAME_REQUIRED, exception.getErrorKey());
         assertEquals("DiaryRoutine name cannot be null or empty", exception.getMessage());
         verify(diaryRoutineRepository, never()).save(any());
     }
@@ -227,9 +230,10 @@ class DiaryRoutineServiceUnitTest {
                                 false
                         )));
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+        BusinessException exception = assertThrows(
+                BusinessException.class,
                 () -> diaryRoutineService.createDiaryRoutine(invalidDTO, new User()));
+        assertEquals(ErrorKey.ITEM_END_BEFORE_START, exception.getErrorKey());
         assertEquals("End time must be after start time for task in routine section: Manhã Produtiva",
                 exception.getMessage());
         verify(diaryRoutineRepository, never()).save(any());
@@ -258,9 +262,10 @@ class DiaryRoutineServiceUnitTest {
                                 false
                         )));
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+        BusinessException exception = assertThrows(
+                BusinessException.class,
                 () -> diaryRoutineService.createDiaryRoutine(invalidDTO, new User()));
+        assertEquals(ErrorKey.ITEM_END_OUT_OF_SECTION, exception.getErrorKey());
         assertEquals("End time must be within section bounds for habit in routine section: Manhã Produtiva",
                 exception.getMessage());
         verify(diaryRoutineRepository, never()).save(any());
@@ -416,11 +421,13 @@ class DiaryRoutineServiceUnitTest {
     @Test
     @DisplayName("Should throw DiaryRoutineNotFoundException when deleting non-existent routine")
     void shouldThrowNotFoundWhenDeletingNonExistentRoutine() {
-        DiaryRoutineNotFoundException exception = assertThrows(
-                DiaryRoutineNotFoundException.class,
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
                 () -> diaryRoutineService.deleteDiaryRoutine(routineId, userId));
+        assertEquals(ErrorKey.ROUTINE_NOT_OWNED, exception.getErrorKey());
         assertEquals("The user trying to get its different of the one in the object", exception.getMessage());
-        // verify(diaryRoutineRepository, times(1)).existsById(routineId);
         verify(diaryRoutineRepository, never()).deleteById(any());
     }
 

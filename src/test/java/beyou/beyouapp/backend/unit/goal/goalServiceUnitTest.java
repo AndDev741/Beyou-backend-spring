@@ -32,6 +32,8 @@ import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
 import beyou.beyouapp.backend.domain.goal.util.GoalXpCalculator;
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.goal.GoalNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
@@ -154,12 +156,10 @@ public class goalServiceUnitTest {
         when(categoryService.getCategory(any(UUID.class))).thenReturn(new Category());
         doThrow(new RuntimeException()).when(goalRepository).save(any(Goal.class));
 
-        ResponseEntity<Map<String, String>> response = goalService.createGoal(dto, user);
-
-        assertEquals(400, response.getStatusCode().value());
-        Map<String, String> body = response.getBody();
-        assertNotNull(body);
-        assertEquals("Error trying to create goal", body.get("error"));
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> goalService.createGoal(dto, user));
+        assertEquals(ErrorKey.GOAL_CREATE_FAILED, exception.getErrorKey());
+        assertEquals("Error trying to create goal", exception.getMessage());
     }
 
     @Test
@@ -203,7 +203,9 @@ public class goalServiceUnitTest {
         goal.setUser(other);
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
 
-        assertThrows(GoalNotFound.class, () -> goalService.editGoal(dto, userId));
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> goalService.editGoal(dto, userId));
+        assertEquals(ErrorKey.GOAL_NOT_OWNED, exception.getErrorKey());
     }
 
     @Test
@@ -216,12 +218,10 @@ public class goalServiceUnitTest {
         when(categoryService.getCategory(any(UUID.class))).thenReturn(new Category());
         doThrow(new RuntimeException()).when(goalRepository).save(goal);
 
-        ResponseEntity<Map<String, String>> response = goalService.editGoal(dto, userId);
-
-        assertEquals(400, response.getStatusCode().value());
-        Map<String, String> body = response.getBody();
-        assertNotNull(body);
-        assertEquals("Error trying to edit goal", body.get("error"));
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> goalService.editGoal(dto, userId));
+        assertEquals(ErrorKey.GOAL_EDIT_FAILED, exception.getErrorKey());
+        assertEquals("Error trying to edit goal", exception.getMessage());
     }
 
     @Test
@@ -251,7 +251,9 @@ public class goalServiceUnitTest {
         goal.setUser(other);
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
 
-        assertThrows(GoalNotFound.class, () -> goalService.deleteGoal(goalId, userId));
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> goalService.deleteGoal(goalId, userId));
+        assertEquals(ErrorKey.GOAL_NOT_OWNED, exception.getErrorKey());
     }
 
     @Test
@@ -259,12 +261,10 @@ public class goalServiceUnitTest {
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
         doThrow(new RuntimeException()).when(goalRepository).delete(goal);
 
-        ResponseEntity<Map<String, String>> response = goalService.deleteGoal(goalId, userId);
-
-        assertEquals(400, response.getStatusCode().value());
-        Map<String, String> body = response.getBody();
-        assertNotNull(body);
-        assertEquals("Error trying to delete goal", body.get("error"));
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> goalService.deleteGoal(goalId, userId));
+        assertEquals(ErrorKey.GOAL_DELETE_FAILED, exception.getErrorKey());
+        assertEquals("Error trying to delete goal", exception.getMessage());
     }
 
     @Test

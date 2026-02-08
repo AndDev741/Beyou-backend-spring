@@ -1,6 +1,6 @@
 package beyou.beyouapp.backend.unit.routine.itemGroup;
 
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
@@ -24,6 +24,8 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.task.Task;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
@@ -62,9 +64,9 @@ class ItemGroupServiceUnitTest {
         DiaryRoutine routine = routineWithGroups(otherGroup, null);
         when(diaryRoutineRepository.findById(routine.getId())).thenReturn(Optional.of(routine));
 
-        HabitGroup result = itemGroupService.findHabitGroupByDTO(routine.getId(), habitGroup.getId());
-
-        assertNull(result);
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> itemGroupService.findHabitGroupByDTO(routine.getId(), habitGroup.getId()));
+        assertEquals(ErrorKey.ITEM_GROUP_REQUIRED, exception.getErrorKey());
     }
 
     @Test
@@ -103,9 +105,9 @@ class ItemGroupServiceUnitTest {
         DiaryRoutine routine = routineWithGroups(null, otherGroup);
         when(diaryRoutineRepository.findById(routine.getId())).thenReturn(Optional.of(routine));
 
-        TaskGroup result = itemGroupService.findTaskGroupByDTO(routine.getId(), taskGroup.getId());
-
-        assertNull(result);
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> itemGroupService.findTaskGroupByDTO(routine.getId(), taskGroup.getId()));
+        assertEquals(ErrorKey.ITEM_GROUP_REQUIRED, exception.getErrorKey());
     }
 
     @Test

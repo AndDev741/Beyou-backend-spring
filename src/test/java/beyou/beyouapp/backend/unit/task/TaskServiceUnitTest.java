@@ -33,6 +33,8 @@ import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.task.TaskNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
@@ -245,7 +247,9 @@ public class TaskServiceUnitTest {
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         EditTaskRequestDTO editTaskRequestDTO = new EditTaskRequestDTO(taskId, "newName", null, null, null, null, null, false);
         
-        assertThrows(TaskNotFound.class, () -> taskService.editTask(editTaskRequestDTO, userId));
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> taskService.editTask(editTaskRequestDTO, userId));
+        assertEquals(ErrorKey.TASK_NOT_OWNED, exception.getErrorKey());
     }
 
     @Test
@@ -265,6 +269,8 @@ public class TaskServiceUnitTest {
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         
-        assertThrows(TaskNotFound.class, () -> taskService.deleteTask(taskId, userId));
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> taskService.deleteTask(taskId, userId));
+        assertEquals(ErrorKey.TASK_NOT_OWNED, exception.getErrorKey());
     }
 }

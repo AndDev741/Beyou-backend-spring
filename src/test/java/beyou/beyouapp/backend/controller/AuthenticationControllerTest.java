@@ -154,7 +154,8 @@ public class AuthenticationControllerTest {
                 .content("{\"name\": \"    \", \"email\": \"newtestbeyou4@gmail.com\", \"password\": \"123456\", " +
                         "\"isGoogleAccount\": false}"))
                 .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
-                .andExpect(jsonPath("$.name").value("Name is Required"));
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.details.name").value("Name is Required"));
     }
 
     @Test
@@ -164,7 +165,8 @@ public class AuthenticationControllerTest {
                         .content("{\"name\": \"a\", \"email\": \"newtestbeyou4@gmail.com\", \"password\": \"123456\", " +
                                 "\"isGoogleAccount\": false}"))
                 .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
-                .andExpect(jsonPath("$.name").value("Name require a minimum of 2 characters"));
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.details.name").value("Name require a minimum of 2 characters"));
     }
 
     @Test
@@ -174,7 +176,8 @@ public class AuthenticationControllerTest {
                         .content("{\"name\": \"namename\", \"email\": \"\", \"password\": \"123456\", " +
                                 "\"isGoogleAccount\": false}"))
                 .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
-                .andExpect(jsonPath("$.email").value("Email is Required"));
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.details.email").value("Email is Required"));
     }
 
     @Test
@@ -184,7 +187,8 @@ public class AuthenticationControllerTest {
                 .content("{\"name\": \"namename\", \"email\": \"email.com\", \"password\": \"123456\", " +
                         "\"isGoogleAccount\": false}"))
                 .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
-                .andExpect(jsonPath("$.email").value("Email is invalid"));
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.details.email").value("Email is invalid"));
     }
 
     @Test
@@ -194,7 +198,8 @@ public class AuthenticationControllerTest {
                         .content("{\"name\": \"namename\", \"email\": \"newtestbeyou4@gmail.com\", \"password\": \"1234\", " +
                                 "\"isGoogleAccount\": false}"))
                 .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
-                .andExpect(jsonPath("$.password").value("Password require a minimum of 6 characters"));
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.details.password").value("Password require a minimum of 6 characters"));
     }
 
     private MvcResult simulateLogin() throws Exception {
