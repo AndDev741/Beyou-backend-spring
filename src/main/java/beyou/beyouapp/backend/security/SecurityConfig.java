@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.security;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -20,6 +21,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
     @Autowired
     SecurityFilter securityFilter;
+
+    @Value("${cors.allowed-pattern}")
+    private String allowedOrigin;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -48,7 +52,7 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
 
         config.setAllowCredentials(true);
-        config.addAllowedOriginPattern("http://localhost:3000");
+        config.addAllowedOriginPattern(allowedOrigin);
         config.addAllowedHeader("*");
         config.addExposedHeader("accessToken");
         config.addAllowedMethod("*");

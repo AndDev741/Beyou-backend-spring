@@ -9,6 +9,7 @@ import java.util.Base64;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,9 @@ public class RefreshTokenService {
     private final TokenService tokenService;
     private static final SecureRandom secureRandom = new SecureRandom();
     private static final Base64.Encoder base64Encoder = Base64.getUrlEncoder();
+
+    @Value("${cookie.secure}")
+    boolean COOKIE_SECURE;
 
     public String createRefreshToken(User user) {
         var token = new RefreshToken();
@@ -147,7 +151,7 @@ public class RefreshTokenService {
     private void clearRefreshTokenCookie(HttpServletResponse response){
         Cookie cookie = new Cookie("refreshToken", "");
         cookie.setHttpOnly(true);
-        cookie.setSecure(true);
+        cookie.setSecure(COOKIE_SECURE);
         cookie.setPath("/");
         cookie.setMaxAge(0); // Expire immediately
 
