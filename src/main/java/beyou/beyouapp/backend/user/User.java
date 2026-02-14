@@ -99,6 +99,8 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)
     private ConstanceConfiguration constanceConfiguration;
 
+    private boolean isTutorialCompleted;
+
     @PrePersist
     protected void onUserCreate(){
         LocalDate now = LocalDate.now();
@@ -111,6 +113,7 @@ public class User implements UserDetails {
         getXpProgress().setLevel(0);
         getXpProgress().setXp(0D);
         setConstanceConfiguration(ConstanceConfiguration.ANY);
+        setTutorialCompleted(false);
     }
 
     @PreUpdate

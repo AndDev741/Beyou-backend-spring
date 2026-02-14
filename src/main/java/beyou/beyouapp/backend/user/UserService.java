@@ -120,6 +120,7 @@ public class UserService {
             user.setWidgetsIdInUse(userEdit.widgetsId() != null ? userEdit.widgetsId() : user.getWidgetsIdInUse());
             user.setConstanceConfiguration(userEdit.constanceConfiguration() != null ? userEdit.constanceConfiguration() : user.getConstanceConfiguration());
             user.setLanguageInUse(userEdit.language() != null ? userEdit.language() : user.getLanguageInUse());
+            user.setTutorialCompleted(userEdit.isTutorialCompleted() != null ? userEdit.isTutorialCompleted() : user.isTutorialCompleted());
 
             try{
                 User saved = userRepository.save(user);

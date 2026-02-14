@@ -159,7 +159,8 @@ public class UserServiceUnitTest {
                 List.of(),
                 "light",
                 ConstanceConfiguration.ANY,
-                "en"
+                "en",
+                null
                 );
 
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -185,7 +186,8 @@ public class UserServiceUnitTest {
                 List.of("widget1E, widget2E"), 
                 null,
                 ConstanceConfiguration.ANY,
-                "en"
+                "en",
+                null
             );
 
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));

@@ -75,13 +75,14 @@ public class UserControllerTest {
     void shouldEditUserSuccessfully() throws Exception {
         UserEditDTO dto = new UserEditDTO(
             "Andree", 
-            "photo", 
+            null, 
             "phrase", 
             "author", 
             List.of("widget1"), 
             "dark",
             ConstanceConfiguration.ANY,
-            "en"
+            "en",
+            true
         );
         when(userService.editUser(dto, userId)).thenReturn(userResponseDTO);
 
@@ -104,7 +105,8 @@ public class UserControllerTest {
             List.of("widgetA", "widgetB"), 
             null,
             ConstanceConfiguration.ANY,
-            "en"
+            "en",
+            null
         );
        
         when(userService.editUser(dto, userId)).thenReturn(userResponseDTO);
@@ -128,6 +130,7 @@ public class UserControllerTest {
             null, 
             null,
             null,
+            null,
             null
         );
 
@@ -147,6 +150,7 @@ public class UserControllerTest {
             null, 
             null, 
             null, 
+            null,
             null,
             null,
             null

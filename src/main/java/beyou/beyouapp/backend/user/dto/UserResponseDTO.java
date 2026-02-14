@@ -21,6 +21,7 @@ public record UserResponseDTO(
         ConstanceConfiguration constanceConfiguration,
         boolean constanceIncreaseToday,
         int maxConstance,
+        boolean isTutorialCompleted,
         String languageInUse
 ) {
 }

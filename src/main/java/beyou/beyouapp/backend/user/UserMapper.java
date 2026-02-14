@@ -27,6 +27,7 @@ public class UserMapper {
             user.getConstanceConfiguration(),
             user.getCompletedDays().contains(LocalDate.now()),
             user.getMaxConstance(),
+            user.isTutorialCompleted(),
             user.getLanguageInUse()
         );
     }

@@ -20,7 +20,8 @@ public record UserEditDTO(
     List<String> widgetsId,
     String theme,
     ConstanceConfiguration constanceConfiguration,
-    String language
+    String language,
+    Boolean isTutorialCompleted
 ) {
     
 }
