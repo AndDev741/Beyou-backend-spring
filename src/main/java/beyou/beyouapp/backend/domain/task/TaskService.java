@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
@@ -152,6 +153,7 @@ public class TaskService {
         }
     }
 
+    @Transactional
     public ResponseEntity<Map<String, String>> deleteTask(UUID taskId, UUID userId){
         Task taskToDelete = getTask(taskId);
         log.info("[LOG] Deleting task => {}", taskToDelete);
@@ -159,12 +161,26 @@ public class TaskService {
             throw new BusinessException(ErrorKey.TASK_NOT_OWNED, "The task isn't of the user on context");
         }
 
+        if (isTaskLinkedToRoutine(taskId, userId)) {
+            throw new BusinessException(ErrorKey.TASK_IN_ROUTINE, "This task is used in some routine, please remove it first");
+        }
+
         try{
             taskRepository.delete(taskToDelete);
             return ResponseEntity.ok(Map.of("success", "Task deleted Successfully!"));
+        }catch(DataIntegrityViolationException e){
+            throw new BusinessException(ErrorKey.TASK_IN_ROUTINE, "This task is used in some routine, please remove it first");
         }catch(Exception e){
             throw new BusinessException(ErrorKey.TASK_DELETE_FAILED, "Error trying to delete task");
         }
+    }
+
+    private boolean isTaskLinkedToRoutine(UUID taskId, UUID userId) {
+        List<DiaryRoutine> routines = diaryRoutineRepository.findAllByUserId(userId);
+        return routines.stream()
+            .flatMap(routine -> routine.getRoutineSections().stream())
+            .flatMap(section -> section.getTaskGroups().stream())
+            .anyMatch(group -> group.getTask() != null && taskId.equals(group.getTask().getId()));
     }
 
     public Task editTask(Task taskToEdit){

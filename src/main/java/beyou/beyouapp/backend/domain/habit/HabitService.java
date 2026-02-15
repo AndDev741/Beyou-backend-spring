@@ -16,14 +16,18 @@ import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @Service
 @Slf4j
@@ -43,6 +47,9 @@ public class HabitService {
 
     @Autowired
     private final HabitMapper habitMapper;
+
+    @Autowired
+    private final DiaryRoutineRepository diaryRoutineRepository;
 
     public Habit getHabit(UUID habitId){
         return habitRepository.findById(habitId)
@@ -102,17 +109,31 @@ public class HabitService {
         }
     }
 
+    @Transactional
     public ResponseEntity<Map<String, String>> deleteHabit(UUID habitId, UUID userId){
+        Habit habitToDelete = getHabit(habitId);
+        if(!habitToDelete.getUser().getId().equals(userId)){
+            throw new BusinessException(ErrorKey.HABIT_NOT_OWNED, "The habit are not from the user in context");
+        }
+        if (isHabitLinkedToRoutine(habitId, userId)) {
+            throw new BusinessException(ErrorKey.HABIT_IN_ROUTINE, "This habit is used in some routine, please remove it first");
+        }
         try{
-            Habit habitToDelete = getHabit(habitId);
-            if(!habitToDelete.getUser().getId().equals(userId)){
-                throw new BusinessException(ErrorKey.HABIT_NOT_OWNED, "The habit are not from the user in context");
-            }
             habitRepository.delete(habitToDelete);
             return ResponseEntity.ok().body(Map.of("success", "habit deleted successfully"));
+        }catch(DataIntegrityViolationException e){
+            throw new BusinessException(ErrorKey.HABIT_IN_ROUTINE, "This habit is used in some routine, please remove it first");
         }catch(Exception e){
             throw new BusinessException(ErrorKey.HABIT_DELETE_FAILED, "Error trying to delete habit");
         }
+    }
+
+    private boolean isHabitLinkedToRoutine(UUID habitId, UUID userId) {
+        List<DiaryRoutine> routines = diaryRoutineRepository.findAllByUserId(userId);
+        return routines.stream()
+            .flatMap(routine -> routine.getRoutineSections().stream())
+            .flatMap(section -> section.getHabitGroups().stream())
+            .anyMatch(group -> group.getHabit() != null && habitId.equals(group.getHabit().getId()));
     }
 
     public Habit editEntity(Habit habitToEdit){
