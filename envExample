@@ -7,3 +7,10 @@ FRONTEND_URL="http://localhost:3000/"
 OAUTH_GOOGLE_URL="https://oauth2.googleapis.com/token"
 USER_INFO_GOOGLE_URL="https://www.googleapis.com/oauth2/v2/userinfo"
 
+MAIL_HOST=
+MAIL_PORT=
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_FROM=
+PASSWORD_RESET_TTL_MINUTES=30
+PASSWORD_RESET_COOLDOWN_MINUTES=5

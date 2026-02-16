@@ -15,6 +15,17 @@ spring:
     hibernate:
       ddl-auto: update
   #      ddl-auto: create-drop  # Uncomment this line to recreate the tables when starting
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 server:
   port: 8099
@@ -41,3 +52,10 @@ google:
 
 frontend:
     url: ${FRONTEND_URL}
+
+mail:
+  from: ${MAIL_FROM:${MAIL_USERNAME}}
+
+password-reset:
+  token-ttl-minutes: ${PASSWORD_RESET_TTL_MINUTES:30}
+  cooldown-minutes: ${PASSWORD_RESET_COOLDOWN_MINUTES:5}

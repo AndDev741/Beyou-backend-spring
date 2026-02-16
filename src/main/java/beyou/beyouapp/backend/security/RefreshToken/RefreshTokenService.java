@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -109,6 +110,17 @@ public class RefreshTokenService {
 
         refreshToken.get().setRevokedAt(Timestamp.from(Instant.now()));
         repository.save(refreshToken.get());
+    }
+
+    @Transactional
+    public void revokeAllForUser(User user){
+        List<RefreshToken> tokens = repository.findAllByUserId(user.getId());
+        if(tokens.isEmpty()) return;
+        Timestamp now = Timestamp.from(Instant.now());
+        for(RefreshToken token : tokens){
+            token.setRevokedAt(now);
+        }
+        repository.saveAll(tokens);
     }
 
     public boolean isTokenExpired(RefreshToken token) {

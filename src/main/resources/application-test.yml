@@ -12,6 +12,17 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
+  mail:
+    host: test
+    port: 25
+    username: test
+    password: test
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
 
 api:
   security:
@@ -28,3 +39,16 @@ google:
 
 frontend:
   url: test
+
+mail:
+  from: test@example.com
+
+password-reset:
+  token-ttl-minutes: 30
+  cooldown-minutes: 1
+
+cookie:
+  secure: false
+
+cors:
+  allowed-pattern: http://localhost:3000

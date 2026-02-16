@@ -36,7 +36,9 @@ public class SecurityConfig {
                             "/auth/register", 
                             "/auth/google",
                             "/auth/refresh",
-                            "/auth/logout"
+                            "/auth/logout",
+                            "/auth/forgot-password",
+                            "/auth/reset-password/**"
                         ).permitAll()
                         .anyRequest()
                         .authenticated()

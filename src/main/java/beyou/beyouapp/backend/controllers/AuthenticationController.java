@@ -1,10 +1,13 @@
 package beyou.beyouapp.backend.controllers;
 
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
+import beyou.beyouapp.backend.security.passwordreset.PasswordResetService;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.UserServiceGoogleOAuth;
+import beyou.beyouapp.backend.user.dto.ForgotPasswordRequestDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
+import beyou.beyouapp.backend.user.dto.ResetPasswordRequestDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -23,6 +26,7 @@ public class AuthenticationController {
     private final UserService userService;
     private final UserServiceGoogleOAuth userServiceGoogleOAuth;
     private final RefreshTokenService refreshTokenService;
+    private final PasswordResetService passwordResetService;
 
     @GetMapping("/verify")
     public ResponseEntity<String> verifyAuthentication(){
@@ -56,6 +60,23 @@ public class AuthenticationController {
         refreshTokenService.revokeRefreshToken(request, response);
         return ResponseEntity.ok("Logged out successfully");
     }
-}
 
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Map<String, Object>> forgotPassword(@RequestBody @Valid ForgotPasswordRequestDTO request){
+        passwordResetService.requestPasswordReset(request.email());
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @GetMapping("/reset-password/validate")
+    public ResponseEntity<Map<String, Object>> validateResetPasswordToken(@RequestParam("token") String token){
+        passwordResetService.validateToken(token);
+        return ResponseEntity.ok(Map.of("valid", true));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Map<String, Object>> resetPassword(@RequestBody @Valid ResetPasswordRequestDTO request){
+        passwordResetService.resetPassword(request.token(), request.password());
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+}
 
