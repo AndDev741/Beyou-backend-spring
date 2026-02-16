@@ -28,6 +28,7 @@ import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
@@ -45,6 +46,9 @@ public class HabitServiceUnitTest {
 
     @Mock
     private CategoryService categoryService;
+
+    @Mock
+    private DiaryRoutineRepository diaryRoutineRepository;
 
     private HabitMapper habitMapper = new HabitMapper();
 
@@ -66,7 +70,7 @@ public class HabitServiceUnitTest {
         habit.setImportance(0);
         habit.setDificulty(1);
 
-        habitService = new HabitService(habitRepository, userRepository, xpByLevelRepository, categoryService, habitMapper);
+        habitService = new HabitService(habitRepository, userRepository, xpByLevelRepository, categoryService, habitMapper, diaryRoutineRepository);
     }
 
     @Test

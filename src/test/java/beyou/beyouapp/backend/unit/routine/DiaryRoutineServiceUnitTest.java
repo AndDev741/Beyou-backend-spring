@@ -466,7 +466,9 @@ class DiaryRoutineServiceUnitTest {
         otherRoutine.setName("Evening Routine");
 
         Schedule schedule = new Schedule();
-        schedule.setDays((Set<WeekDay>) Set.of(WeekDay.Monday)); // Will not work in Monday haha!
+        WeekDay today = WeekDay.valueOf(LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH));
+        WeekDay notToday = today == WeekDay.Monday ? WeekDay.Tuesday : WeekDay.Monday;
+        schedule.setDays(Set.of(notToday));
         otherRoutine.setSchedule(schedule);
 
         when(diaryRoutineRepository.findAllByUserId(userId))

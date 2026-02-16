@@ -3,22 +3,32 @@ package beyou.beyouapp.backend.controller;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import beyou.beyouapp.backend.notification.EmailService;
+import beyou.beyouapp.backend.security.passwordreset.PasswordResetToken;
+import beyou.beyouapp.backend.security.passwordreset.PasswordResetTokenRepository;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserService;
+import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -35,6 +45,15 @@ public class AuthenticationControllerTest {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private PasswordResetTokenRepository passwordResetTokenRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @MockBean
+    private EmailService emailService;
 
     @BeforeEach
     void setup() {
@@ -202,6 +221,58 @@ public class AuthenticationControllerTest {
                 .andExpect(jsonPath("$.details.password").value("Password require a minimum of 6 characters"));
     }
 
+    @Test
+    public void shouldRequestPasswordResetSuccessfully() throws Exception {
+        mockMvc.perform(post("/auth/forgot-password")
+                .content("{\"email\": \"testebeyou@gmail.com\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        assertEquals(1, passwordResetTokenRepository.count());
+    }
+
+    @Test
+    public void shouldValidateResetTokenSuccessfully() throws Exception {
+        String token = createResetTokenForUser("testebeyou@gmail.com");
+
+        mockMvc.perform(get("/auth/reset-password/validate")
+                .param("token", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(true));
+    }
+
+    @Test
+    public void shouldResetPasswordSuccessfully() throws Exception {
+        String token = createResetTokenForUser("testebeyou@gmail.com");
+
+        mockMvc.perform(post("/auth/reset-password")
+                .content("{\"token\": \"" + token + "\", \"password\": \"654321\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(post("/auth/login")
+                .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"654321\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void shouldRejectUsedResetToken() throws Exception {
+        String token = createResetTokenForUser("testebeyou@gmail.com");
+
+        mockMvc.perform(post("/auth/reset-password")
+                .content("{\"token\": \"" + token + "\", \"password\": \"654321\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/auth/reset-password/validate")
+                .param("token", token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("PASSWORD_RESET_TOKEN_USED"));
+    }
+
     private MvcResult simulateLogin() throws Exception {
         return mockMvc.perform(post("/auth/login")
                         .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
@@ -209,5 +280,17 @@ public class AuthenticationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(header().exists("accessToken"))
                 .andReturn();
+    }
+
+    private String createResetTokenForUser(String email) {
+        User user = userRepository.findByEmail(email).orElseThrow();
+        String rawToken = "raw-reset-token";
+        PasswordResetToken token = new PasswordResetToken();
+        token.setUser(user);
+        token.setCreatedAt(Timestamp.from(Instant.now()));
+        token.setExpiresAt(Timestamp.from(Instant.now().plus(Duration.ofMinutes(30))));
+        token.setTokenHash(passwordEncoder.encode(rawToken));
+        passwordResetTokenRepository.save(token);
+        return token.getId() + "." + rawToken;
     }
 }
