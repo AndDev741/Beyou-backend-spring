@@ -233,6 +233,20 @@ public class AuthenticationControllerTest {
     }
 
     @Test
+    public void shouldReturnSuccessWithoutTokenForGoogleAccountResetRequest() throws Exception {
+        UserRegisterDTO googleUser = new UserRegisterDTO("google", "googleuser@gmail.com", "123456", true);
+        userService.registerUser(googleUser);
+
+        mockMvc.perform(post("/auth/forgot-password")
+                .content("{\"email\": \"googleuser@gmail.com\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        assertEquals(0, passwordResetTokenRepository.count());
+    }
+
+    @Test
     public void shouldValidateResetTokenSuccessfully() throws Exception {
         String token = createResetTokenForUser("testebeyou@gmail.com");
 

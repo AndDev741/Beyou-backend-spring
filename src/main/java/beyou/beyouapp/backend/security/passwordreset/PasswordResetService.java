@@ -14,6 +14,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
@@ -55,7 +57,7 @@ public class PasswordResetService {
 
         User user = userOpt.get();
         if (user.isGoogleAccount()) {
-            throw new BusinessException(ErrorKey.PASSWORD_RESET_NOT_ALLOWED, "Password reset not available for Google accounts");
+            return; // Avoid user enumeration for Google accounts
         }
 
         enforceCooldown(user);
@@ -71,7 +73,8 @@ public class PasswordResetService {
 
         String fullToken = token.getId() + "." + rawToken;
         String resetLink = buildResetLink(fullToken);
-        emailService.sendPasswordResetEmail(user.getEmail(), resetLink, Duration.ofMinutes(tokenTtlMinutes));
+        Duration ttl = Duration.ofMinutes(tokenTtlMinutes);
+        schedulePasswordResetEmail(user, token.getId(), resetLink, ttl);
     }
 
     public void validateToken(String token) {
@@ -130,6 +133,36 @@ public class PasswordResetService {
     private void invalidateActiveTokens(User user) {
         Timestamp now = Timestamp.from(Instant.now());
         passwordResetTokenRepository.invalidateActiveTokens(user.getId(), now, now);
+    }
+
+    private void schedulePasswordResetEmail(User user, UUID tokenId, String resetLink, Duration ttl) {
+        Runnable sendEmail = () -> {
+            try {
+                emailService.sendPasswordResetEmail(user.getEmail(), resetLink, ttl, user.getLanguageInUse());
+            } catch (Exception ex) {
+                log.error("Failed to send password reset email for user {}", user.getId(), ex);
+                cleanupFailedResetToken(tokenId, user.getId());
+            }
+        };
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    sendEmail.run();
+                }
+            });
+        } else {
+            sendEmail.run();
+        }
+    }
+
+    private void cleanupFailedResetToken(UUID tokenId, UUID userId) {
+        try {
+            passwordResetTokenRepository.deleteById(tokenId);
+        } catch (Exception ex) {
+            log.error("Failed to cleanup password reset token {} for user {}", tokenId, userId, ex);
+        }
     }
 
     private String buildResetLink(String token) {
