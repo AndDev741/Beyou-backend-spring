@@ -22,6 +22,9 @@ public class SecurityConfig {
     @Autowired
     SecurityFilter securityFilter;
 
+    @Autowired
+    DocsImportSecretFilter docsImportSecretFilter;
+
     @Value("${cors.allowed-pattern}")
     private String allowedOrigin;
 
@@ -40,10 +43,13 @@ public class SecurityConfig {
                             "/auth/forgot-password",
                             "/auth/reset-password/**"
                         ).permitAll()
+                        .requestMatchers("/docs/admin/**").authenticated()
+                        .requestMatchers("/docs/**").permitAll()
                         .anyRequest()
                         .authenticated()
                 )
                 .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(docsImportSecretFilter, UsernamePasswordAuthenticationFilter.class)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
         return http.build();

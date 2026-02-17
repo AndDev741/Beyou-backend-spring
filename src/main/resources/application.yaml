@@ -59,3 +59,12 @@ mail:
 password-reset:
   token-ttl-minutes: ${PASSWORD_RESET_TTL_MINUTES:30}
   cooldown-minutes: ${PASSWORD_RESET_COOLDOWN_MINUTES:5}
+
+docs:
+  import:
+    repoOwner: ${DOCS_IMPORT_REPO_OWNER:AndDev741}
+    repoName: ${DOCS_IMPORT_REPO_NAME:beyou-arch-design}
+    branch: ${DOCS_IMPORT_BRANCH:main}
+    path: ${DOCS_IMPORT_PATH:architecture}
+    token: ${DOCS_IMPORT_TOKEN:}
+    secret: ${DOCS_IMPORT_SECRET:}

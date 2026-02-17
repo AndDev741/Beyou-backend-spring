@@ -37,7 +37,8 @@ public class SecurityFilter extends OncePerRequestFilter {
             requestURI.startsWith("/auth/google") ||
             requestURI.startsWith("/auth/logout") ||
             requestURI.equals("/auth/forgot-password") ||
-            requestURI.startsWith("/auth/reset-password")
+            requestURI.startsWith("/auth/reset-password") ||
+            (requestURI.startsWith("/docs") && !requestURI.startsWith("/docs/admin"))
         ){
             filterChain.doFilter(request, response);
             return;
