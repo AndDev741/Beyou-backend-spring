@@ -66,5 +66,7 @@ docs:
     repoName: ${DOCS_IMPORT_REPO_NAME:beyou-arch-design}
     branch: ${DOCS_IMPORT_BRANCH:main}
     path: ${DOCS_IMPORT_PATH:architecture}
+    design:
+      path: ${DOCS_IMPORT_DESIGN_PATH:design}
     token: ${DOCS_IMPORT_TOKEN:}
     secret: ${DOCS_IMPORT_SECRET:}
