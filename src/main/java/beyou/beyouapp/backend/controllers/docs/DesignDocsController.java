@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.docs.design;
+package beyou.beyouapp.backend.controllers.docs;
 
 import java.util.List;
 
@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import beyou.beyouapp.backend.docs.design.DesignTopicService;
 import beyou.beyouapp.backend.docs.design.dto.DesignTopicDetailDTO;
 import beyou.beyouapp.backend.docs.design.dto.DesignTopicListItemDTO;
 import lombok.RequiredArgsConstructor;

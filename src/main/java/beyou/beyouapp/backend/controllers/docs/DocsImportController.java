@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.docs;
+package beyou.beyouapp.backend.controllers.docs;
 
 import java.util.Map;
 

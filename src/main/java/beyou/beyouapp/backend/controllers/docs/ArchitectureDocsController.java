@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.docs.architecture;
+package beyou.beyouapp.backend.controllers.docs;
 
 import java.util.List;
 
@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import beyou.beyouapp.backend.docs.architecture.ArchitectureTopicService;
 import beyou.beyouapp.backend.docs.architecture.dto.ArchitectureTopicDetailDTO;
 import beyou.beyouapp.backend.docs.architecture.dto.ArchitectureTopicListItemDTO;
 
