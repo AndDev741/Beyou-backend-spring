@@ -68,5 +68,13 @@ docs:
     path: ${DOCS_IMPORT_PATH:architecture}
     design:
       path: ${DOCS_IMPORT_DESIGN_PATH:design}
+    api:
+      path: ${DOCS_IMPORT_API_PATH:api}
     token: ${DOCS_IMPORT_TOKEN:}
     secret: ${DOCS_IMPORT_SECRET:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"

@@ -21,7 +21,12 @@ public class DocsImportSecretFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(@SuppressWarnings("null") HttpServletRequest request) {
         String path = request.getRequestURI();
-        if (path == null || !path.startsWith("/docs/admin/import")) {
+        if(path == null) return true;
+
+        boolean isDocsImport = path.startsWith("/docs/admin/import");
+        boolean isActuator = path.startsWith("/actuator");
+
+        if (!isDocsImport && !isActuator) {
             return true;
         }
 
