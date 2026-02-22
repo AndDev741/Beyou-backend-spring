@@ -70,6 +70,8 @@ docs:
       path: ${DOCS_IMPORT_DESIGN_PATH:design}
     api:
       path: ${DOCS_IMPORT_API_PATH:api}
+    projects:
+      path: ${DOCS_IMPORT_PROJECTS_PATH:projects}
     token: ${DOCS_IMPORT_TOKEN:}
     secret: ${DOCS_IMPORT_SECRET:}
 

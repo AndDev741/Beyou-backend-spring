@@ -17,6 +17,9 @@ import beyou.beyouapp.backend.docs.architecture.imp.ArchitectureDocsImportServic
 import beyou.beyouapp.backend.docs.design.dto.DesignDocsImportRequestDTO;
 import beyou.beyouapp.backend.docs.design.dto.DesignDocsImportResultDTO;
 import beyou.beyouapp.backend.docs.design.imp.DesignDocsImportService;
+import beyou.beyouapp.backend.docs.project.dto.ProjectDocsImportRequestDTO;
+import beyou.beyouapp.backend.docs.project.dto.ProjectDocsImportResultDTO;
+import beyou.beyouapp.backend.docs.project.imp.ProjectDocsImportService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -27,6 +30,7 @@ public class DocsImportController {
     private final ArchitectureDocsImportService importService;
     private final DesignDocsImportService designImportService;
     private final ApiDocsImportService apiDocsImportService;
+    private final ProjectDocsImportService projectImportService;
 
     @PostMapping("/architecture")
     public ResponseEntity<Map<String, Object>> importArchitecture(
@@ -59,6 +63,19 @@ public class DocsImportController {
         @RequestBody(required = false) ApiDocsImportRequestDTO request
     ) {
         ApiDocsImportResultDTO result = apiDocsImportService.importFromGitHub(request);
+
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "importedTopics", result.importedTopics(),
+            "archivedTopics", result.archivedTopics()
+        ));
+    }
+
+    @PostMapping("/projects")
+    public ResponseEntity<Map<String, Object>> importProjects(
+        @RequestBody(required = false) ProjectDocsImportRequestDTO request
+    ) {
+        ProjectDocsImportResultDTO result = projectImportService.importFromGitHub(request);
 
         return ResponseEntity.ok(Map.of(
             "success", true,
