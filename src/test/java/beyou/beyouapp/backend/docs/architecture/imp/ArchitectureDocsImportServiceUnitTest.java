@@ -51,6 +51,8 @@ public class ArchitectureDocsImportServiceUnitTest {
             1,
             ArchitectureTopicStatus.ACTIVE,
             "flowchart LR",
+            List.of("system-design", "spring"),
+            null,
             List.of(content)
         );
 

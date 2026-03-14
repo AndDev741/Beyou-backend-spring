@@ -40,7 +40,10 @@ public class ArchitectureDocsControllerTest {
             "Overview",
             "Main flow",
             1,
-            Date.valueOf("2026-02-17")
+            Date.valueOf("2026-02-17"),
+            "ACTIVE",
+            "[\"system-design\"]",
+            null
         );
 
         when(topicService.getTopics("pt")).thenReturn(List.of(listItem));
@@ -58,7 +61,10 @@ public class ArchitectureDocsControllerTest {
             "Overview",
             "flowchart LR",
             "## Context",
-            Date.valueOf("2026-02-17")
+            Date.valueOf("2026-02-17"),
+            "ACTIVE",
+            "[\"system-design\"]",
+            null
         );
 
         when(topicService.getTopic("overview", "en")).thenReturn(detail);

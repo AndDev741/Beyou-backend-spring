@@ -2,6 +2,9 @@ package beyou.beyouapp.backend.unit.docs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -23,6 +26,28 @@ public class ArchitectureDocsImportParserTest {
         assertEquals("overview", metadata.key());
         assertEquals(2, metadata.orderIndex());
         assertEquals(ArchitectureTopicStatus.DRAFT, metadata.status());
+        assertTrue(metadata.tags().isEmpty());
+        assertNull(metadata.projectKey());
+    }
+
+    @Test
+    void shouldParseTopicYamlWithTags() {
+        String yaml = "key: overview\norderIndex: 1\nstatus: ACTIVE\ntags:\n  - system-design\n  - spring\n  - react\nprojectKey: beyou-backend\n";
+
+        ArchitectureTopicMetadata metadata = parser.parseTopicYaml(yaml, "fallback");
+
+        assertEquals("overview", metadata.key());
+        assertEquals(List.of("system-design", "spring", "react"), metadata.tags());
+        assertEquals("beyou-backend", metadata.projectKey());
+    }
+
+    @Test
+    void shouldParseTopicYamlWithNullProjectKey() {
+        String yaml = "key: overview\norderIndex: 1\nstatus: ACTIVE\nprojectKey: null\n";
+
+        ArchitectureTopicMetadata metadata = parser.parseTopicYaml(yaml, "fallback");
+
+        assertNull(metadata.projectKey());
     }
 
     @Test

@@ -7,7 +7,10 @@ public record ArchitectureTopicListItemDTO(
     String title,
     String summary,
     int orderIndex,
-    Date updatedAt
+    Date updatedAt,
+    String status,
+    String tags,
+    String projectKey
 ) {
 
 }

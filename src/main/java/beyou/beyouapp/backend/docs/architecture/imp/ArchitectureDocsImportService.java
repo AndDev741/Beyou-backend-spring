@@ -93,6 +93,8 @@ public class ArchitectureDocsImportService {
 
         topic.setOrderIndex(importTopic.orderIndex());
         topic.setStatus(importTopic.status());
+        topic.setTags(convertTagsToJson(importTopic.tags()));
+        topic.setProjectKey(importTopic.projectKey());
 
         List<ArchitectureTopicContent> contents = topic.getContents();
         if (contents == null) {
@@ -248,6 +250,8 @@ public class ArchitectureDocsImportService {
             metadata.orderIndex(),
             metadata.status(),
             diagramContent,
+            metadata.tags(),
+            metadata.projectKey(),
             contents
         );
     }
@@ -319,6 +323,25 @@ public class ArchitectureDocsImportService {
         return locale.trim().toLowerCase();
     }
 
+    private String convertTagsToJson(List<String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < tags.size(); i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            sb.append("\"").append(escapeJson(tags.get(i))).append("\"");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private String escapeJson(String str) {
+        return str.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
     record ImportSource(String owner, String name, String branch, String path, String token) {}
 
     record ArchitectureDocsImportTopic(
@@ -326,6 +349,8 @@ public class ArchitectureDocsImportService {
         int orderIndex,
         ArchitectureTopicStatus status,
         String diagramMermaid,
+        List<String> tags,
+        String projectKey,
         List<ArchitectureDocsImportContent> contents
     ) {}
 

@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.stereotype.Component;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.error.YAMLException;
 
 import beyou.beyouapp.backend.docs.architecture.entity.ArchitectureTopicStatus;
 import beyou.beyouapp.backend.exceptions.docs.DocsImportFailed;
@@ -17,17 +19,41 @@ public class ArchitectureDocsImportParser {
             throw new DocsImportFailed("topic.yaml is empty");
         }
 
-        Map<String, String> values = parseSimpleYaml(content);
+        Map<String, Object> values;
+        try {
+            Yaml yaml = new Yaml();
+            values = yaml.load(content);
+        } catch (YAMLException e) {
+            throw new DocsImportFailed("Invalid YAML format: " + e.getMessage());
+        }
 
-        String key = valueOrFallback(values.get("key"), fallbackKey);
+        if (values == null) {
+            throw new DocsImportFailed("topic.yaml is empty");
+        }
+
+        String key = valueOrFallback((String) values.get("key"), fallbackKey);
         if (key == null || key.isBlank()) {
             throw new DocsImportFailed("topic.yaml missing key");
         }
 
         int orderIndex = parseIntOrDefault(values.get("orderIndex"), 0);
-        ArchitectureTopicStatus status = parseStatus(values.get("status"));
+        ArchitectureTopicStatus status = parseStatus((String) values.get("status"));
 
-        return new ArchitectureTopicMetadata(key.trim(), orderIndex, status);
+        String projectKey = (String) values.get("projectKey");
+        if ("null".equals(projectKey)) {
+            projectKey = null;
+        }
+
+        @SuppressWarnings("unchecked")
+        List<String> tags = (List<String>) values.get("tags");
+
+        return new ArchitectureTopicMetadata(
+            key.trim(),
+            orderIndex,
+            status,
+            tags != null ? tags : List.of(),
+            projectKey
+        );
     }
 
     public MarkdownContent parseMarkdown(String content) {
@@ -67,12 +93,33 @@ public class ArchitectureDocsImportParser {
         );
     }
 
-    private Map<String, String> parseSimpleYaml(String content) {
-        Map<String, String> values = new HashMap<>();
-        for (String line : content.split("\\r?\\n")) {
-            addYamlLine(values, line);
+    private ArchitectureTopicStatus parseStatus(String statusValue) {
+        if (statusValue == null || statusValue.isBlank()) {
+            return ArchitectureTopicStatus.ACTIVE;
         }
-        return values;
+
+        try {
+            return ArchitectureTopicStatus.valueOf(statusValue.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new DocsImportFailed("Invalid status: " + statusValue);
+        }
+    }
+
+    private int parseIntOrDefault(Object value, int fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        if (value instanceof Integer) {
+            return (Integer) value;
+        }
+        if (value instanceof String) {
+            try {
+                return Integer.parseInt(((String) value).trim());
+            } catch (NumberFormatException ex) {
+                throw new DocsImportFailed("Invalid orderIndex: " + value);
+            }
+        }
+        throw new DocsImportFailed("Invalid orderIndex type: " + value.getClass());
     }
 
     private void addYamlLine(Map<String, String> values, String line) {
@@ -103,29 +150,6 @@ public class ArchitectureDocsImportParser {
         return trimmed;
     }
 
-    private ArchitectureTopicStatus parseStatus(String statusValue) {
-        if (statusValue == null || statusValue.isBlank()) {
-            return ArchitectureTopicStatus.ACTIVE;
-        }
-
-        try {
-            return ArchitectureTopicStatus.valueOf(statusValue.trim().toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new DocsImportFailed("Invalid status: " + statusValue);
-        }
-    }
-
-    private int parseIntOrDefault(String value, int fallback) {
-        if (value == null || value.isBlank()) {
-            return fallback;
-        }
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (NumberFormatException ex) {
-            throw new DocsImportFailed("Invalid orderIndex: " + value);
-        }
-    }
-
     private String valueOrFallback(String value, String fallback) {
         if (value == null || value.isBlank()) {
             return fallback;
@@ -140,7 +164,7 @@ public class ArchitectureDocsImportParser {
         return value;
     }
 
-    public record ArchitectureTopicMetadata(String key, int orderIndex, ArchitectureTopicStatus status) {}
+    public record ArchitectureTopicMetadata(String key, int orderIndex, ArchitectureTopicStatus status, List<String> tags, String projectKey) {}
 
     public record MarkdownContent(String title, String summary, String body) {}
 }

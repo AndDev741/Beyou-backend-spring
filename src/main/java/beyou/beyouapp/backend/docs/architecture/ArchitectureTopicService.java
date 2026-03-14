@@ -44,7 +44,10 @@ public class ArchitectureTopicService {
             content.getTitle(),
             content.getDiagramMermaid(),
             content.getDocMarkdown(),
-            content.getUpdatedAt()
+            content.getUpdatedAt(),
+            topic.getStatus().name(),
+            topic.getTags(),
+            topic.getProjectKey()
         );
     }
 
@@ -56,7 +59,10 @@ public class ArchitectureTopicService {
             content.getTitle(),
             content.getSummary(),
             topic.getOrderIndex(),
-            content.getUpdatedAt()
+            content.getUpdatedAt(),
+            topic.getStatus().name(),
+            topic.getTags(),
+            topic.getProjectKey()
         );
     }
 

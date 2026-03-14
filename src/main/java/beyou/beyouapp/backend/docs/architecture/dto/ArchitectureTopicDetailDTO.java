@@ -7,7 +7,10 @@ public record ArchitectureTopicDetailDTO(
     String title,
     String diagramMermaid,
     String docMarkdown,
-    Date updatedAt
+    Date updatedAt,
+    String status,
+    String tags,
+    String projectKey
 ) {
 
 }

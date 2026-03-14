@@ -95,6 +95,8 @@ public class ArchitectureTopicServiceUnitTest {
         newTopic.setKey("overview");
         newTopic.setOrderIndex(1);
         newTopic.setStatus(ArchitectureTopicStatus.ACTIVE);
+        newTopic.setTags("[\"system-design\",\"spring\"]");
+        newTopic.setProjectKey(null);
         newTopic.setContents(List.of(buildContent(newTopic, "en")));
         return newTopic;
     }

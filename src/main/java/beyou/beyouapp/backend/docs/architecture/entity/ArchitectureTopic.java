@@ -47,6 +47,12 @@ public class ArchitectureTopic {
     @Column(nullable = false)
     private ArchitectureTopicStatus status = ArchitectureTopicStatus.ACTIVE;
 
+    @Column(columnDefinition = "TEXT")
+    private String tags;
+
+    @Column(length = 128)
+    private String projectKey;
+
     @OneToMany(mappedBy = "topic", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
     private List<ArchitectureTopicContent> contents = new ArrayList<>();
