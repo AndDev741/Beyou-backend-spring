@@ -1,7 +1,6 @@
 package beyou.beyouapp.backend.security;
 
 import beyou.beyouapp.backend.user.User;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 
 import com.auth0.jwt.algorithms.Algorithm;
@@ -10,9 +9,12 @@ import com.auth0.jwt.exceptions.JWTCreationException;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -58,13 +60,18 @@ public class TokenService {
     public void addJwtTokenToResponse(HttpServletResponse response, String accessToken, String refreshToken){
         response.addHeader("accessToken", accessToken);
 
-        Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(COOKIE_SECURE);
-        cookie.setPath("/");
-        cookie.setMaxAge(15 * 24 * 60 * 60); //15 days
+        ResponseCookie cookie = buildRefreshCookie(refreshToken, Duration.ofDays(15));
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
 
-        response.addCookie(cookie);
+    public ResponseCookie buildRefreshCookie(String value, Duration maxAge) {
+        return ResponseCookie.from("refreshToken", value)
+                .httpOnly(true)
+                .secure(COOKIE_SECURE)
+                .path("/")
+                .maxAge(maxAge)
+                .sameSite("Lax")
+                .build();
     }
 
     private Instant genExpirationDate(){
