@@ -14,9 +14,9 @@ import beyou.beyouapp.backend.docs.api.imp.ApiDocsImportService;
 import beyou.beyouapp.backend.docs.architecture.dto.ArchitectureDocsImportRequestDTO;
 import beyou.beyouapp.backend.docs.architecture.dto.ArchitectureDocsImportResultDTO;
 import beyou.beyouapp.backend.docs.architecture.imp.ArchitectureDocsImportService;
-import beyou.beyouapp.backend.docs.design.dto.DesignDocsImportRequestDTO;
-import beyou.beyouapp.backend.docs.design.dto.DesignDocsImportResultDTO;
-import beyou.beyouapp.backend.docs.design.imp.DesignDocsImportService;
+import beyou.beyouapp.backend.docs.blog.dto.BlogDocsImportRequestDTO;
+import beyou.beyouapp.backend.docs.blog.dto.BlogDocsImportResultDTO;
+import beyou.beyouapp.backend.docs.blog.imp.BlogDocsImportService;
 import beyou.beyouapp.backend.docs.project.dto.ProjectDocsImportRequestDTO;
 import beyou.beyouapp.backend.docs.project.dto.ProjectDocsImportResultDTO;
 import beyou.beyouapp.backend.docs.project.imp.ProjectDocsImportService;
@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
 public class DocsImportController {
 
     private final ArchitectureDocsImportService importService;
-    private final DesignDocsImportService designImportService;
+    private final BlogDocsImportService blogImportService;
     private final ApiDocsImportService apiDocsImportService;
     private final ProjectDocsImportService projectImportService;
 
@@ -45,11 +45,11 @@ public class DocsImportController {
         ));
     }
 
-    @PostMapping("/design")
-    public ResponseEntity<Map<String, Object>> importDesign(
-        @RequestBody(required = false) DesignDocsImportRequestDTO request
+    @PostMapping("/blog")
+    public ResponseEntity<Map<String, Object>> importBlog(
+        @RequestBody(required = false) BlogDocsImportRequestDTO request
     ) {
-        DesignDocsImportResultDTO result = designImportService.importFromGitHub(request);
+        BlogDocsImportResultDTO result = blogImportService.importFromGitHub(request);
 
         return ResponseEntity.ok(Map.of(
             "success", true,

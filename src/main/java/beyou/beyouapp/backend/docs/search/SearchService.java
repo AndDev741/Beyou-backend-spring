@@ -12,8 +12,8 @@ import beyou.beyouapp.backend.docs.api.ApiControllerTopicRepository;
 import beyou.beyouapp.backend.docs.api.entity.ApiControllerStatus;
 import beyou.beyouapp.backend.docs.architecture.ArchitectureTopicRepository;
 import beyou.beyouapp.backend.docs.architecture.entity.ArchitectureTopicStatus;
-import beyou.beyouapp.backend.docs.design.DesignTopicRepository;
-import beyou.beyouapp.backend.docs.design.entity.DesignTopicStatus;
+import beyou.beyouapp.backend.docs.blog.BlogTopicRepository;
+import beyou.beyouapp.backend.docs.blog.entity.BlogTopicStatus;
 import beyou.beyouapp.backend.docs.project.ProjectTopicRepository;
 import beyou.beyouapp.backend.docs.project.entity.ProjectTopicStatus;
 import beyou.beyouapp.backend.docs.search.dto.SearchHighlightDTO;
@@ -26,7 +26,7 @@ import lombok.RequiredArgsConstructor;
 public class SearchService {
 
     private final ArchitectureTopicRepository architectureRepository;
-    private final DesignTopicRepository designRepository;
+    private final BlogTopicRepository blogRepository;
     private final ApiControllerTopicRepository apiRepository;
     private final ProjectTopicRepository projectRepository;
 
@@ -40,8 +40,8 @@ public class SearchService {
         String locale = request.locale() != null ? request.locale() : "en";
         String category = request.category() != null ? request.category() : "all";
         // Normalize plural category names to singular
-        if ("designs".equals(category)) {
-            category = "design";
+        if ("blogs".equals(category)) {
+            category = "blog";
         } else if ("apis".equals(category)) {
             category = "api";
         } else if ("projects".equals(category)) {
@@ -55,8 +55,8 @@ public class SearchService {
         if (category.equals("all") || category.equals("architecture")) {
             allResults.addAll(searchArchitecture(query, locale));
         }
-        if (category.equals("all") || category.equals("design")) {
-            allResults.addAll(searchDesign(query, locale));
+        if (category.equals("all") || category.equals("blog")) {
+            allResults.addAll(searchBlog(query, locale));
         }
         if (category.equals("all") || category.equals("api")) {
             allResults.addAll(searchApi(query, locale));
@@ -97,9 +97,9 @@ public class SearchService {
             .collect(Collectors.toList());
     }
 
-    private List<SearchResultDTO> searchDesign(String query, String locale) {
-        return designRepository
-            .searchByLocaleAndQuery(DesignTopicStatus.ACTIVE, locale, "%" + query + "%")
+    private List<SearchResultDTO> searchBlog(String query, String locale) {
+        return blogRepository
+            .searchByLocaleAndQuery(BlogTopicStatus.ACTIVE, locale, "%" + query + "%")
             .stream()
             .map(topic -> {
                 var content = topic.findContentByLocale(locale)
@@ -108,7 +108,7 @@ public class SearchService {
                 double score = computeScore(content.getTitle(), content.getSummary(), query);
                 var highlight = computeHighlight(content.getTitle(), content.getSummary(), query);
                 return new SearchResultDTO(
-                    "design",
+                    "blog",
                     topic.getKey(),
                     content.getTitle(),
                     content.getSummary(),

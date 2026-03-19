@@ -2,7 +2,7 @@ package beyou.beyouapp.backend.docs.search;
 
 import beyou.beyouapp.backend.docs.api.ApiControllerTopicRepository;
 import beyou.beyouapp.backend.docs.architecture.ArchitectureTopicRepository;
-import beyou.beyouapp.backend.docs.design.DesignTopicRepository;
+import beyou.beyouapp.backend.docs.blog.BlogTopicRepository;
 import beyou.beyouapp.backend.docs.project.ProjectTopicRepository;
 import beyou.beyouapp.backend.docs.search.dto.SearchRequestDTO;
 import beyou.beyouapp.backend.docs.search.dto.SearchResultDTO;
@@ -25,7 +25,7 @@ class SearchServiceTest {
     @Mock
     private ArchitectureTopicRepository architectureRepository;
     @Mock
-    private DesignTopicRepository designRepository;
+    private BlogTopicRepository blogRepository;
     @Mock
     private ApiControllerTopicRepository apiRepository;
     @Mock
@@ -52,7 +52,7 @@ class SearchServiceTest {
         // Given
         SearchRequestDTO request = new SearchRequestDTO("test", "en", "all", 10, 0);
         when(architectureRepository.searchByLocaleAndQuery(any(), any(), any())).thenReturn(List.of());
-        when(designRepository.searchByLocaleAndQuery(any(), any(), any())).thenReturn(List.of());
+        when(blogRepository.searchByLocaleAndQuery(any(), any(), any())).thenReturn(List.of());
         when(apiRepository.searchByLocaleAndQuery(any(), any(), any())).thenReturn(List.of());
         when(projectRepository.searchByLocaleAndQuery(any(), any(), any())).thenReturn(List.of());
 
