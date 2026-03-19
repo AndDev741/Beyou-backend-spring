@@ -49,6 +49,7 @@ public class DiaryRoutineMapper {
 
     public DiaryRoutineResponseDTO toResponse(DiaryRoutine entity) {
         List<DiaryRoutineResponseDTO.RoutineSectionResponseDTO> sectionDTOs = entity.getRoutineSections().stream()
+                .sorted(java.util.Comparator.comparingInt(RoutineSection::getOrderIndex))
                 .map(this::mapSectionToResponse)
                 .collect(Collectors.toList());
 
@@ -61,8 +62,7 @@ public class DiaryRoutineMapper {
                 entity.getXpProgress().getXp(),
                 entity.getXpProgress().getActualLevelXp(),
                 entity.getXpProgress().getNextLevelXp(),
-                entity.getXpProgress().getLevel()
-            );
+                entity.getXpProgress().getLevel());
     }
 
     public List<RoutineSection> mapToRoutineSections(List<RoutineSectionRequestDTO> dtos, DiaryRoutine diaryRoutine) {
@@ -88,6 +88,27 @@ public class DiaryRoutineMapper {
             section.setHabitGroups(mapHabitGroups(dto.habitGroup(), section));
             return section;
         }).collect(Collectors.toList());
+    }
+
+    public RoutineSection mapToRoutineSection(RoutineSectionRequestDTO dto, DiaryRoutine diaryRoutine) {
+        if (dto == null) {
+            return new RoutineSection();
+        }
+
+        RoutineSection section = new RoutineSection();
+        if (dto.id() != null) {
+            section.setId(dto.id());
+        }
+        section.setName(dto.name());
+        section.setIconId(dto.iconId());
+        section.setStartTime(dto.startTime());
+        section.setEndTime(dto.endTime());
+        section.setFavorite(dto.favorite());
+        section.setRoutine(diaryRoutine);
+
+        section.setTaskGroups(mapTaskGroups(dto.taskGroup(), section));
+        section.setHabitGroups(mapHabitGroups(dto.habitGroup(), section));
+        return section;
     }
 
     private List<TaskGroup> mapTaskGroups(List<TaskGroupDTO> taskGroupDTOs, RoutineSection section) {
@@ -148,24 +169,24 @@ public class DiaryRoutineMapper {
     }
 
     private DiaryRoutineResponseDTO.RoutineSectionResponseDTO mapSectionToResponse(RoutineSection section) {
-        List<DiaryRoutineResponseDTO.RoutineSectionResponseDTO.TaskGroupResponseDTO> taskGroupDTOs = section.getTaskGroups().stream()
+        List<DiaryRoutineResponseDTO.RoutineSectionResponseDTO.TaskGroupResponseDTO> taskGroupDTOs = section
+                .getTaskGroups().stream()
                 .map(taskGroup -> new DiaryRoutineResponseDTO.RoutineSectionResponseDTO.TaskGroupResponseDTO(
                         taskGroup.getId(),
                         taskGroup.getTask().getId(),
                         formatTime(taskGroup.getStartTime()),
                         formatTime(taskGroup.getEndTime()),
-                        taskGroup.getTaskGroupChecks()
-                ))
+                        taskGroup.getTaskGroupChecks()))
                 .collect(Collectors.toList());
 
-        List<DiaryRoutineResponseDTO.RoutineSectionResponseDTO.HabitGroupResponseDTO> habitGroupDTOs = section.getHabitGroups().stream()
+        List<DiaryRoutineResponseDTO.RoutineSectionResponseDTO.HabitGroupResponseDTO> habitGroupDTOs = section
+                .getHabitGroups().stream()
                 .map(habitGroup -> new DiaryRoutineResponseDTO.RoutineSectionResponseDTO.HabitGroupResponseDTO(
                         habitGroup.getId(),
                         habitGroup.getHabit().getId(),
                         formatTime(habitGroup.getStartTime()),
                         formatTime(habitGroup.getEndTime()),
-                        habitGroup.getHabitGroupChecks()
-                ))
+                        habitGroup.getHabitGroupChecks()))
                 .collect(Collectors.toList());
 
         return new DiaryRoutineResponseDTO.RoutineSectionResponseDTO(

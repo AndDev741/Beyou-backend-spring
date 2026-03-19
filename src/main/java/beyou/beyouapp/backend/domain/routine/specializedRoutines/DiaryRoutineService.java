@@ -23,7 +23,10 @@ import java.time.LocalTime;
 import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -42,8 +45,9 @@ public class DiaryRoutineService {
     public DiaryRoutineResponseDTO getDiaryRoutineById(UUID id, UUID userId) {
         DiaryRoutine diaryRoutine = diaryRoutineRepository.findById(id)
                 .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
-        if(!diaryRoutine.getUser().getId().equals(userId)){
-            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "The user trying to get its different of the one in the object");
+        if (!diaryRoutine.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED,
+                    "The user trying to get its different of the one in the object");
         }
         return mapper.toResponse(diaryRoutine);
     }
@@ -53,8 +57,9 @@ public class DiaryRoutineService {
         DiaryRoutine diaryRoutine = diaryRoutineRepository.findByScheduleId(scheduleId)
                 .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
 
-        if(!diaryRoutine.getUser().getId().equals(userId)){
-            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "The user trying to get its different of the one in the object");
+        if (!diaryRoutine.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED,
+                    "The user trying to get its different of the one in the object");
         }
         return diaryRoutine;
     }
@@ -63,8 +68,9 @@ public class DiaryRoutineService {
     public DiaryRoutine getDiaryRoutineModelById(UUID id, UUID userId) {
         DiaryRoutine diaryRoutine = diaryRoutineRepository.findById(id)
                 .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
-        if(!diaryRoutine.getUser().getId().equals(userId)){
-            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "The user trying to get its different of the one in the object");
+        if (!diaryRoutine.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED,
+                    "The user trying to get its different of the one in the object");
         }
         return diaryRoutine;
     }
@@ -97,22 +103,60 @@ public class DiaryRoutineService {
         DiaryRoutine existing = diaryRoutineRepository.findById(id)
                 .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
 
-        if(!existing.getUser().getId().equals(userId)){
-            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "The user trying to get its different of the one in the object");
+        if (!existing.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED,
+                    "The user trying to get its different of the one in the object");
         }
 
         existing.setName(dto.name());
         existing.setIconId(dto.iconId());
-        existing.getRoutineSections().clear();
-        List<RoutineSection> newSections = mapper.mapToRoutineSections(dto.routineSections(), existing);
-        existing.getRoutineSections().addAll(newSections);
 
-        DiaryRoutine updated = diaryRoutineRepository.save(existing);
-        return mapper.toResponse(updated);
+        mergeSections(existing, dto.routineSections());
+
+        /*
+         * JPA manage the entity inside the transaction, after commit will be persisted.
+         * After update the spring boot (and hibernate), the merge operation was trowing
+         * a NPE inside the operationQueue
+         */
+        // DiaryRoutine updated = diaryRoutineRepository.save(existing);
+        return mapper.toResponse(existing);
+    }
+
+    private void mergeSections(DiaryRoutine routine, List<RoutineSectionRequestDTO> dtoSections) {
+        Set<UUID> incomingIds = dtoSections.stream()
+                .map(RoutineSectionRequestDTO::id)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        routine.getRoutineSections().removeIf(s -> !incomingIds.contains(s.getId()));
+
+        Map<UUID, RoutineSection> existingMap = routine.getRoutineSections().stream()
+                .collect(Collectors.toMap(RoutineSection::getId, s -> s));
+
+        int index = 0;
+        for (RoutineSectionRequestDTO sectionDTO : dtoSections) {
+            if (sectionDTO.id() != null && existingMap.containsKey(sectionDTO.id())) {
+                // Update current section
+                RoutineSection existing = existingMap.get(sectionDTO.id());
+                existing.setName(sectionDTO.name());
+                existing.setIconId(sectionDTO.iconId());
+                existing.setStartTime(sectionDTO.startTime());
+                existing.setEndTime(sectionDTO.endTime());
+                existing.setFavorite(sectionDTO.favorite());
+                existing.setOrderIndex(index);
+            } else {
+                // Create new section
+                RoutineSection newSection = mapper.mapToRoutineSection(sectionDTO, routine);
+                newSection.setId(null);
+                newSection.setOrderIndex(index);
+                routine.getRoutineSections().add(newSection);
+            }
+            index++;
+        }
     }
 
     @Transactional
-    public void saveRoutine(DiaryRoutine routine){
+    public void saveRoutine(DiaryRoutine routine) {
         diaryRoutineRepository.save(routine);
     }
 
@@ -121,30 +165,32 @@ public class DiaryRoutineService {
         Optional<DiaryRoutine> diaryRoutineToDelete = diaryRoutineRepository.findById(id);
 
         if (diaryRoutineToDelete.isEmpty() || !diaryRoutineToDelete.get().getUser().getId().equals(userId)) {
-            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "The user trying to get its different of the one in the object");
+            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED,
+                    "The user trying to get its different of the one in the object");
         }
 
         diaryRoutineRepository.deleteById(id);
     }
 
     @Transactional
-    public DiaryRoutineResponseDTO getTodayRoutineScheduled(UUID userId){
+    public DiaryRoutineResponseDTO getTodayRoutineScheduled(UUID userId) {
         List<DiaryRoutine> diaryRoutines = diaryRoutineRepository.findAllByUserId(userId);
 
         DiaryRoutine todaysRoutine = null;
         String dayOfWeek = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
         log.info("Day: {} ", dayOfWeek);
         for (DiaryRoutine diaryRoutine : diaryRoutines) {
-            if(diaryRoutine.getSchedule() != null && diaryRoutine.getSchedule().getDays().contains(WeekDay.valueOf(dayOfWeek))){
+            if (diaryRoutine.getSchedule() != null
+                    && diaryRoutine.getSchedule().getDays().contains(WeekDay.valueOf(dayOfWeek))) {
                 log.info("Routine {} are scheduled for today", diaryRoutine.getName());
                 todaysRoutine = diaryRoutine;
             }
         }
 
-        if(todaysRoutine == null){
+        if (todaysRoutine == null) {
             log.warn("NO ROUTINES SCHEDULED FOR TODAY");
             return null;
-        }else{
+        } else {
             return mapper.toResponse(todaysRoutine);
         }
 
@@ -162,10 +208,12 @@ public class DiaryRoutineService {
         }
         for (var section : dto.routineSections()) {
             if (section.name() == null || section.name().trim().isEmpty()) {
-                throw new BusinessException(ErrorKey.ROUTINE_SECTION_NAME_REQUIRED, "Routine section name cannot be null or empty");
+                throw new BusinessException(ErrorKey.ROUTINE_SECTION_NAME_REQUIRED,
+                        "Routine section name cannot be null or empty");
             }
             if (section.startTime() == null) {
-                throw new BusinessException(ErrorKey.ROUTINE_SECTION_START_REQUIRED, "Routine section start time cannot be null");
+                throw new BusinessException(ErrorKey.ROUTINE_SECTION_START_REQUIRED,
+                        "Routine section start time cannot be null");
             }
             validateItemTimes(section);
         }
@@ -177,16 +225,14 @@ public class DiaryRoutineService {
                     section,
                     taskGroup.startTime(),
                     taskGroup.endTime(),
-                    "task"
-            ));
+                    "task"));
         }
         if (section.habitGroup() != null) {
             section.habitGroup().forEach(habitGroup -> validateItemTimeBounds(
                     section,
                     habitGroup.startTime(),
                     habitGroup.endTime(),
-                    "habit"
-            ));
+                    "habit"));
         }
     }
 
@@ -194,8 +240,7 @@ public class DiaryRoutineService {
             RoutineSectionRequestDTO section,
             LocalTime startTime,
             LocalTime endTime,
-            String itemType
-    ) {
+            String itemType) {
         if (endTime == null && startTime == null) {
             return;
         }
@@ -211,26 +256,33 @@ public class DiaryRoutineService {
         }
 
         if (sectionStart != null && sectionEnd != null) {
-            if (startTime != null && !isWithinSectionWithTolerance(startTime, sectionStart, sectionEnd, sectionOvernight)) {
+            if (startTime != null
+                    && !isWithinSectionWithTolerance(startTime, sectionStart, sectionEnd, sectionOvernight)) {
                 throw new BusinessException(
                         ErrorKey.ITEM_START_OUT_OF_SECTION,
-                        "Start time must be within section bounds for " + itemType + " in routine section: " + section.name());
+                        "Start time must be within section bounds for " + itemType + " in routine section: "
+                                + section.name());
             }
             if (endTime != null && !isWithinSectionWithTolerance(endTime, sectionStart, sectionEnd, sectionOvernight)) {
                 throw new BusinessException(
                         ErrorKey.ITEM_END_OUT_OF_SECTION,
-                        "End time must be within section bounds for " + itemType + " in routine section: " + section.name());
+                        "End time must be within section bounds for " + itemType + " in routine section: "
+                                + section.name());
             }
         } else {
-            if (sectionStart != null && startTime != null && startTime.isBefore(sectionStart.minusMinutes(ITEM_TIME_TOLERANCE_MINUTES))) {
+            if (sectionStart != null && startTime != null
+                    && startTime.isBefore(sectionStart.minusMinutes(ITEM_TIME_TOLERANCE_MINUTES))) {
                 throw new BusinessException(
                         ErrorKey.ITEM_START_OUT_OF_SECTION,
-                        "Start time must be within section bounds for " + itemType + " in routine section: " + section.name());
+                        "Start time must be within section bounds for " + itemType + " in routine section: "
+                                + section.name());
             }
-            if (sectionEnd != null && endTime != null && endTime.isAfter(sectionEnd.plusMinutes(ITEM_TIME_TOLERANCE_MINUTES))) {
+            if (sectionEnd != null && endTime != null
+                    && endTime.isAfter(sectionEnd.plusMinutes(ITEM_TIME_TOLERANCE_MINUTES))) {
                 throw new BusinessException(
                         ErrorKey.ITEM_END_OUT_OF_SECTION,
-                        "End time must be within section bounds for " + itemType + " in routine section: " + section.name());
+                        "End time must be within section bounds for " + itemType + " in routine section: "
+                                + section.name());
             }
         }
     }
@@ -243,8 +295,7 @@ public class DiaryRoutineService {
             LocalTime time,
             LocalTime sectionStart,
             LocalTime sectionEnd,
-            boolean sectionOvernight
-    ) {
+            boolean sectionOvernight) {
         int timeMinutes = toMinutes(time);
         int startMinutes = toMinutes(sectionStart);
         int endMinutes = toMinutes(sectionEnd);
@@ -269,12 +320,12 @@ public class DiaryRoutineService {
     }
 
     @Transactional
-    public RefreshUiDTO checkAndUncheckGroup(CheckGroupRequestDTO checkGroupRequestDTO, UUID userId){
+    public RefreshUiDTO checkAndUncheckGroup(CheckGroupRequestDTO checkGroupRequestDTO, UUID userId) {
         return checkItemService.checkOrUncheckItemGroup(checkGroupRequestDTO);
     }
 
     @Transactional
-    public RefreshUiDTO skipOrUnskipGroup(SkipGroupRequestDTO skipGroupRequestDTO, UUID userId){
+    public RefreshUiDTO skipOrUnskipGroup(SkipGroupRequestDTO skipGroupRequestDTO, UUID userId) {
         return checkItemService.skipOrUnskipItemGroup(skipGroupRequestDTO);
     }
 
