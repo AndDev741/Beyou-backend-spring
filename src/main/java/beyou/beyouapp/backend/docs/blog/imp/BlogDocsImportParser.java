@@ -46,7 +46,7 @@ public class BlogDocsImportParser {
 
         String tags = parseTags(values.get("tags"));
         boolean featured = booleanValue(values.get("featured"), false);
-        Date publishedAt = parsePublishedAt(stringValue(values.get("publishedAt")));
+        Date publishedAt = parsePublishedAt(values.get("publishedAt"));
         String coverColor = parseColor(stringValue(values.get("coverColor")));
         String coverEmoji = stringValue(values.get("coverEmoji"));
         String author = stringValue(values.get("author"));
@@ -172,12 +172,19 @@ public class BlogDocsImportParser {
         return "true".equals(str);
     }
 
-    private Date parsePublishedAt(String value) {
-        if (value == null || value.isBlank()) {
+    private Date parsePublishedAt(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof java.util.Date date) {
+            return new Date(date.getTime());
+        }
+        String str = value.toString().trim();
+        if (str.isBlank()) {
             return null;
         }
         try {
-            LocalDate localDate = LocalDate.parse(value.trim());
+            LocalDate localDate = LocalDate.parse(str);
             return Date.valueOf(localDate);
         } catch (DateTimeParseException ex) {
             throw new DocsImportFailed("Invalid publishedAt date: " + value);
