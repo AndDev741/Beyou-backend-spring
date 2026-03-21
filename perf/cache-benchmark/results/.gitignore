@@ -1,0 +1,6 @@
+# Benchmark result files — machine-specific, not committed
+*.json
+*.txt
+
+# Keep the directory structure
+!.gitkeep
