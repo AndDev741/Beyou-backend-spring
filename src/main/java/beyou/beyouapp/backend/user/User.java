@@ -17,6 +17,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
+import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import beyou.beyouapp.backend.user.enums.UserRole;
 
@@ -99,6 +100,13 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)
     private ConstanceConfiguration constanceConfiguration;
 
+    @Column(nullable = false)
+    private String timezone = "UTC";
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private XpDecayStrategy xpDecayStrategy = XpDecayStrategy.GRADUAL;
+
     private boolean isTutorialCompleted;
 
     @PrePersist
@@ -113,6 +121,8 @@ public class User implements UserDetails {
         getXpProgress().setLevel(0);
         getXpProgress().setXp(0D);
         setConstanceConfiguration(ConstanceConfiguration.ANY);
+        if (this.timezone == null) this.timezone = "UTC";
+        if (this.xpDecayStrategy == null) this.xpDecayStrategy = XpDecayStrategy.GRADUAL;
         setTutorialCompleted(false);
     }
 
