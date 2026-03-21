@@ -156,10 +156,10 @@ function discoverTopics() {
   if (discovered) return;
 
   const endpoints = [
-    { key: "architecture", path: "/docs/architecture/topics" },
-    { key: "api", path: "/docs/api/controllers" },
-    { key: "projects", path: "/docs/projects/topics" },
-    { key: "blog", path: "/docs/blog/topics" },
+    { key: "architecture", path: "/docs/architecture/topics?locale=en" },
+    { key: "api", path: "/docs/api/controllers?locale=en" },
+    { key: "projects", path: "/docs/projects/topics?locale=en" },
+    { key: "blog", path: "/docs/blog/topics?locale=en" },
   ];
 
   for (const ep of endpoints) {
@@ -229,11 +229,11 @@ export default function () {
   // ── Architecture docs ──
   if (shouldRun("architecture")) {
     group("architecture", () => {
-      doGet("/docs/architecture/topics", "GET /docs/architecture/topics", archListLatency);
+      doGet("/docs/architecture/topics?locale=en", "GET /docs/architecture/topics", archListLatency);
 
       const key = pickRandom(topicKeys.architecture);
       if (key) {
-        doGet(`/docs/architecture/topics/${key}`, "GET /docs/architecture/topics/{key}", archGetLatency);
+        doGet(`/docs/architecture/topics/${key}?locale=en`, "GET /docs/architecture/topics/{key}", archGetLatency);
       }
     });
   }
@@ -241,11 +241,11 @@ export default function () {
   // ── API docs ──
   if (shouldRun("api")) {
     group("api", () => {
-      doGet("/docs/api/controllers", "GET /docs/api/controllers", apiListLatency);
+      doGet("/docs/api/controllers?locale=en", "GET /docs/api/controllers", apiListLatency);
 
       const key = pickRandom(topicKeys.api);
       if (key) {
-        doGet(`/docs/api/controllers/${key}`, "GET /docs/api/controllers/{key}", apiGetLatency);
+        doGet(`/docs/api/controllers/${key}?locale=en`, "GET /docs/api/controllers/{key}", apiGetLatency);
       }
     });
   }
@@ -253,11 +253,11 @@ export default function () {
   // ── Project docs ──
   if (shouldRun("projects")) {
     group("projects", () => {
-      doGet("/docs/projects/topics", "GET /docs/projects/topics", projectsListLatency);
+      doGet("/docs/projects/topics?locale=en", "GET /docs/projects/topics", projectsListLatency);
 
       const key = pickRandom(topicKeys.projects);
       if (key) {
-        doGet(`/docs/projects/topics/${key}`, "GET /docs/projects/topics/{key}", projectsGetLatency);
+        doGet(`/docs/projects/topics/${key}?locale=en`, "GET /docs/projects/topics/{key}", projectsGetLatency);
       }
     });
   }
@@ -265,11 +265,11 @@ export default function () {
   // ── Blog docs ──
   if (shouldRun("blog")) {
     group("blog", () => {
-      doGet("/docs/blog/topics", "GET /docs/blog/topics", blogListLatency);
+      doGet("/docs/blog/topics?locale=en", "GET /docs/blog/topics", blogListLatency);
 
       const key = pickRandom(topicKeys.blog);
       if (key) {
-        doGet(`/docs/blog/topics/${key}`, "GET /docs/blog/topics/{key}", blogGetLatency);
+        doGet(`/docs/blog/topics/${key}?locale=en`, "GET /docs/blog/topics/{key}", blogGetLatency);
       }
     });
   }
@@ -278,7 +278,7 @@ export default function () {
   if (shouldRun("search")) {
     group("search", () => {
       const term = pickRandom(SEARCH_TERMS);
-      doGet(`/docs/search?q=${encodeURIComponent(term)}`, "GET /docs/search", searchLatency);
+      doGet(`/docs/search?q=${encodeURIComponent(term)}&locale=en`, "GET /docs/search", searchLatency);
     });
   }
 
