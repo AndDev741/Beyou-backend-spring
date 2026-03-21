@@ -76,7 +76,12 @@ docs:
     secret: ${DOCS_IMPORT_SECRET:}
 
 management:
+  server:
+    port: ${MANAGEMENT_PORT:9091}
   endpoints:
     web:
       exposure:
         include: "*"
+  metrics:
+    tags:
+      application: beyou-backend

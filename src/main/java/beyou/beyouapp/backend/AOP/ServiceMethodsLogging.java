@@ -28,7 +28,7 @@ public class ServiceMethodsLogging {
     @AfterReturning(pointcut = "allUserServiceMethods()", returning = "result")
     public void logAfter(JoinPoint joinPoint, Object result) {
         log.info("[END] Method finish: {} ", joinPoint.getSignature().getName());
-        log.info("[END] Return: {} ", result);
+        log.debug("[END] Return: {} ", result);
     }
 
     @Around("allUserServiceMethods()")

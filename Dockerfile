@@ -6,6 +6,7 @@ RUN mvn -q -DskipTests dependency:go-offline
 FROM base AS dev
 COPY . .
 EXPOSE 8099
+EXPOSE 9091
 CMD ["mvn", "spring-boot:run"]
 
 FROM base AS build
@@ -18,4 +19,5 @@ RUN useradd -ms /bin/bash appuser
 COPY --from=build /app/target/*.jar /app/app.jar
 USER appuser
 EXPOSE 8099
+EXPOSE 9091
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

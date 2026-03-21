@@ -64,7 +64,7 @@ const WRITE_RATIO = envNum("WRITE_RATIO", 0.05);
 const P95_MS = envNum("P95_MS", 300);
 const ERR_RATE = envNum("ERR_RATE", 0.02);
 const SCENARIOS_FILTER = env("SCENARIOS", "all");
-const SEED_DATA = envBool("SEED_DATA", false);
+const SEED_DATA = envBool("SEED_DATA", true);
 
 // ─── Profiles ─────────────────────────────────────────────────────────────────
 

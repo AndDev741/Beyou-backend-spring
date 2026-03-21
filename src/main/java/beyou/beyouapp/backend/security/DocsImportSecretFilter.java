@@ -24,9 +24,8 @@ public class DocsImportSecretFilter extends OncePerRequestFilter {
         if(path == null) return true;
 
         boolean isDocsImport = path.startsWith("/docs/admin/import");
-        boolean isActuator = path.startsWith("/actuator");
 
-        if (!isDocsImport && !isActuator) {
+        if (!isDocsImport) {
             return true;
         }
 
