@@ -13,7 +13,7 @@ FROM base AS build
 COPY . .
 RUN mvn -DskipTests package
 
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /app
 RUN useradd -ms /bin/bash appuser
 COPY --from=build /app/target/*.jar /app/app.jar
