@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.docs.architecture;
 
 import java.util.List;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ public class ArchitectureTopicService {
     private final ArchitectureTopicRepository topicRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "architectureTopics", key = "#locale")
     public List<ArchitectureTopicListItemDTO> getTopics(String locale) {
         String normalizedLocale = normalizeLocale(locale);
 
@@ -31,6 +33,7 @@ public class ArchitectureTopicService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "architectureTopic", key = "#key + '_' + #locale")
     public ArchitectureTopicDetailDTO getTopic(String key, String locale) {
         String normalizedLocale = normalizeLocale(locale);
 

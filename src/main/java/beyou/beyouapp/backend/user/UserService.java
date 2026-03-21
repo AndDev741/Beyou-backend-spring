@@ -39,6 +39,7 @@ public class UserService {
         return ResponseEntity.ok().body("authenticated");
     }
 
+    //Used in a test
     public Optional<User> getUser(String email){
         try{
             return userRepository.findByEmail(email);
@@ -47,6 +48,7 @@ public class UserService {
         }
     }
 
+    //Used by refresh XP service
     public User findUserById (UUID userId) {
         return userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFound("User not found by id"));

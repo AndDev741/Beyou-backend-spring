@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.docs.blog;
 
 import java.util.List;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,7 @@ public class BlogTopicService {
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "blogTopics", key = "#locale + '_' + #category + '_' + #tag")
     public List<BlogTopicListItemDTO> getTopics(String locale, String category, String tag) {
         String normalizedLocale = normalizeLocale(locale);
         BlogTopicCategory parsedCategory = parseCategory(category);
@@ -39,6 +41,7 @@ public class BlogTopicService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "blogTopic", key = "#key + '_' + #locale")
     public BlogTopicDetailDTO getTopic(String key, String locale) {
         String normalizedLocale = normalizeLocale(locale);
 

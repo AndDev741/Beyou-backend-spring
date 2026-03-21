@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.docs.project;
 
 import java.util.List;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ public class ProjectTopicService {
     private final ProjectTopicRepository topicRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "projectsTopics", key = "#locale")
     public List<ProjectTopicListItemDTO> getTopics(String locale) {
         String normalizedLocale = normalizeLocale(locale);
 
@@ -31,6 +33,7 @@ public class ProjectTopicService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "projectsTopic", key = "#key + '_' + #locale")
     public ProjectTopicDetailDTO getTopic(String key, String locale) {
         String normalizedLocale = normalizeLocale(locale);
 

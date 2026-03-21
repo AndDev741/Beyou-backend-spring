@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -58,6 +59,7 @@ public class ArchitectureDocsImportService {
     private String repoToken;
 
     @Transactional
+    @CacheEvict(cacheNames = {"architectureTopics", "architectureTopic"}, allEntries = true)
     public ArchitectureDocsImportResultDTO importFromGitHub(ArchitectureDocsImportRequestDTO request) {
         ImportSource source = resolveSource(request);
         validateSource(source);

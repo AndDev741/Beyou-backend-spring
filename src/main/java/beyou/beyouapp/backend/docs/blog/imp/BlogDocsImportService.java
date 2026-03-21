@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -64,6 +65,7 @@ public class BlogDocsImportService {
     private String repoToken;
 
     @Transactional
+    @CacheEvict(cacheNames = {"blogTopics", "blogTopic"}, allEntries = true)
     public BlogDocsImportResultDTO importFromGitHub(BlogDocsImportRequestDTO request) {
         ImportSource source = resolveSource(request);
         validateSource(source);
