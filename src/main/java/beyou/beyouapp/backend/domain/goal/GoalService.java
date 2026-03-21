@@ -5,12 +5,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
@@ -35,12 +37,14 @@ public class GoalService {
     private final GoalMapper goalMapper;
     private final XpCalculatorService xpCalculatorService;
     private final RefreshUiDtoBuilder refreshUiDtoBuilder;
+    private final UserCacheEvictService userCacheEvictService;
 
     public Goal getGoal(UUID goalId) {
         return goalRepository.findById(goalId)
                 .orElseThrow(() -> new GoalNotFound("Goal not found"));
     }
 
+    @Cacheable(cacheNames = "goals", key = "#userId")
     public List<GoalResponseDTO> getAllGoals(UUID userId) {
         return goalRepository.findAllByUserId(userId)
                 .orElseThrow(() -> new UserNotFound("User not found when trying to get goals"))
@@ -58,6 +62,7 @@ public class GoalService {
         Goal goal = goalMapper.toEntity(dto, categories, user);
         try {
             goalRepository.save(goal);
+            userCacheEvictService.evictAllUserCaches(user.getId());
             return ResponseEntity.ok(Map.of("success", "Goal created successfully"));
         } catch (Exception e) {
             throw new BusinessException(ErrorKey.GOAL_CREATE_FAILED, "Error trying to create goal");
@@ -74,6 +79,7 @@ public class GoalService {
         goalMapper.updateEntity(goal, dto, categories);
         try {
             goalRepository.save(goal);
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok(Map.of("success", "Goal edited successfully"));
         } catch (Exception e) {
             log.error("ERROR TRYING TO EDIT GOAL", e);
@@ -87,6 +93,7 @@ public class GoalService {
 
         try {
             goalRepository.delete(goal);
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok(Map.of("success", "Goal deleted successfully"));
         } catch (Exception e) {
             throw new BusinessException(ErrorKey.GOAL_DELETE_FAILED, "Error trying to delete goal");
@@ -110,13 +117,14 @@ public class GoalService {
             removeCompletedOfAGoalAndRemoveXp(goal, xp);
         }
 
+        userCacheEvictService.evictAllUserCaches(userId);
         return refreshUiDtoBuilder.buildRefreshUiDto(
-            LocalDate.now(), 
-            null, 
-            goal.getCategories(), 
+            LocalDate.now(),
+            null,
+            goal.getCategories(),
             null
         );
-    } 
+    }
 
     private void setGoalAsCompletedAndAddXp(Goal goal, double xpReward){
         goal.setComplete(true);   
@@ -141,6 +149,7 @@ public class GoalService {
         goal.setCurrentValue(goal.getCurrentValue() + 1);
         try {
             goalRepository.save(goal);
+            userCacheEvictService.evictAllUserCaches(userId);
             return goalMapper.toResponseDTO(goal);
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -154,6 +163,7 @@ public class GoalService {
         goal.setCurrentValue(goal.getCurrentValue() - 1);
         try {
             goalRepository.save(goal);
+            userCacheEvictService.evictAllUserCaches(userId);
             return goalMapper.toResponseDTO(goal);
         } catch (Exception e) {
             throw new RuntimeException(e);

@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +19,7 @@ import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
@@ -51,11 +53,14 @@ public class HabitService {
     @Autowired
     private final DiaryRoutineRepository diaryRoutineRepository;
 
+    private final UserCacheEvictService userCacheEvictService;
+
     public Habit getHabit(UUID habitId){
         return habitRepository.findById(habitId)
         .orElseThrow(() -> new HabitNotFound("Habit not found"));
     }
 
+    @Cacheable(cacheNames = "habits", key = "#userId")
     public List<HabitResponseDTO> getHabits(UUID userId){
         ArrayList<Habit> habits = habitRepository.findAllByUserId(userId);
         return habits.stream()
@@ -81,6 +86,7 @@ public class HabitService {
 
         try{
             habitRepository.save(newHabit);
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok().body(Map.of("success", "Habit saved successfully"));
         }catch(Exception e){
             throw new BusinessException(ErrorKey.HABIT_CREATE_FAILED, "Error trying to create habit");
@@ -103,6 +109,7 @@ public class HabitService {
         habitMapper.updateEntity(habitToEdit, editHabitDTO, categoriesEdit);
         try{
             habitRepository.save(habitToEdit);
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok().body(Map.of("success", "Habit edited successfully"));
         }catch(Exception e){
             throw new BusinessException(ErrorKey.HABIT_EDIT_FAILED, "Error trying to edit habit");
@@ -120,6 +127,7 @@ public class HabitService {
         }
         try{
             habitRepository.delete(habitToDelete);
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok().body(Map.of("success", "habit deleted successfully"));
         }catch(DataIntegrityViolationException e){
             throw new BusinessException(ErrorKey.HABIT_IN_ROUTINE, "This habit is used in some routine, please remove it first");

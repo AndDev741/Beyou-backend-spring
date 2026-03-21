@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.goal.Goal;
@@ -58,6 +59,9 @@ public class goalServiceUnitTest {
     @Mock
     RefreshUiDtoBuilder refreshUiDtoBuilder;
 
+    @Mock
+    UserCacheEvictService userCacheEvictService;
+
     private GoalMapper goalMapper = new GoalMapper();
 
     GoalService goalService;
@@ -82,7 +86,7 @@ public class goalServiceUnitTest {
         goal.setUser(user);
 
         goalService = new GoalService(goalRepository, categoryService, goalMapper, xpCalculatorService,
-                refreshUiDtoBuilder);
+                refreshUiDtoBuilder, userCacheEvictService);
 
     }
 

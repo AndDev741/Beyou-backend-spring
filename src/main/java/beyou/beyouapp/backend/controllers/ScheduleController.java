@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
+import beyou.beyouapp.backend.domain.routine.schedule.dto.ScheduleResponseDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
@@ -32,7 +33,7 @@ public class ScheduleController {
     private AuthenticatedUser authenticatedUser;
 
     @GetMapping()
-    public List<Schedule> getAllSchedules() {
+    public List<ScheduleResponseDTO> getAllSchedules() {
         User authUser = authenticatedUser.getAuthenticatedUser();
         return scheduleService.findAll(authUser.getId());
     }

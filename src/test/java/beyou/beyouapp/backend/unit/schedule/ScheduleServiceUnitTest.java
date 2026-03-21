@@ -5,7 +5,9 @@ import beyou.beyouapp.backend.domain.routine.schedule.ScheduleRepository;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
+import beyou.beyouapp.backend.domain.routine.schedule.dto.ScheduleResponseDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.exceptions.routine.ScheduleNotFoundException;
@@ -29,14 +31,22 @@ class ScheduleServiceUnitTest {
     @Mock
     private DiaryRoutineService diaryRoutineService;
 
+    @Mock
+    private UserCacheEvictService userCacheEvictService;
+
     @InjectMocks
     private ScheduleService scheduleService;
 
     @Test
     void shouldReturnAllSchedulesForUser() {
         UUID userId = UUID.randomUUID();
-        Schedule schedule1 = new Schedule();
-        Schedule schedule2 = new Schedule();
+        UUID scheduleId1 = UUID.randomUUID();
+        UUID scheduleId2 = UUID.randomUUID();
+        Set<WeekDay> days1 = Set.of(WeekDay.Monday);
+        Set<WeekDay> days2 = Set.of(WeekDay.Friday);
+
+        Schedule schedule1 = new Schedule(scheduleId1, days1);
+        Schedule schedule2 = new Schedule(scheduleId2, days2);
 
         DiaryRoutine routine1 = new DiaryRoutine();
         routine1.setSchedule(schedule1);
@@ -47,11 +57,13 @@ class ScheduleServiceUnitTest {
         when(diaryRoutineService.getAllDiaryRoutinesModels(userId))
                 .thenReturn(List.of(routine1, routine2));
 
-        List<Schedule> result = scheduleService.findAll(userId);
+        List<ScheduleResponseDTO> result = scheduleService.findAll(userId);
 
         assertEquals(2, result.size());
-        assertTrue(result.contains(schedule1));
-        assertTrue(result.contains(schedule2));
+        assertEquals(scheduleId1, result.get(0).id());
+        assertEquals(days1, result.get(0).days());
+        assertEquals(scheduleId2, result.get(1).id());
+        assertEquals(days2, result.get(1).days());
     }
 
     @Test

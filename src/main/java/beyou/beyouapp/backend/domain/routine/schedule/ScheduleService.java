@@ -1,8 +1,11 @@
 package beyou.beyouapp.backend.domain.routine.schedule;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
+import beyou.beyouapp.backend.domain.routine.schedule.dto.ScheduleResponseDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
@@ -19,16 +22,16 @@ public class ScheduleService {
 
     private final ScheduleRepository scheduleRepository;
     private final DiaryRoutineService diaryRoutineService;
+    private final UserCacheEvictService userCacheEvictService;
 
-    public List<Schedule> findAll(UUID userId) {
-        List<Schedule> schedules = new ArrayList<>();
+    @Cacheable(cacheNames = "schedules", key = "#userId")
+    public List<ScheduleResponseDTO> findAll(UUID userId) {
         List<DiaryRoutine> routines = diaryRoutineService.getAllDiaryRoutinesModels(userId);
-
-        routines.forEach((routine) -> {
-            schedules.add(routine.getSchedule());
-        });
-
-        return schedules;
+        return routines.stream()
+                .map(DiaryRoutine::getSchedule)
+                .filter(Objects::nonNull)
+                .map(ScheduleResponseDTO::from)
+                .toList();
     }
 
     public Optional<Schedule> findById(UUID id) {
@@ -50,6 +53,7 @@ public class ScheduleService {
 
         diaryRoutineService.saveRoutine(routine);
 
+        userCacheEvictService.evictAllUserCaches(userId);
         return schedule;
     }
 
@@ -61,7 +65,9 @@ public class ScheduleService {
 
         schedule.setDays(updatedSchedule.days());
 
-        return scheduleRepository.save(schedule);
+        Schedule updatedScheduleEntity = scheduleRepository.save(schedule);
+        userCacheEvictService.evictAllUserCaches(userId);
+        return updatedScheduleEntity;
     }
 
     public void delete(UUID id, UUID userId) {
@@ -75,6 +81,7 @@ public class ScheduleService {
         routine.setSchedule(null);
 
         scheduleRepository.deleteById(id);
+        userCacheEvictService.evictAllUserCaches(userId);
     }
 
     private void checkAndReplaceScheduledRoutines(Set<WeekDay> newDays, UUID userId){

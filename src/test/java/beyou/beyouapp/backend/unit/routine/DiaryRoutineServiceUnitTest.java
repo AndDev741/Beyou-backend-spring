@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.unit.routine;
 
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
@@ -59,6 +60,9 @@ class DiaryRoutineServiceUnitTest {
 
     @Mock
     private CheckItemService checkItemService;
+
+    @Mock
+    private UserCacheEvictService userCacheEvictService;
 
     private DiaryRoutineMapper mapper;
 
@@ -148,7 +152,7 @@ class DiaryRoutineServiceUnitTest {
         section.setRoutine(diaryRoutine);
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(section)));
 
-        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, mapper, checkItemService);
+        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, mapper, checkItemService, userCacheEvictService);
     }
 
     @Test

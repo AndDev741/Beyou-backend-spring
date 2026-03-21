@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.routine.specializedRoutines;
 
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
@@ -15,6 +16,7 @@ import beyou.beyouapp.backend.user.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,7 +42,9 @@ public class DiaryRoutineService {
     private final DiaryRoutineRepository diaryRoutineRepository;
     private final DiaryRoutineMapper mapper;
     private final CheckItemService checkItemService;
+    private final UserCacheEvictService userCacheEvictService;
 
+    @Cacheable(cacheNames = "routine", key = "#userId + '_' + #id")
     @Transactional(readOnly = true)
     public DiaryRoutineResponseDTO getDiaryRoutineById(UUID id, UUID userId) {
         DiaryRoutine diaryRoutine = diaryRoutineRepository.findById(id)
@@ -75,6 +79,7 @@ public class DiaryRoutineService {
         return diaryRoutine;
     }
 
+    @Cacheable(cacheNames = "routines", key = "#userId")
     @Transactional(readOnly = true)
     public List<DiaryRoutineResponseDTO> getAllDiaryRoutines(UUID userId) {
         return diaryRoutineRepository.findAllByUserId(userId).stream()
@@ -94,6 +99,7 @@ public class DiaryRoutineService {
         DiaryRoutine diaryRoutine = mapper.toEntity(dto);
         diaryRoutine.setUser(user);
         DiaryRoutine saved = diaryRoutineRepository.save(diaryRoutine);
+        userCacheEvictService.evictAllUserCaches(user.getId());
         return mapper.toResponse(saved);
     }
 
@@ -119,6 +125,7 @@ public class DiaryRoutineService {
          * a NPE inside the operationQueue
          */
         // DiaryRoutine updated = diaryRoutineRepository.save(existing);
+        userCacheEvictService.evictAllUserCaches(userId);
         return mapper.toResponse(existing);
     }
 
@@ -170,8 +177,10 @@ public class DiaryRoutineService {
         }
 
         diaryRoutineRepository.deleteById(id);
+        userCacheEvictService.evictAllUserCaches(userId);
     }
 
+    @Cacheable(cacheNames = "todayRoutine", key = "#userId", unless = "#result == null")
     @Transactional
     public DiaryRoutineResponseDTO getTodayRoutineScheduled(UUID userId) {
         List<DiaryRoutine> diaryRoutines = diaryRoutineRepository.findAllByUserId(userId);
@@ -321,12 +330,16 @@ public class DiaryRoutineService {
 
     @Transactional
     public RefreshUiDTO checkAndUncheckGroup(CheckGroupRequestDTO checkGroupRequestDTO, UUID userId) {
-        return checkItemService.checkOrUncheckItemGroup(checkGroupRequestDTO);
+        RefreshUiDTO result = checkItemService.checkOrUncheckItemGroup(checkGroupRequestDTO);
+        userCacheEvictService.evictAllUserCaches(userId);
+        return result;
     }
 
     @Transactional
     public RefreshUiDTO skipOrUnskipGroup(SkipGroupRequestDTO skipGroupRequestDTO, UUID userId) {
-        return checkItemService.skipOrUnskipItemGroup(skipGroupRequestDTO);
+        RefreshUiDTO result = checkItemService.skipOrUnskipItemGroup(skipGroupRequestDTO);
+        userCacheEvictService.evictAllUserCaches(userId);
+        return result;
     }
 
 }

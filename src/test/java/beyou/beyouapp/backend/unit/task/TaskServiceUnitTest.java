@@ -2,11 +2,8 @@ package beyou.beyouapp.backend.unit.task;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,10 +19,8 @@ import org.junit.jupiter.api.BeforeEach;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
-import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskMapper;
 import beyou.beyouapp.backend.domain.task.TaskRepository;
@@ -54,6 +49,9 @@ public class TaskServiceUnitTest {
     @Mock
     DiaryRoutineRepository diaryRoutineRepository;
 
+    @Mock
+    UserCacheEvictService userCacheEvictService;
+
     TaskMapper taskMapper = new TaskMapper();
 
     TaskService taskService;
@@ -66,7 +64,7 @@ public class TaskServiceUnitTest {
 
     @BeforeEach
     void setup() {
-        taskService = new TaskService(taskRepository, userRepository, categoryService, diaryRoutineRepository, taskMapper);
+        taskService = new TaskService(taskRepository, userRepository, categoryService, diaryRoutineRepository, taskMapper, userCacheEvictService);
     }
 
     @Test
@@ -166,45 +164,6 @@ public class TaskServiceUnitTest {
         ResponseEntity<Map<String, String>> deleteTaskResponse = taskService.deleteTask(taskId, userId);
 
         assertEquals(ResponseEntity.ok(Map.of("success", "Task deleted Successfully!")), deleteTaskResponse);
-    }
-
-    @Test
-    public void shouldDelete1DayAfterTheMarkedToDeleteDate(){
-        user.setId(userId);
-        DiaryRoutine diaryRoutine = new DiaryRoutine();
-        diaryRoutine.setUser(user);
-        RoutineSection routineSection = new RoutineSection();
-        routineSection.setId(UUID.randomUUID());
-
-        Task taskToDelete = new Task();
-        taskToDelete.setId(taskId);
-        taskToDelete.setUser(user);
-        taskToDelete.setOneTimeTask(true);
-        taskToDelete.setMarkedToDelete(LocalDate.now().minusDays(1));
-
-        TaskGroup taskGroup = new TaskGroup();
-        taskGroup.setId(UUID.randomUUID());
-        taskGroup.setTask(taskToDelete);
-        taskGroup.setRoutineSection(routineSection);
-        List<TaskGroup> taskGroups = new ArrayList<>(List.of(taskGroup));
-        routineSection.setTaskGroups(taskGroups);
-
-        diaryRoutine.setRoutineSections(List.of(routineSection));
-
-        when(taskRepository.findAllByUserId(userId)).thenReturn(Optional.of(List.of(taskToDelete)));
-        when(taskRepository.findAllByUserId(userId))
-            .thenReturn(Optional.of(List.of(taskToDelete)))  // 1ª call
-            .thenReturn(Optional.of(new ArrayList<>()));    // 2ª call
-        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(diaryRoutine));
-
-        List<TaskResponseDTO> result = taskService.getAllTasks(userId);
-
-        verify(taskRepository, times(2)).findAllByUserId(userId);
-        verify(taskRepository, times(1)).deleteAll(List.of(taskToDelete));
-        verify(diaryRoutineRepository, times(1)).findAllByUserId(userId);
-        verify(diaryRoutineRepository, times(1)).save(diaryRoutine);
-
-        assertEquals(new ArrayList<>(), result);
     }
 
     //Exceptions

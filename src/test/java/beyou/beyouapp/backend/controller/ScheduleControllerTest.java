@@ -25,11 +25,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +38,7 @@ import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
+import beyou.beyouapp.backend.domain.routine.schedule.dto.ScheduleResponseDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
@@ -51,10 +52,10 @@ public class ScheduleControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private ScheduleService scheduleService;
 
-    @MockBean
+    @MockitoBean
     private AuthenticatedUser authenticatedUser;
 
     Schedule schedule;
@@ -80,7 +81,8 @@ public class ScheduleControllerTest {
 
     @Test
     void shouldGetAllSchedulesSuccessfully() throws Exception {
-        List<Schedule> schedules = List.of(schedule);
+        ScheduleResponseDTO scheduleDTO = ScheduleResponseDTO.from(schedule);
+        List<ScheduleResponseDTO> schedules = List.of(scheduleDTO);
 
         when(scheduleService.findAll(userID))
             .thenReturn(schedules);

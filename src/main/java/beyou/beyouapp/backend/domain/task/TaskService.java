@@ -8,12 +8,14 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
@@ -39,23 +41,19 @@ public class TaskService {
     private final CategoryService categoryService;
     private final DiaryRoutineRepository diaryRoutineRepository;
     private final TaskMapper taskMapper;
+    private final UserCacheEvictService userCacheEvictService;
 
     public Task getTask(UUID taskId){
         return taskRepository.findById(taskId).orElseThrow(() -> new TaskNotFound("Task not found"));
     }
 
+    @Cacheable(cacheNames = "tasks", key = "#userId")
     public List<TaskResponseDTO> getAllTasks(UUID userId){
         List<Task> tasks = taskRepository.findAllByUserId(userId).orElseThrow(() -> new UserNotFound("User not found when tried to get tasks"));
-        deleteAllMarked(tasks, userId);
-        return taskRepository.findAllByUserId(userId)
-                .orElseThrow(() -> new UserNotFound("User not found when tried to get tasks"))
-                .stream()
-                .map(taskMapper::toResponseDTO)
-                .toList();
+        return tasks.stream().map(taskMapper::toResponseDTO).toList();
     }
 
-    @Transactional
-    private void deleteAllMarked(List<Task> tasks, UUID userId) {
+    void deleteAllMarked(List<Task> tasks, UUID userId) {
         LocalDate today = LocalDate.now();
         
         List<Task> tasksToDelete = tasks.stream()
@@ -115,6 +113,7 @@ public class TaskService {
 
         try {
             taskRepository.save(taskToCreate);
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok().body(Map.of("success", "Task created Successfully"));
         } catch (Exception e) {
             log.error("Error trying to create task", e);
@@ -145,6 +144,7 @@ public class TaskService {
 
         try{
             taskRepository.save(taskToEdit);
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok().body(Map.of("success", "Task edited successfully"));
         }catch(TaskNotFound e){
             throw e;
@@ -167,6 +167,7 @@ public class TaskService {
 
         try{
             taskRepository.delete(taskToDelete);
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok(Map.of("success", "Task deleted Successfully!"));
         }catch(DataIntegrityViolationException e){
             throw new BusinessException(ErrorKey.TASK_IN_ROUTINE, "This task is used in some routine, please remove it first");

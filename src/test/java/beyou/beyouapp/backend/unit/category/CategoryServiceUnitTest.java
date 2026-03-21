@@ -4,6 +4,7 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryMapper;
 import beyou.beyouapp.backend.domain.category.CategoryRepository;
 import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
@@ -40,6 +41,9 @@ public class CategoryServiceUnitTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private UserCacheEvictService userCacheEvictService;
+
     private CategoryMapper categoryMapper = new CategoryMapper();
 
     @InjectMocks
@@ -69,7 +73,7 @@ public class CategoryServiceUnitTest {
         category.getXpProgress().setNextLevelXp(xpByLevel2.getXp());
         category.getXpProgress().setActualLevelXp(xpByLevel.getXp());
 
-        categoryService = new CategoryService(categoryRepository, xpByLevelRepository, userRepository, categoryMapper);
+        categoryService = new CategoryService(categoryRepository, xpByLevelRepository, userRepository, categoryMapper, userCacheEvictService);
     }
 
     @Test

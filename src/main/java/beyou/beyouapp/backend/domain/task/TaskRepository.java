@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.task;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,4 +11,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface TaskRepository extends JpaRepository<Task,UUID> {
     Optional<List<Task>> findAllByUserId(UUID userId);
+    List<Task> findAllByMarkedToDeleteBefore(LocalDate date);
 }

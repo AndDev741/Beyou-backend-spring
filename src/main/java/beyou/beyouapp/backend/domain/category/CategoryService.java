@@ -5,6 +5,7 @@ import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
@@ -15,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -40,11 +42,14 @@ public class CategoryService {
     @Autowired
     private final CategoryMapper categoryMapper;
 
+    private final UserCacheEvictService userCacheEvictService;
+
     public Category getCategory(UUID categoryId){
         return categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new CategoryNotFound("Category not found"));
     }
 
+    @Cacheable(cacheNames = "categories", key = "#userId")
     public List<CategoryResponseDTO> getAllCategories(UUID userId){
         ArrayList<Category> categories = categoryRepository.findAllByUserId(userId)
                 .orElseThrow(() -> new UserNotFound(""));
@@ -65,6 +70,7 @@ public class CategoryService {
 
         try{
             categoryRepository.save(newCategory);
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok().body(Map.of("success", "Category created successfully"));
         }catch(Exception e){
             throw new BusinessException(ErrorKey.CATEGORY_CREATE_FAILED, "Error trying create the category");
@@ -82,6 +88,7 @@ public class CategoryService {
 
         try{
             categoryRepository.save(categoryToEdit);
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok().body(Map.of("success", categoryToEdit));
         }catch(Exception e){
             throw new BusinessException(ErrorKey.CATEGORY_EDIT_FAILED, "Error trying to edit the category");
@@ -97,6 +104,7 @@ public class CategoryService {
             }
 
             categoryRepository.delete(category);
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok().body(Map.of("success", "Category deleted successfully"));
         }catch(DataIntegrityViolationException exception){
             throw new BusinessException(ErrorKey.CATEGORY_IN_USE, "This category is used in some habit, please delete it first");
