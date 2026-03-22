@@ -145,6 +145,118 @@ class RoutineSnapshotSchedulerTest {
     }
 
     // ---------------------------------------------------------------
+    // backfillMissedSnapshots tests
+    // ---------------------------------------------------------------
+
+    @Test
+    void backfillMissedSnapshots_createsSnapshotsForMissedDays() {
+        // Routine scheduled every weekday. Last snapshot was 3 days ago.
+        Schedule schedule = new Schedule();
+        schedule.setId(UUID.randomUUID());
+        schedule.setDays(Set.of(WeekDay.Monday, WeekDay.Tuesday, WeekDay.Wednesday,
+                WeekDay.Thursday, WeekDay.Friday, WeekDay.Saturday, WeekDay.Sunday));
+        routine.setSchedule(schedule);
+
+        LocalDate today = LocalDate.now();
+        LocalDate yesterday = today.minusDays(1);
+        LocalDate threeDaysAgo = today.minusDays(3);
+
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(routine));
+        when(snapshotRepository.findLatestSnapshotDateByRoutineId(routineId))
+                .thenReturn(Optional.of(threeDaysAgo));
+        when(snapshotRepository.findByRoutineIdAndSnapshotDate(eq(routineId), any()))
+                .thenReturn(Optional.empty());
+        when(snapshotService.createSnapshot(any(), any(), any()))
+                .thenAnswer(inv -> buildSnapshot(inv.getArgument(2)));
+
+        scheduler.backfillMissedSnapshots();
+
+        // Should create snapshots for (threeDaysAgo+1) and (threeDaysAgo+2) = yesterday
+        // That's 2 days: today-2 and today-1
+        verify(snapshotService, times(2)).createSnapshot(eq(routine), eq(user), any());
+        verify(snapshotService).createSnapshot(routine, user, today.minusDays(2));
+        verify(snapshotService).createSnapshot(routine, user, yesterday);
+    }
+
+    @Test
+    void backfillMissedSnapshots_skipsAlreadyExistingSnapshots() {
+        Schedule schedule = new Schedule();
+        schedule.setId(UUID.randomUUID());
+        schedule.setDays(Set.of(WeekDay.Monday, WeekDay.Tuesday, WeekDay.Wednesday,
+                WeekDay.Thursday, WeekDay.Friday, WeekDay.Saturday, WeekDay.Sunday));
+        routine.setSchedule(schedule);
+
+        LocalDate today = LocalDate.now();
+        LocalDate yesterday = today.minusDays(1);
+        LocalDate twoDaysAgo = today.minusDays(2);
+
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(routine));
+        when(snapshotRepository.findLatestSnapshotDateByRoutineId(routineId))
+                .thenReturn(Optional.of(twoDaysAgo.minusDays(1)));
+        // twoDaysAgo already has a snapshot
+        when(snapshotRepository.findByRoutineIdAndSnapshotDate(routineId, twoDaysAgo))
+                .thenReturn(Optional.of(buildSnapshot(twoDaysAgo)));
+        // yesterday does not
+        when(snapshotRepository.findByRoutineIdAndSnapshotDate(routineId, yesterday))
+                .thenReturn(Optional.empty());
+        when(snapshotService.createSnapshot(any(), any(), any()))
+                .thenAnswer(inv -> buildSnapshot(inv.getArgument(2)));
+
+        scheduler.backfillMissedSnapshots();
+
+        // Only yesterday should be created
+        verify(snapshotService, times(1)).createSnapshot(routine, user, yesterday);
+        verify(snapshotService, never()).createSnapshot(routine, user, twoDaysAgo);
+    }
+
+    @Test
+    void backfillMissedSnapshots_respectsMaxBackfillWindow() {
+        Schedule schedule = new Schedule();
+        schedule.setId(UUID.randomUUID());
+        schedule.setDays(Set.of(WeekDay.Monday, WeekDay.Tuesday, WeekDay.Wednesday,
+                WeekDay.Thursday, WeekDay.Friday, WeekDay.Saturday, WeekDay.Sunday));
+        routine.setSchedule(schedule);
+
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(routine));
+        // No snapshots at all — would want to backfill everything, but limited to 7 days
+        when(snapshotRepository.findLatestSnapshotDateByRoutineId(routineId))
+                .thenReturn(Optional.empty());
+        when(snapshotRepository.findByRoutineIdAndSnapshotDate(eq(routineId), any()))
+                .thenReturn(Optional.empty());
+        when(snapshotService.createSnapshot(any(), any(), any()))
+                .thenAnswer(inv -> buildSnapshot(inv.getArgument(2)));
+
+        scheduler.backfillMissedSnapshots();
+
+        // Should create exactly 7 snapshots (MAX_BACKFILL_DAYS)
+        verify(snapshotService, times(7)).createSnapshot(eq(routine), eq(user), any());
+    }
+
+    @Test
+    void backfillMissedSnapshots_noBackfillNeededWhenUpToDate() {
+        Schedule schedule = new Schedule();
+        schedule.setId(UUID.randomUUID());
+        schedule.setDays(Set.of(WeekDay.Monday, WeekDay.Tuesday, WeekDay.Wednesday,
+                WeekDay.Thursday, WeekDay.Friday, WeekDay.Saturday, WeekDay.Sunday));
+        routine.setSchedule(schedule);
+
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(routine));
+        // Last snapshot is yesterday — fully up to date
+        when(snapshotRepository.findLatestSnapshotDateByRoutineId(routineId))
+                .thenReturn(Optional.of(yesterday));
+
+        scheduler.backfillMissedSnapshots();
+
+        verify(snapshotService, never()).createSnapshot(any(), any(), any());
+    }
+
+    // ---------------------------------------------------------------
     // Helper methods
     // ---------------------------------------------------------------
 
