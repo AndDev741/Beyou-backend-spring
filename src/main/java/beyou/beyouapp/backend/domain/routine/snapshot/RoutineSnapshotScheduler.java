@@ -38,6 +38,11 @@ public class RoutineSnapshotScheduler {
      * Backfilled snapshots use the CURRENT routine structure (historical structure
      * is not recoverable). This is an accepted trade-off documented in the spec.
      */
+    /**
+     * Runs once on startup. Computes which dates need backfilling per user,
+     * then delegates to createSnapshotsForUser (which is @Transactional and
+     * public, so the Spring proxy provides a Hibernate session).
+     */
     @EventListener(ApplicationReadyEvent.class)
     public void backfillMissedSnapshots() {
         log.info("Starting startup backfill for missed snapshots");
@@ -45,57 +50,28 @@ public class RoutineSnapshotScheduler {
         List<User> allUsers = userRepository.findAll();
         for (User user : allUsers) {
             try {
-                backfillForUser(user);
+                ZoneId zoneId = ZoneId.of(user.getTimezone());
+                LocalDate userToday = LocalDate.now(zoneId);
+                LocalDate yesterday = userToday.minusDays(1);
+                LocalDate earliestAllowed = yesterday.minusDays(MAX_BACKFILL_DAYS - 1);
+
+                // Iterate each day in the backfill window and call the
+                // @Transactional createSnapshotsForUser for each date.
+                // That method already handles schedule checks, duplicate
+                // prevention, and lazy-loaded collections within a session.
+                for (LocalDate date = earliestAllowed; !date.isAfter(yesterday); date = date.plusDays(1)) {
+                    try {
+                        createSnapshotsForUser(user, date);
+                    } catch (Exception e) {
+                        log.error("Failed to backfill date {} for user {}", date, user.getId(), e);
+                    }
+                }
             } catch (Exception e) {
                 log.error("Failed to backfill snapshots for user {}", user.getId(), e);
             }
         }
 
         log.info("Startup backfill completed");
-    }
-
-    private void backfillForUser(User user) {
-        ZoneId zoneId = ZoneId.of(user.getTimezone());
-        LocalDate userToday = LocalDate.now(zoneId);
-        // Yesterday is the most recent day that could need a snapshot
-        LocalDate yesterday = userToday.minusDays(1);
-
-        List<DiaryRoutine> routines = diaryRoutineRepository.findAllByUserId(user.getId());
-        if (routines.isEmpty()) return;
-
-        for (DiaryRoutine routine : routines) {
-            if (routine.getSchedule() == null || routine.getSchedule().getDays() == null) continue;
-
-            try {
-                // Find the last snapshot date for this routine
-                Optional<LocalDate> latestOpt = snapshotRepository.findLatestSnapshotDateByRoutineId(routine.getId());
-                // Start from the day after the last snapshot, or MAX_BACKFILL_DAYS ago
-                LocalDate startDate = latestOpt
-                        .map(latest -> latest.plusDays(1))
-                        .orElse(yesterday.minusDays(MAX_BACKFILL_DAYS - 1));
-
-                // Don't go further back than MAX_BACKFILL_DAYS
-                LocalDate earliestAllowed = yesterday.minusDays(MAX_BACKFILL_DAYS - 1);
-                if (startDate.isBefore(earliestAllowed)) {
-                    startDate = earliestAllowed;
-                }
-
-                // Backfill each missing day
-                for (LocalDate date = startDate; !date.isAfter(yesterday); date = date.plusDays(1)) {
-                    String dayName = date.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
-                    WeekDay weekDay = WeekDay.valueOf(dayName);
-
-                    if (!routine.getSchedule().getDays().contains(weekDay)) continue;
-                    if (snapshotRepository.findByRoutineIdAndSnapshotDate(routine.getId(), date).isPresent()) continue;
-
-                    RoutineSnapshot snapshot = snapshotService.createSnapshot(routine, user, date);
-                    checkMigrator.migrateChecks(routine, snapshot, date);
-                    log.info("Backfilled snapshot for routine {} on date {}", routine.getId(), date);
-                }
-            } catch (Exception e) {
-                log.error("Failed to backfill routine {} for user {}", routine.getId(), user.getId(), e);
-            }
-        }
     }
 
     @Scheduled(cron = "0 0 * * * *")
