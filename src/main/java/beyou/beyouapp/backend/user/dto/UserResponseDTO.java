@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.user.dto;
 
 import java.util.List;
 
+import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 
 public record UserResponseDTO(
@@ -24,6 +25,6 @@ public record UserResponseDTO(
         boolean isTutorialCompleted,
         String languageInUse,
         String timezone,
-        beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy xpDecayStrategy
+        XpDecayStrategy xpDecayStrategy
 ) {
 }

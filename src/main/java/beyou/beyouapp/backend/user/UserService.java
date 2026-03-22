@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
@@ -123,7 +125,14 @@ public class UserService {
             user.setConstanceConfiguration(userEdit.constanceConfiguration() != null ? userEdit.constanceConfiguration() : user.getConstanceConfiguration());
             user.setLanguageInUse(userEdit.language() != null ? userEdit.language() : user.getLanguageInUse());
             user.setTutorialCompleted(userEdit.isTutorialCompleted() != null ? userEdit.isTutorialCompleted() : user.isTutorialCompleted());
-            user.setTimezone(userEdit.timezone() != null ? userEdit.timezone() : user.getTimezone());
+            if (userEdit.timezone() != null) {
+                if (java.time.ZoneId.getAvailableZoneIds().contains(userEdit.timezone())) {
+                    user.setTimezone(userEdit.timezone());
+                } else {
+                    throw new BusinessException(ErrorKey.INVALID_REQUEST,
+                            "Invalid timezone: " + userEdit.timezone());
+                }
+            }
             user.setXpDecayStrategy(userEdit.xpDecayStrategy() != null ? userEdit.xpDecayStrategy() : user.getXpDecayStrategy());
 
             try{

@@ -214,7 +214,12 @@ public class SnapshotCheckService {
         if (completed && !wasCompleted) {
             userService.markDayCompleted(user, snapshotDate);
         } else if (!completed && wasCompleted) {
-            userService.unmarkDayComplete(user, snapshotDate);
+            // Only unmark if no other snapshot for this user+date is still complete
+            boolean otherSnapshotsComplete = snapshotRepository
+                    .existsByUserIdAndSnapshotDateAndCompletedTrue(user.getId(), snapshotDate);
+            if (!otherSnapshotsComplete) {
+                userService.unmarkDayComplete(user, snapshotDate);
+            }
         }
     }
 }
