@@ -78,7 +78,48 @@ public class XpCalculatorService {
         removeGoalXpAndPersist(goal);
         removeCategoriesXpAndPersist(newXp, categories);
     }
-    
+
+    // === Snapshot-compatible overloads (accept User directly, no SecurityContext needed) ===
+
+    public void addXpToUserRoutineHabitAndCategoriesAndPersist(User user, Double newXp, DiaryRoutine routine,
+            Habit habit, List<Category> categories) {
+        addUserXpAndPersist(user, newXp);
+        addRoutineXpAndPersist(newXp, routine);
+        addHabitXpAndPersist(newXp, habit);
+        addCategoriesXpAndPersist(newXp, categories);
+    }
+
+    public void removeXpOfUserRoutineHabitAndCategoriesAndPersist(User user, Double xpToRemove, DiaryRoutine routine,
+            Habit habit, List<Category> categories) {
+        removeUserXpAndPersist(user, xpToRemove);
+        removeRoutineXpAndPersist(xpToRemove, routine);
+        removeHabitXpAndPersist(xpToRemove, habit);
+        removeCategoriesXpAndPersist(xpToRemove, categories);
+    }
+
+    public void addXpToUserRoutineAndCategoriesAndPersist(User user, Double newXp, DiaryRoutine routine,
+            List<Category> categories) {
+        addUserXpAndPersist(user, newXp);
+        addRoutineXpAndPersist(newXp, routine);
+        addCategoriesXpAndPersist(newXp, categories);
+    }
+
+    public void removeXpOfUserRoutineAndCategoriesAndPersist(User user, Double xpToRemove, DiaryRoutine routine,
+            List<Category> categories) {
+        removeUserXpAndPersist(user, xpToRemove);
+        removeRoutineXpAndPersist(xpToRemove, routine);
+        removeCategoriesXpAndPersist(xpToRemove, categories);
+    }
+
+    public void addXpToUserAndRoutineOnly(User user, Double newXp, DiaryRoutine routine) {
+        addUserXpAndPersist(user, newXp);
+        addRoutineXpAndPersist(newXp, routine);
+    }
+
+    public void removeXpFromUserAndRoutineOnly(User user, Double xpToRemove, DiaryRoutine routine) {
+        removeUserXpAndPersist(user, xpToRemove);
+        removeRoutineXpAndPersist(xpToRemove, routine);
+    }
 
     private void addUserXpAndPersist(Double newXp) {
         User user = authenticatedUser.getAuthenticatedUser();
@@ -86,6 +127,16 @@ public class XpCalculatorService {
                 newXp,
                 level -> xpByLevelRepository.findByLevel(level));
 
+        try {
+            userRepository.save(user);
+        } catch (Exception e) {
+            log.error("ERROR ADDING XP TO USER -> {}", e.getMessage());
+            throw e;
+        }
+    }
+
+    private void addUserXpAndPersist(User user, Double newXp) {
+        user.getXpProgress().addXp(newXp, level -> xpByLevelRepository.findByLevel(level));
         try {
             userRepository.save(user);
         } catch (Exception e) {
@@ -165,6 +216,16 @@ public class XpCalculatorService {
                 xpToRemove,
                 level -> xpByLevelRepository.findByLevel(level));
 
+        try {
+            userRepository.save(user);
+        } catch (Exception e) {
+            log.error("ERROR REMOVING XP FROM USER -> {}", e.getMessage());
+            throw e;
+        }
+    }
+
+    private void removeUserXpAndPersist(User user, Double xpToRemove) {
+        user.getXpProgress().removeXp(xpToRemove, level -> xpByLevelRepository.findByLevel(level));
         try {
             userRepository.save(user);
         } catch (Exception e) {

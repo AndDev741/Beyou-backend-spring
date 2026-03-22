@@ -69,4 +69,18 @@ public class RefreshUiDtoBuilder {
                 habitToRefreshDto,
                 refreshItemCheckedDTO);
     }
+
+    public RefreshUiDTO buildSnapshotRefreshUiDto(User user) {
+        LocalDate today = LocalDate.now();
+        RefreshUserDTO refreshUserDTO = new RefreshUserDTO(
+                user.getCurrentConstance(today),
+                user.getCompletedDays().contains(today),
+                user.getMaxConstance(),
+                user.getXpProgress().getXp(),
+                user.getXpProgress().getLevel(),
+                user.getXpProgress().getActualLevelXp(),
+                user.getXpProgress().getNextLevelXp());
+
+        return new RefreshUiDTO(refreshUserDTO, null, null, null);
+    }
 }
