@@ -68,7 +68,9 @@ public class SnapshotStructureSerializer {
             return objectMapper.writeValueAsString(root);
         } catch (Exception e) {
             log.error("Failed to serialize routine structure: {}", e.getMessage());
-            throw new RuntimeException("Failed to serialize routine structure", e);
+            throw new beyou.beyouapp.backend.exceptions.BusinessException(
+                    beyou.beyouapp.backend.exceptions.ErrorKey.UNEXPECTED_ERROR,
+                    "Failed to serialize routine structure");
         }
     }
 

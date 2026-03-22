@@ -17,6 +17,7 @@ import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,7 @@ class SnapshotCheckServiceTest {
     @Mock private HabitRepository habitRepository;
     @Mock private TaskRepository taskRepository;
     @Mock private UserRepository userRepository;
+    @Mock private UserService userService;
     @Mock private XpCalculatorService xpCalculatorService;
     @Mock private XpDecayCalculator xpDecayCalculator;
     @Mock private RefreshUiDtoBuilder refreshUiDtoBuilder;
@@ -518,7 +520,7 @@ class SnapshotCheckServiceTest {
     // ---------------------------------------------------------------
 
     @Test
-    void checkItem_routineDeletedSinceSnapshot_noXpApplied() {
+    void checkItem_routineDeletedSinceSnapshot_xpAppliedToUserOnly() {
         when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
         when(snapshotRepository.findById(snapshotId)).thenReturn(Optional.of(snapshot));
         when(snapshotCheckRepository.findById(habitCheckId)).thenReturn(Optional.of(habitCheck));
@@ -532,8 +534,8 @@ class SnapshotCheckServiceTest {
         assertNotNull(result);
         assertTrue(habitCheck.isChecked());
         assertEquals(96.0, habitCheck.getXpGenerated(), 0.001);
-        // XP not applied because routine is null
-        verifyNoInteractions(xpCalculatorService);
+        // XP applied to user only since routine is deleted
+        verify(xpCalculatorService).addXpToUserOnly(user, 96.0);
     }
 
     @Test

@@ -123,6 +123,8 @@ public class UserService {
             user.setConstanceConfiguration(userEdit.constanceConfiguration() != null ? userEdit.constanceConfiguration() : user.getConstanceConfiguration());
             user.setLanguageInUse(userEdit.language() != null ? userEdit.language() : user.getLanguageInUse());
             user.setTutorialCompleted(userEdit.isTutorialCompleted() != null ? userEdit.isTutorialCompleted() : user.isTutorialCompleted());
+            user.setTimezone(userEdit.timezone() != null ? userEdit.timezone() : user.getTimezone());
+            user.setXpDecayStrategy(userEdit.xpDecayStrategy() != null ? userEdit.xpDecayStrategy() : user.getXpDecayStrategy());
 
             try{
                 User saved = userRepository.save(user);

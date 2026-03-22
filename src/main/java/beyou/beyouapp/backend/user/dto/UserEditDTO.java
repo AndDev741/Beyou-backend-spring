@@ -21,7 +21,9 @@ public record UserEditDTO(
     String theme,
     ConstanceConfiguration constanceConfiguration,
     String language,
-    Boolean isTutorialCompleted
+    Boolean isTutorialCompleted,
+    String timezone,
+    beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy xpDecayStrategy
 ) {
     
 }

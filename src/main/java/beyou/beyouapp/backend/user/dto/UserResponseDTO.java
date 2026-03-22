@@ -22,6 +22,8 @@ public record UserResponseDTO(
         boolean constanceIncreaseToday,
         int maxConstance,
         boolean isTutorialCompleted,
-        String languageInUse
+        String languageInUse,
+        String timezone,
+        beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy xpDecayStrategy
 ) {
 }

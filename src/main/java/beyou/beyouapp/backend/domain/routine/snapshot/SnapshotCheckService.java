@@ -24,6 +24,7 @@ import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+import beyou.beyouapp.backend.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,6 +39,7 @@ public class SnapshotCheckService {
     private final HabitRepository habitRepository;
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
+    private final UserService userService;
     private final XpCalculatorService xpCalculatorService;
     private final XpDecayCalculator xpDecayCalculator;
     private final RefreshUiDtoBuilder refreshUiDtoBuilder;
@@ -131,9 +133,7 @@ public class SnapshotCheckService {
         check.setCheckTime(LocalTime.now());
         check.setXpGenerated(decayedXp);
 
-        if (routine != null) {
-            applyXp(user, routine, check, decayedXp, true);
-        }
+        applyXp(user, routine, check, decayedXp, true);
     }
 
     private void uncheckSnapshotItem(User user, DiaryRoutine routine, RoutineSnapshot snapshot, SnapshotCheck check) {
@@ -143,7 +143,7 @@ public class SnapshotCheckService {
         check.setCheckTime(null);
         check.setXpGenerated(0.0);
 
-        if (routine != null && storedXp > 0.0) {
+        if (storedXp > 0.0) {
             applyXp(user, routine, check, storedXp, false);
         }
     }
@@ -151,39 +151,51 @@ public class SnapshotCheckService {
     private void applyXp(User user, DiaryRoutine routine, SnapshotCheck check, double xp, boolean add) {
         if (xp == 0.0) return;
 
-        if (check.getItemType() == SnapshotItemType.HABIT) {
-            Optional<Habit> habitOpt = habitRepository.findById(check.getOriginalItemId());
-            if (habitOpt.isPresent()) {
-                Habit habit = habitOpt.get();
-                if (add) {
-                    xpCalculatorService.addXpToUserRoutineHabitAndCategoriesAndPersist(
-                            user, xp, routine, habit, habit.getCategories());
-                } else {
-                    xpCalculatorService.removeXpOfUserRoutineHabitAndCategoriesAndPersist(
-                            user, xp, routine, habit, habit.getCategories());
-                }
-                return;
-            }
-        } else if (check.getItemType() == SnapshotItemType.TASK) {
-            Optional<Task> taskOpt = taskRepository.findById(check.getOriginalItemId());
-            if (taskOpt.isPresent()) {
-                Task task = taskOpt.get();
-                if (add) {
-                    xpCalculatorService.addXpToUserRoutineAndCategoriesAndPersist(
-                            user, xp, routine, task.getCategories());
-                } else {
-                    xpCalculatorService.removeXpOfUserRoutineAndCategoriesAndPersist(
-                            user, xp, routine, task.getCategories());
-                }
-                return;
-            }
-        }
+        // If routine still exists, try full XP distribution
+        if (routine != null) {
+            UUID originalItemId = check.getOriginalItemId();
 
-        // Fallback: original item deleted
-        if (add) {
-            xpCalculatorService.addXpToUserAndRoutineOnly(user, xp, routine);
+            if (originalItemId != null && check.getItemType() == SnapshotItemType.HABIT) {
+                Optional<Habit> habitOpt = habitRepository.findById(originalItemId);
+                if (habitOpt.isPresent()) {
+                    Habit habit = habitOpt.get();
+                    if (add) {
+                        xpCalculatorService.addXpToUserRoutineHabitAndCategoriesAndPersist(
+                                user, xp, routine, habit, habit.getCategories());
+                    } else {
+                        xpCalculatorService.removeXpOfUserRoutineHabitAndCategoriesAndPersist(
+                                user, xp, routine, habit, habit.getCategories());
+                    }
+                    return;
+                }
+            } else if (originalItemId != null && check.getItemType() == SnapshotItemType.TASK) {
+                Optional<Task> taskOpt = taskRepository.findById(originalItemId);
+                if (taskOpt.isPresent()) {
+                    Task task = taskOpt.get();
+                    if (add) {
+                        xpCalculatorService.addXpToUserRoutineAndCategoriesAndPersist(
+                                user, xp, routine, task.getCategories());
+                    } else {
+                        xpCalculatorService.removeXpOfUserRoutineAndCategoriesAndPersist(
+                                user, xp, routine, task.getCategories());
+                    }
+                    return;
+                }
+            }
+
+            // Fallback: original item deleted but routine exists
+            if (add) {
+                xpCalculatorService.addXpToUserAndRoutineOnly(user, xp, routine);
+            } else {
+                xpCalculatorService.removeXpFromUserAndRoutineOnly(user, xp, routine);
+            }
         } else {
-            xpCalculatorService.removeXpFromUserAndRoutineOnly(user, xp, routine);
+            // Routine deleted — apply XP to user only
+            if (add) {
+                xpCalculatorService.addXpToUserOnly(user, xp);
+            } else {
+                xpCalculatorService.removeXpFromUserOnly(user, xp);
+            }
         }
     }
 
@@ -193,6 +205,16 @@ public class SnapshotCheckService {
             case COMPLETE -> checks.stream().allMatch(c -> c.isChecked() || c.isSkipped());
             case ANY -> checks.stream().anyMatch(SnapshotCheck::isChecked);
         };
+
+        boolean wasCompleted = snapshot.isCompleted();
         snapshot.setCompleted(completed);
+
+        // Update user constance streak for the snapshot date
+        LocalDate snapshotDate = snapshot.getSnapshotDate();
+        if (completed && !wasCompleted) {
+            userService.markDayCompleted(user, snapshotDate);
+        } else if (!completed && wasCompleted) {
+            userService.unmarkDayComplete(user, snapshotDate);
+        }
     }
 }

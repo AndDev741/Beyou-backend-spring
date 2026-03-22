@@ -134,34 +134,31 @@ public class RoutineSnapshotScheduler {
         WeekDay weekDay = WeekDay.valueOf(dayName);
 
         for (DiaryRoutine routine : routines) {
-            try {
-                // Check if routine is scheduled for this day
-                if (routine.getSchedule() == null
-                        || routine.getSchedule().getDays() == null
-                        || !routine.getSchedule().getDays().contains(weekDay)) {
-                    log.debug("Routine {} not scheduled for {}", routine.getId(), weekDay);
-                    continue;
-                }
-
-                // Check if snapshot already exists (duplicate prevention)
-                boolean exists = snapshotRepository
-                        .findByRoutineIdAndSnapshotDate(routine.getId(), date)
-                        .isPresent();
-
-                if (exists) {
-                    log.debug("Snapshot already exists for routine {} on {}", routine.getId(), date);
-                    continue;
-                }
-
-                // Create snapshot and migrate checks
-                RoutineSnapshot snapshot = snapshotService.createSnapshot(routine, user, date);
-                checkMigrator.migrateChecks(routine, snapshot, date);
-
-                log.info("Snapshot created for routine {} on date {}", routine.getId(), date);
-            } catch (Exception e) {
-                log.error("Failed to create snapshot for routine {} on date {}",
-                        routine.getId(), date, e);
+            // Check if routine is scheduled for this day
+            if (routine.getSchedule() == null
+                    || routine.getSchedule().getDays() == null
+                    || !routine.getSchedule().getDays().contains(weekDay)) {
+                log.debug("Routine {} not scheduled for {}", routine.getId(), weekDay);
+                continue;
             }
+
+            // Check if snapshot already exists (duplicate prevention)
+            boolean exists = snapshotRepository
+                    .findByRoutineIdAndSnapshotDate(routine.getId(), date)
+                    .isPresent();
+
+            if (exists) {
+                log.debug("Snapshot already exists for routine {} on {}", routine.getId(), date);
+                continue;
+            }
+
+            // Create snapshot and migrate checks atomically —
+            // if migrateChecks fails, the whole transaction rolls back
+            // so we don't end up with a snapshot missing its check data.
+            RoutineSnapshot snapshot = snapshotService.createSnapshot(routine, user, date);
+            checkMigrator.migrateChecks(routine, snapshot, date);
+
+            log.info("Snapshot created for routine {} on date {}", routine.getId(), date);
         }
     }
 }

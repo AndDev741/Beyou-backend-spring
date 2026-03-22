@@ -81,6 +81,9 @@ public class User implements UserDetails {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Goal> goals;
 
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot> routineSnapshots;
+
     private Date createdAt;
 
     private Date updatedAt;

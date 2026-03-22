@@ -28,7 +28,9 @@ public class UserMapper {
             user.getCompletedDays().contains(LocalDate.now()),
             user.getMaxConstance(),
             user.isTutorialCompleted(),
-            user.getLanguageInUse()
+            user.getLanguageInUse(),
+            user.getTimezone(),
+            user.getXpDecayStrategy()
         );
     }
 }
