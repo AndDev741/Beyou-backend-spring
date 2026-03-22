@@ -13,6 +13,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.test.util.ReflectionTestUtils;
+
 import java.time.LocalDate;
 import java.util.*;
 
@@ -62,6 +64,10 @@ class RoutineSnapshotSchedulerTest {
         routine.setIconId("icon-morning");
         routine.setUser(user);
         routine.setRoutineSections(new ArrayList<>());
+
+        // Set self-reference so backfill calls go through the same instance
+        // (in production, Spring's @Lazy proxy handles this)
+        ReflectionTestUtils.setField(scheduler, "self", scheduler);
     }
 
     // ---------------------------------------------------------------

@@ -7,6 +7,8 @@ import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,7 +20,6 @@ import java.time.*;
 import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -32,6 +33,14 @@ public class RoutineSnapshotScheduler {
     private final RoutineSnapshotRepository snapshotRepository;
     private final SnapshotService snapshotService;
     private final SnapshotCheckMigrator checkMigrator;
+
+    /**
+     * Self-reference injected lazily to allow calling @Transactional methods
+     * through the Spring proxy (self-invocations bypass AOP proxying).
+     */
+    @Lazy
+    @Autowired
+    private RoutineSnapshotScheduler self;
 
     /**
      * Runs once on startup — detects missed snapshots and backfills up to 7 days.
@@ -61,7 +70,7 @@ public class RoutineSnapshotScheduler {
                 // prevention, and lazy-loaded collections within a session.
                 for (LocalDate date = earliestAllowed; !date.isAfter(yesterday); date = date.plusDays(1)) {
                     try {
-                        createSnapshotsForUser(user, date);
+                        self.createSnapshotsForUser(user, date);
                     } catch (Exception e) {
                         log.error("Failed to backfill date {} for user {}", date, user.getId(), e);
                     }
@@ -94,7 +103,7 @@ public class RoutineSnapshotScheduler {
 
                     for (User user : users) {
                         try {
-                            createSnapshotsForUser(user, yesterday);
+                            self.createSnapshotsForUser(user, yesterday);
                         } catch (Exception e) {
                             log.error("Failed to create snapshots for user {} in timezone {}",
                                     user.getId(), timezone, e);
