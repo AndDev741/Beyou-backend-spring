@@ -74,15 +74,10 @@ public class UserControllerTest {
     @Test
     void shouldEditUserSuccessfully() throws Exception {
         UserEditDTO dto = new UserEditDTO(
-            "Andree", 
-            null, 
-            "phrase", 
-            "author", 
-            List.of("widget1"), 
-            "dark",
-            ConstanceConfiguration.ANY,
-            "en",
-            true
+            "Andree", null, "phrase", "author",
+            List.of("widget1"), "dark",
+            ConstanceConfiguration.ANY, "en", true,
+            null, null
         );
         when(userService.editUser(dto, userId)).thenReturn(userResponseDTO);
 
@@ -98,15 +93,10 @@ public class UserControllerTest {
     @Test
     void shouldEditWidgetsSuccessfully() throws Exception {
         UserEditDTO dto = new UserEditDTO(
-            null, 
-            null, 
-            null, 
-            null, 
-            List.of("widgetA", "widgetB"), 
-            null,
-            ConstanceConfiguration.ANY,
-            "en",
-            null
+            null, null, null, null,
+            List.of("widgetA", "widgetB"), null,
+            ConstanceConfiguration.ANY, "en", null,
+            null, null
         );
        
         when(userService.editUser(dto, userId)).thenReturn(userResponseDTO);
@@ -123,15 +113,9 @@ public class UserControllerTest {
     @Test
     void shouldReturnBadRequestWhenNameIsInvalid() throws Exception {
         UserEditDTO dto = new UserEditDTO(
-            "a", 
-            null, 
-            null, 
-            null, 
-            null, 
-            null,
-            null,
-            null,
-            null
+            "a",
+            null, null, null, null, null,
+            null, null, null, null, null
         );
 
         mockMvc.perform(put("/user")
@@ -145,15 +129,9 @@ public class UserControllerTest {
     @Test
     void shouldReturnBadRequestWhenPhotoUrlIsInvalid() throws Exception {
         UserEditDTO dto = new UserEditDTO(
-            null, 
-            "invalid-url", 
-            null, 
-            null, 
-            null, 
-            null,
-            null,
-            null,
-            null
+            null, "invalid-url",
+            null, null, null, null,
+            null, null, null, null, null
         );
 
         mockMvc.perform(put("/user")

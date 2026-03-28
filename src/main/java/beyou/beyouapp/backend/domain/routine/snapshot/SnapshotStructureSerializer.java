@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalTime;
@@ -68,7 +70,8 @@ public class SnapshotStructureSerializer {
             return objectMapper.writeValueAsString(root);
         } catch (Exception e) {
             log.error("Failed to serialize routine structure: {}", e.getMessage());
-            throw new RuntimeException("Failed to serialize routine structure", e);
+            throw new BusinessException(ErrorKey.UNEXPECTED_ERROR,
+                    "Failed to serialize routine structure");
         }
     }
 

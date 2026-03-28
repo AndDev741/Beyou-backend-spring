@@ -19,4 +19,6 @@ public interface RoutineSnapshotRepository extends JpaRepository<RoutineSnapshot
     Optional<LocalDate> findLatestSnapshotDateByRoutineId(@Param("routineId") UUID routineId);
 
     List<RoutineSnapshot> findAllByRoutineId(UUID routineId);
+
+    boolean existsByUserIdAndSnapshotDateAndCompletedTrue(UUID userId, LocalDate snapshotDate);
 }

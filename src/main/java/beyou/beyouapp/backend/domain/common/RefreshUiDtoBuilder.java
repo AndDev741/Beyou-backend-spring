@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.common;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -71,10 +72,10 @@ public class RefreshUiDtoBuilder {
     }
 
     public RefreshUiDTO buildSnapshotRefreshUiDto(User user) {
-        LocalDate today = LocalDate.now();
+        LocalDate userToday = LocalDate.now(ZoneId.of(user.getTimezone()));
         RefreshUserDTO refreshUserDTO = new RefreshUserDTO(
-                user.getCurrentConstance(today),
-                user.getCompletedDays().contains(today),
+                user.getCurrentConstance(userToday),
+                user.getCompletedDays().contains(userToday),
                 user.getMaxConstance(),
                 user.getXpProgress().getXp(),
                 user.getXpProgress().getLevel(),

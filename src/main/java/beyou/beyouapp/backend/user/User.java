@@ -5,6 +5,7 @@ import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.routine.Routine;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
@@ -80,6 +81,9 @@ public class User implements UserDetails {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Goal> goals;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RoutineSnapshot> routineSnapshots;
 
     private Date createdAt;
 

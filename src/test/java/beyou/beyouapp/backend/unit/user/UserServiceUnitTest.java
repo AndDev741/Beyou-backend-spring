@@ -152,14 +152,16 @@ public class UserServiceUnitTest {
         public void shouldEditTheUserInfoSuccessfully() {
             // Arrange
             UserEditDTO userEditDTO = new UserEditDTO(
-                "new Name", 
-                "newphoto.com", 
-                "new PHRASE", 
+                "new Name",
+                "newphoto.com",
+                "new PHRASE",
                 "phrase author",
                 List.of(),
                 "light",
                 ConstanceConfiguration.ANY,
                 "en",
+                null,
+                null,
                 null
                 );
 
@@ -179,14 +181,16 @@ public class UserServiceUnitTest {
         public void shouldEditTheWidgetsSuccessfully() {
             // Arrange
             UserEditDTO userEditDTO = new UserEditDTO(
-                null, 
-                null, 
-                null, 
-                null, 
-                List.of("widget1E, widget2E"), 
+                null,
+                null,
+                null,
+                null,
+                List.of("widget1E, widget2E"),
                 null,
                 ConstanceConfiguration.ANY,
                 "en",
+                null,
+                null,
                 null
             );
 

@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.user.dto;
 
 import java.util.List;
 
+import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -21,7 +22,9 @@ public record UserEditDTO(
     String theme,
     ConstanceConfiguration constanceConfiguration,
     String language,
-    Boolean isTutorialCompleted
+    Boolean isTutorialCompleted,
+    String timezone,
+    XpDecayStrategy xpDecayStrategy
 ) {
     
 }

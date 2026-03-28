@@ -121,6 +121,14 @@ public class XpCalculatorService {
         removeRoutineXpAndPersist(xpToRemove, routine);
     }
 
+    public void addXpToUserOnly(User user, Double newXp) {
+        addUserXpAndPersist(user, newXp);
+    }
+
+    public void removeXpFromUserOnly(User user, Double xpToRemove) {
+        removeUserXpAndPersist(user, xpToRemove);
+    }
+
     private void addUserXpAndPersist(Double newXp) {
         User user = authenticatedUser.getAuthenticatedUser();
         user.getXpProgress().addXp(

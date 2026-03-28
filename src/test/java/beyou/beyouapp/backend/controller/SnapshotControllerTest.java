@@ -38,9 +38,9 @@ import beyou.beyouapp.backend.domain.routine.snapshot.dto.SnapshotCheckRequestDT
 import beyou.beyouapp.backend.domain.routine.snapshot.dto.SnapshotCheckResponseDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.dto.SnapshotMonthResponseDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.dto.SnapshotResponseDTO;
+import beyou.beyouapp.backend.domain.common.DTO.RefreshUserDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
-import beyou.beyouapp.backend.utils.RefreshUiDtoBuilder;
 
 @SpringBootTest
 @AutoConfigureMockMvc(addFilters = false)
@@ -67,7 +67,10 @@ class SnapshotControllerTest {
     private UUID routineId;
     private UUID snapshotId;
     private UUID snapshotCheckId;
-    private RefreshUiDTO refreshUiDTO = RefreshUiDtoBuilder.mockedRefreshUiDTO();
+    // Snapshot endpoints return RefreshUiDTO with only refreshUser populated (no categories/habit/itemChecked)
+    private RefreshUiDTO refreshUiDTO = new RefreshUiDTO(
+            new RefreshUserDTO(3, false, 7, 120.5, 2, 20.0, 130.0),
+            null, null, null);
 
     @BeforeEach
     void setUp() {
@@ -175,12 +178,9 @@ class SnapshotControllerTest {
                 .andExpect(jsonPath("$.refreshUser.level").value(2))
                 .andExpect(jsonPath("$.refreshUser.actualLevelXp").value(20.0))
                 .andExpect(jsonPath("$.refreshUser.nextLevelXp").value(130.0))
-                .andExpect(jsonPath("$.refreshCategories", hasSize(2)))
-                .andExpect(jsonPath("$.refreshCategories[0].id").value("11111111-1111-1111-1111-111111111111"))
-                .andExpect(jsonPath("$.refreshCategories[1].id").value("22222222-2222-2222-2222-222222222222"))
-                .andExpect(jsonPath("$.refreshHabit.id").value("33333333-3333-3333-3333-333333333333"))
-                .andExpect(jsonPath("$.refreshItemChecked.groupItemId").value("55555555-5555-5555-5555-555555555555"))
-                .andExpect(jsonPath("$.refreshItemChecked.check.checked").value(true));
+                .andExpect(jsonPath("$.refreshCategories").doesNotExist())
+                .andExpect(jsonPath("$.refreshHabit").doesNotExist())
+                .andExpect(jsonPath("$.refreshItemChecked").doesNotExist());
 
         verify(snapshotCheckService).checkOrUncheckSnapshotItem(snapshotId, snapshotCheckId);
     }
@@ -201,9 +201,9 @@ class SnapshotControllerTest {
                 .andExpect(jsonPath("$.refreshUser.maxConstance").value(7))
                 .andExpect(jsonPath("$.refreshUser.xp").value(120.5))
                 .andExpect(jsonPath("$.refreshUser.level").value(2))
-                .andExpect(jsonPath("$.refreshCategories", hasSize(2)))
-                .andExpect(jsonPath("$.refreshHabit.id").value("33333333-3333-3333-3333-333333333333"))
-                .andExpect(jsonPath("$.refreshItemChecked.groupItemId").value("55555555-5555-5555-5555-555555555555"));
+                .andExpect(jsonPath("$.refreshCategories").doesNotExist())
+                .andExpect(jsonPath("$.refreshHabit").doesNotExist())
+                .andExpect(jsonPath("$.refreshItemChecked").doesNotExist());
 
         verify(snapshotCheckService).skipOrUnskipSnapshotItem(snapshotId, snapshotCheckId);
     }
