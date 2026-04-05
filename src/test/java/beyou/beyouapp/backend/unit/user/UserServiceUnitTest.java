@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -54,6 +55,9 @@ public class UserServiceUnitTest {
     @Mock
     RefreshTokenService refreshTokenService;
 
+    @Mock
+    ApplicationEventPublisher eventPublisher;
+
     UserMapper userMapper = new UserMapper();
 
     private UserService userService;
@@ -74,7 +78,7 @@ public class UserServiceUnitTest {
         user.setPerfilPhraseAuthor("lg?");
         user.setWidgetsIdInUse(List.of("widget4, widget5"));
 
-        userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService, userMapper);
+        userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService, userMapper, eventPublisher);
     }
 
     @Nested
@@ -104,6 +108,7 @@ public class UserServiceUnitTest {
             UserLoginDTO userLoginDTO = new UserLoginDTO("testebeyou@gmail.com", "123456");
             User user = new User();
             user.setPassword("hashedPassword");
+            user.setEmailVerified(true);
 
             when(userRepository.findByEmail(userLoginDTO.email())).thenReturn(Optional.of(user));
             when(passwordEncoder.matches(userLoginDTO.password(), user.getPassword())).thenReturn(true);

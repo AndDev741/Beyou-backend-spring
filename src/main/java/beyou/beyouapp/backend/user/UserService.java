@@ -8,11 +8,14 @@ import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
+import beyou.beyouapp.backend.user.event.UserRegisteredEvent;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,7 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import beyou.beyouapp.backend.user.validation.PasswordValidator;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -37,6 +43,10 @@ public class UserService {
     private final TokenService tokenService;
     private final RefreshTokenService refreshTokenService;
     private final UserMapper userMapper;
+    private final ApplicationEventPublisher eventPublisher;
+
+    private static final SecureRandom secureRandom = new SecureRandom();
+    private static final Base64.Encoder base64Encoder = Base64.getUrlEncoder();
 
     public ResponseEntity<String> verifyAuthentication(){
         return ResponseEntity.ok().body("authenticated");
@@ -62,6 +72,10 @@ public class UserService {
         if(loginUser.isPresent()){
             User user = loginUser.get();
             if(passwordEncoder.matches(userLoginDTO.password(), user.getPassword())){
+                if (!user.isEmailVerified()) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(Map.of("error", "EMAIL_NOT_VERIFIED"));
+                }
                 String accessToken = tokenService.generateJwtToken(user);
                 String refreshToken = refreshTokenService.createRefreshToken(user);
 
@@ -95,7 +109,16 @@ public class UserService {
         }else{
             User newUser = new User(userRegisterDTO);
             newUser.setPassword(passwordEncoder.encode(userRegisterDTO.password()));
+
+            String token = generateVerificationToken();
+            newUser.setVerificationToken(token);
+            newUser.setVerificationTokenExpiry(LocalDateTime.now().plusHours(24));
+
             userRepository.save(newUser);
+
+            eventPublisher.publishEvent(new UserRegisteredEvent(
+                    this, newUser.getEmail(), token, newUser.getLanguageInUse()));
+
             return ResponseEntity.ok().body(Map.of("success", "User registered successfully"));
         }
     }
@@ -149,6 +172,12 @@ public class UserService {
         }else{
             throw new UserNotFound("User not found by id");
         }
+    }
+
+    private static String generateVerificationToken() {
+        byte[] randomBytes = new byte[32];
+        secureRandom.nextBytes(randomBytes);
+        return base64Encoder.encodeToString(randomBytes);
     }
 
     private String normalizeOptionalString(String value) {

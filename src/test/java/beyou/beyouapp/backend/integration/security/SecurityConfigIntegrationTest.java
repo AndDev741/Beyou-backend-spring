@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import beyou.beyouapp.backend.security.SecurityConfig;
+import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
@@ -51,7 +52,11 @@ public class SecurityConfigIntegrationTest {
         userRepository.deleteAll(); // Clean before all tests
         UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!", false);
         userService.registerUser(register);
-    
+
+        // Verify the user's email so login tests work
+        User user = userRepository.findByEmail("testebeyou@gmail.com").orElseThrow();
+        user.setEmailVerified(true);
+        userRepository.save(user);
     }
 
 
