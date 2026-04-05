@@ -1,12 +1,26 @@
-TOKEN_SECRET=
+# Database
+DATABASE_URL=jdbc:postgresql://localhost:5490/beyou
+DATABASE_USERNAME=postgres
+DATABASE_PASSWORD=
 
+# Auth
+TOKEN_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 
-FRONTEND_URL="http://localhost:3000/"
-OAUTH_GOOGLE_URL="https://oauth2.googleapis.com/token"
-USER_INFO_GOOGLE_URL="https://www.googleapis.com/oauth2/v2/userinfo"
+# URLs
+FRONTEND_URL=http://localhost:3000/
+OAUTH_GOOGLE_URL=https://oauth2.googleapis.com/token
+USER_INFO_GOOGLE_URL=https://www.googleapis.com/oauth2/v2/userinfo
 
+# Cookie
+COOKIE_SECURE=false
+COOKIE_SAME_SITE=Lax
+
+# CORS
+CORS_ALLOWED_PATTERN=*
+
+# Mail
 MAIL_HOST=
 MAIL_PORT=
 MAIL_USERNAME=
@@ -15,9 +29,18 @@ MAIL_FROM=
 PASSWORD_RESET_TTL_MINUTES=30
 PASSWORD_RESET_COOLDOWN_MINUTES=5
 
+# Docs Import
 DOCS_IMPORT_REPO_OWNER=AndDev741
 DOCS_IMPORT_REPO_NAME=beyou-arch-design
 DOCS_IMPORT_PATH=architecture
 DOCS_IMPORT_PROJECTS_PATH=projects
 DOCS_IMPORT_API_PATH=api
 DOCS_IMPORT_TOKEN=
+DOCS_IMPORT_SECRET=
+
+# Monitoring
+MANAGEMENT_PORT=9091
+ACTUATOR_ENDPOINTS=health,metrics,prometheus
+
+# Spring Profile (dev or prod)
+SPRING_PROFILES_ACTIVE=dev

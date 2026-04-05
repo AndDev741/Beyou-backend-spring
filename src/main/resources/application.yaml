@@ -5,16 +5,15 @@ spring:
   application:
     name: backend
   datasource:
-    url: jdbc:postgresql://localhost:5490/beyou
-    username: postgres
-    password: 1516
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5490/beyou}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD}
   jpa:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
-  #      ddl-auto: create-drop  # Uncomment this line to recreate the tables when starting
+      ddl-auto: ${DDL_AUTO:update}
   mail:
     host: ${MAIL_HOST}
     port: ${MAIL_PORT}
@@ -29,10 +28,11 @@ spring:
 
 server:
   port: 8099
-  adress: 0.0.0.0
+  address: 0.0.0.0
 
 cookie:
-  secure: ${COOKIE_SECURE}
+  secure: ${COOKIE_SECURE:false}
+  same-site: ${COOKIE_SAME_SITE:Lax}
 
 cors:
   allowed-pattern: ${CORS_ALLOWED_PATTERN}
@@ -78,10 +78,11 @@ docs:
 management:
   server:
     port: ${MANAGEMENT_PORT:9091}
+    address: 127.0.0.1
   endpoints:
     web:
       exposure:
-        include: "*"
+        include: ${ACTUATOR_ENDPOINTS:health,metrics,prometheus}
   metrics:
     tags:
       application: beyou-backend

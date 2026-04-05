@@ -1,6 +1,4 @@
 spring:
-  server:
-    port: 8011
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
     driverClassName: org.h2.Driver
@@ -24,10 +22,13 @@ spring:
           starttls:
             enable: false
 
+server:
+  port: 8011
+
 api:
   security:
     token:
-      secret: test
+      secret: test-secret-that-is-at-least-32-characters-long
 
 google:
   secrets:
@@ -49,6 +50,13 @@ password-reset:
 
 cookie:
   secure: false
+  same-site: Lax
 
 cors:
   allowed-pattern: http://localhost:3000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
