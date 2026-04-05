@@ -26,8 +26,8 @@ public class ControllerLogging {
         Object result = joinPoint.proceed();
 
         long duration = System.currentTimeMillis() - start;
-        log.info("[REQUEST] {} called with args {} - completed in {} ms",
-                joinPoint.getSignature(), joinPoint.getArgs(), duration);
+        log.info("[REQUEST] {} - completed in {} ms",
+                joinPoint.getSignature(), duration);
 
         return result;
     }
