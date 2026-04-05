@@ -28,6 +28,9 @@ public class TokenService {
     @Value("${cookie.secure}")
     boolean COOKIE_SECURE;
 
+    @Value("${cookie.same-site:Lax}")
+    private String cookieSameSite;
+
     public String generateJwtToken(User  user){
         try{
             Algorithm algorithm = Algorithm.HMAC256(secret);
@@ -70,7 +73,7 @@ public class TokenService {
                 .secure(COOKIE_SECURE)
                 .path("/")
                 .maxAge(maxAge)
-                .sameSite("Lax")
+                .sameSite(cookieSameSite)
                 .build();
     }
 
