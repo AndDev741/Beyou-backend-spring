@@ -5,6 +5,7 @@ import beyou.beyouapp.backend.domain.category.CategoryRepository;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.common.ExperienceLevel;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.user.User;
 import jakarta.transaction.Transactional;
@@ -60,7 +61,7 @@ public class CategoryControllerTest {
 
         CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO(
                 "name", "icon", "desc",
-                0, 0);
+                ExperienceLevel.BEGINNER);
         category = new Category(categoryRequestDTO, user);
         categoryService.createCategory(categoryRequestDTO, userID);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
@@ -80,7 +81,7 @@ public class CategoryControllerTest {
     void shouldCreateCategorySuccessfully() throws Exception {
         CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO(
                 "name", "icon", "desc",
-                0, 0);
+                ExperienceLevel.BEGINNER);
         Category category = new Category(categoryRequestDTO, user);
 
         ResponseEntity<Map<String, Object>> successResponse = ResponseEntity.ok(Map.of("success", category));

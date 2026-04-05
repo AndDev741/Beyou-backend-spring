@@ -26,6 +26,7 @@ import beyou.beyouapp.backend.domain.habit.HabitMapper;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
+import beyou.beyouapp.backend.domain.common.ExperienceLevel;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
@@ -100,9 +101,9 @@ public class HabitServiceUnitTest {
 
     @Test
     public void shouldCreateHabitSuccessfully(){
-        CreateHabitDTO createHabitDTO = new CreateHabitDTO( 
-        "name", "", "", "", 2, 2, 
-        categories, 0, 0);
+        CreateHabitDTO createHabitDTO = new CreateHabitDTO(
+        "name", "", "", "", 2, 2,
+        categories, ExperienceLevel.BEGINNER);
 
         XpByLevel xpByLevel = new XpByLevel(0, 0);
         ResponseEntity<Map<String, String>> response = ResponseEntity.ok().body(Map.of("success", "Habit saved successfully"));

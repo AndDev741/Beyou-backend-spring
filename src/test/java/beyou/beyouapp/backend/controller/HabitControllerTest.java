@@ -33,6 +33,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
+import beyou.beyouapp.backend.domain.common.ExperienceLevel;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
@@ -79,8 +80,8 @@ public class HabitControllerTest {
     void shouldCreateAHabitSuccessfully() throws JsonProcessingException, Exception{
         List<UUID> categories = new ArrayList<>(List.of(UUID.randomUUID()));
 
-        CreateHabitDTO createHabitDTO = new CreateHabitDTO( 
-        "name", "", "", "", 2, 2, categories, 0, 0);
+        CreateHabitDTO createHabitDTO = new CreateHabitDTO(
+        "name", "", "", "", 2, 2, categories, ExperienceLevel.BEGINNER);
 
         ResponseEntity<Map<String, String>> successResponse = ResponseEntity.ok().body(Map.of("success", "Habit saved successfully"));
 

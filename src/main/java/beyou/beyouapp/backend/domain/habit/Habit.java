@@ -116,8 +116,8 @@ public class Habit {
         setIconId(createHabitDTO.iconId());
         setMotivationalPhrase(createHabitDTO.motivationalPhrase());
         setCategories(categories);
-        xpProgress.setXp(createHabitDTO.xp());
-        xpProgress.setLevel(createHabitDTO.level());
+        xpProgress.setXp(createHabitDTO.experience().getXp());
+        xpProgress.setLevel(createHabitDTO.experience().getLevel());
         setImportance(createHabitDTO.importance());
         setDificulty(createHabitDTO.dificulty());
         setConstance(0);

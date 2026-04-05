@@ -72,8 +72,8 @@ public class HabitService {
         User user = userRepository.findById(userId)
         .orElseThrow(() -> new UserNotFound("User not found"));
 
-        XpByLevel actualBaseXp = xpByLevelRepository.findByLevel(createHabitDTO.level());
-        XpByLevel nextLevelXp = xpByLevelRepository.findByLevel(createHabitDTO.level() + 1);
+        XpByLevel actualBaseXp = xpByLevelRepository.findByLevel(createHabitDTO.experience().getLevel());
+        XpByLevel nextLevelXp = xpByLevelRepository.findByLevel(createHabitDTO.experience().getLevel() + 1);
 
         ArrayList<Category> categories = new ArrayList<>();
         int numberOfCategories = createHabitDTO.categoriesId().size();
