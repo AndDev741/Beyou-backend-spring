@@ -330,6 +330,7 @@ public class DiaryRoutineService {
 
     @Transactional
     public RefreshUiDTO checkAndUncheckGroup(CheckGroupRequestDTO checkGroupRequestDTO, UUID userId) {
+        verifyRoutineOwnership(checkGroupRequestDTO.routineId(), userId);
         RefreshUiDTO result = checkItemService.checkOrUncheckItemGroup(checkGroupRequestDTO);
         userCacheEvictService.evictAllUserCaches(userId);
         return result;
@@ -337,9 +338,18 @@ public class DiaryRoutineService {
 
     @Transactional
     public RefreshUiDTO skipOrUnskipGroup(SkipGroupRequestDTO skipGroupRequestDTO, UUID userId) {
+        verifyRoutineOwnership(skipGroupRequestDTO.routineId(), userId);
         RefreshUiDTO result = checkItemService.skipOrUnskipItemGroup(skipGroupRequestDTO);
         userCacheEvictService.evictAllUserCaches(userId);
         return result;
+    }
+
+    private void verifyRoutineOwnership(UUID routineId, UUID userId) {
+        DiaryRoutine routine = diaryRoutineRepository.findById(routineId)
+                .orElseThrow(() -> new BusinessException(ErrorKey.ROUTINE_NOT_FOUND, "Routine not found"));
+        if (!routine.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "Access denied: routine does not belong to user");
+        }
     }
 
 }
