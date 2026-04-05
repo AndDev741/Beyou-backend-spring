@@ -60,6 +60,9 @@ password-reset:
   token-ttl-minutes: ${PASSWORD_RESET_TTL_MINUTES:30}
   cooldown-minutes: ${PASSWORD_RESET_COOLDOWN_MINUTES:5}
 
+rate-limit:
+  enabled: true
+
 docs:
   import:
     repoOwner: ${DOCS_IMPORT_REPO_OWNER:AndDev741}

@@ -55,6 +55,9 @@ cookie:
 cors:
   allowed-pattern: http://localhost:3000
 
+rate-limit:
+  enabled: false
+
 management:
   endpoints:
     web:
