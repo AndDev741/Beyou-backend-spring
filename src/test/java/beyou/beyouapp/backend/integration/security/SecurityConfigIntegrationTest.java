@@ -49,7 +49,7 @@ public class SecurityConfigIntegrationTest {
         MockitoAnnotations.openMocks(this);
 
         userRepository.deleteAll(); // Clean before all tests
-        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "123456", false);
+        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!", false);
         userService.registerUser(register);
     
     }
@@ -59,13 +59,13 @@ public class SecurityConfigIntegrationTest {
     @Transactional
     public void shouldAllowAccessToLoginAndRegisterWithoutAuthentication() throws Exception {
         mockMvc.perform(post("/auth/login")
-                        .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
+                        .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("accessToken"));
 
         mockMvc.perform(post("/auth/register")
-                        .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"123456\", " +
+                        .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"TestPassword1!\", " +
                                 "\"isGoogleAccount\": false}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -125,7 +125,7 @@ public class SecurityConfigIntegrationTest {
 
     private MvcResult simulateLogin() throws Exception {
         return mockMvc.perform(post("/auth/login")
-                        .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
+                        .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("accessToken"))

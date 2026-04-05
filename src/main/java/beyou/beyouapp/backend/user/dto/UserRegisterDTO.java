@@ -13,7 +13,7 @@ public record UserRegisterDTO(@NotBlank(message = "Name is Required")
                             @Size(max = 256, message = "Email is too long")
                             String email,
                             @NotBlank(message = "Password is Required")
-                            @Size(min = 6, message = "Password require a minimum of 6 characters")
+                            @Size(min = 12, message = "Password require a minimum of 12 characters")
                             @Size(max = 256, message = "Password is too long")
                             String password,
                             boolean isGoogleAccount) {

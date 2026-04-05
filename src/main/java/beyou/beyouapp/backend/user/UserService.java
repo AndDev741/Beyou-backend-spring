@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
+import beyou.beyouapp.backend.user.validation.PasswordValidator;
 
 import java.time.LocalDate;
 import java.util.Map;
@@ -82,6 +83,10 @@ public class UserService {
             for (ConstraintViolation<UserRegisterDTO> violation : violations){
                 throw new IllegalArgumentException(violation.getMessage());
             }
+        }
+
+        if (!PasswordValidator.isValid(userRegisterDTO.password())) {
+            throw new BusinessException(ErrorKey.INVALID_REQUEST, "Password must be at least 12 characters with at least 2 character types");
         }
 
         Optional<User> verifyUser = userRepository.findByEmail(userRegisterDTO.email());
