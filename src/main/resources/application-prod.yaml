@@ -1,0 +1,26 @@
+# Prod profile — activate with: spring.profiles.active=prod
+# All secrets MUST be set via environment variables (no defaults).
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+cookie:
+  secure: true
+  same-site: Strict
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
