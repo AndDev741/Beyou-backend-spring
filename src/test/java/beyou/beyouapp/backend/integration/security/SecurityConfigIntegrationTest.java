@@ -117,6 +117,12 @@ public class SecurityConfigIntegrationTest {
                 .andExpect(content().string("JWT not Found in authorization header"));
     }
 
+    @Test
+    public void shouldBlockUnauthenticatedAccessToActuator() throws Exception {
+        mockMvc.perform(get("/actuator/env"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private MvcResult simulateLogin() throws Exception {
         return mockMvc.perform(post("/auth/login")
                         .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")

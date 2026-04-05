@@ -43,7 +43,6 @@ public class SecurityConfig {
                             "/auth/forgot-password",
                             "/auth/reset-password/**"
                         ).permitAll()
-                        .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/docs/admin/**").authenticated()
                         .requestMatchers("/docs/**").permitAll()
                         .anyRequest()

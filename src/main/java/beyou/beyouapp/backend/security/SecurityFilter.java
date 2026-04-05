@@ -31,15 +31,14 @@ public class SecurityFilter extends OncePerRequestFilter {
         String requestURI = request.getRequestURI();
 
         if(
-            requestURI.equals("/auth/login") || 
+            requestURI.equals("/auth/login") ||
             requestURI.equals("/auth/register") ||
-            requestURI.startsWith("/auth/refresh")|| 
+            requestURI.startsWith("/auth/refresh")||
             requestURI.startsWith("/auth/google") ||
             requestURI.startsWith("/auth/logout") ||
             requestURI.equals("/auth/forgot-password") ||
             requestURI.startsWith("/auth/reset-password") ||
-            (requestURI.startsWith("/docs") && !requestURI.startsWith("/docs/admin")) ||
-            requestURI.startsWith("/actuator")
+            (requestURI.startsWith("/docs") && !requestURI.startsWith("/docs/admin"))
         ){
             filterChain.doFilter(request, response);
             return;
