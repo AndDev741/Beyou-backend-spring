@@ -10,6 +10,8 @@ import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.routine.ScheduleNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -124,11 +126,34 @@ class ScheduleServiceUnitTest {
         schedule.setDays(Set.of(WeekDay.Monday));
 
         when(scheduleRepository.findById(scheduleId)).thenReturn(Optional.of(schedule));
+        when(diaryRoutineService.getDiaryRoutineByScheduleId(scheduleId, userId)).thenReturn(routine);
         when(scheduleRepository.save(schedule)).thenReturn(schedule);
 
         Schedule result = scheduleService.update(dto, userId);
 
         assertEquals(days, result.getDays());
+    }
+
+    @Test
+    void testUpdate_shouldRejectScheduleNotOwnedByUser() {
+        UUID userId = UUID.randomUUID();
+        UUID scheduleId = UUID.randomUUID();
+        UUID routineId = UUID.randomUUID();
+
+        Set<WeekDay> days = Set.of(WeekDay.Monday);
+        UpdateScheduleDTO dto = new UpdateScheduleDTO(scheduleId, days, routineId);
+
+        Schedule schedule = new Schedule();
+        schedule.setId(scheduleId);
+        schedule.setDays(Set.of(WeekDay.Friday));
+
+        when(scheduleRepository.findById(scheduleId)).thenReturn(Optional.of(schedule));
+        when(diaryRoutineService.getDiaryRoutineByScheduleId(scheduleId, userId))
+                .thenThrow(new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "Access denied"));
+
+        assertThrows(BusinessException.class, () -> {
+            scheduleService.update(dto, userId);
+        });
     }
 
     @Test

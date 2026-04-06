@@ -78,7 +78,7 @@ public class HabitService {
         ArrayList<Category> categories = new ArrayList<>();
         int numberOfCategories = createHabitDTO.categoriesId().size();
         for(int i = 0; i < numberOfCategories; i++){
-            Category category = categoryService.getCategory(createHabitDTO.categoriesId().get(i));
+            Category category = categoryService.getCategory(createHabitDTO.categoriesId().get(i), userId);
             categories.add(category);
         }
 
@@ -102,7 +102,7 @@ public class HabitService {
         List<Category> categoriesEdit = new ArrayList<>();
         int numberOfCategories = editHabitDTO.categoriesId().size();
         for(int i = 0; i < numberOfCategories; i++){
-            Category category = categoryService.getCategory(editHabitDTO.categoriesId().get(i));
+            Category category = categoryService.getCategory(editHabitDTO.categoriesId().get(i), userId);
             categoriesEdit.add(category);
         }
         

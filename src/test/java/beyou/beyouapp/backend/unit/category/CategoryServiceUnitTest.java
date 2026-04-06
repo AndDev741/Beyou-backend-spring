@@ -11,6 +11,7 @@ import beyou.beyouapp.backend.domain.common.ExperienceLevel;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
+import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
@@ -82,7 +83,7 @@ public class CategoryServiceUnitTest {
     public void shouldReturnACategory(){
         when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category));
 
-        Category assertCategory = categoryService.getCategory(categoryId);
+        Category assertCategory = categoryService.getCategory(categoryId, userId);
 
         assertEquals(category, assertCategory);
         assertEquals(category.getName(), assertCategory.getName());
@@ -145,10 +146,19 @@ public class CategoryServiceUnitTest {
     @Test
     public void shouldThrowAExceptionOfCategoryNotFoundWhenPassedAWrongCategoryId(){
         Exception exception = assertThrows(CategoryNotFound.class, () -> {
-            categoryService.getCategory(UUID.randomUUID());
+            categoryService.getCategory(UUID.randomUUID(), userId);
         });
 
         assertEquals("Category not found", exception.getMessage());
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenCategoryDoesNotBelongToUser() {
+        UUID otherUserId = UUID.randomUUID();
+        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category));
+        assertThrows(BusinessException.class, () -> {
+            categoryService.getCategory(categoryId, otherUserId);
+        });
     }
 
     @Test

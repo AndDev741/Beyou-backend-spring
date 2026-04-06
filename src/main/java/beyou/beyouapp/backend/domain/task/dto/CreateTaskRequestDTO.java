@@ -3,8 +3,11 @@ package beyou.beyouapp.backend.domain.task.dto;
 import java.util.List;
 import java.util.UUID;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record CreateTaskRequestDTO(
@@ -13,8 +16,8 @@ public record CreateTaskRequestDTO(
     String description,
     @NotBlank
     String iconId,
-    Integer importance,
-    Integer difficulty,
+    @NotNull @Min(1) @Max(5) Integer importance,
+    @NotNull @Min(1) @Max(5) Integer difficulty,
     List<UUID> categoriesId,
     boolean oneTimeTask
 ) {

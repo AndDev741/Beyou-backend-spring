@@ -56,9 +56,9 @@ public class GoalService {
     public ResponseEntity<Map<String, String>> createGoal(CreateGoalRequestDTO dto, User user) {
         log.info("[LOG] Creating Goal with DTO => {}", dto);
         List<Category> categories = dto.categoriesId().stream()
-                .map(categoryService::getCategory)
+                .map(catId -> categoryService.getCategory(catId, user.getId()))
                 .toList();
-        
+
         Goal goal = goalMapper.toEntity(dto, categories, user);
         try {
             goalRepository.save(goal);
@@ -74,7 +74,7 @@ public class GoalService {
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
         List<Category> categories = dto.categoriesId().stream()
-                .map(categoryService::getCategory)
+                .map(catId -> categoryService.getCategory(catId, userId))
                 .toList();
         goalMapper.updateEntity(goal, dto, categories);
         try {

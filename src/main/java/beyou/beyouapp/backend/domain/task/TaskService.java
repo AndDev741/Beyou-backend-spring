@@ -105,10 +105,10 @@ public class TaskService {
 
         if(createTaskDTO.categoriesId() != null && !createTaskDTO.categoriesId().isEmpty()){
             List<UUID> categoriesId = createTaskDTO.categoriesId();
-            categoriesId.forEach(categoryId -> 
-            categoriesToAdd.add(categoryService.getCategory(categoryId)));
+            categoriesId.forEach(categoryId ->
+            categoriesToAdd.add(categoryService.getCategory(categoryId, userId)));
         }
-        
+
         Task taskToCreate = taskMapper.toEntity(createTaskDTO, categoriesToAdd, user);
 
         try {
@@ -137,8 +137,8 @@ public class TaskService {
         List<Category> categoriesToAdd = new ArrayList<>();
         if(editTaskRequestDTO.categoriesId() != null && !editTaskRequestDTO.categoriesId().isEmpty()){
             List<UUID> categoriesId = editTaskRequestDTO.categoriesId();
-            categoriesId.forEach(categoryId -> 
-            categoriesToAdd.add(categoryService.getCategory(categoryId)));
+            categoriesId.forEach(categoryId ->
+            categoriesToAdd.add(categoryService.getCategory(categoryId, userId)));
         }
         taskMapper.updateEntity(taskToEdit, editTaskRequestDTO, categoriesToAdd);
 

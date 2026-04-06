@@ -61,6 +61,8 @@ public class ScheduleService {
         Schedule schedule = scheduleRepository.findById(updatedSchedule.scheduleId())
         .orElseThrow(() -> new ScheduleNotFoundException("Schedule not found by ID: " + updatedSchedule.scheduleId()));
 
+        diaryRoutineService.getDiaryRoutineByScheduleId(schedule.getId(), userId);
+
         checkAndReplaceScheduledRoutines(updatedSchedule.days(), userId);
 
         schedule.setDays(updatedSchedule.days());

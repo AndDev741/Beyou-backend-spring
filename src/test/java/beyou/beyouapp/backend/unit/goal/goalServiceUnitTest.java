@@ -139,7 +139,7 @@ public class goalServiceUnitTest {
                 GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
         Category cat = new Category();
         cat.setId(dto.categoriesId().get(0));
-        when(categoryService.getCategory(dto.categoriesId().get(0))).thenReturn(cat);
+        when(categoryService.getCategory(dto.categoriesId().get(0), user.getId())).thenReturn(cat);
         when(goalRepository.save(any(Goal.class))).thenReturn(goal);
 
         ResponseEntity<Map<String, String>> response = goalService.createGoal(dto, user);
@@ -157,7 +157,7 @@ public class goalServiceUnitTest {
                 List.of(UUID.randomUUID()), "motivation",
                 LocalDate.now(), LocalDate.now().plusDays(1),
                 GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
-        when(categoryService.getCategory(any(UUID.class))).thenReturn(new Category());
+        when(categoryService.getCategory(any(UUID.class), any(UUID.class))).thenReturn(new Category());
         doThrow(new RuntimeException()).when(goalRepository).save(any(Goal.class));
 
         BusinessException exception = assertThrows(BusinessException.class,
@@ -174,7 +174,7 @@ public class goalServiceUnitTest {
                 LocalDate.now(), LocalDate.now().plusDays(2),
                 GoalStatus.IN_PROGRESS, GoalTerm.MEDIUM_TERM);
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
-        when(categoryService.getCategory(any(UUID.class))).thenReturn(new Category());
+        when(categoryService.getCategory(any(UUID.class), any(UUID.class))).thenReturn(new Category());
         when(goalRepository.save(goal)).thenReturn(goal);
 
         ResponseEntity<Map<String, String>> response = goalService.editGoal(dto, userId);
@@ -219,7 +219,7 @@ public class goalServiceUnitTest {
                 false, List.of(UUID.randomUUID()), "", LocalDate.now(), LocalDate.now(),
                 GoalStatus.NOT_STARTED, GoalTerm.LONG_TERM);
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
-        when(categoryService.getCategory(any(UUID.class))).thenReturn(new Category());
+        when(categoryService.getCategory(any(UUID.class), any(UUID.class))).thenReturn(new Category());
         doThrow(new RuntimeException()).when(goalRepository).save(goal);
 
         BusinessException exception = assertThrows(BusinessException.class,
