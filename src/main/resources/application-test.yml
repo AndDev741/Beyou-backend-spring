@@ -45,7 +45,7 @@ mail:
   from: test@example.com
 
 password-reset:
-  token-ttl-minutes: 30
+  token-ttl-minutes: 15
   cooldown-minutes: 1
 
 cookie:

@@ -57,7 +57,7 @@ mail:
   from: ${MAIL_FROM:${MAIL_USERNAME}}
 
 password-reset:
-  token-ttl-minutes: ${PASSWORD_RESET_TTL_MINUTES:30}
+  token-ttl-minutes: ${PASSWORD_RESET_TTL_MINUTES:15}
   cooldown-minutes: ${PASSWORD_RESET_COOLDOWN_MINUTES:5}
 
 rate-limit:
