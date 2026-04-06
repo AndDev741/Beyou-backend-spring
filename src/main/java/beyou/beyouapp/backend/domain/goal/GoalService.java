@@ -160,7 +160,7 @@ public class GoalService {
         Goal goal = getGoal(goalId);
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
-        goal.setCurrentValue(goal.getCurrentValue() - 1);
+        goal.setCurrentValue(Math.max(0, goal.getCurrentValue() - 1));
         try {
             goalRepository.save(goal);
             userCacheEvictService.evictAllUserCaches(userId);

@@ -20,9 +20,9 @@ public class ServiceMethodsLogging {
     public void allUserServiceMethods() {
     }
 
-    @Before("allServiceMethods()")
+    @Before("allUserServiceMethods()")
     public void logBefore(JoinPoint joinpoint) {
-        log.info("[START] Starting method: {} with args {}", joinpoint.getSignature().getName(), joinpoint.getArgs());
+        log.info("[START] Starting method: {} with {} arg(s)", joinpoint.getSignature().getName(), joinpoint.getArgs().length);
     }
 
     @AfterReturning(pointcut = "allUserServiceMethods()", returning = "result")

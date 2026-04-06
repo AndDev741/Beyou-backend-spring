@@ -343,4 +343,16 @@ public class goalServiceUnitTest {
 
     }
 
+    @Test
+    void shouldNotDecrementBelowZero() {
+        goal.setCurrentValue(0.0);
+
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        GoalResponseDTO response = goalService.decreaseCurrentValue(goalId, userId);
+
+        assertEquals(0.0, response.currentValue());
+    }
+
 }
