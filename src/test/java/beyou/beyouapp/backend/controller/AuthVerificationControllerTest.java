@@ -47,7 +47,7 @@ public class AuthVerificationControllerTest {
 
     @Test
     public void shouldVerifyEmailSuccessfully() throws Exception {
-        UserRegisterDTO register = new UserRegisterDTO("test", "verify@test.com", "TestPassword1!", false);
+        UserRegisterDTO register = new UserRegisterDTO("test", "verify@test.com", "TestPassword1!");
         userService.registerUser(register);
 
         User user = userRepository.findByEmail("verify@test.com").orElseThrow();
@@ -75,7 +75,7 @@ public class AuthVerificationControllerTest {
 
     @Test
     public void shouldRejectExpiredToken() throws Exception {
-        UserRegisterDTO register = new UserRegisterDTO("test", "expired@test.com", "TestPassword1!", false);
+        UserRegisterDTO register = new UserRegisterDTO("test", "expired@test.com", "TestPassword1!");
         userService.registerUser(register);
 
         User user = userRepository.findByEmail("expired@test.com").orElseThrow();
@@ -89,7 +89,7 @@ public class AuthVerificationControllerTest {
 
     @Test
     public void shouldBlockLoginForUnverifiedUser() throws Exception {
-        UserRegisterDTO register = new UserRegisterDTO("test", "unverified@test.com", "TestPassword1!", false);
+        UserRegisterDTO register = new UserRegisterDTO("test", "unverified@test.com", "TestPassword1!");
         userService.registerUser(register);
 
         mockMvc.perform(post("/auth/login")
@@ -101,7 +101,7 @@ public class AuthVerificationControllerTest {
 
     @Test
     public void shouldAllowLoginAfterVerification() throws Exception {
-        UserRegisterDTO register = new UserRegisterDTO("test", "verified@test.com", "TestPassword1!", false);
+        UserRegisterDTO register = new UserRegisterDTO("test", "verified@test.com", "TestPassword1!");
         userService.registerUser(register);
 
         User user = userRepository.findByEmail("verified@test.com").orElseThrow();

@@ -148,7 +148,7 @@ public class User implements UserDetails {
         setName(user.name());
         setEmail(user.email());
         setPassword(user.password());
-        setGoogleAccount(user.isGoogleAccount());
+        setGoogleAccount(false);
     }
 
     public User(GoogleUserDTO googleUser) {

@@ -15,6 +15,5 @@ public record UserRegisterDTO(@NotBlank(message = "Name is Required")
                             @NotBlank(message = "Password is Required")
                             @Size(min = 12, message = "Password require a minimum of 12 characters")
                             @Size(max = 256, message = "Password is too long")
-                            String password,
-                            boolean isGoogleAccount) {
+                            String password) {
 }

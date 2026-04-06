@@ -50,7 +50,7 @@ public class SecurityConfigIntegrationTest {
         MockitoAnnotations.openMocks(this);
 
         userRepository.deleteAll(); // Clean before all tests
-        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!", false);
+        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!");
         userService.registerUser(register);
 
         // Verify the user's email so login tests work
@@ -70,8 +70,7 @@ public class SecurityConfigIntegrationTest {
                 .andExpect(header().exists("accessToken"));
 
         mockMvc.perform(post("/auth/register")
-                        .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"TestPassword1!\", " +
-                                "\"isGoogleAccount\": false}")
+                        .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"TestPassword1!\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(content().string("{\"success\":\"User registered successfully\"}"));
