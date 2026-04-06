@@ -73,14 +73,23 @@ public class XpProgressTest {
     }
 
     @Test
-    void removeXpShouldStopLevelingDownWhenXpIsDepleted() {
+    void removeXpShouldFloorAtZeroWhenAmountExceedsCurrentXp() {
         initializeProgress(80.0, 1);
 
         xpProgress.removeXp(100.0, levelProvider);
 
-        assertEquals(-20.0, xpProgress.getXp());
+        assertEquals(0.0, xpProgress.getXp(), "XP must never go below 0");
         assertEquals(1, xpProgress.getLevel());
         assertEquals(0.0, xpProgress.getActualLevelXp());
         assertEquals(100.0, xpProgress.getNextLevelXp());
+    }
+
+    @Test
+    void removeXpShouldFloorAtZeroWhenStartingAtZero() {
+        initializeProgress(0.0, 1);
+
+        xpProgress.removeXp(50.0, levelProvider);
+
+        assertEquals(0.0, xpProgress.getXp(), "XP must never go below 0 even when starting at zero");
     }
 }

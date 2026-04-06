@@ -4,6 +4,7 @@ import beyou.beyouapp.backend.exceptions.security.JwtNotFoundException;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenDontMatchRaw;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenExpiredException;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -65,6 +66,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpClientErrorException.class)
     public ResponseEntity<Map<String, String>> handleHttpClientErrorException(HttpClientErrorException ex){
         return ResponseEntity.badRequest().body(Map.of("error", "error trying login with google, try again"));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleDataIntegrityViolationException(DataIntegrityViolationException ex){
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.DUPLICATE_CHECK.name(), "Duplicate check: this item has already been checked for the given date", null);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
 
 }
