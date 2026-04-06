@@ -114,7 +114,7 @@ public class User implements UserDetails {
 
     private boolean isTutorialCompleted;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean emailVerified = false;
 
     private String verificationToken;
