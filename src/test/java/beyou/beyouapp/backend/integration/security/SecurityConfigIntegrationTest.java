@@ -128,6 +128,15 @@ public class SecurityConfigIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    @WithMockUser
+    public void shouldReturnSecurityHeaders() throws Exception {
+        mockMvc.perform(get("/category"))
+                .andExpect(header().exists("Content-Security-Policy"))
+                .andExpect(header().exists("Referrer-Policy"))
+                .andExpect(header().exists("Permissions-Policy"));
+    }
+
     private MvcResult simulateLogin() throws Exception {
         return mockMvc.perform(post("/auth/login")
                         .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
