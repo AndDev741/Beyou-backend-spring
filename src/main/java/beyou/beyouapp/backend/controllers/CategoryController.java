@@ -37,7 +37,7 @@ public class CategoryController {
     }
 
     @PutMapping
-    public ResponseEntity<Map<String, Object>> editCategory(@RequestBody CategoryEditRequestDTO categoryEditRequestDTO){
+    public ResponseEntity<Map<String, Object>> editCategory(@RequestBody @Valid CategoryEditRequestDTO categoryEditRequestDTO){
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return categoryService.editCategory(categoryEditRequestDTO, userAuth.getId());
     }

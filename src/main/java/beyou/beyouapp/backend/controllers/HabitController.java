@@ -44,7 +44,7 @@ public class HabitController{
     }
 
     @PutMapping()
-    public ResponseEntity<Map<String, String>> editHabit(@RequestBody EditHabitDTO editHabitDTO){
+    public ResponseEntity<Map<String, String>> editHabit(@RequestBody @Valid EditHabitDTO editHabitDTO){
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return habitService.editHabit(editHabitDTO, userAuth.getId());
     }

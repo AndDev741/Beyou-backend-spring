@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.Valid;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
@@ -45,7 +46,7 @@ public class TaskController {
     }
 
     @PutMapping
-    public ResponseEntity<Map<String, String>> editTask(@RequestBody EditTaskRequestDTO editTaskRequestDTO){
+    public ResponseEntity<Map<String, String>> editTask(@RequestBody @Valid EditTaskRequestDTO editTaskRequestDTO){
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return taskService.editTask(editTaskRequestDTO, userAuth.getId());
     }
