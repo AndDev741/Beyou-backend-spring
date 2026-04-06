@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
 
+    Optional<User> findByVerificationToken(String verificationToken);
+
     @Query("SELECT DISTINCT u.timezone FROM User u")
     List<String> findDistinctTimezones();
 

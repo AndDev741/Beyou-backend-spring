@@ -31,6 +31,7 @@ public class XpProgress {
 
     public void removeXp(double amount,  Function<Integer, XpByLevel> levelProvider){
         xp -= amount;
+        xp = Math.max(0, xp);
 
         while (xp < actualLevelXp && xp >= 0) {
             level--;

@@ -63,8 +63,8 @@ public class CategoryService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFound("User not found"));
 
-        XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.level() + 1);
-        XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.level());
+        XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.experience().getLevel() + 1);
+        XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.experience().getLevel());
 
         Category newCategory = categoryMapper.toEntity(categoryRequestDTO, user, xpForActualLevel, xpForNextLevel);
 

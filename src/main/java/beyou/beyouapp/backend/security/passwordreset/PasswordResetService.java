@@ -19,6 +19,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
+import beyou.beyouapp.backend.user.validation.PasswordValidator;
 import beyou.beyouapp.backend.notification.EmailService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.User;
@@ -88,6 +89,10 @@ public class PasswordResetService {
 
         if (user.isGoogleAccount()) {
             throw new BusinessException(ErrorKey.PASSWORD_RESET_NOT_ALLOWED, "Password reset not available for Google accounts");
+        }
+
+        if (!PasswordValidator.isValid(newPassword)) {
+            throw new BusinessException(ErrorKey.INVALID_REQUEST, "Password must be at least 12 characters with at least 2 character types");
         }
 
         user.setPassword(passwordEncoder.encode(newPassword));

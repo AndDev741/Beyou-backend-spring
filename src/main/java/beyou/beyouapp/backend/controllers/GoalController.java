@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.Valid;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.goal.GoalService;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
@@ -40,13 +41,13 @@ public class GoalController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, String>> createGoal(@RequestBody CreateGoalRequestDTO dto) {
+    public ResponseEntity<Map<String, String>> createGoal(@RequestBody @Valid CreateGoalRequestDTO dto) {
         User user = authenticatedUser.getAuthenticatedUser();
         return goalService.createGoal(dto, user);
     }
 
     @PutMapping
-    public ResponseEntity<Map<String, String>> editGoal(@RequestBody EditGoalRequestDTO dto) {
+    public ResponseEntity<Map<String, String>> editGoal(@RequestBody @Valid EditGoalRequestDTO dto) {
         User user = authenticatedUser.getAuthenticatedUser();
         return goalService.editGoal(dto, user.getId());
     }

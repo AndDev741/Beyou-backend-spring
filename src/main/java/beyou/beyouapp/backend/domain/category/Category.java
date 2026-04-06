@@ -91,8 +91,8 @@ public class Category {
           this.name = categoryRequestDTO.name();
           this.iconId = categoryRequestDTO.icon();
           this.description = categoryRequestDTO.description();
-          this.xpProgress.setLevel( categoryRequestDTO.level());
-          this.xpProgress.setXp(categoryRequestDTO.xp());
+          this.xpProgress.setLevel(categoryRequestDTO.experience().getLevel());
+          this.xpProgress.setXp(categoryRequestDTO.experience().getXp());
      }
 
      public void gainXp(double xp, Function<Integer, XpByLevel> provider){

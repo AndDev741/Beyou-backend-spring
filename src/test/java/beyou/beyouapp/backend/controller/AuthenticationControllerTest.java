@@ -58,8 +58,13 @@ public class AuthenticationControllerTest {
     @BeforeEach
     void setup() {
         userRepository.deleteAll(); // Clean before all tests
-        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "123456", false);
+        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!");
         userService.registerUser(register);
+
+        // Verify the user's email so login tests work
+        User user = userRepository.findByEmail("testebeyou@gmail.com").orElseThrow();
+        user.setEmailVerified(true);
+        userRepository.save(user);
     }
 
     @Test
@@ -72,7 +77,7 @@ public class AuthenticationControllerTest {
     @Test
     public void shouldMakeLoginSuccessfully() throws Exception {
         mockMvc.perform(post("/auth/login")
-                .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
+                .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success.name").exists())
@@ -83,8 +88,7 @@ public class AuthenticationControllerTest {
     @Test
     public void shouldRegisterAUserSuccessfully() throws Exception {
         mockMvc.perform(post("/auth/register")
-                .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"123456\", " +
-                        "\"isGoogleAccount\": false}")
+                .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"TestPassword1!\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value("User registered successfully"));
@@ -139,7 +143,7 @@ public class AuthenticationControllerTest {
     @Test
     public void shouldReturnIncorrectEmailOrPasswordWhenPassedAIncorrectEmail() throws Exception {
         mockMvc.perform(post("/auth/login")
-                .content("{\"email\": \"Incorrect@gmail.com\", \"password\": \"123456\"}")
+                .content("{\"email\": \"Incorrect@gmail.com\", \"password\": \"TestPassword1!\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Email or password incorrect"));
@@ -156,8 +160,7 @@ public class AuthenticationControllerTest {
 
     @Test
     public void shouldReturnAErrorMessageOfEmailAlreadyInUseIfTryingToRegisterAEmailAlreadyRegistered() throws Exception {
-        String jsonRequest = "{\"name\": \"required\", \"email\": \"testebeyou@gmail.com\", \"password\": \"123456\", " +
-                        "\"isGoogleAccount\": false}";
+        String jsonRequest = "{\"name\": \"required\", \"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}";
         System.out.println("[LOG] JsonRequest => " + jsonRequest);
         mockMvc.perform(post("/auth/register")
                 .content(jsonRequest)
@@ -170,8 +173,7 @@ public class AuthenticationControllerTest {
     public void shouldReturnAErrorMessageOfMissingNameIfTryingToRegisterWithoutAName() throws Exception {
         mockMvc.perform(post("/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"    \", \"email\": \"newtestbeyou4@gmail.com\", \"password\": \"123456\", " +
-                        "\"isGoogleAccount\": false}"))
+                .content("{\"name\": \"    \", \"email\": \"newtestbeyou4@gmail.com\", \"password\": \"TestPassword1!\"}"))
                 .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
                 .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.details.name").value("Name is Required"));
@@ -181,8 +183,7 @@ public class AuthenticationControllerTest {
     public void shouldReturnAErrorMessageOfMinimumCharacterForNameIfTryingToRegisterANameSmallerThan2Characters() throws Exception {
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"a\", \"email\": \"newtestbeyou4@gmail.com\", \"password\": \"123456\", " +
-                                "\"isGoogleAccount\": false}"))
+                        .content("{\"name\": \"a\", \"email\": \"newtestbeyou4@gmail.com\", \"password\": \"TestPassword1!\"}"))
                 .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
                 .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.details.name").value("Name require a minimum of 2 characters"));
@@ -192,8 +193,7 @@ public class AuthenticationControllerTest {
     public void shouldReturnErrorWhenEmailIsMissingIfTryingToRegisterWithoutAEmail() throws Exception {
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"namename\", \"email\": \"\", \"password\": \"123456\", " +
-                                "\"isGoogleAccount\": false}"))
+                        .content("{\"name\": \"namename\", \"email\": \"\", \"password\": \"TestPassword1!\"}"))
                 .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
                 .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.details.email").value("Email is Required"));
@@ -203,22 +203,20 @@ public class AuthenticationControllerTest {
     public void shouldReturnAErrorMessageOfIncorrectEmailIfTryingToRegisterWithAInvalidEmail() throws Exception {
         mockMvc.perform(post("/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"namename\", \"email\": \"email.com\", \"password\": \"123456\", " +
-                        "\"isGoogleAccount\": false}"))
+                .content("{\"name\": \"namename\", \"email\": \"email.com\", \"password\": \"TestPassword1!\"}"))
                 .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
                 .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.details.email").value("Email is invalid"));
     }
 
     @Test
-    public void shouldReturnAErrorMessageOfMinimumCharactersIfTryingToRegisterAPasswordWithLessThan6Characters() throws Exception {
+    public void shouldReturnAErrorMessageOfMinimumCharactersIfTryingToRegisterAPasswordWithLessThan12Characters() throws Exception {
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"namename\", \"email\": \"newtestbeyou4@gmail.com\", \"password\": \"1234\", " +
-                                "\"isGoogleAccount\": false}"))
+                        .content("{\"name\": \"namename\", \"email\": \"newtestbeyou4@gmail.com\", \"password\": \"1234\"}"))
                 .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
                 .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.details.password").value("Password require a minimum of 6 characters"));
+                .andExpect(jsonPath("$.details.password").value("Password require a minimum of 12 characters"));
     }
 
     @Test
@@ -234,8 +232,12 @@ public class AuthenticationControllerTest {
 
     @Test
     public void shouldReturnSuccessWithoutTokenForGoogleAccountResetRequest() throws Exception {
-        UserRegisterDTO googleUser = new UserRegisterDTO("google", "googleuser@gmail.com", "123456", true);
+        UserRegisterDTO googleUser = new UserRegisterDTO("google", "googleuser@gmail.com", "TestPassword1!");
         userService.registerUser(googleUser);
+        // Simulate Google OAuth account by setting the flag directly (not via registration DTO)
+        User googleUserEntity = userRepository.findByEmail("googleuser@gmail.com").orElseThrow();
+        googleUserEntity.setGoogleAccount(true);
+        userRepository.save(googleUserEntity);
 
         mockMvc.perform(post("/auth/forgot-password")
                 .content("{\"email\": \"googleuser@gmail.com\"}")
@@ -261,13 +263,13 @@ public class AuthenticationControllerTest {
         String token = createResetTokenForUser("testebeyou@gmail.com");
 
         mockMvc.perform(post("/auth/reset-password")
-                .content("{\"token\": \"" + token + "\", \"password\": \"654321\"}")
+                .content("{\"token\": \"" + token + "\", \"password\": \"NewPassword1!\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
         mockMvc.perform(post("/auth/login")
-                .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"654321\"}")
+                .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"NewPassword1!\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
     }
@@ -277,7 +279,7 @@ public class AuthenticationControllerTest {
         String token = createResetTokenForUser("testebeyou@gmail.com");
 
         mockMvc.perform(post("/auth/reset-password")
-                .content("{\"token\": \"" + token + "\", \"password\": \"654321\"}")
+                .content("{\"token\": \"" + token + "\", \"password\": \"NewPassword1!\"}")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
@@ -289,7 +291,7 @@ public class AuthenticationControllerTest {
 
     private MvcResult simulateLogin() throws Exception {
         return mockMvc.perform(post("/auth/login")
-                        .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
+                        .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("accessToken"))

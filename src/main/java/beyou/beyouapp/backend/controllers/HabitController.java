@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
 
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
@@ -37,13 +38,13 @@ public class HabitController{
     }
 
     @PostMapping()
-    public ResponseEntity<Map<String, String>> createHabit(@RequestBody CreateHabitDTO createHabitDTO){
+    public ResponseEntity<Map<String, String>> createHabit(@RequestBody @Valid CreateHabitDTO createHabitDTO){
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return habitService.createHabit(createHabitDTO, userAuth.getId());
     }
 
     @PutMapping()
-    public ResponseEntity<Map<String, String>> editHabit(@RequestBody EditHabitDTO editHabitDTO){
+    public ResponseEntity<Map<String, String>> editHabit(@RequestBody @Valid EditHabitDTO editHabitDTO){
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return habitService.editHabit(editHabitDTO, userAuth.getId());
     }

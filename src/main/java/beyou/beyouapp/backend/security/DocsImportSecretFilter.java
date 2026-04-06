@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.security;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -44,7 +45,7 @@ public class DocsImportSecretFilter extends OncePerRequestFilter {
         }
 
         String providedSecret = request.getHeader("X-Docs-Import-Secret");
-        if (providedSecret == null || !providedSecret.equals(importSecret)) {
+        if (providedSecret == null || !MessageDigest.isEqual(providedSecret.getBytes(StandardCharsets.UTF_8), importSecret.getBytes(StandardCharsets.UTF_8))) {
             setForbidden(response, "Docs import secret invalid");
             return;
         }

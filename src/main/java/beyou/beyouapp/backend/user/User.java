@@ -23,6 +23,7 @@ import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import beyou.beyouapp.backend.user.enums.UserRole;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.HashSet;
@@ -113,6 +114,13 @@ public class User implements UserDetails {
 
     private boolean isTutorialCompleted;
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean emailVerified = false;
+
+    private String verificationToken;
+
+    private LocalDateTime verificationTokenExpiry;
+
     @PrePersist
     protected void onUserCreate(){
         LocalDate now = LocalDate.now();
@@ -128,6 +136,7 @@ public class User implements UserDetails {
         if (this.timezone == null) this.timezone = "UTC";
         if (this.xpDecayStrategy == null) this.xpDecayStrategy = XpDecayStrategy.GRADUAL;
         setTutorialCompleted(false);
+        if (!this.emailVerified) this.emailVerified = false;
     }
 
     @PreUpdate
@@ -139,7 +148,7 @@ public class User implements UserDetails {
         setName(user.name());
         setEmail(user.email());
         setPassword(user.password());
-        setGoogleAccount(user.isGoogleAccount());
+        setGoogleAccount(false);
     }
 
     public User(GoogleUserDTO googleUser) {
@@ -148,6 +157,7 @@ public class User implements UserDetails {
         setPassword("GOOGLE_USER");
         setGoogleAccount(googleUser.isGoogleAccount());
         setPerfilPhoto(googleUser.perfilPhoto());
+        setEmailVerified(true);
     }
 
     public int getCurrentConstance(LocalDate referenceDate) {

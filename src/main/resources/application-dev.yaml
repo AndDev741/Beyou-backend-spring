@@ -1,0 +1,28 @@
+# Dev profile defaults — activate with: spring.profiles.active=dev
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5490/beyou
+    username: postgres
+    password: ${DATABASE_PASSWORD:1516}
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+cookie:
+  secure: false
+  same-site: Lax
+
+cors:
+  allowed-pattern: "*"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

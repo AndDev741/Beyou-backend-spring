@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import beyou.beyouapp.backend.security.SecurityConfig;
+import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
@@ -49,9 +50,13 @@ public class SecurityConfigIntegrationTest {
         MockitoAnnotations.openMocks(this);
 
         userRepository.deleteAll(); // Clean before all tests
-        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "123456", false);
+        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!");
         userService.registerUser(register);
-    
+
+        // Verify the user's email so login tests work
+        User user = userRepository.findByEmail("testebeyou@gmail.com").orElseThrow();
+        user.setEmailVerified(true);
+        userRepository.save(user);
     }
 
 
@@ -59,14 +64,13 @@ public class SecurityConfigIntegrationTest {
     @Transactional
     public void shouldAllowAccessToLoginAndRegisterWithoutAuthentication() throws Exception {
         mockMvc.perform(post("/auth/login")
-                        .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
+                        .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("accessToken"));
 
         mockMvc.perform(post("/auth/register")
-                        .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"123456\", " +
-                                "\"isGoogleAccount\": false}")
+                        .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"TestPassword1!\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(content().string("{\"success\":\"User registered successfully\"}"));
@@ -117,9 +121,24 @@ public class SecurityConfigIntegrationTest {
                 .andExpect(content().string("JWT not Found in authorization header"));
     }
 
+    @Test
+    public void shouldBlockUnauthenticatedAccessToActuator() throws Exception {
+        mockMvc.perform(get("/actuator/env"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser
+    public void shouldReturnSecurityHeaders() throws Exception {
+        mockMvc.perform(get("/category"))
+                .andExpect(header().exists("Content-Security-Policy"))
+                .andExpect(header().exists("Referrer-Policy"))
+                .andExpect(header().exists("Permissions-Policy"));
+    }
+
     private MvcResult simulateLogin() throws Exception {
         return mockMvc.perform(post("/auth/login")
-                        .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"123456\"}")
+                        .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(header().exists("accessToken"))

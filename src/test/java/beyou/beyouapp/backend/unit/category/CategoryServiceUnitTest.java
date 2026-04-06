@@ -7,6 +7,7 @@ import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.common.ExperienceLevel;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
@@ -53,7 +54,7 @@ public class CategoryServiceUnitTest {
     UUID userId = UUID.randomUUID();
     Category category = new Category();
     UUID categoryId = UUID.randomUUID();
-    CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO("Life", "test", "My life in category", 0, 0);
+    CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO("Life", "test", "My life in category", ExperienceLevel.BEGINNER);
     XpByLevel xpByLevel = new XpByLevel();
     XpByLevel xpByLevel2 = new XpByLevel();
     @BeforeEach
@@ -154,7 +155,7 @@ public class CategoryServiceUnitTest {
     public void shouldThrowAExceptionOfUserNotFoundWhenTryingToCreateACategoryWithWrongUserId(){
         Exception exception = assertThrows(UserNotFound.class, () -> {
             CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO("Life", "test",
-                    "My life in category", 0, 0);
+                    "My life in category", ExperienceLevel.BEGINNER);
             categoryService.createCategory(categoryRequestDTO, UUID.randomUUID());
         });
         assertEquals("User not found", exception.getMessage());
