@@ -106,7 +106,7 @@ public class TaskServiceUnitTest {
         ResponseEntity<Map<String, String>> successMessage = ResponseEntity.ok().body(Map.of("success", "Task created Successfully"));
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(categoryService.getCategory(categoriesId.get(0))).thenReturn(category);
+        when(categoryService.getCategory(categoriesId.get(0), userId)).thenReturn(category);
         
         ResponseEntity<Map<String, String>> responseMessage = taskService.createTask(createTaskDTO, userId);
 

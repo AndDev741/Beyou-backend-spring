@@ -7,7 +7,7 @@ public record ResetPasswordRequestDTO(
         @NotBlank(message = "Token is required")
         String token,
         @NotBlank(message = "Password is Required")
-        @Size(min = 6, message = "Password require a minimum of 6 characters")
+        @Size(min = 12, message = "Password requires a minimum of 12 characters")
         @Size(max = 256, message = "the password is too long!")
         String password
 ) {}

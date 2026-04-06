@@ -111,7 +111,7 @@ public class HabitServiceUnitTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(xpByLevelRepository.findByLevel(0)).thenReturn(xpByLevel);
         when(xpByLevelRepository.findByLevel(0 + 1)).thenReturn(xpByLevel);
-        when(categoryService.getCategory(categories.get(0))).thenReturn(newCategory);
+        when(categoryService.getCategory(categories.get(0), userId)).thenReturn(newCategory);
 
         ResponseEntity<Map<String, String>> assertResponse = habitService.createHabit(createHabitDTO, userId);
 
@@ -126,7 +126,7 @@ public class HabitServiceUnitTest {
         ResponseEntity<Map<String, String>> response = ResponseEntity.ok().body(Map.of("success", "Habit edited successfully"));
 
         when(habitRepository.findById(habitId)).thenReturn(Optional.of(habit));
-        when(categoryService.getCategory(categories.get(0))).thenReturn(newCategory);
+        when(categoryService.getCategory(categories.get(0), userId)).thenReturn(newCategory);
 
         ResponseEntity<Map<String, String>> assertResponse = habitService.editHabit(editHabitDTO, userId);
 

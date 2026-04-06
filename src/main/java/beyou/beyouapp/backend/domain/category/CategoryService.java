@@ -44,9 +44,13 @@ public class CategoryService {
 
     private final UserCacheEvictService userCacheEvictService;
 
-    public Category getCategory(UUID categoryId){
-        return categoryRepository.findById(categoryId)
+    public Category getCategory(UUID categoryId, UUID userId){
+        Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new CategoryNotFound("Category not found"));
+        if (!category.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.CATEGORY_NOT_OWNED, "This category does not belong to the user");
+        }
+        return category;
     }
 
     @Cacheable(cacheNames = "categories", key = "#userId")
@@ -78,11 +82,7 @@ public class CategoryService {
     }
 
     public ResponseEntity<Map<String, Object>> editCategory(CategoryEditRequestDTO categoryEditRequestDTO, UUID userId){
-        Category categoryToEdit = getCategory(UUID.fromString(categoryEditRequestDTO.categoryId()));
-        //If are not from the user in context
-        if(!categoryToEdit.getUser().getId().equals(userId)){
-            throw new BusinessException(ErrorKey.CATEGORY_NOT_OWNED, "This category are not from the user in context");
-        }
+        Category categoryToEdit = getCategory(UUID.fromString(categoryEditRequestDTO.categoryId()), userId);
 
         categoryMapper.updateEntity(categoryToEdit, categoryEditRequestDTO);
 
