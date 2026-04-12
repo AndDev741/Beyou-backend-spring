@@ -40,7 +40,7 @@ public class TaskController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, String>> createTask(@RequestBody CreateTaskRequestDTO taskRequestDTO){
+    public ResponseEntity<Map<String, String>> createTask(@RequestBody @Valid CreateTaskRequestDTO taskRequestDTO){
         User userAuth = authenticatedUser.getAuthenticatedUser();
         return taskService.createTask(taskRequestDTO, userAuth.getId());
     }

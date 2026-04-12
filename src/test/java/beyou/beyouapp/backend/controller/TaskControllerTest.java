@@ -28,6 +28,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import jakarta.servlet.http.HttpServletResponse;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import beyou.beyouapp.backend.domain.task.TaskRepository;
@@ -152,5 +154,61 @@ public class TaskControllerTest {
         mockMvc.perform(delete("/task/{taskId}", taskId))
                .andExpect(status().isOk())
                .andExpect(jsonPath("$.success").value("Task deleted Successfully!"));
+    }
+
+    @Test
+    void shouldReturn400WhenCreatingTaskWithEmptyName() throws Exception {
+        String json = "{\"name\": \"\", \"description\": \"\", \"iconId\": \"icon1\", \"importance\": 2, \"difficulty\": 2, \"categoriesId\": [], \"oneTimeTask\": false}";
+
+        mockMvc.perform(post("/task")
+               .contentType(MediaType.APPLICATION_JSON)
+               .content(json))
+               .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
+               .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+               .andExpect(jsonPath("$.details.name").exists());
+    }
+
+    @Test
+    void shouldReturn400WhenCreatingTaskWithNameTooShort() throws Exception {
+        String json = "{\"name\": \"a\", \"description\": \"\", \"iconId\": \"icon1\", \"importance\": 2, \"difficulty\": 2, \"categoriesId\": [], \"oneTimeTask\": false}";
+
+        mockMvc.perform(post("/task")
+               .contentType(MediaType.APPLICATION_JSON)
+               .content(json))
+               .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
+               .andExpect(jsonPath("$.details.name").value("Task needs a minimum of 2 characters"));
+    }
+
+    @Test
+    void shouldReturn400WhenCreatingTaskWithBlankIcon() throws Exception {
+        String json = "{\"name\": \"Task\", \"description\": \"\", \"iconId\": \"   \", \"importance\": 2, \"difficulty\": 2, \"categoriesId\": [], \"oneTimeTask\": false}";
+
+        mockMvc.perform(post("/task")
+               .contentType(MediaType.APPLICATION_JSON)
+               .content(json))
+               .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
+               .andExpect(jsonPath("$.details.iconId").exists());
+    }
+
+    @Test
+    void shouldReturn400WhenCreatingTaskWithNullImportance() throws Exception {
+        String json = "{\"name\": \"Task\", \"description\": \"\", \"iconId\": \"icon1\", \"importance\": null, \"difficulty\": 2, \"categoriesId\": [], \"oneTimeTask\": false}";
+
+        mockMvc.perform(post("/task")
+               .contentType(MediaType.APPLICATION_JSON)
+               .content(json))
+               .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
+               .andExpect(jsonPath("$.details.importance").exists());
+    }
+
+    @Test
+    void shouldReturn400WhenCreatingTaskWithDifficultyOutOfRange() throws Exception {
+        String json = "{\"name\": \"Task\", \"description\": \"\", \"iconId\": \"icon1\", \"importance\": 2, \"difficulty\": 0, \"categoriesId\": [], \"oneTimeTask\": false}";
+
+        mockMvc.perform(post("/task")
+               .contentType(MediaType.APPLICATION_JSON)
+               .content(json))
+               .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
+               .andExpect(jsonPath("$.details.difficulty").exists());
     }
 }
