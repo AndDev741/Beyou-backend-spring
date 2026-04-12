@@ -5,12 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,6 +26,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenDontMatchRaw;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenExpiredException;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenNotFoundException;
+import org.springframework.http.ResponseCookie;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshToken;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenRepository;
@@ -121,18 +122,20 @@ public class RefreshTokenServiceUnitTest {
         void testRevokeRefreshToken() {
             // Given
             String cookieValue = tokenId.toString() + ".rawToken";
+            ResponseCookie clearCookie = ResponseCookie.from("refreshToken", "")
+                    .httpOnly(true).path("/").maxAge(Duration.ZERO).build();
 
             when(request.getCookies()).thenReturn(new Cookie[] { new Cookie("refreshToken", cookieValue) });
             when(repository.findById(tokenId)).thenReturn(Optional.of(refreshToken));
             when(passwordEncoder.matches("rawToken", refreshToken.getTokenHash())).thenReturn(true);
+            when(tokenService.buildRefreshCookie("", Duration.ZERO)).thenReturn(clearCookie);
 
             // When
             refreshTokenService.revokeRefreshToken(request, response);
 
             // Then
             verify(repository).save(refreshToken);
-            verify(response)
-                    .addCookie(argThat(cookie -> cookie.getName().equals("refreshToken") && cookie.getMaxAge() == 0));
+            verify(response).addHeader("Set-Cookie", clearCookie.toString());
         }
 
     }

@@ -429,7 +429,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForRequiredPassword() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("Name", "email@gmail.com",
-                        "           ");
+                        "   ");
                 userService.registerUser(newUser);
             });
 

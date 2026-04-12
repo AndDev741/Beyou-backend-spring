@@ -385,7 +385,8 @@ class DiaryRoutineServiceUnitTest {
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(updatedSection)));
 
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
-        when(diaryRoutineRepository.save(any(DiaryRoutine.class))).thenReturn(updatedRoutine);
+        when(taskService.getTask(any(UUID.class))).thenReturn(mockedTask);
+        when(habitService.getHabit(any(UUID.class))).thenReturn(mockedHabit);
 
         DiaryRoutineResponseDTO response = diaryRoutineService.updateDiaryRoutine(routineId, updatedDTO, userId);
 
@@ -395,7 +396,6 @@ class DiaryRoutineServiceUnitTest {
         assertEquals(updatedDTO.iconId(), response.iconId());
         assertEquals(updatedDTO.routineSections().get(0).name(), response.routineSections().get(0).name());
         verify(diaryRoutineRepository, times(1)).findById(routineId);
-        verify(diaryRoutineRepository, times(1)).save(any(DiaryRoutine.class));
     }
 
     @Test

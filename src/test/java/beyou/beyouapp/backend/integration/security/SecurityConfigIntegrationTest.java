@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import beyou.beyouapp.backend.security.SecurityConfig;
+import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenRepository;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserService;
@@ -45,10 +46,14 @@ public class SecurityConfigIntegrationTest {
     @Autowired
     UserService userService;
 
+    @Autowired
+    RefreshTokenRepository refreshTokenRepository;
+
     @BeforeEach
     void setUp(){
         MockitoAnnotations.openMocks(this);
 
+        refreshTokenRepository.deleteAll();
         userRepository.deleteAll(); // Clean before all tests
         UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!");
         userService.registerUser(register);
