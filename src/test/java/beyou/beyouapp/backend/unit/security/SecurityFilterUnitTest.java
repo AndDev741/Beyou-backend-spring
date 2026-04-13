@@ -67,7 +67,8 @@ public class SecurityFilterUnitTest {
         securityFilter.doFilterInternal(request, response, filterChain);
 
         verify(response).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        verify(printWriter).write("JWT not Found in authorization header");
+        verify(printWriter).write(contains("JWT_NOT_FOUND"));
+        verify(printWriter).write(contains("JWT not Found in authorization header"));
         verify(filterChain, never()).doFilter(request, response);
     }
 
@@ -81,7 +82,8 @@ public class SecurityFilterUnitTest {
         securityFilter.doFilterInternal(request, response, filterChain);
 
         verify(response).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        verify(printWriter).write("Invalid JWT Token");
+        verify(printWriter).write(contains("JWT_INVALID"));
+        verify(printWriter).write(contains("Invalid JWT Token"));
         verify(filterChain, never()).doFilter(request, response);
     }
 
@@ -98,7 +100,8 @@ public class SecurityFilterUnitTest {
         securityFilter.doFilterInternal(request, response, filterChain);
 
         verify(response).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        verify(printWriter).write("User not found for the provided JWT");
+        verify(printWriter).write(contains("USER_NOT_FOUND"));
+        verify(printWriter).write(contains("User not found for the provided JWT"));
         verify(filterChain, never()).doFilter(request, response);
 
     }

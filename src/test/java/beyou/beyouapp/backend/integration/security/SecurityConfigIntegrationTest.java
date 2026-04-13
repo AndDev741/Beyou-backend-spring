@@ -123,7 +123,8 @@ public class SecurityConfigIntegrationTest {
     public void shouldReturnUnauthorizedWhenJwtCookieNotFound() throws Exception {
         mockMvc.perform(get("/user"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(content().string("JWT not Found in authorization header"));
+                .andExpect(jsonPath("$.errorKey").value("JWT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("JWT not Found in authorization header"));
     }
 
     @Test

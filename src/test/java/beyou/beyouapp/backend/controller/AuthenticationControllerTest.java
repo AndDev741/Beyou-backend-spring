@@ -121,7 +121,8 @@ public class AuthenticationControllerTest {
         mockMvc.perform(post("/auth/refresh")
                 .cookie(refreshTokenCookie))
                 .andExpect(status().isUnauthorized())
-                .andExpect(content().string("Refresh token expired or already revoked"));
+                .andExpect(jsonPath("$.errorKey").value("REFRESH_TOKEN_EXPIRED"))
+                .andExpect(jsonPath("$.message").value("Refresh token expired or already revoked"));
     }
 
     @Test

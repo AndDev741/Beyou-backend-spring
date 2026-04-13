@@ -433,7 +433,13 @@ public class UserServiceUnitTest {
                 userService.registerUser(newUser);
             });
 
-            assertEquals("Password is Required", exception.getMessage());
+            // A blank password (whitespace) fails both @NotBlank and @Size; Hibernate Validator
+            // does not guarantee which violation message is reported first, so accept either.
+            String message = exception.getMessage();
+            assertTrue(
+                message.equals("Password is Required") ||
+                message.equals("Password require a minimum of 12 characters"),
+                "Expected password validation error, got: " + message);
         }
 
         @Test
