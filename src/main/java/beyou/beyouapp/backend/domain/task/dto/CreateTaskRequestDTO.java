@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Size;
 public record CreateTaskRequestDTO(
     @NotEmpty @Size(min = 2, max = 256, message = "Task needs a minimum of 2 characters")
     String name,
+    @Size(max = 1000, message = "Description is too long")
     String description,
     @NotBlank
     String iconId,

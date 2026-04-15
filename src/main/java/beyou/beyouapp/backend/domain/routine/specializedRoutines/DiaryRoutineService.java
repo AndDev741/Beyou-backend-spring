@@ -4,11 +4,19 @@ import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
+import beyou.beyouapp.backend.domain.habit.Habit;
+import beyou.beyouapp.backend.domain.habit.HabitService;
+import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
+import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.HabitGroupDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
+import beyou.beyouapp.backend.domain.task.Task;
+import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
@@ -43,6 +51,8 @@ public class DiaryRoutineService {
     private final DiaryRoutineMapper mapper;
     private final CheckItemService checkItemService;
     private final UserCacheEvictService userCacheEvictService;
+    private final HabitService habitService;
+    private final TaskService taskService;
 
     @Cacheable(cacheNames = "routine", key = "#userId + '_' + #id")
     @Transactional(readOnly = true)
@@ -117,7 +127,7 @@ public class DiaryRoutineService {
         existing.setName(dto.name());
         existing.setIconId(dto.iconId());
 
-        mergeSections(existing, dto.routineSections());
+        mergeSections(existing, dto.routineSections(), userId);
 
         /*
          * JPA manage the entity inside the transaction, after commit will be persisted.
@@ -129,7 +139,7 @@ public class DiaryRoutineService {
         return mapper.toResponse(existing);
     }
 
-    private void mergeSections(DiaryRoutine routine, List<RoutineSectionRequestDTO> dtoSections) {
+    private void mergeSections(DiaryRoutine routine, List<RoutineSectionRequestDTO> dtoSections, UUID userId) {
         Set<UUID> incomingIds = dtoSections.stream()
                 .map(RoutineSectionRequestDTO::id)
                 .filter(Objects::nonNull)
@@ -151,6 +161,9 @@ public class DiaryRoutineService {
                 existing.setEndTime(sectionDTO.endTime());
                 existing.setFavorite(sectionDTO.favorite());
                 existing.setOrderIndex(index);
+
+                mergeHabitGroups(existing, sectionDTO.habitGroup(), userId);
+                mergeTaskGroups(existing, sectionDTO.taskGroup(), userId);
             } else {
                 // Create new section
                 RoutineSection newSection = mapper.mapToRoutineSection(sectionDTO, routine);
@@ -159,6 +172,80 @@ public class DiaryRoutineService {
                 routine.getRoutineSections().add(newSection);
             }
             index++;
+        }
+    }
+
+    private void mergeHabitGroups(RoutineSection section, List<HabitGroupDTO> dtoGroups, UUID userId) {
+        if (dtoGroups == null) {
+            dtoGroups = List.of();
+        }
+
+        Set<UUID> incomingIds = dtoGroups.stream()
+                .map(HabitGroupDTO::id)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // Remove groups not present in the incoming list (orphanRemoval cascades to checks)
+        section.getHabitGroups().removeIf(g -> !incomingIds.contains(g.getId()));
+
+        Map<UUID, HabitGroup> existingMap = section.getHabitGroups().stream()
+                .collect(Collectors.toMap(HabitGroup::getId, g -> g));
+
+        for (HabitGroupDTO dto : dtoGroups) {
+            if (dto.id() != null && existingMap.containsKey(dto.id())) {
+                // Update existing group
+                HabitGroup existing = existingMap.get(dto.id());
+                existing.setStartTime(dto.startTime());
+                existing.setEndTime(dto.endTime());
+                if (!existing.getHabit().getId().equals(dto.habitId())) {
+                    existing.setHabit(getOwnedHabit(dto.habitId(), userId));
+                }
+            } else {
+                // Create new group
+                HabitGroup newGroup = new HabitGroup();
+                newGroup.setHabit(getOwnedHabit(dto.habitId(), userId));
+                newGroup.setStartTime(dto.startTime());
+                newGroup.setEndTime(dto.endTime());
+                newGroup.setRoutineSection(section);
+                section.getHabitGroups().add(newGroup);
+            }
+        }
+    }
+
+    private void mergeTaskGroups(RoutineSection section, List<TaskGroupDTO> dtoGroups, UUID userId) {
+        if (dtoGroups == null) {
+            dtoGroups = List.of();
+        }
+
+        Set<UUID> incomingIds = dtoGroups.stream()
+                .map(TaskGroupDTO::id)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // Remove groups not present in the incoming list (orphanRemoval cascades to checks)
+        section.getTaskGroups().removeIf(g -> !incomingIds.contains(g.getId()));
+
+        Map<UUID, TaskGroup> existingMap = section.getTaskGroups().stream()
+                .collect(Collectors.toMap(TaskGroup::getId, g -> g));
+
+        for (TaskGroupDTO dto : dtoGroups) {
+            if (dto.id() != null && existingMap.containsKey(dto.id())) {
+                // Update existing group
+                TaskGroup existing = existingMap.get(dto.id());
+                existing.setStartTime(dto.startTime());
+                existing.setEndTime(dto.endTime());
+                if (!existing.getTask().getId().equals(dto.taskId())) {
+                    existing.setTask(getOwnedTask(dto.taskId(), userId));
+                }
+            } else {
+                // Create new group
+                TaskGroup newGroup = new TaskGroup();
+                newGroup.setTask(getOwnedTask(dto.taskId(), userId));
+                newGroup.setStartTime(dto.startTime());
+                newGroup.setEndTime(dto.endTime());
+                newGroup.setRoutineSection(section);
+                section.getTaskGroups().add(newGroup);
+            }
         }
     }
 
@@ -342,6 +429,24 @@ public class DiaryRoutineService {
         RefreshUiDTO result = checkItemService.skipOrUnskipItemGroup(skipGroupRequestDTO);
         userCacheEvictService.evictAllUserCaches(userId);
         return result;
+    }
+
+    private Habit getOwnedHabit(UUID habitId, UUID userId) {
+        Habit habit = habitService.getHabit(habitId);
+        if (!habit.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.HABIT_NOT_OWNED,
+                    "Cannot add habit to routine: habit does not belong to user");
+        }
+        return habit;
+    }
+
+    private Task getOwnedTask(UUID taskId, UUID userId) {
+        Task task = taskService.getTask(taskId);
+        if (!task.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.TASK_NOT_OWNED,
+                    "Cannot add task to routine: task does not belong to user");
+        }
+        return task;
     }
 
     private void verifyRoutineOwnership(UUID routineId, UUID userId) {

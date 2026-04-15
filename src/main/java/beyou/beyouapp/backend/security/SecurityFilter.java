@@ -1,13 +1,17 @@
 package beyou.beyouapp.backend.security;
 
+import beyou.beyouapp.backend.exceptions.ApiErrorResponse;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.security.JwtNotFoundException;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,6 +28,8 @@ public class SecurityFilter extends OncePerRequestFilter {
 
     @Autowired
     UserRepository userRepository;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @SuppressWarnings("null")
     @Override
@@ -50,7 +56,7 @@ public class SecurityFilter extends OncePerRequestFilter {
             
             if(authorizationHeader != null){
                 if(authorizationHeader.length() < 7 || !authorizationHeader.startsWith("Bearer")){
-                    setResponseAsUnatuhorized(response, "Invalid Authorization header");
+                    setResponseAsUnatuhorized(response, ErrorKey.AUTH_HEADER_INVALID, "Invalid Authorization header");
                     return;
                 }
 
@@ -58,7 +64,7 @@ public class SecurityFilter extends OncePerRequestFilter {
                 ResponseEntity<String> tokenValidationResponse = tokenService.validateToken(token);
 
                 if(tokenValidationResponse.getStatusCode().is4xxClientError()){
-                    setResponseAsUnatuhorized(response, "Invalid JWT Token");
+                    setResponseAsUnatuhorized(response, ErrorKey.JWT_INVALID, "Invalid JWT Token");
                     return;
                 }
                 
@@ -70,21 +76,23 @@ public class SecurityFilter extends OncePerRequestFilter {
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }else{
-                    setResponseAsUnatuhorized(response, "User not found for the provided JWT");
+                    setResponseAsUnatuhorized(response, ErrorKey.USER_NOT_FOUND, "User not found for the provided JWT");
                     return;
                 }
             }
             filterChain.doFilter(request, response);
 
         }catch(JwtNotFoundException e){
-            setResponseAsUnatuhorized(response, e.getMessage());
+            setResponseAsUnatuhorized(response, ErrorKey.JWT_NOT_FOUND, e.getMessage());
             return;
         }
     }
 
-    private void setResponseAsUnatuhorized(HttpServletResponse response, String message) throws IOException {
+    private void setResponseAsUnatuhorized(HttpServletResponse response, ErrorKey errorKey, String message) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.getWriter().write(message);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        ApiErrorResponse body = new ApiErrorResponse(errorKey.name(), message, null);
+        response.getWriter().write(objectMapper.writeValueAsString(body));
         response.getWriter().flush();
         SecurityContextHolder.clearContext();
     }

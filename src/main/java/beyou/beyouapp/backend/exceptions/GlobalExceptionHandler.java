@@ -20,23 +20,27 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(JwtNotFoundException.class)
-    public ResponseEntity<String> handleJwtNotFoundException(JwtNotFoundException ex){
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleJwtNotFoundException(JwtNotFoundException ex){
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.JWT_NOT_FOUND.name(), ex.getMessage(), null);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
     @ExceptionHandler(RefreshTokenExpiredException.class)
-    public ResponseEntity<String> handleRefreshTokenExpiredException(RefreshTokenExpiredException ex){
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleRefreshTokenExpiredException(RefreshTokenExpiredException ex){
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.REFRESH_TOKEN_EXPIRED.name(), ex.getMessage(), null);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
     @ExceptionHandler(RefreshTokenNotFoundException.class)
-    public ResponseEntity<String> handleRefreshTokenNotFoundException(RefreshTokenNotFoundException ex){
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleRefreshTokenNotFoundException(RefreshTokenNotFoundException ex){
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.REFRESH_TOKEN_NOT_FOUND.name(), ex.getMessage(), null);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
     @ExceptionHandler(RefreshTokenDontMatchRaw.class)
-    public ResponseEntity<String> handleRefreshTokenDontMatchRaw(RefreshTokenDontMatchRaw ex){
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleRefreshTokenDontMatchRaw(RefreshTokenDontMatchRaw ex){
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.REFRESH_TOKEN_INVALID.name(), ex.getMessage(), null);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
     @ExceptionHandler(BusinessException.class)
@@ -64,8 +68,9 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(HttpClientErrorException.class)
-    public ResponseEntity<Map<String, String>> handleHttpClientErrorException(HttpClientErrorException ex){
-        return ResponseEntity.badRequest().body(Map.of("error", "error trying login with google, try again"));
+    public ResponseEntity<ApiErrorResponse> handleHttpClientErrorException(HttpClientErrorException ex){
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.GOOGLE_OAUTH_FAILED.name(), "Error trying login with Google, try again", null);
+        return ResponseEntity.badRequest().body(response);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

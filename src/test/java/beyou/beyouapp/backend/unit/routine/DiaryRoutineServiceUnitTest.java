@@ -126,6 +126,7 @@ class DiaryRoutineServiceUnitTest {
 
         mockedTask = new Task();
         mockedTask.setId(validRequestDTO.routineSections().get(0).taskGroup().get(0).taskId());
+        mockedTask.setUser(user);
 
         Task task = new Task();
         task.setId(validRequestDTO.routineSections().get(0).taskGroup().get(0).taskId());
@@ -139,6 +140,7 @@ class DiaryRoutineServiceUnitTest {
 
         mockedHabit = new Habit();
         mockedHabit.setId(validRequestDTO.routineSections().get(0).habitGroup().get(0).habitId());
+        mockedHabit.setUser(user);
 
         Habit habit = new Habit();
         habit.setId(validRequestDTO.routineSections().get(0).habitGroup().get(0).habitId());
@@ -152,7 +154,7 @@ class DiaryRoutineServiceUnitTest {
         section.setRoutine(diaryRoutine);
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(section)));
 
-        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, mapper, checkItemService, userCacheEvictService);
+        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, mapper, checkItemService, userCacheEvictService, habitService, taskService);
     }
 
     @Test
@@ -372,6 +374,7 @@ class DiaryRoutineServiceUnitTest {
 
         mockedHabit = new Habit();
         mockedHabit.setId(validRequestDTO.routineSections().get(0).habitGroup().get(0).habitId());
+        mockedHabit.setUser(user);
 
         Habit habit = new Habit();
         habit.setId(validRequestDTO.routineSections().get(0).habitGroup().get(0).habitId());
@@ -482,5 +485,269 @@ class DiaryRoutineServiceUnitTest {
         DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId);
 
         assertNull(result);
+    }
+
+    // --- mergeSections: habitGroup/taskGroup merge tests ---
+
+    @Test
+    @DisplayName("Should remove habit groups when update sends empty habitGroup list")
+    void shouldRemoveHabitGroupsWhenUpdateSendsEmptyList() {
+        // The diaryRoutine from setUp has 1 section with 1 habitGroup and 1 taskGroup
+        RoutineSection existingSection = diaryRoutine.getRoutineSections().get(0);
+        UUID sectionId = existingSection.getId();
+        UUID taskGroupId = existingSection.getTaskGroups().get(0).getId();
+
+        assertEquals(1, existingSection.getHabitGroups().size(), "Precondition: should start with 1 habit group");
+
+        // Send update with existing section ID but empty habitGroup list (keep taskGroup)
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+                "Updated",
+                "icon",
+                List.of(new RoutineSectionRequestDTO(
+                        sectionId,
+                        "Morning",
+                        "sun",
+                        LocalTime.of(6, 0),
+                        LocalTime.of(12, 0),
+                        List.of(new TaskGroupDTO(taskGroupId,
+                                existingSection.getTaskGroups().get(0).getTask().getId(),
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                        List.of(), // empty habitGroup — should remove the existing one
+                        false)));
+
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+
+        DiaryRoutineResponseDTO response = diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId);
+
+        assertNotNull(response);
+        assertEquals(0, existingSection.getHabitGroups().size(), "Habit groups should be empty after removal");
+        assertEquals(1, existingSection.getTaskGroups().size(), "Task groups should still be present");
+    }
+
+    @Test
+    @DisplayName("Should remove task groups when update sends empty taskGroup list")
+    void shouldRemoveTaskGroupsWhenUpdateSendsEmptyList() {
+        RoutineSection existingSection = diaryRoutine.getRoutineSections().get(0);
+        UUID sectionId = existingSection.getId();
+        UUID habitGroupId = existingSection.getHabitGroups().get(0).getId();
+
+        assertEquals(1, existingSection.getTaskGroups().size(), "Precondition: should start with 1 task group");
+
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+                "Updated",
+                "icon",
+                List.of(new RoutineSectionRequestDTO(
+                        sectionId,
+                        "Morning",
+                        "sun",
+                        LocalTime.of(6, 0),
+                        LocalTime.of(12, 0),
+                        List.of(), // empty taskGroup — should remove the existing one
+                        List.of(new HabitGroupDTO(habitGroupId,
+                                existingSection.getHabitGroups().get(0).getHabit().getId(),
+                                LocalTime.of(6, 15), LocalTime.of(6, 45), null)),
+                        false)));
+
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+
+        DiaryRoutineResponseDTO response = diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId);
+
+        assertNotNull(response);
+        assertEquals(0, existingSection.getTaskGroups().size(), "Task groups should be empty after removal");
+        assertEquals(1, existingSection.getHabitGroups().size(), "Habit groups should still be present");
+    }
+
+    @Test
+    @DisplayName("Should add new habit group to existing section")
+    void shouldAddNewHabitGroupToExistingSection() {
+        RoutineSection existingSection = diaryRoutine.getRoutineSections().get(0);
+        UUID sectionId = existingSection.getId();
+        UUID existingHabitGroupId = existingSection.getHabitGroups().get(0).getId();
+        UUID existingTaskGroupId = existingSection.getTaskGroups().get(0).getId();
+
+        UUID newHabitId = UUID.randomUUID();
+        Habit newHabit = new Habit();
+        newHabit.setId(newHabitId);
+        User owner = new User();
+        owner.setId(userId);
+        newHabit.setUser(owner);
+
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+        when(habitService.getHabit(newHabitId)).thenReturn(newHabit);
+
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+                "Updated",
+                "icon",
+                List.of(new RoutineSectionRequestDTO(
+                        sectionId,
+                        "Morning",
+                        "sun",
+                        LocalTime.of(6, 0),
+                        LocalTime.of(12, 0),
+                        List.of(new TaskGroupDTO(existingTaskGroupId,
+                                existingSection.getTaskGroups().get(0).getTask().getId(),
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                        List.of(
+                                new HabitGroupDTO(existingHabitGroupId,
+                                        existingSection.getHabitGroups().get(0).getHabit().getId(),
+                                        LocalTime.of(6, 15), LocalTime.of(6, 45), null),
+                                new HabitGroupDTO(null, // new group — no ID
+                                        newHabitId,
+                                        LocalTime.of(7, 0), LocalTime.of(7, 30), null)),
+                        false)));
+
+        DiaryRoutineResponseDTO response = diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId);
+
+        assertNotNull(response);
+        assertEquals(2, existingSection.getHabitGroups().size(), "Should have 2 habit groups after adding one");
+        verify(habitService).getHabit(newHabitId);
+    }
+
+    @Test
+    @DisplayName("Should update existing habit group time and keep it")
+    void shouldUpdateExistingHabitGroupTime() {
+        RoutineSection existingSection = diaryRoutine.getRoutineSections().get(0);
+        UUID sectionId = existingSection.getId();
+        UUID habitGroupId = existingSection.getHabitGroups().get(0).getId();
+        UUID taskGroupId = existingSection.getTaskGroups().get(0).getId();
+
+        LocalTime newStart = LocalTime.of(7, 0);
+        LocalTime newEnd = LocalTime.of(7, 30);
+
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+                "Updated",
+                "icon",
+                List.of(new RoutineSectionRequestDTO(
+                        sectionId,
+                        "Morning",
+                        "sun",
+                        LocalTime.of(6, 0),
+                        LocalTime.of(12, 0),
+                        List.of(new TaskGroupDTO(taskGroupId,
+                                existingSection.getTaskGroups().get(0).getTask().getId(),
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                        List.of(new HabitGroupDTO(habitGroupId,
+                                existingSection.getHabitGroups().get(0).getHabit().getId(),
+                                newStart, newEnd, null)),
+                        false)));
+
+        diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId);
+
+        HabitGroup updated = existingSection.getHabitGroups().get(0);
+        assertEquals(habitGroupId, updated.getId(), "Should keep the same habit group");
+        assertEquals(newStart, updated.getStartTime(), "Start time should be updated");
+        assertEquals(newEnd, updated.getEndTime(), "End time should be updated");
+    }
+
+    @Test
+    @DisplayName("Should remove all groups when both lists are empty")
+    void shouldRemoveAllGroupsWhenBothListsAreEmpty() {
+        RoutineSection existingSection = diaryRoutine.getRoutineSections().get(0);
+        UUID sectionId = existingSection.getId();
+
+        assertEquals(1, existingSection.getHabitGroups().size());
+        assertEquals(1, existingSection.getTaskGroups().size());
+
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+                "Updated",
+                "icon",
+                List.of(new RoutineSectionRequestDTO(
+                        sectionId,
+                        "Morning",
+                        "sun",
+                        LocalTime.of(6, 0),
+                        LocalTime.of(12, 0),
+                        List.of(), // empty tasks
+                        List.of(), // empty habits
+                        false)));
+
+        diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId);
+
+        assertEquals(0, existingSection.getHabitGroups().size(), "All habit groups should be removed");
+        assertEquals(0, existingSection.getTaskGroups().size(), "All task groups should be removed");
+    }
+
+    @Test
+    @DisplayName("Should reject habit from different user (IDOR prevention)")
+    void shouldRejectHabitFromDifferentUser() {
+        RoutineSection existingSection = diaryRoutine.getRoutineSections().get(0);
+        UUID sectionId = existingSection.getId();
+        UUID existingTaskGroupId = existingSection.getTaskGroups().get(0).getId();
+
+        UUID foreignHabitId = UUID.randomUUID();
+        Habit foreignHabit = new Habit();
+        foreignHabit.setId(foreignHabitId);
+        User otherUser = new User();
+        otherUser.setId(UUID.randomUUID()); // different user
+        foreignHabit.setUser(otherUser);
+
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+        when(habitService.getHabit(foreignHabitId)).thenReturn(foreignHabit);
+
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+                "Updated",
+                "icon",
+                List.of(new RoutineSectionRequestDTO(
+                        sectionId,
+                        "Morning",
+                        "sun",
+                        LocalTime.of(6, 0),
+                        LocalTime.of(12, 0),
+                        List.of(new TaskGroupDTO(existingTaskGroupId,
+                                existingSection.getTaskGroups().get(0).getTask().getId(),
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                        List.of(new HabitGroupDTO(null, // new group with foreign habit
+                                foreignHabitId,
+                                LocalTime.of(7, 0), LocalTime.of(7, 30), null)),
+                        false)));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId));
+        assertEquals(ErrorKey.HABIT_NOT_OWNED, exception.getErrorKey());
+    }
+
+    @Test
+    @DisplayName("Should reject task from different user (IDOR prevention)")
+    void shouldRejectTaskFromDifferentUser() {
+        RoutineSection existingSection = diaryRoutine.getRoutineSections().get(0);
+        UUID sectionId = existingSection.getId();
+        UUID existingHabitGroupId = existingSection.getHabitGroups().get(0).getId();
+
+        UUID foreignTaskId = UUID.randomUUID();
+        Task foreignTask = new Task();
+        foreignTask.setId(foreignTaskId);
+        User otherUser = new User();
+        otherUser.setId(UUID.randomUUID()); // different user
+        foreignTask.setUser(otherUser);
+
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+        when(taskService.getTask(foreignTaskId)).thenReturn(foreignTask);
+
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+                "Updated",
+                "icon",
+                List.of(new RoutineSectionRequestDTO(
+                        sectionId,
+                        "Morning",
+                        "sun",
+                        LocalTime.of(6, 0),
+                        LocalTime.of(12, 0),
+                        List.of(new TaskGroupDTO(null, // new group with foreign task
+                                foreignTaskId,
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                        List.of(new HabitGroupDTO(existingHabitGroupId,
+                                existingSection.getHabitGroups().get(0).getHabit().getId(),
+                                LocalTime.of(6, 15), LocalTime.of(6, 45), null)),
+                        false)));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId));
+        assertEquals(ErrorKey.TASK_NOT_OWNED, exception.getErrorKey());
     }
 }

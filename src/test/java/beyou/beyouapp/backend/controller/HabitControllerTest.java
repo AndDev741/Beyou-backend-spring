@@ -28,6 +28,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import jakarta.servlet.http.HttpServletResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -81,7 +82,7 @@ public class HabitControllerTest {
         List<UUID> categories = new ArrayList<>(List.of(UUID.randomUUID()));
 
         CreateHabitDTO createHabitDTO = new CreateHabitDTO(
-        "name", "", "", "", 2, 2, categories, ExperienceLevel.BEGINNER);
+        "name", "", "", "icon1", 2, 2, categories, ExperienceLevel.BEGINNER);
 
         ResponseEntity<Map<String, String>> successResponse = ResponseEntity.ok().body(Map.of("success", "Habit saved successfully"));
 
@@ -126,5 +127,73 @@ public class HabitControllerTest {
 
     //Exceptions
 
-    
+    @Test
+    void shouldReturn400WhenCreatingHabitWithBlankName() throws Exception {
+        String json = """
+            {"name": "   ", "description": "", "motivationalPhrase": "", "iconId": "icon1", "importance": 2, "dificulty": 2, "categoriesId": [], "experience": "BEGINNER"}
+            """;
+
+        mockMvc.perform(post("/habit")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json))
+                .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.details.name").value("Name is Required"));
+    }
+
+    @Test
+    void shouldReturn400WhenCreatingHabitWithNameTooShort() throws Exception {
+        String json = """
+            {"name": "a", "description": "", "motivationalPhrase": "", "iconId": "icon1", "importance": 2, "dificulty": 2, "categoriesId": [], "experience": "BEGINNER"}
+            """;
+
+        mockMvc.perform(post("/habit")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json))
+                .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.details.name").value("Name must be between 2 and 256 characters"));
+    }
+
+    @Test
+    void shouldReturn400WhenCreatingHabitWithBlankIcon() throws Exception {
+        String json = """
+            {"name": "Habit", "description": "", "motivationalPhrase": "", "iconId": "", "importance": 2, "dificulty": 2, "categoriesId": [], "experience": "BEGINNER"}
+            """;
+
+        mockMvc.perform(post("/habit")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json))
+                .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.details.iconId").value("Icon is Required"));
+    }
+
+    @Test
+    void shouldReturn400WhenCreatingHabitWithNullImportance() throws Exception {
+        String json = """
+            {"name": "Habit", "description": "", "motivationalPhrase": "", "iconId": "icon1", "importance": null, "dificulty": 2, "categoriesId": [], "experience": "BEGINNER"}
+            """;
+
+        mockMvc.perform(post("/habit")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json))
+                .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.details.importance").exists());
+    }
+
+    @Test
+    void shouldReturn400WhenCreatingHabitWithImportanceOutOfRange() throws Exception {
+        String json = """
+            {"name": "Habit", "description": "", "motivationalPhrase": "", "iconId": "icon1", "importance": 6, "dificulty": 2, "categoriesId": [], "experience": "BEGINNER"}
+            """;
+
+        mockMvc.perform(post("/habit")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json))
+                .andExpect(status().is(HttpServletResponse.SC_BAD_REQUEST))
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.details.importance").exists());
+    }
 }
