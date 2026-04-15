@@ -126,6 +126,7 @@ class DiaryRoutineServiceUnitTest {
 
         mockedTask = new Task();
         mockedTask.setId(validRequestDTO.routineSections().get(0).taskGroup().get(0).taskId());
+        mockedTask.setUser(user);
 
         Task task = new Task();
         task.setId(validRequestDTO.routineSections().get(0).taskGroup().get(0).taskId());
@@ -139,6 +140,7 @@ class DiaryRoutineServiceUnitTest {
 
         mockedHabit = new Habit();
         mockedHabit.setId(validRequestDTO.routineSections().get(0).habitGroup().get(0).habitId());
+        mockedHabit.setUser(user);
 
         Habit habit = new Habit();
         habit.setId(validRequestDTO.routineSections().get(0).habitGroup().get(0).habitId());
@@ -372,6 +374,7 @@ class DiaryRoutineServiceUnitTest {
 
         mockedHabit = new Habit();
         mockedHabit.setId(validRequestDTO.routineSections().get(0).habitGroup().get(0).habitId());
+        mockedHabit.setUser(user);
 
         Habit habit = new Habit();
         habit.setId(validRequestDTO.routineSections().get(0).habitGroup().get(0).habitId());
@@ -565,6 +568,9 @@ class DiaryRoutineServiceUnitTest {
         UUID newHabitId = UUID.randomUUID();
         Habit newHabit = new Habit();
         newHabit.setId(newHabitId);
+        User owner = new User();
+        owner.setId(userId);
+        newHabit.setUser(owner);
 
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
         when(habitService.getHabit(newHabitId)).thenReturn(newHabit);
@@ -663,5 +669,85 @@ class DiaryRoutineServiceUnitTest {
 
         assertEquals(0, existingSection.getHabitGroups().size(), "All habit groups should be removed");
         assertEquals(0, existingSection.getTaskGroups().size(), "All task groups should be removed");
+    }
+
+    @Test
+    @DisplayName("Should reject habit from different user (IDOR prevention)")
+    void shouldRejectHabitFromDifferentUser() {
+        RoutineSection existingSection = diaryRoutine.getRoutineSections().get(0);
+        UUID sectionId = existingSection.getId();
+        UUID existingTaskGroupId = existingSection.getTaskGroups().get(0).getId();
+
+        UUID foreignHabitId = UUID.randomUUID();
+        Habit foreignHabit = new Habit();
+        foreignHabit.setId(foreignHabitId);
+        User otherUser = new User();
+        otherUser.setId(UUID.randomUUID()); // different user
+        foreignHabit.setUser(otherUser);
+
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+        when(habitService.getHabit(foreignHabitId)).thenReturn(foreignHabit);
+
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+                "Updated",
+                "icon",
+                List.of(new RoutineSectionRequestDTO(
+                        sectionId,
+                        "Morning",
+                        "sun",
+                        LocalTime.of(6, 0),
+                        LocalTime.of(12, 0),
+                        List.of(new TaskGroupDTO(existingTaskGroupId,
+                                existingSection.getTaskGroups().get(0).getTask().getId(),
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                        List.of(new HabitGroupDTO(null, // new group with foreign habit
+                                foreignHabitId,
+                                LocalTime.of(7, 0), LocalTime.of(7, 30), null)),
+                        false)));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId));
+        assertEquals(ErrorKey.HABIT_NOT_OWNED, exception.getErrorKey());
+    }
+
+    @Test
+    @DisplayName("Should reject task from different user (IDOR prevention)")
+    void shouldRejectTaskFromDifferentUser() {
+        RoutineSection existingSection = diaryRoutine.getRoutineSections().get(0);
+        UUID sectionId = existingSection.getId();
+        UUID existingHabitGroupId = existingSection.getHabitGroups().get(0).getId();
+
+        UUID foreignTaskId = UUID.randomUUID();
+        Task foreignTask = new Task();
+        foreignTask.setId(foreignTaskId);
+        User otherUser = new User();
+        otherUser.setId(UUID.randomUUID()); // different user
+        foreignTask.setUser(otherUser);
+
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+        when(taskService.getTask(foreignTaskId)).thenReturn(foreignTask);
+
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+                "Updated",
+                "icon",
+                List.of(new RoutineSectionRequestDTO(
+                        sectionId,
+                        "Morning",
+                        "sun",
+                        LocalTime.of(6, 0),
+                        LocalTime.of(12, 0),
+                        List.of(new TaskGroupDTO(null, // new group with foreign task
+                                foreignTaskId,
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                        List.of(new HabitGroupDTO(existingHabitGroupId,
+                                existingSection.getHabitGroups().get(0).getHabit().getId(),
+                                LocalTime.of(6, 15), LocalTime.of(6, 45), null)),
+                        false)));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId));
+        assertEquals(ErrorKey.TASK_NOT_OWNED, exception.getErrorKey());
     }
 }

@@ -4,6 +4,7 @@ import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
+import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
@@ -14,6 +15,7 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSect
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
+import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
@@ -125,7 +127,7 @@ public class DiaryRoutineService {
         existing.setName(dto.name());
         existing.setIconId(dto.iconId());
 
-        mergeSections(existing, dto.routineSections());
+        mergeSections(existing, dto.routineSections(), userId);
 
         /*
          * JPA manage the entity inside the transaction, after commit will be persisted.
@@ -137,7 +139,7 @@ public class DiaryRoutineService {
         return mapper.toResponse(existing);
     }
 
-    private void mergeSections(DiaryRoutine routine, List<RoutineSectionRequestDTO> dtoSections) {
+    private void mergeSections(DiaryRoutine routine, List<RoutineSectionRequestDTO> dtoSections, UUID userId) {
         Set<UUID> incomingIds = dtoSections.stream()
                 .map(RoutineSectionRequestDTO::id)
                 .filter(Objects::nonNull)
@@ -160,8 +162,8 @@ public class DiaryRoutineService {
                 existing.setFavorite(sectionDTO.favorite());
                 existing.setOrderIndex(index);
 
-                mergeHabitGroups(existing, sectionDTO.habitGroup());
-                mergeTaskGroups(existing, sectionDTO.taskGroup());
+                mergeHabitGroups(existing, sectionDTO.habitGroup(), userId);
+                mergeTaskGroups(existing, sectionDTO.taskGroup(), userId);
             } else {
                 // Create new section
                 RoutineSection newSection = mapper.mapToRoutineSection(sectionDTO, routine);
@@ -173,7 +175,7 @@ public class DiaryRoutineService {
         }
     }
 
-    private void mergeHabitGroups(RoutineSection section, List<HabitGroupDTO> dtoGroups) {
+    private void mergeHabitGroups(RoutineSection section, List<HabitGroupDTO> dtoGroups, UUID userId) {
         if (dtoGroups == null) {
             dtoGroups = List.of();
         }
@@ -196,12 +198,12 @@ public class DiaryRoutineService {
                 existing.setStartTime(dto.startTime());
                 existing.setEndTime(dto.endTime());
                 if (!existing.getHabit().getId().equals(dto.habitId())) {
-                    existing.setHabit(habitService.getHabit(dto.habitId()));
+                    existing.setHabit(getOwnedHabit(dto.habitId(), userId));
                 }
             } else {
                 // Create new group
                 HabitGroup newGroup = new HabitGroup();
-                newGroup.setHabit(habitService.getHabit(dto.habitId()));
+                newGroup.setHabit(getOwnedHabit(dto.habitId(), userId));
                 newGroup.setStartTime(dto.startTime());
                 newGroup.setEndTime(dto.endTime());
                 newGroup.setRoutineSection(section);
@@ -210,7 +212,7 @@ public class DiaryRoutineService {
         }
     }
 
-    private void mergeTaskGroups(RoutineSection section, List<TaskGroupDTO> dtoGroups) {
+    private void mergeTaskGroups(RoutineSection section, List<TaskGroupDTO> dtoGroups, UUID userId) {
         if (dtoGroups == null) {
             dtoGroups = List.of();
         }
@@ -233,12 +235,12 @@ public class DiaryRoutineService {
                 existing.setStartTime(dto.startTime());
                 existing.setEndTime(dto.endTime());
                 if (!existing.getTask().getId().equals(dto.taskId())) {
-                    existing.setTask(taskService.getTask(dto.taskId()));
+                    existing.setTask(getOwnedTask(dto.taskId(), userId));
                 }
             } else {
                 // Create new group
                 TaskGroup newGroup = new TaskGroup();
-                newGroup.setTask(taskService.getTask(dto.taskId()));
+                newGroup.setTask(getOwnedTask(dto.taskId(), userId));
                 newGroup.setStartTime(dto.startTime());
                 newGroup.setEndTime(dto.endTime());
                 newGroup.setRoutineSection(section);
@@ -427,6 +429,24 @@ public class DiaryRoutineService {
         RefreshUiDTO result = checkItemService.skipOrUnskipItemGroup(skipGroupRequestDTO);
         userCacheEvictService.evictAllUserCaches(userId);
         return result;
+    }
+
+    private Habit getOwnedHabit(UUID habitId, UUID userId) {
+        Habit habit = habitService.getHabit(habitId);
+        if (!habit.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.HABIT_NOT_OWNED,
+                    "Cannot add habit to routine: habit does not belong to user");
+        }
+        return habit;
+    }
+
+    private Task getOwnedTask(UUID taskId, UUID userId) {
+        Task task = taskService.getTask(taskId);
+        if (!task.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.TASK_NOT_OWNED,
+                    "Cannot add task to routine: task does not belong to user");
+        }
+        return task;
     }
 
     private void verifyRoutineOwnership(UUID routineId, UUID userId) {
