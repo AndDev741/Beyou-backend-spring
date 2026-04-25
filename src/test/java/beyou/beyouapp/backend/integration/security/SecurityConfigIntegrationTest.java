@@ -6,14 +6,14 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockitoAnnotations;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+
+import beyou.beyouapp.backend.AbstractIntegrationTest;
 import org.springframework.test.web.servlet.MvcResult;
 
 import beyou.beyouapp.backend.security.SecurityConfig;
@@ -30,9 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @AutoConfigureMockMvc
 @Import({SecurityConfig.class})
-@SpringBootTest
-@ActiveProfiles("test")
-public class SecurityConfigIntegrationTest {
+public class SecurityConfigIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     MockMvc mockMvc;

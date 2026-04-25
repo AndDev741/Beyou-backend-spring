@@ -4,15 +4,13 @@ import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
+
+import beyou.beyouapp.backend.AbstractIntegrationTest;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
-@ActiveProfiles("test")
-public class TokenServiceIntegrationTest {
+public class TokenServiceIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private TokenService tokenService;
 

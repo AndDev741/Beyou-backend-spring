@@ -1,6 +1,5 @@
 package beyou.beyouapp.backend.unit.security;
 
-import beyou.beyouapp.backend.security.ratelimit.RateLimitConfig;
 import beyou.beyouapp.backend.security.ratelimit.RateLimitFilter;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;

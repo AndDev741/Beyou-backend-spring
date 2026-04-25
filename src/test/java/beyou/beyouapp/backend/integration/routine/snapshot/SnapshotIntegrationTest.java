@@ -1,6 +1,5 @@
 package beyou.beyouapp.backend.domain.routine.snapshot;
 
-import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
@@ -23,9 +22,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+
+import beyou.beyouapp.backend.AbstractIntegrationTest;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -37,10 +36,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@SpringBootTest
-@ActiveProfiles("test")
 @Transactional
-class SnapshotIntegrationTest {
+class SnapshotIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired private SnapshotService snapshotService;
     @Autowired private RoutineSnapshotRepository snapshotRepository;
@@ -49,7 +46,6 @@ class SnapshotIntegrationTest {
     @Autowired private HabitRepository habitRepository;
     @Autowired private ScheduleRepository scheduleRepository;
     @Autowired private DiaryRoutineRepository diaryRoutineRepository;
-    @Autowired private XpByLevelRepository xpByLevelRepository;
     @Autowired private EntityManager entityManager;
 
     private User user;

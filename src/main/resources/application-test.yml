@@ -1,15 +1,15 @@
 spring:
+  # Datasource is configured dynamically by AbstractIntegrationTest
+  # via Testcontainers PostgreSQL (@DynamicPropertySource)
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
-    driverClassName: org.h2.Driver
-    username: sa
-    password:
+    hikari:
+      # Keep connection pool small — multiple Spring test contexts share one
+      # PostgreSQL container with default max_connections=100.
+      maximum-pool-size: 2
+      minimum-idle: 0
   jpa:
     hibernate:
       ddl-auto: create-drop
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
   mail:
     host: test
     port: 25
