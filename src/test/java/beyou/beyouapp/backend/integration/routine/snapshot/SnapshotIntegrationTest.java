@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.domain.routine.snapshot;
+package beyou.beyouapp.backend.integration.routine.snapshot;
 
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.habit.Habit;
@@ -7,6 +7,13 @@ import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleRepository;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshotRepository;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotCheck;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotCheckRepository;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotItemType;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotService;
+import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.domain.routine.snapshot.dto.SnapshotMonthResponseDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.dto.SnapshotResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;

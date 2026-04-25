@@ -1,7 +1,12 @@
-package beyou.beyouapp.backend.domain.routine.snapshot;
+package beyou.beyouapp.backend.integration.routine.snapshot;
 
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshotRepository;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshotScheduler;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotCheckMigrator;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.user.User;

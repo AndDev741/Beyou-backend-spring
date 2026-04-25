@@ -1,6 +1,9 @@
-package beyou.beyouapp.backend.domain.routine.snapshot;
+package beyou.beyouapp.backend.integration.routine.snapshot;
 
 import org.junit.jupiter.api.Test;
+
+import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class XpDecayStrategyTest {

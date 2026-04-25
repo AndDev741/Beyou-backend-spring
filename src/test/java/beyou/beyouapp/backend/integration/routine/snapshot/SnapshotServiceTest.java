@@ -1,5 +1,12 @@
-package beyou.beyouapp.backend.domain.routine.snapshot;
+package beyou.beyouapp.backend.integration.routine.snapshot;
 
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshotRepository;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotCheck;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotCheckRepository;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotItemType;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotService;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotStructureSerializer;
 import beyou.beyouapp.backend.domain.routine.snapshot.dto.SnapshotCheckResponseDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.dto.SnapshotMonthResponseDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.dto.SnapshotResponseDTO;

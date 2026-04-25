@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.domain.routine.snapshot;
+package beyou.beyouapp.backend.integration.routine.snapshot;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
@@ -8,6 +8,14 @@ import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUserDTO;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshotRepository;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotCheck;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotCheckRepository;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotCheckService;
+import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotItemType;
+import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayCalculator;
+import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.task.Task;
