@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.routine.specializedRoutines;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,9 +39,11 @@ public class RoutineSection {
     private LocalTime endTime;
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
     private List<TaskGroup> taskGroups = new ArrayList<>();
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
     private List<HabitGroup> habitGroups = new ArrayList<>();
 
     @ManyToOne
