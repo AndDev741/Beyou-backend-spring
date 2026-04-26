@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.UuidGenerator;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -68,6 +69,7 @@ public class Habit {
     @JsonIgnore
     @ToString.Exclude
     @OneToMany(mappedBy = "habit", cascade = CascadeType.ALL, orphanRemoval = false)
+    @BatchSize(size = 10)
     private List<HabitGroup> habitGroups;
 
     @Column(nullable = false)
