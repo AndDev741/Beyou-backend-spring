@@ -9,6 +9,7 @@ import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.user.User;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -50,16 +51,19 @@ public class Category {
      @JsonIgnore
      @ManyToMany(mappedBy = "categories")
      @ToString.Exclude
+     @BatchSize(size = 100)
      private List<Habit> habits;
 
      @JsonIgnore
      @ManyToMany(mappedBy = "categories")
      @ToString.Exclude
+     @BatchSize(size = 100)
      private List<Task> tasks;
 
      @JsonIgnore
      @ManyToMany(mappedBy = "categories")
      @ToString.Exclude
+     @BatchSize(size = 100)
      private List<Goal> goals;
 
      @Embedded

@@ -10,6 +10,13 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+    properties:
+      hibernate:
+        # Enable query/fetch counters for N+1 detection in tests.
+        # Read via SessionFactory.getStatistics() — see HibernateStatistics test helper.
+        # Never enable in production: ~1-2% overhead and the JVM-singleton counters
+        # don't aggregate cleanly across multi-pod deployments.
+        generate_statistics: true
   mail:
     host: test
     port: 25
