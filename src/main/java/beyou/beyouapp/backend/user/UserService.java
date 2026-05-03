@@ -14,6 +14,7 @@ import jakarta.validation.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,6 +45,15 @@ public class UserService {
     private final RefreshTokenService refreshTokenService;
     private final UserMapper userMapper;
     private final ApplicationEventPublisher eventPublisher;
+
+    /**
+     * When true, newly registered users are immediately marked as verified and
+     * the registration email event is skipped. ONLY enabled in the {@code e2e}
+     * profile so Playwright tests don't need an SMTP server or a verification
+     * link parser. Always {@code false} in production / dev.
+     */
+    @Value("${e2e.auto-verify-email:false}")
+    private boolean autoVerifyEmail;
 
     private static final SecureRandom secureRandom = new SecureRandom();
     private static final Base64.Encoder base64Encoder = Base64.getUrlEncoder();
@@ -114,10 +124,18 @@ public class UserService {
             newUser.setVerificationToken(token);
             newUser.setVerificationTokenExpiry(LocalDateTime.now().plusHours(24));
 
+            // E2E shortcut: skip email verification entirely so Playwright tests
+            // can register and log in without an SMTP server or token parser.
+            if (autoVerifyEmail) {
+                newUser.setEmailVerified(true);
+            }
+
             userRepository.save(newUser);
 
-            eventPublisher.publishEvent(new UserRegisteredEvent(
-                    this, newUser.getEmail(), token, newUser.getLanguageInUse()));
+            if (!autoVerifyEmail) {
+                eventPublisher.publishEvent(new UserRegisteredEvent(
+                        this, newUser.getEmail(), token, newUser.getLanguageInUse()));
+            }
 
             return ResponseEntity.ok().body(Map.of("success", "User registered successfully"));
         }
