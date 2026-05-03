@@ -34,7 +34,10 @@ public class SecurityFilter extends OncePerRequestFilter {
     @SuppressWarnings("null")
     @Override
     public void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        String requestURI = request.getRequestURI();
+        // Strip the servlet context-path (e.g. /api/v1) so the bypass list works
+        // regardless of versioning. Done manually because getServletPath() returns
+        // an empty string under MockMvc, breaking integration tests.
+        String requestURI = stripContextPath(request);
 
         if(
             requestURI.equals("/auth/login") ||
@@ -95,6 +98,15 @@ public class SecurityFilter extends OncePerRequestFilter {
         response.getWriter().write(objectMapper.writeValueAsString(body));
         response.getWriter().flush();
         SecurityContextHolder.clearContext();
+    }
+
+    private static String stripContextPath(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        if (contextPath != null && !contextPath.isEmpty() && uri.startsWith(contextPath)) {
+            return uri.substring(contextPath.length());
+        }
+        return uri;
     }
 
     public String recoverTokenFromHeader(HttpServletRequest request){

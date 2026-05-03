@@ -31,13 +31,15 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.m2/repository/org/owasp/dependency-check-data
-          key: owasp-nvd-${{ github.run_id }}
+          key: owasp-nvd-${{ runner.os }}-${{ github.run_number }}
           restore-keys: |
+            owasp-nvd-${{ runner.os }}-
             owasp-nvd-
 
       - name: Run OWASP dependency check
-        # Fails build on any CVE with CVSS score >= 7 (configured in pom.xml)
-        run: mvn -B org.owasp:dependency-check-maven:check
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: mvn -B org.owasp:dependency-check-maven:check -DnvdApiKey=$NVD_API_KEY
 
       - name: Upload report
         if: always()

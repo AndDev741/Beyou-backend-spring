@@ -24,6 +24,13 @@ REST API for Beyou — a personal productivity app for habits, goals, routines, 
 ./mvnw package -DskipTests # build JAR
 ```
 
+## API versioning
+
+All endpoints are served under `/api/v1` (e.g. `POST http://localhost:8099/api/v1/auth/login`).
+This is configured globally via `server.servlet.context-path` in `application.yaml`.
+The management/actuator server runs on a separate port (default `9091`) and is **not** versioned —
+`/actuator/health` stays at the root.
+
 Configuration via `application.yaml` + environment variables (see `envExample`).
 
 ## License
