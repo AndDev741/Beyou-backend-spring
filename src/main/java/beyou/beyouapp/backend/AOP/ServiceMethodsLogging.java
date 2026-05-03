@@ -9,6 +9,11 @@ import org.aspectj.lang.annotation.Before;
 import org.aspectj.lang.annotation.Pointcut;
 import org.springframework.stereotype.Component;
 
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.security.JwtNotFoundException;
+import beyou.beyouapp.backend.exceptions.security.RefreshTokenDontMatchRaw;
+import beyou.beyouapp.backend.exceptions.security.RefreshTokenExpiredException;
+import beyou.beyouapp.backend.exceptions.security.RefreshTokenNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 
 @Aspect
@@ -49,8 +54,25 @@ public class ServiceMethodsLogging {
         try {
             return joinPoint.proceed();
         } catch (Exception e) {
-            log.error("[ERROR] Exception in method {}: {}", joinPoint.getSignature(), e.getMessage(), e);
+            if (isExpectedClientError(e)) {
+                log.warn("[CLIENT_ERROR] {} in {}: {}",
+                        e.getClass().getSimpleName(),
+                        joinPoint.getSignature().getName(),
+                        e.getMessage());
+            } else {
+                log.error("[ERROR] Exception in method {}: {}",
+                        joinPoint.getSignature(), e.getMessage(), e);
+            }
             throw e; // Throw again to continue with the normal flux
         }
+    }
+
+    static boolean isExpectedClientError(Throwable e) {
+        return e instanceof BusinessException
+                || e instanceof JwtNotFoundException
+                || e instanceof RefreshTokenNotFoundException
+                || e instanceof RefreshTokenExpiredException
+                || e instanceof RefreshTokenDontMatchRaw
+                || e instanceof IllegalArgumentException;
     }
 }
