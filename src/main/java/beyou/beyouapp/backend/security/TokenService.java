@@ -61,7 +61,7 @@ public class TokenService {
     }
 
     public void addJwtTokenToResponse(HttpServletResponse response, String accessToken, String refreshToken){
-        response.addHeader("accessToken", accessToken);
+        response.addHeader("X-Access-Token", accessToken);
 
         ResponseCookie cookie = buildRefreshCookie(refreshToken, Duration.ofDays(15));
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
