@@ -11,6 +11,7 @@ import beyou.beyouapp.backend.domain.routine.checks.HabitGroupCheck;
 import beyou.beyouapp.backend.domain.routine.checks.TaskGroupCheck;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
+import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import lombok.RequiredArgsConstructor;
@@ -58,11 +59,18 @@ public class DiaryRoutineMapper {
                 entity.getName(),
                 entity.getIconId(),
                 sectionDTOs,
-                entity.getSchedule(),
+                mapSchedule(entity.getSchedule()),
                 entity.getXpProgress().getXp(),
                 entity.getXpProgress().getActualLevelXp(),
                 entity.getXpProgress().getNextLevelXp(),
                 entity.getXpProgress().getLevel());
+    }
+
+    private DiaryRoutineResponseDTO.ScheduleResponseDTO mapSchedule(Schedule schedule) {
+        if (schedule == null) {
+            return null;
+        }
+        return new DiaryRoutineResponseDTO.ScheduleResponseDTO(schedule.getId(), schedule.getDays());
     }
 
     public List<RoutineSection> mapToRoutineSections(List<RoutineSectionRequestDTO> dtos, DiaryRoutine diaryRoutine) {

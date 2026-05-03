@@ -1,22 +1,25 @@
 package beyou.beyouapp.backend.domain.routine.specializedRoutines.dto;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import beyou.beyouapp.backend.domain.routine.checks.HabitGroupCheck;
 import beyou.beyouapp.backend.domain.routine.checks.TaskGroupCheck;
-import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
+import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 
 public record DiaryRoutineResponseDTO(
         UUID id,
         String name,
         String iconId,
         List<RoutineSectionResponseDTO> routineSections,
-        Schedule schedule,
+        ScheduleResponseDTO schedule,
         double xp,
         double actualLevelXp,
         double nextLevelXp,
         int level) {
+
+    public record ScheduleResponseDTO(UUID id, Set<WeekDay> days) {}
 
     public record RoutineSectionResponseDTO(
             UUID id,
