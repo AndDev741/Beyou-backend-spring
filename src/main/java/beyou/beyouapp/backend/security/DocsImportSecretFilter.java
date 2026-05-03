@@ -21,8 +21,15 @@ public class DocsImportSecretFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(@SuppressWarnings("null") HttpServletRequest request) {
-        String path = request.getRequestURI();
-        if(path == null) return true;
+        // Strip the servlet context-path (e.g. /api/v1) so the /docs/admin/import
+        // comparison works regardless of versioning. Done manually because
+        // getServletPath() returns an empty string under MockMvc.
+        String uri = request.getRequestURI();
+        if (uri == null) return true;
+        String contextPath = request.getContextPath();
+        String path = (contextPath != null && !contextPath.isEmpty() && uri.startsWith(contextPath))
+                ? uri.substring(contextPath.length())
+                : uri;
 
         boolean isDocsImport = path.startsWith("/docs/admin/import");
 
