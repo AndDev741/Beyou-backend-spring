@@ -67,7 +67,7 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
     @Test
     public void shouldPassIfUserIsAuthenticated() throws Exception {
         mockMvc.perform(get("/auth/verify")
-                .header("authorization", "Bearer " + simulateLogin().getResponse().getHeader("accessToken")))
+                .header("authorization", "Bearer " + simulateLogin().getResponse().getHeader("X-Access-Token")))
                 .andExpect(status().isOk());
     }
 
@@ -99,7 +99,7 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/auth/refresh")
                 .cookie(refreshTokenCookie))
                 .andExpect(status().isOk())
-                .andExpect(header().exists("accessToken"));
+                .andExpect(header().exists("X-Access-Token"));
     }
 
     @Test
@@ -292,7 +292,7 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
                         .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(header().exists("accessToken"))
+                .andExpect(header().exists("X-Access-Token"))
                 .andReturn();
     }
 
