@@ -74,7 +74,7 @@ public class SecurityConfig {
         config.setAllowCredentials(true);
         config.addAllowedOriginPattern(allowedOrigin);
         config.addAllowedHeader("*");
-        config.addExposedHeader("accessToken");
+        config.addExposedHeader("X-Access-Token");
         config.addAllowedMethod("*");
         config.addAllowedMethod("GET");
         config.addAllowedMethod("POST");
