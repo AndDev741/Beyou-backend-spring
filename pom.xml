@@ -187,6 +187,9 @@
                 <version>12.2.1</version>
                 <configuration>
                     <failBuildOnCVSS>7</failBuildOnCVSS>
+					<nvdApiDelay>4000</nvdApiDelay>                                                                           
+					<nvdMaxRetryCount>10</nvdMaxRetryCount>                                                                                                                                                 
+					<nvdValidForHours>24</nvdValidForHours>   
                 </configuration>
             </plugin>
 
