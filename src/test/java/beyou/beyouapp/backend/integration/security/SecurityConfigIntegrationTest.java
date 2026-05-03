@@ -70,7 +70,7 @@ public class SecurityConfigIntegrationTest extends AbstractIntegrationTest {
                         .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(header().exists("accessToken"));
+                .andExpect(header().exists("X-Access-Token"));
 
         mockMvc.perform(post("/auth/register")
                         .content("{\"name\": \"test\", \"email\": \"newtestbeyou5@gmail.com\", \"password\": \"TestPassword1!\"}")
@@ -82,7 +82,7 @@ public class SecurityConfigIntegrationTest extends AbstractIntegrationTest {
     @Test
     public void shouldAllowAccessToProtectedEndpointIfAuthenticated() throws Exception {
         mockMvc.perform(get("/category")
-                .header("authorization", "Bearer " + simulateLogin().getResponse().getHeader("accessToken")))
+                .header("authorization", "Bearer " + simulateLogin().getResponse().getHeader("X-Access-Token")))
                 .andExpect(status().isOk());
     }
 
@@ -102,7 +102,7 @@ public class SecurityConfigIntegrationTest extends AbstractIntegrationTest {
     // public void shouldInvalidateSessionOnLogout() throws Exception {
 
     //     mockMvc.perform(post("/logout")
-    //             .header("authorization", "Bearer " + simulateLogin().getResponse().getHeader("accessToken")))
+    //             .header("authorization", "Bearer " + simulateLogin().getResponse().getHeader("X-Access-Token")))
     //             .andExpect(status().isOk())
     //             .andExpect(cookie().maxAge("jwt", 0));
     // }
@@ -145,7 +145,7 @@ public class SecurityConfigIntegrationTest extends AbstractIntegrationTest {
                         .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(header().exists("accessToken"))
+                .andExpect(header().exists("X-Access-Token"))
                 .andReturn();
     }
 }
