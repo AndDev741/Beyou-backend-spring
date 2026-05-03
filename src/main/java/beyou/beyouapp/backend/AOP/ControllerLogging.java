@@ -34,7 +34,15 @@ public class ControllerLogging {
 
     @AfterThrowing(pointcut = "allControllerMethods()", throwing = "ex")
     public void logControllerExceptions(JoinPoint joinPoint, Throwable ex) {
-        log.error("[EXCEPTION] Exception in {}: {}", joinPoint.getSignature(), ex.getMessage(), ex);
+        if (ServiceMethodsLogging.isExpectedClientError(ex)) {
+            log.warn("[CLIENT_ERROR] {} in {}: {}",
+                    ex.getClass().getSimpleName(),
+                    joinPoint.getSignature().getName(),
+                    ex.getMessage());
+        } else {
+            log.error("[EXCEPTION] Exception in {}: {}",
+                    joinPoint.getSignature(), ex.getMessage(), ex);
+        }
     }
 
 }
