@@ -1,0 +1,91 @@
+# E2E profile — used by Playwright tests in /Beyou-e2e-tests.
+#
+# Activated via SPRING_PROFILES_ACTIVE=e2e (set in docker-compose.e2e.yml or
+# manually for local runs). Inherits from application.yaml — only overrides
+# the bits we want different for headless browser testing.
+#
+# Differences from production:
+#   - Auto-verifies emails on registration (no SMTP needed)
+#   - Recreates the schema on every startup (clean state per test run)
+#   - Disables rate limiting so tests can hammer the API
+#   - Uses a noop mail config (no real SMTP server expected)
+
+spring:
+  datasource:
+    # Defaults to the dedicated `beyou_e2e` database — NOT the dev `beyou` DB.
+    # This profile uses ddl-auto: create-drop, which wipes the schema on every
+    # boot. E2eSafetyCheck refuses to start if this URL doesn't contain "e2e"
+    # or "test" so a misconfigured override can't silently destroy dev data.
+    #
+    # Create the database once with:
+    #   docker exec -it <postgres-container> psql -U postgres -c "CREATE DATABASE beyou_e2e;"
+    # or against a local Postgres:
+    #   psql -U postgres -c "CREATE DATABASE beyou_e2e;"
+    url: ${DATABASE_E2E_URL:jdbc:postgresql://localhost:5490/beyou_e2e}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:1516}
+  jpa:
+    hibernate:
+      # Drop and recreate the schema on every backend boot — the test container
+      # is throwaway, and we want consistent seed data per run.
+      ddl-auto: create-drop
+  mail:
+    host: localhost
+    port: 25
+    username: noop
+    password: noop
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+# Skip the email verification step entirely. Tests can register and log in
+# in the same flow without parsing an email link.
+e2e:
+  auto-verify-email: true
+
+# Rate limiter off — tests fire many requests quickly and we don't want to
+# exercise the limiter, only the application logic.
+rate-limit:
+  enabled: false
+
+# Cookie config that matches local frontend at http://localhost:3000.
+cookie:
+  secure: false
+  same-site: Lax
+
+cors:
+  allowed-pattern: "http://localhost:3000"
+
+# Reasonable test secrets — never use these outside the e2e profile.
+api:
+  security:
+    token:
+      secret: e2e-test-secret-that-is-at-least-32-characters-long
+
+# Google OAuth is not exercised in E2E. Stub values just so the context boots.
+google:
+  secrets:
+    clientId: e2e-noop
+    clientSecret: e2e-noop
+  url:
+    oauth: http://localhost/noop
+    userInfo: http://localhost/noop
+
+frontend:
+  url: http://localhost:3000
+
+mail:
+  from: e2e@example.local
+
+password-reset:
+  token-ttl-minutes: 15
+  cooldown-minutes: 1
+
+# Docs import is not exercised in E2E.
+docs:
+  import:
+    secret: e2e-noop
+    token: e2e-noop
