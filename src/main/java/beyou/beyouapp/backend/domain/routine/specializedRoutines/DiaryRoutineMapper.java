@@ -184,7 +184,7 @@ public class DiaryRoutineMapper {
                         taskGroup.getTask().getId(),
                         formatTime(taskGroup.getStartTime()),
                         formatTime(taskGroup.getEndTime()),
-                        taskGroup.getTaskGroupChecks()))
+                        new ArrayList<>(taskGroup.getTaskGroupChecks())))
                 .collect(Collectors.toList());
 
         List<DiaryRoutineResponseDTO.RoutineSectionResponseDTO.HabitGroupResponseDTO> habitGroupDTOs = section
@@ -194,7 +194,7 @@ public class DiaryRoutineMapper {
                         habitGroup.getHabit().getId(),
                         formatTime(habitGroup.getStartTime()),
                         formatTime(habitGroup.getEndTime()),
-                        habitGroup.getHabitGroupChecks()))
+                        new ArrayList<>(habitGroup.getHabitGroupChecks())))
                 .collect(Collectors.toList());
 
         return new DiaryRoutineResponseDTO.RoutineSectionResponseDTO(
