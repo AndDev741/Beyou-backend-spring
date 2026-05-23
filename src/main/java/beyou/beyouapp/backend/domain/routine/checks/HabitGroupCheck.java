@@ -12,7 +12,6 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 
 @Entity
-@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"habit_group_id", "check_date"}))
 @Getter
 @Setter
 @AllArgsConstructor
