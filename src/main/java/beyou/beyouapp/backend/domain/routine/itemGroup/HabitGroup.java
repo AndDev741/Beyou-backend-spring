@@ -9,6 +9,9 @@ import lombok.ToString;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import org.hibernate.annotations.BatchSize;
+
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.routine.checks.HabitGroupCheck;
 
@@ -25,5 +28,6 @@ public class HabitGroup extends ItemGroup {
     private Habit habit;
 
     @OneToMany(mappedBy = "habitGroup", cascade = CascadeType.ALL, orphanRemoval = false)
+    @BatchSize(size = 50)
     private List<HabitGroupCheck> habitGroupChecks = new ArrayList<>();;
 }
