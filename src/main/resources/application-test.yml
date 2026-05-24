@@ -66,7 +66,16 @@ rate-limit:
   enabled: false
 
 management:
+  server:
+    port: ${MANAGEMENT_PORT:9091}
+    address: ${MANAGEMENT_ADDRESS:127.0.0.1}
   endpoints:
     web:
       exposure:
-        include: "*"
+        include: ${ACTUATOR_ENDPOINTS:health,metrics,prometheus}
+  metrics:
+    tags:
+      application: beyou-backend
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
