@@ -8,6 +8,9 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.util.List;
+
+import org.hibernate.annotations.BatchSize;
+
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.routine.checks.TaskGroupCheck;
 
@@ -24,5 +27,6 @@ public class TaskGroup extends ItemGroup {
     private Task task;
     
     @OneToMany(mappedBy = "taskGroup", cascade = CascadeType.ALL, orphanRemoval = false)
+    @BatchSize(size = 50)
     private List<TaskGroupCheck> taskGroupChecks;
 }
