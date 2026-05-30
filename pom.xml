@@ -29,6 +29,8 @@
 	</scm>
 	<properties>
 		<java.version>25</java.version>
+		<!-- Override Spring Boot 3.5.14 BOM (manages 42.7.10) to patch CVE-2026-42198 (CVSS 7.5) -->
+		<postgresql.version>42.7.11</postgresql.version>
 	</properties>
 	<dependencies>
 		<dependency>
