@@ -56,6 +56,7 @@ public class GoalService {
     public ResponseEntity<Map<String, String>> createGoal(CreateGoalRequestDTO dto, User user) {
         log.info("[LOG] Creating Goal with DTO => {}", dto);
         List<Category> categories = dto.categoriesId().stream()
+                .distinct()
                 .map(catId -> categoryService.getCategory(catId, user.getId()))
                 .toList();
 
@@ -74,6 +75,7 @@ public class GoalService {
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
         List<Category> categories = dto.categoriesId().stream()
+                .distinct()
                 .map(catId -> categoryService.getCategory(catId, userId))
                 .toList();
         goalMapper.updateEntity(goal, dto, categories);
