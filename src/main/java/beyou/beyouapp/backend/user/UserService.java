@@ -150,6 +150,12 @@ public class UserService {
         }
     }
 
+    public UserResponseDTO getProfile(UUID userId){
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User not found by id"));
+        return userMapper.toResponseDTO(user);
+    }
+
     public UserResponseDTO editUser(UserEditDTO userEdit, UUID userId){
         Optional<User> userOpt = userRepository.findById(userId);
         if(userOpt.isPresent()){

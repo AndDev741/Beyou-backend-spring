@@ -48,7 +48,10 @@ public class GoalMapper {
                         category -> new CategoryMiniDTO(
                             category.getName(),
                             category.getIconId()
-                        )
+                        ),
+                        // A goal may carry the same category twice (duplicate
+                        // join row); collapse instead of throwing on the key.
+                        (existing, duplicate) -> existing
                     ))
                 : Map.of();
 

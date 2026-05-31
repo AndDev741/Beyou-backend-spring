@@ -104,7 +104,8 @@ public class TaskService {
         List<Category> categoriesToAdd = new ArrayList<>();
 
         if(createTaskDTO.categoriesId() != null && !createTaskDTO.categoriesId().isEmpty()){
-            List<UUID> categoriesId = createTaskDTO.categoriesId();
+            // Dedupe ids so a task never gets the same category (and join row) twice.
+            List<UUID> categoriesId = createTaskDTO.categoriesId().stream().distinct().toList();
             categoriesId.forEach(categoryId ->
             categoriesToAdd.add(categoryService.getCategory(categoryId, userId)));
         }
@@ -136,7 +137,8 @@ public class TaskService {
         
         List<Category> categoriesToAdd = new ArrayList<>();
         if(editTaskRequestDTO.categoriesId() != null && !editTaskRequestDTO.categoriesId().isEmpty()){
-            List<UUID> categoriesId = editTaskRequestDTO.categoriesId();
+            // Dedupe ids so a task never gets the same category (and join row) twice.
+            List<UUID> categoriesId = editTaskRequestDTO.categoriesId().stream().distinct().toList();
             categoriesId.forEach(categoryId ->
             categoriesToAdd.add(categoryService.getCategory(categoryId, userId)));
         }
