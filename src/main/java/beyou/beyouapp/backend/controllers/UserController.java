@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.controllers;
 
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +22,12 @@ public class UserController {
     public UserController(UserService userService, AuthenticatedUser authenticatedUser){
         this.userService = userService;
         this.authenticatedUser = authenticatedUser;
+    }
+
+    @GetMapping()
+    public UserResponseDTO getProfile(){
+        User user = authenticatedUser.getAuthenticatedUser();
+        return userService.getProfile(user.getId());
     }
 
     @PutMapping()
