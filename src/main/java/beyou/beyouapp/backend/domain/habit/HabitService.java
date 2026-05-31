@@ -76,10 +76,9 @@ public class HabitService {
         XpByLevel nextLevelXp = xpByLevelRepository.findByLevel(createHabitDTO.experience().getLevel() + 1);
 
         ArrayList<Category> categories = new ArrayList<>();
-        int numberOfCategories = createHabitDTO.categoriesId().size();
-        for(int i = 0; i < numberOfCategories; i++){
-            Category category = categoryService.getCategory(createHabitDTO.categoriesId().get(i), userId);
-            categories.add(category);
+        // Dedupe ids so a habit never gets the same category (and join row) twice.
+        for(UUID categoryId : createHabitDTO.categoriesId().stream().distinct().toList()){
+            categories.add(categoryService.getCategory(categoryId, userId));
         }
 
         Habit newHabit = habitMapper.toEntity(createHabitDTO, categories, actualBaseXp, nextLevelXp, user);
@@ -100,12 +99,11 @@ public class HabitService {
         }
 
         List<Category> categoriesEdit = new ArrayList<>();
-        int numberOfCategories = editHabitDTO.categoriesId().size();
-        for(int i = 0; i < numberOfCategories; i++){
-            Category category = categoryService.getCategory(editHabitDTO.categoriesId().get(i), userId);
-            categoriesEdit.add(category);
+        // Dedupe ids so a habit never gets the same category (and join row) twice.
+        for(UUID categoryId : editHabitDTO.categoriesId().stream().distinct().toList()){
+            categoriesEdit.add(categoryService.getCategory(categoryId, userId));
         }
-        
+
         habitMapper.updateEntity(habitToEdit, editHabitDTO, categoriesEdit);
         try{
             habitRepository.save(habitToEdit);
