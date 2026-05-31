@@ -41,11 +41,14 @@ public class TaskMapper {
             ?
             task.getCategories().stream()
                 .collect(Collectors.toMap(
-                    Category::getId, 
+                    Category::getId,
                     category -> new CategoryMiniDTO(
-                        category.getName(), 
+                        category.getName(),
                         category.getIconId()
-                    )
+                    ),
+                    // A task may carry the same category twice (duplicate join
+                    // row); collapse instead of throwing on the key.
+                    (existing, duplicate) -> existing
                 ))
             : Map.of();
 
