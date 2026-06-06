@@ -6,8 +6,8 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import beyou.beyouapp.backend.docs.blog.dto.BlogTopicDetailDTO;
 import beyou.beyouapp.backend.docs.blog.dto.BlogTopicListItemDTO;
@@ -95,7 +95,7 @@ public class BlogTopicService {
         }
         try {
             return objectMapper.writeValueAsString(tags);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return "[]";
         }
     }
