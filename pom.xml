@@ -197,7 +197,7 @@
 			<plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.5.5</version>
+                <version>3.5.4</version>
                 <configuration>
                     <useModulePath>false</useModulePath>
                     <argLine>-Dmockito.automatic-inline-mock-maker=false
@@ -212,9 +212,6 @@
                 <version>12.2.1</version>
                 <configuration>
                     <failBuildOnCVSS>7</failBuildOnCVSS>
-					<nvdApiDelay>4000</nvdApiDelay>                                                                           
-					<nvdMaxRetryCount>10</nvdMaxRetryCount>                                                                                                                                                 
-					<nvdValidForHours>24</nvdValidForHours>   
                 </configuration>
             </plugin>
 
