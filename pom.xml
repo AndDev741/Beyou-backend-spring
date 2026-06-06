@@ -29,6 +29,13 @@
 	</scm>
 	<properties>
 		<java.version>25</java.version>
+		<!-- Override Spring Boot 3.5.14 BOM (manages 42.7.10) to patch CVE-2026-42198 (CVSS 7.5) -->
+		<postgresql.version>42.7.11</postgresql.version>
+		<!-- Override Spring Boot 3.5.14 BOM (manages 2.24.3) to patch CVE-2026-34479 (CVSS v3.1 7.5).
+		     Vulnerable code lives in the log4j-1.2-api bridge (Log4j1XmlLayout) + log4j-core,
+		     neither on our classpath (we only pull log4j-api + log4j-to-slf4j -> Logback),
+		     so this is a false positive; bumping past the fixed version (2.25.4) clears the gate. -->
+		<log4j2.version>2.25.4</log4j2.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -169,7 +176,7 @@
 			<plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.5.4</version>
+                <version>3.5.5</version>
                 <configuration>
                     <useModulePath>false</useModulePath>
                     <argLine>-Dmockito.automatic-inline-mock-maker=false
@@ -184,6 +191,9 @@
                 <version>12.2.1</version>
                 <configuration>
                     <failBuildOnCVSS>7</failBuildOnCVSS>
+					<nvdApiDelay>4000</nvdApiDelay>                                                                           
+					<nvdMaxRetryCount>10</nvdMaxRetryCount>                                                                                                                                                 
+					<nvdValidForHours>24</nvdValidForHours>   
                 </configuration>
             </plugin>
 
