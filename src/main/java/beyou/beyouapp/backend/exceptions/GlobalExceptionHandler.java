@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.exceptions;
 
+import beyou.beyouapp.backend.exceptions.ai.AiGenerationException;
 import beyou.beyouapp.backend.exceptions.security.JwtNotFoundException;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenDontMatchRaw;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenExpiredException;
@@ -71,6 +72,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleHttpClientErrorException(HttpClientErrorException ex){
         ApiErrorResponse response = new ApiErrorResponse(ErrorKey.GOOGLE_OAUTH_FAILED.name(), "Error trying login with Google, try again", null);
         return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(AiGenerationException.class)
+    public ResponseEntity<ApiErrorResponse> handleAiGenerationException(AiGenerationException ex){
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.AI_GENERATION_FAILED.name(),
+                "AI generation is unavailable right now, try again later", null);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

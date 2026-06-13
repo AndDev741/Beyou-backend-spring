@@ -63,22 +63,26 @@ public class CategoryService {
                 .toList();
     }
 
-    public ResponseEntity<Map<String, Object>> createCategory(CategoryRequestDTO categoryRequestDTO, UUID userId){
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFound("User not found"));
-
+    /** Core create: saves and returns the entity. Does NOT evict caches — callers decide. */
+    public Category createCategoryEntity(CategoryRequestDTO categoryRequestDTO, User user){
         XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.experience().getLevel() + 1);
         XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.experience().getLevel());
 
         Category newCategory = categoryMapper.toEntity(categoryRequestDTO, user, xpForActualLevel, xpForNextLevel);
 
         try{
-            categoryRepository.save(newCategory);
-            userCacheEvictService.evictAllUserCaches(userId);
-            return ResponseEntity.ok().body(Map.of("success", "Category created successfully"));
+            return categoryRepository.save(newCategory);
         }catch(Exception e){
             throw new BusinessException(ErrorKey.CATEGORY_CREATE_FAILED, "Error trying create the category");
         }
+    }
+
+    public ResponseEntity<Map<String, Object>> createCategory(CategoryRequestDTO categoryRequestDTO, UUID userId){
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User not found"));
+        createCategoryEntity(categoryRequestDTO, user);
+        userCacheEvictService.evictAllUserCaches(userId);
+        return ResponseEntity.ok().body(Map.of("success", "Category created successfully"));
     }
 
     public ResponseEntity<Map<String, Object>> editCategory(CategoryEditRequestDTO categoryEditRequestDTO, UUID userId){

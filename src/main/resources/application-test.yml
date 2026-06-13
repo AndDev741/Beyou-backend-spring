@@ -17,6 +17,11 @@ spring:
         # Never enable in production: ~1-2% overhead and the JVM-singleton counters
         # don't aggregate cleanly across multi-pod deployments.
         generate_statistics: true
+  # Dummy AI key so the OpenAI autoconfiguration can boot; the generator is
+  # never invoked in tests (services are mocked / canned).
+  ai:
+    openai:
+      api-key: test-noop
   mail:
     host: test
     port: 25

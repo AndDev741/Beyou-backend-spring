@@ -36,6 +36,9 @@
 		     neither on our classpath (we only pull log4j-api + log4j-to-slf4j -> Logback),
 		     so this is a false positive; bumping past the fixed version (2.25.4) clears the gate. -->
 		<log4j2.version>2.25.4</log4j2.version>
+		<!-- Spring AI 2.0.x is the Boot 4 / Framework 7 line. RC1 is the newest on
+		     Maven Central as of 2026-06-06 — bump to GA when released. -->
+		<spring-ai.version>2.0.0-RC1</spring-ai.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -141,7 +144,25 @@
 			<version>8.10.1</version>
 		</dependency>
 
+		<!-- AI routine generation (provider-agnostic ChatClient; swap starter to change provider) -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-model-openai</artifactId>
+		</dependency>
+
 	</dependencies>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.ai</groupId>
+				<artifactId>spring-ai-bom</artifactId>
+				<version>${spring-ai.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 
 	<build>
 		<plugins>

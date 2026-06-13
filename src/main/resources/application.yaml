@@ -16,6 +16,19 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: ${DDL_AUTO:update}
+  ai:
+    openai:
+      # Non-empty default so the context always boots; without a real key the
+      # provider call fails and surfaces as 503 AI_GENERATION_FAILED.
+      api-key: ${AI_API_KEY:dev-noop}
+      chat:
+        options:
+          model: ${AI_ROUTINE_MODEL:gpt-5-mini}
+          # gpt-5 family are reasoning models: default effort can take >60s for a
+          # full routine draft. "low" cuts latency drastically and is plenty for
+          # structured JSON generation; use "minimal" if still slow.
+          # (Note: these models reject custom temperature — do not re-add it.)
+          reasoning-effort: ${AI_REASONING_EFFORT:low}
   mail:
     host: ${MAIL_HOST}
     port: ${MAIL_PORT}
@@ -66,6 +79,10 @@ password-reset:
 
 rate-limit:
   enabled: true
+
+ai:
+  routine:
+    enabled: ${AI_ROUTINE_ENABLED:true}
 
 docs:
   import:
