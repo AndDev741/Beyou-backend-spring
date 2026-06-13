@@ -68,7 +68,8 @@ public class HabitService {
                 .toList();
     }
 
-    public ResponseEntity<Map<String, String>> createHabit(CreateHabitDTO createHabitDTO, UUID userId){
+    /** Core create: saves and returns the entity. Does NOT evict caches — callers decide. */
+    public Habit createHabitEntity(CreateHabitDTO createHabitDTO, UUID userId){
         User user = userRepository.findById(userId)
         .orElseThrow(() -> new UserNotFound("User not found"));
 
@@ -84,12 +85,16 @@ public class HabitService {
         Habit newHabit = habitMapper.toEntity(createHabitDTO, categories, actualBaseXp, nextLevelXp, user);
 
         try{
-            habitRepository.save(newHabit);
-            userCacheEvictService.evictAllUserCaches(userId);
-            return ResponseEntity.ok().body(Map.of("success", "Habit saved successfully"));
+            return habitRepository.save(newHabit);
         }catch(Exception e){
             throw new BusinessException(ErrorKey.HABIT_CREATE_FAILED, "Error trying to create habit");
         }
+    }
+
+    public ResponseEntity<Map<String, String>> createHabit(CreateHabitDTO createHabitDTO, UUID userId){
+        createHabitEntity(createHabitDTO, userId);
+        userCacheEvictService.evictAllUserCaches(userId);
+        return ResponseEntity.ok().body(Map.of("success", "Habit saved successfully"));
     }
 
     public ResponseEntity<Map<String, String>> editHabit(EditHabitDTO editHabitDTO, UUID userId){

@@ -49,6 +49,16 @@ public class RateLimitConfig {
                 .build();
     }
 
+    /** AI generations are the most expensive call in the system: 10 per hour per user. */
+    public static Bucket createAiBucket() {
+        return Bucket.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(10)
+                        .refillGreedy(10, Duration.ofHours(1))
+                        .build())
+                .build();
+    }
+
     public static Bucket createDocsBucket() {
         return Bucket.builder()
                 .addLimit(Bandwidth.builder()

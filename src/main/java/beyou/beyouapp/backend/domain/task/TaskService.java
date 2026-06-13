@@ -97,8 +97,9 @@ public class TaskService {
     }
 
 
-    public ResponseEntity<Map<String, String>> createTask(CreateTaskRequestDTO createTaskDTO, UUID userId){
-        User user = userRepository.findById(userId).orElseThrow(() -> 
+    /** Core create: saves and returns the entity. Does NOT evict caches — callers decide. */
+    public Task createTaskEntity(CreateTaskRequestDTO createTaskDTO, UUID userId){
+        User user = userRepository.findById(userId).orElseThrow(() ->
         new UserNotFound("User not found when tried to create a task"));
 
         List<Category> categoriesToAdd = new ArrayList<>();
@@ -113,13 +114,17 @@ public class TaskService {
         Task taskToCreate = taskMapper.toEntity(createTaskDTO, categoriesToAdd, user);
 
         try {
-            taskRepository.save(taskToCreate);
-            userCacheEvictService.evictAllUserCaches(userId);
-            return ResponseEntity.ok().body(Map.of("success", "Task created Successfully"));
+            return taskRepository.save(taskToCreate);
         } catch (Exception e) {
             log.error("Error trying to create task", e);
             throw new BusinessException(ErrorKey.TASK_CREATE_FAILED, "Error trying to create task");
         }
+    }
+
+    public ResponseEntity<Map<String, String>> createTask(CreateTaskRequestDTO createTaskDTO, UUID userId){
+        createTaskEntity(createTaskDTO, userId);
+        userCacheEvictService.evictAllUserCaches(userId);
+        return ResponseEntity.ok().body(Map.of("success", "Task created Successfully"));
     }
 
     public ResponseEntity<Map<String, String>> editTask(EditTaskRequestDTO editTaskRequestDTO, UUID userId){
