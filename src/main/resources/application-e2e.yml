@@ -11,6 +11,11 @@
 #   - Uses a noop mail config (no real SMTP server expected)
 
 spring:
+  # Dummy AI key: the e2e profile swaps in CannedRoutineDraftGenerator, so the
+  # real provider is never called — this only lets the autoconfiguration boot.
+  ai:
+    openai:
+      api-key: e2e-noop
   datasource:
     # Defaults to the dedicated `beyou_e2e` database — NOT the dev `beyou` DB.
     # This profile uses ddl-auto: create-drop, which wipes the schema on every
