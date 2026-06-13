@@ -369,7 +369,13 @@ public class AiDraftValidator {
         if (time == null) {
             return null;
         }
-        return Integer.parseInt(time.substring(0, 2)) * 60 + Integer.parseInt(time.substring(3, 5));
+        try {
+            return Integer.parseInt(time.substring(0, 2)) * 60 + Integer.parseInt(time.substring(3, 5));
+        } catch (NumberFormatException | IndexOutOfBoundsException e) {
+            // Unreachable in practice: every time reaching here has already passed
+            // requireValidTime (TIME_PATTERN). Guarded so the parse can never escape.
+            return null;
+        }
     }
 
     // --- small helpers ---

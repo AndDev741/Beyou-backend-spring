@@ -13,6 +13,8 @@ import jakarta.validation.constraints.Size;
 public record GenerateRoutineRequestDTO(
         @NotBlank @Size(min = 10, max = 2000) String description,
         @Valid RoutineDraftDTO previousDraft,
-        @Size(max = 500) String feedback,
+        // Matches `description`: in adjust mode the frontend forwards the same
+        // (up to 2000-char) text as feedback, so the two limits must agree.
+        @Size(max = 2000) String feedback,
         @Pattern(regexp = "en|pt") String language) {
 }

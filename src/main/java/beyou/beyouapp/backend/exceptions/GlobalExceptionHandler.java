@@ -14,10 +14,13 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.client.HttpClientErrorException;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.HashMap;
 import java.util.Map;
 
 @ControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(JwtNotFoundException.class)
@@ -76,6 +79,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AiGenerationException.class)
     public ResponseEntity<ApiErrorResponse> handleAiGenerationException(AiGenerationException ex){
+        // Log the provider failure server-side; return a generic message to the client.
+        log.warn("AI generation failed: {}", ex.getMessage());
         ApiErrorResponse response = new ApiErrorResponse(ErrorKey.AI_GENERATION_FAILED.name(),
                 "AI generation is unavailable right now, try again later", null);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
