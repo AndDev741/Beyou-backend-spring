@@ -23,7 +23,7 @@ import beyou.beyouapp.backend.domain.routine.Routine;
 @ToString
 public class DiaryRoutine extends Routine {
 
-    @OneToMany(mappedBy = "routine", cascade = CascadeType.ALL, orphanRemoval = false)
+    @OneToMany(mappedBy = "routine", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     private List<RoutineSection> routineSections  = new ArrayList<>();
 }
