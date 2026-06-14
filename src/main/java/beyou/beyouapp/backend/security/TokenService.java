@@ -60,13 +60,12 @@ public class TokenService {
         }
     }
 
-    public String addJwtTokenToResponse(HttpServletResponse response, String accessToken, String refreshToken, boolean mobile) {
+    public void addJwtTokenToResponse(HttpServletResponse response, String accessToken, String refreshToken, boolean mobile) {
         response.addHeader("X-Access-Token", accessToken);
         if (!mobile) {
             ResponseCookie cookie = buildRefreshCookie(refreshToken, Duration.ofDays(15));
             response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         }
-        return refreshToken;
     }
 
     public void addJwtTokenToResponse(HttpServletResponse response, String accessToken, String refreshToken) {

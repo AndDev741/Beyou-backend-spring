@@ -51,9 +51,9 @@ public class AuthenticationController {
 
     @PostMapping("/refresh")
     public ResponseEntity<?> refreshAccess(HttpServletRequest request, HttpServletResponse response){
-        String mobileRefresh = refreshTokenService.refreshAccessToken(request, response);
-        if (mobileRefresh != null) { return ResponseEntity.ok(Map.of("refreshToken", mobileRefresh)); }
-        return ResponseEntity.ok("Access Token refreshed");
+        return refreshTokenService.refreshAccessToken(request, response)
+                .<ResponseEntity<?>>map(rt -> ResponseEntity.ok(Map.of("refreshToken", rt)))
+                .orElseGet(() -> ResponseEntity.ok("Access Token refreshed"));
     }
 
     @PostMapping("/logout")

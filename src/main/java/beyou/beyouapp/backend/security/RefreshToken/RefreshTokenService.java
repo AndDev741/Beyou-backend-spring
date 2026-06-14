@@ -51,7 +51,7 @@ public class RefreshTokenService {
     }
 
     @Transactional
-    public String refreshAccessToken(HttpServletRequest request, HttpServletResponse response){
+    public Optional<String> refreshAccessToken(HttpServletRequest request, HttpServletResponse response){
         String cookieValue = recoverToken(request, true);
 
         String[] parts = cookieValue.split("\\.");
@@ -73,7 +73,7 @@ public class RefreshTokenService {
         String newToken = tokenService.generateJwtToken(refreshToken.getUser());
         String newRefreshToken = createRefreshToken(refreshToken.getUser());
         tokenService.addJwtTokenToResponse(response, newToken, newRefreshToken, mobile);
-        return mobile ? newRefreshToken : null;
+        return mobile ? Optional.of(newRefreshToken) : Optional.empty();
     }
 
     public void revokeRefreshToken(HttpServletRequest request, HttpServletResponse response){
@@ -130,20 +130,18 @@ public class RefreshTokenService {
     public String recoverToken(HttpServletRequest request, boolean throwIfNotFound){
         Optional<String> cookieToken = Optional.ofNullable(request.getCookies())
                 .flatMap(cookies -> Arrays.stream(cookies)
-                        .filter(cookie -> "refreshToken".equals(cookie.getName()))
+                        .filter(c -> "refreshToken".equals(c.getName()))
                         .findFirst())
-                .map(Cookie::getValue);
+                .map(Cookie::getValue)
+                .filter(v -> v != null && !v.isBlank());
 
-        String token = cookieToken.orElseGet(() -> request.getHeader("X-Refresh-Token"));
+        String headerToken = request.getHeader("X-Refresh-Token");
+        String token = cookieToken.orElse((headerToken != null && !headerToken.isBlank()) ? headerToken : null);
 
-        if(throwIfNotFound){
-            if (token == null) {
-                throw new RefreshTokenNotFoundException("Refresh token not found in cookies or headers");
-            }
-            return token;
-        }else{
-            return token;
+        if (throwIfNotFound && token == null) {
+            throw new RefreshTokenNotFoundException("Refresh token not found in cookies or headers");
         }
+        return token;
     }
 
     private boolean isNotMatchingOrExpired(RefreshToken refreshToken, String rawToken, boolean throwIfExpired){
