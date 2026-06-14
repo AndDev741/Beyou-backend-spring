@@ -34,8 +34,8 @@ public class AuthenticationController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> doLogin(HttpServletResponse response, @RequestBody @Valid UserLoginDTO userLoginDTO){
-        return userService.doLogin(response, userLoginDTO);
+    public ResponseEntity<Map<String, Object>> doLogin(HttpServletRequest request, HttpServletResponse response, @RequestBody @Valid UserLoginDTO userLoginDTO){
+        return userService.doLogin(request, response, userLoginDTO);
     }
 
     @PostMapping("/register")
@@ -50,9 +50,10 @@ public class AuthenticationController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<String> refreshAccess(HttpServletRequest request, HttpServletResponse response){
-        refreshTokenService.refreshAccessToken(request, response);
-        return ResponseEntity.ok("Access Token refreshed");
+    public ResponseEntity<?> refreshAccess(HttpServletRequest request, HttpServletResponse response){
+        return refreshTokenService.refreshAccessToken(request, response)
+                .<ResponseEntity<?>>map(rt -> ResponseEntity.ok(Map.of("refreshToken", rt)))
+                .orElseGet(() -> ResponseEntity.ok("Access Token refreshed"));
     }
 
     @PostMapping("/logout")

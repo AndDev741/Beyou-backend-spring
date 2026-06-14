@@ -287,6 +287,47 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.errorKey").value("PASSWORD_RESET_TOKEN_USED"));
     }
 
+    @Test
+    public void mobileLoginReturnsRefreshTokenInBodyAndNoCookie() throws Exception {
+        mockMvc.perform(post("/auth/login")
+                .header("X-Client", "mobile")
+                .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("X-Access-Token"))
+                .andExpect(jsonPath("$.success.email").value("testebeyou@gmail.com"))
+                .andExpect(jsonPath("$.refreshToken").exists())
+                .andExpect(cookie().doesNotExist("refreshToken"));
+    }
+
+    @Test
+    public void mobileRefreshAcceptsHeaderTokenAndReturnsNewTokenInBody() throws Exception {
+        MvcResult login = mockMvc.perform(post("/auth/login")
+                .header("X-Client", "mobile")
+                .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
+                .contentType(MediaType.APPLICATION_JSON)).andReturn();
+        String refresh = com.jayway.jsonpath.JsonPath.read(login.getResponse().getContentAsString(), "$.refreshToken");
+
+        mockMvc.perform(post("/auth/refresh").header("X-Client", "mobile").header("X-Refresh-Token", refresh))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("X-Access-Token"))
+                .andExpect(jsonPath("$.refreshToken").exists());
+    }
+
+    @Test
+    public void mobileLogoutRevokesHeaderToken() throws Exception {
+        MvcResult login = mockMvc.perform(post("/auth/login")
+                .header("X-Client", "mobile")
+                .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")
+                .contentType(MediaType.APPLICATION_JSON)).andReturn();
+        String refresh = com.jayway.jsonpath.JsonPath.read(login.getResponse().getContentAsString(), "$.refreshToken");
+
+        mockMvc.perform(post("/auth/logout").header("X-Client", "mobile").header("X-Refresh-Token", refresh))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/auth/refresh").header("X-Client", "mobile").header("X-Refresh-Token", refresh))
+                .andExpect(status().isUnauthorized());
+    }
+
     private MvcResult simulateLogin() throws Exception {
         return mockMvc.perform(post("/auth/login")
                         .content("{\"email\": \"testebeyou@gmail.com\", \"password\": \"TestPassword1!\"}")

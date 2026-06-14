@@ -60,11 +60,16 @@ public class TokenService {
         }
     }
 
-    public void addJwtTokenToResponse(HttpServletResponse response, String accessToken, String refreshToken){
+    public void addJwtTokenToResponse(HttpServletResponse response, String accessToken, String refreshToken, boolean mobile) {
         response.addHeader("X-Access-Token", accessToken);
+        if (!mobile) {
+            ResponseCookie cookie = buildRefreshCookie(refreshToken, Duration.ofDays(15));
+            response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        }
+    }
 
-        ResponseCookie cookie = buildRefreshCookie(refreshToken, Duration.ofDays(15));
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    public void addJwtTokenToResponse(HttpServletResponse response, String accessToken, String refreshToken) {
+        addJwtTokenToResponse(response, accessToken, refreshToken, false);
     }
 
     public ResponseCookie buildRefreshCookie(String value, Duration maxAge) {

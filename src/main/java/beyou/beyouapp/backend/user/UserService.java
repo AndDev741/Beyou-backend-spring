@@ -3,12 +3,14 @@ package beyou.beyouapp.backend.user;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
+import beyou.beyouapp.backend.security.ClientType;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import beyou.beyouapp.backend.user.event.UserRegisteredEvent;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.*;
 import lombok.RequiredArgsConstructor;
@@ -77,7 +79,7 @@ public class UserService {
             .orElseThrow(() -> new UserNotFound("User not found by id"));
     }
 
-    public ResponseEntity<Map<String, Object>> doLogin(HttpServletResponse response, UserLoginDTO userLoginDTO){
+    public ResponseEntity<Map<String, Object>> doLogin(HttpServletRequest request, HttpServletResponse response, UserLoginDTO userLoginDTO){
         Optional<User> loginUser = userRepository.findByEmail(userLoginDTO.email());
         if(loginUser.isPresent()){
             User user = loginUser.get();
@@ -86,11 +88,13 @@ public class UserService {
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
                             .body(Map.of("error", "EMAIL_NOT_VERIFIED"));
                 }
+                boolean mobile = ClientType.isMobile(request);
                 String accessToken = tokenService.generateJwtToken(user);
                 String refreshToken = refreshTokenService.createRefreshToken(user);
-
-                tokenService.addJwtTokenToResponse(response, accessToken, refreshToken);
-
+                tokenService.addJwtTokenToResponse(response, accessToken, refreshToken, mobile);
+                if (mobile) {
+                    return ResponseEntity.ok().body(Map.of("success", userMapper.toResponseDTO(user), "refreshToken", refreshToken));
+                }
                 return ResponseEntity.ok().body(Map.of("success", userMapper.toResponseDTO(user)));
             }
         }
