@@ -114,7 +114,7 @@ public class UserServiceUnitTest {
             when(passwordEncoder.matches(userLoginDTO.password(), user.getPassword())).thenReturn(true);
             when(tokenService.generateJwtToken(user)).thenReturn("mockedToken");
 
-            ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(response, userLoginDTO);
+            ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(null, response, userLoginDTO);
 
             UserResponseDTO userResponseDTO = userMapper.toResponseDTO(user);
 
@@ -459,7 +459,7 @@ public class UserServiceUnitTest {
 
             when(userRepository.findByEmail(userLoginDTO.email())).thenReturn(Optional.empty());
 
-            ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(response, userLoginDTO);
+            ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(null, response, userLoginDTO);
 
             assertEquals(ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED)
                     .body(Map.of("error", "Email or password incorrect")), loginResponse);
@@ -474,7 +474,7 @@ public class UserServiceUnitTest {
             when(userRepository.findByEmail(userLoginDTO.email())).thenReturn(Optional.empty());
             when(passwordEncoder.matches(userLoginDTO.password(), user.getPassword())).thenReturn(false);
 
-            ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(response, userLoginDTO);
+            ResponseEntity<Map<String, Object>> loginResponse = userService.doLogin(null, response, userLoginDTO);
 
             assertEquals(ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED)
                     .body(Map.of("error", "Email or password incorrect")), loginResponse);

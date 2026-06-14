@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenDontMatchRaw;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenExpiredException;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenNotFoundException;
+import beyou.beyouapp.backend.security.ClientType;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.User;
 import jakarta.servlet.http.Cookie;
@@ -50,7 +51,7 @@ public class RefreshTokenService {
     }
 
     @Transactional
-    public void refreshAccessToken(HttpServletRequest request, HttpServletResponse response){
+    public String refreshAccessToken(HttpServletRequest request, HttpServletResponse response){
         String cookieValue = recoverToken(request, true);
 
         String[] parts = cookieValue.split("\\.");
@@ -68,10 +69,11 @@ public class RefreshTokenService {
         refreshToken.setRevokedAt(Timestamp.from(Instant.now()));
         repository.save(refreshToken);
 
+        boolean mobile = ClientType.isMobile(request);
         String newToken = tokenService.generateJwtToken(refreshToken.getUser());
         String newRefreshToken = createRefreshToken(refreshToken.getUser());
-        tokenService.addJwtTokenToResponse(response, newToken, newRefreshToken);
-
+        tokenService.addJwtTokenToResponse(response, newToken, newRefreshToken, mobile);
+        return mobile ? newRefreshToken : null;
     }
 
     public void revokeRefreshToken(HttpServletRequest request, HttpServletResponse response){
@@ -126,16 +128,21 @@ public class RefreshTokenService {
     }
 
     public String recoverToken(HttpServletRequest request, boolean throwIfNotFound){
-        Optional<String> token = Optional.ofNullable(request.getCookies())
+        Optional<String> cookieToken = Optional.ofNullable(request.getCookies())
                 .flatMap(cookies -> Arrays.stream(cookies)
                         .filter(cookie -> "refreshToken".equals(cookie.getName()))
                         .findFirst())
                 .map(Cookie::getValue);
 
+        String token = cookieToken.orElseGet(() -> request.getHeader("X-Refresh-Token"));
+
         if(throwIfNotFound){
-            return token.orElseThrow(() -> new RefreshTokenNotFoundException("Refresh token not found in cookies"));
+            if (token == null) {
+                throw new RefreshTokenNotFoundException("Refresh token not found in cookies or headers");
+            }
+            return token;
         }else{
-            return token.orElse(null);
+            return token;
         }
     }
 
