@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
@@ -94,7 +96,7 @@ public class UserServiceGoogleOAuth {
 
         } catch (HttpClientErrorException e) {
             System.err.println("Error tryng to get token OAuth: " + e.getStatusCode() + " " + e.getResponseBodyAsString());
-            throw e;
+            throw new BusinessException(ErrorKey.GOOGLE_OAUTH_FAILED, "Error trying login with Google, try again");
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }

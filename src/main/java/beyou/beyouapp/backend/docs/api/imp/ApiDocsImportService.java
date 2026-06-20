@@ -17,6 +17,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import beyou.beyouapp.backend.docs.api.ApiControllerTopicRepository;
@@ -62,7 +63,13 @@ public class ApiDocsImportService {
         ImportSource source = resolveSource(request);
         validateSource(source);
 
-        List<ApiDocsImportTopic> topics = fetchTopicsFromGitHub(source);
+        List<ApiDocsImportTopic> topics;
+        try {
+            topics = fetchTopicsFromGitHub(source);
+        } catch (RestClientException e) {
+            log.warn("API docs GitHub fetch failed: {}", e.getMessage());
+            throw new DocsImportFailed("Could not fetch API docs from the source repository");
+        }
         return applyImport(topics);
     }
 

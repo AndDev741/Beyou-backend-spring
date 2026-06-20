@@ -64,9 +64,36 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleHttpClientErrorException_returnsStructuredResponseWith400() {
+    void handleHttpClientErrorException_mapsUnwrappedUpstream4xxToGenericExternalServiceError() {
         ResponseEntity<ApiErrorResponse> response = handler.handleHttpClientErrorException(
-                new HttpClientErrorException(HttpStatus.BAD_REQUEST, "Bad Request"));
+                new HttpClientErrorException(HttpStatus.UNAUTHORIZED, "Bad credentials"));
+
+        assertEquals(HttpStatus.BAD_GATEWAY, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(ErrorKey.EXTERNAL_SERVICE_ERROR.name(), response.getBody().errorKey());
+        assertEquals("An upstream service request failed, try again later",
+                response.getBody().message());
+        assertNull(response.getBody().details());
+    }
+
+    @Test
+    void handleBusinessException_docsImportFailed_returnsStructuredResponseWith400() {
+        ResponseEntity<ApiErrorResponse> response = handler.handleBusinessException(
+                new BusinessException(ErrorKey.DOCS_IMPORT_FAILED,
+                        "Could not fetch architecture docs from the source repository"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(ErrorKey.DOCS_IMPORT_FAILED.name(), response.getBody().errorKey());
+        assertEquals("Could not fetch architecture docs from the source repository",
+                response.getBody().message());
+        assertNull(response.getBody().details());
+    }
+
+    @Test
+    void handleBusinessException_googleOAuthFailed_returnsStructuredResponseWith400() {
+        ResponseEntity<ApiErrorResponse> response = handler.handleBusinessException(
+                new BusinessException(ErrorKey.GOOGLE_OAUTH_FAILED, "Error trying login with Google, try again"));
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertNotNull(response.getBody());

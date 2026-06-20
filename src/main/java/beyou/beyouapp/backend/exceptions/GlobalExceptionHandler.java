@@ -73,8 +73,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpClientErrorException.class)
     public ResponseEntity<ApiErrorResponse> handleHttpClientErrorException(HttpClientErrorException ex){
-        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.GOOGLE_OAUTH_FAILED.name(), "Error trying login with Google, try again", null);
-        return ResponseEntity.badRequest().body(response);
+        log.warn("Upstream HTTP request failed: {} {}", ex.getStatusCode(), ex.getResponseBodyAsString());
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.EXTERNAL_SERVICE_ERROR.name(),
+                "An upstream service request failed, try again later", null);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
     }
 
     @ExceptionHandler(AiGenerationException.class)
