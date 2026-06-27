@@ -17,6 +17,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -70,7 +71,13 @@ public class BlogDocsImportService {
         ImportSource source = resolveSource(request);
         validateSource(source);
 
-        List<BlogDocsImportTopic> topics = fetchTopicsFromGitHub(source);
+        List<BlogDocsImportTopic> topics;
+        try {
+            topics = fetchTopicsFromGitHub(source);
+        } catch (RestClientException e) {
+            log.warn("Blog docs GitHub fetch failed: {}", e.getMessage());
+            throw new DocsImportFailed("Could not fetch blog docs from the source repository");
+        }
         return applyImport(topics);
     }
 

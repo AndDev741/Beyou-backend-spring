@@ -17,6 +17,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import beyou.beyouapp.backend.docs.architecture.ArchitectureTopicRepository;
@@ -64,7 +65,13 @@ public class ArchitectureDocsImportService {
         ImportSource source = resolveSource(request);
         validateSource(source);
 
-        List<ArchitectureDocsImportTopic> topics = fetchTopicsFromGitHub(source);
+        List<ArchitectureDocsImportTopic> topics;
+        try {
+            topics = fetchTopicsFromGitHub(source);
+        } catch (RestClientException e) {
+            log.warn("Architecture docs GitHub fetch failed: {}", e.getMessage());
+            throw new DocsImportFailed("Could not fetch architecture docs from the source repository");
+        }
         return applyImport(topics);
     }
 
