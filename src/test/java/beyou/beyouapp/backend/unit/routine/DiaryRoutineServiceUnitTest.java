@@ -12,6 +12,8 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineMapper;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshotRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
@@ -63,6 +65,9 @@ class DiaryRoutineServiceUnitTest {
 
     @Mock
     private UserCacheEvictService userCacheEvictService;
+
+    @Mock
+    private RoutineSnapshotRepository routineSnapshotRepository;
 
     private DiaryRoutineMapper mapper;
 
@@ -154,7 +159,7 @@ class DiaryRoutineServiceUnitTest {
         section.setRoutine(diaryRoutine);
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(section)));
 
-        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, mapper, checkItemService, userCacheEvictService, habitService, taskService);
+        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, mapper, checkItemService, userCacheEvictService, habitService, taskService, routineSnapshotRepository);
     }
 
     @Test
@@ -426,15 +431,27 @@ class DiaryRoutineServiceUnitTest {
     }
 
     @Test
+    @DisplayName("Should delete the routine's snapshots before deleting the routine (FK cleanup)")
+    void shouldDeleteSnapshotsBeforeDeletingRoutine() {
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
+        List<RoutineSnapshot> snapshots = List.of(new RoutineSnapshot());
+        when(routineSnapshotRepository.findAllByRoutineId(routineId)).thenReturn(snapshots);
+
+        diaryRoutineService.deleteDiaryRoutine(routineId, userId);
+
+        verify(routineSnapshotRepository, times(1)).deleteAll(snapshots);
+        verify(diaryRoutineRepository, times(1)).deleteById(routineId);
+    }
+
+    @Test
     @DisplayName("Should throw DiaryRoutineNotFoundException when deleting non-existent routine")
     void shouldThrowNotFoundWhenDeletingNonExistentRoutine() {
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.empty());
 
         BusinessException exception = assertThrows(
-                BusinessException.class,
+                DiaryRoutineNotFoundException.class,
                 () -> diaryRoutineService.deleteDiaryRoutine(routineId, userId));
-        assertEquals(ErrorKey.ROUTINE_NOT_OWNED, exception.getErrorKey());
-        assertEquals("The user trying to get its different of the one in the object", exception.getMessage());
+        assertEquals(ErrorKey.ROUTINE_NOT_FOUND, exception.getErrorKey());
         verify(diaryRoutineRepository, never()).deleteById(any());
     }
 

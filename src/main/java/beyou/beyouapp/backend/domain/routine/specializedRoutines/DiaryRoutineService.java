@@ -13,6 +13,8 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutin
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.HabitGroupDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
+import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshotRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
@@ -35,7 +37,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -53,6 +54,7 @@ public class DiaryRoutineService {
     private final UserCacheEvictService userCacheEvictService;
     private final HabitService habitService;
     private final TaskService taskService;
+    private final RoutineSnapshotRepository routineSnapshotRepository;
 
     @Cacheable(cacheNames = "routine", key = "#userId + '_' + #id")
     @Transactional(readOnly = true)
@@ -256,11 +258,23 @@ public class DiaryRoutineService {
 
     @Transactional
     public void deleteDiaryRoutine(UUID id, UUID userId) {
-        Optional<DiaryRoutine> diaryRoutineToDelete = diaryRoutineRepository.findById(id);
+        DiaryRoutine diaryRoutineToDelete = diaryRoutineRepository.findById(id)
+                .orElseThrow(() -> new DiaryRoutineNotFoundException("Diary routine not found by id"));
 
-        if (diaryRoutineToDelete.isEmpty() || !diaryRoutineToDelete.get().getUser().getId().equals(userId)) {
+        if (!diaryRoutineToDelete.getUser().getId().equals(userId)) {
             throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED,
-                    "The user trying to get its different of the one in the object");
+                    "The user trying to delete a routine that belongs to a different user");
+        }
+
+        // Snapshots hold a non-null FK to the routine with no DB-level cascade, so they must be
+        // removed first — otherwise the routine delete fails with a foreign-key violation. Deleting
+        // the snapshot entities cascades to their SnapshotChecks (orphanRemoval). Routine has no
+        // mapped back-reference to its snapshots, so flush the snapshot deletes before deleting the
+        // routine to guarantee ordering (Hibernate can't infer the FK dependency otherwise).
+        List<RoutineSnapshot> snapshots = routineSnapshotRepository.findAllByRoutineId(id);
+        if (!snapshots.isEmpty()) {
+            routineSnapshotRepository.deleteAll(snapshots);
+            routineSnapshotRepository.flush();
         }
 
         diaryRoutineRepository.deleteById(id);
