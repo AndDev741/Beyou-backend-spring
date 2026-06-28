@@ -75,6 +75,8 @@ google:
   secrets:
     clientId: e2e-noop
     clientSecret: e2e-noop
+  mobile:
+    audiences: e2e-noop
   url:
     oauth: http://localhost/noop
     userInfo: http://localhost/noop

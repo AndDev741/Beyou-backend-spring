@@ -35,9 +35,10 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
-                            "/auth/login", 
-                            "/auth/register", 
+                            "/auth/login",
+                            "/auth/register",
                             "/auth/google",
+                            "/auth/google/mobile",
                             "/auth/refresh",
                             "/auth/logout",
                             "/auth/forgot-password",

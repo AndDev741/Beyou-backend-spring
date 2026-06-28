@@ -18,16 +18,22 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import beyou.beyouapp.backend.AbstractIntegrationTest;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.notification.EmailService;
 import beyou.beyouapp.backend.security.passwordreset.PasswordResetToken;
 import beyou.beyouapp.backend.security.passwordreset.PasswordResetTokenRepository;
+import beyou.beyouapp.backend.user.GoogleIdTokenVerifierService;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -51,6 +57,10 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
 
     @MockitoBean
     private EmailService emailService;
+
+    // Mocked so the mobile Google sign-in tests never make a real call to Google.
+    @MockitoBean
+    private GoogleIdTokenVerifierService googleIdTokenVerifierService;
 
     @BeforeEach
     void setup() {
@@ -326,6 +336,43 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk());
         mockMvc.perform(post("/auth/refresh").header("X-Client", "mobile").header("X-Refresh-Token", refresh))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    public void mobileGoogleSignInReturnsProfileAndRefreshTokenForValidIdToken() throws Exception {
+        when(googleIdTokenVerifierService.verify(anyString()))
+                .thenReturn(new GoogleUserDTO("googlemobile@gmail.com", "Google Mobile", "http://pic"));
+
+        mockMvc.perform(post("/auth/google/mobile")
+                .header("X-Client", "mobile")
+                .content("{\"idToken\": \"valid-id-token\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("X-Access-Token"))
+                .andExpect(jsonPath("$.success.email").value("googlemobile@gmail.com"))
+                .andExpect(jsonPath("$.refreshToken").exists())
+                .andExpect(cookie().doesNotExist("refreshToken"));
+    }
+
+    @Test
+    public void mobileGoogleSignInRejectsInvalidIdToken() throws Exception {
+        when(googleIdTokenVerifierService.verify(anyString()))
+                .thenThrow(new BusinessException(ErrorKey.INVALID_REQUEST, "Invalid Google ID token"));
+
+        mockMvc.perform(post("/auth/google/mobile")
+                .content("{\"idToken\": \"bad-token\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    public void mobileGoogleSignInRejectsBlankIdToken() throws Exception {
+        mockMvc.perform(post("/auth/google/mobile")
+                .content("{\"idToken\": \"\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"));
     }
 
     private MvcResult simulateLogin() throws Exception {

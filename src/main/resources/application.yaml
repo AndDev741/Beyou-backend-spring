@@ -63,6 +63,10 @@ google:
   secrets:
     clientId: ${GOOGLE_CLIENT_ID}
     clientSecret: ${GOOGLE_CLIENT_SECRET}
+  mobile:
+    # Allowed audiences for mobile Google ID tokens (comma-separated). Defaults to
+    # the web client id; add the Android/iOS client ids via GOOGLE_MOBILE_AUDIENCES.
+    audiences: ${GOOGLE_MOBILE_AUDIENCES:${GOOGLE_CLIENT_ID}}
   url:
     oauth: ${OAUTH_GOOGLE_URL}
     userInfo: ${USER_INFO_GOOGLE_URL}
