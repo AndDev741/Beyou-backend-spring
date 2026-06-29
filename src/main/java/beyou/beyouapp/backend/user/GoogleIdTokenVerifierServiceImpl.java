@@ -7,6 +7,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +19,7 @@ import java.util.List;
  * the token signature against Google's cached public keys plus the issuer, audience
  * and expiry in one call.
  */
+@Slf4j
 @Service
 public class GoogleIdTokenVerifierServiceImpl implements GoogleIdTokenVerifierService {
 
@@ -40,6 +42,10 @@ public class GoogleIdTokenVerifierServiceImpl implements GoogleIdTokenVerifierSe
         try {
             idToken = verifier.verify(idTokenString);
         } catch (Exception e) {
+            // An exception here (vs verify() returning null for a merely-invalid token)
+            // points at a misconfigured audience, clock skew, or a Google outage — surface
+            // the cause so it's diagnosable. Message only; never log the token itself.
+            log.warn("Google ID token verification errored: {}", e.getMessage());
             throw new BusinessException(ErrorKey.INVALID_REQUEST, "Invalid Google ID token");
         }
         if (idToken == null) {
