@@ -46,6 +46,8 @@ google:
   secrets:
     clientId: test
     clientSecret: test
+  mobile:
+    audiences: test
   url:
     oauth: test
     userInfo: test

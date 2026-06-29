@@ -7,6 +7,9 @@ DATABASE_PASSWORD=
 TOKEN_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+# Allowed audiences for mobile Google ID tokens (comma-separated); defaults to GOOGLE_CLIENT_ID.
+# Add the Android/iOS OAuth client ids here once provisioned.
+GOOGLE_MOBILE_AUDIENCES=
 
 # URLs
 FRONTEND_URL=http://localhost:3000/

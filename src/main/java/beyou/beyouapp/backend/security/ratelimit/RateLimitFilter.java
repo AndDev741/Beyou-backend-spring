@@ -25,7 +25,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final Cache<String, Bucket> rateLimitCache;
 
     private static final Set<String> AUTH_PATHS = Set.of(
-            "/auth/login", "/auth/register", "/auth/forgot-password"
+            "/auth/login", "/auth/register", "/auth/forgot-password", "/auth/google", "/auth/google/mobile"
     );
 
     private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "DELETE", "PATCH");

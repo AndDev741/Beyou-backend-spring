@@ -30,6 +30,7 @@ public class UserServiceGoogleOAuth {
     private final RefreshTokenService refreshTokenService;
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+    private final GoogleIdTokenVerifierService googleIdTokenVerifierService;
 
     @Value("${google.secrets.clientId}")
     String GOOGLE_CLIENT_ID;
@@ -72,6 +73,27 @@ public class UserServiceGoogleOAuth {
 
             return ResponseEntity.ok().body(Map.of("success",  userMapper.toResponseDTO(user)));
         }
+    }
+
+    /**
+     * Mobile Google sign-in: verifies the ID token (obtained on-device via
+     * expo-auth-session) server-side, then find-or-creates the user and issues the
+     * JWT + refresh token using the mobile contract (X-Access-Token header +
+     * refreshToken in the body, no cookie).
+     */
+    public ResponseEntity<Map<String, Object>> googleMobileAuth(String idToken, HttpServletResponse response) {
+        GoogleUserDTO googleUser = googleIdTokenVerifierService.verify(idToken);
+
+        User user = userRepository.findByEmail(googleUser.email())
+                .orElseGet(() -> userRepository.save(new User(googleUser)));
+
+        String jwtToken = tokenService.generateJwtToken(user);
+        String refreshToken = refreshTokenService.createRefreshToken(user);
+        tokenService.addJwtTokenToResponse(response, jwtToken, refreshToken, true);
+
+        return ResponseEntity.ok().body(Map.of(
+                "success", userMapper.toResponseDTO(user),
+                "refreshToken", refreshToken));
     }
 
     private String getOAuthAccessTokenGoogle(String code){

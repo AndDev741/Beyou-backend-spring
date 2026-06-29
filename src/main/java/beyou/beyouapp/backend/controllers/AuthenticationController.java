@@ -5,6 +5,7 @@ import beyou.beyouapp.backend.security.passwordreset.PasswordResetService;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.UserServiceGoogleOAuth;
 import beyou.beyouapp.backend.user.dto.ForgotPasswordRequestDTO;
+import beyou.beyouapp.backend.user.dto.GoogleMobileLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import beyou.beyouapp.backend.user.dto.ResetPasswordRequestDTO;
@@ -47,6 +48,12 @@ public class AuthenticationController {
     public ResponseEntity<Map<String, Object>> googleAuth(@RequestParam("code") String code,
                                 HttpServletResponse response){
         return userServiceGoogleOAuth.googleAuth(code, response);
+    }
+
+    @PostMapping("/google/mobile")
+    public ResponseEntity<Map<String, Object>> googleMobileAuth(@RequestBody @Valid GoogleMobileLoginDTO request,
+                                HttpServletResponse response){
+        return userServiceGoogleOAuth.googleMobileAuth(request.idToken(), response);
     }
 
     @PostMapping("/refresh")
