@@ -10,12 +10,13 @@ class AiIconCatalogTest {
 
     @Test
     void validIconPassesThrough() {
-        assertEquals("ri:md/MdWbSunny", AiIconCatalog.orDefault("ri:md/MdWbSunny"));
+        assertEquals("lucide:sun", AiIconCatalog.orDefault("lucide:sun"));
     }
 
     @Test
     void unknownIconFallsBackToDefault() {
-        assertEquals(AiIconCatalog.DEFAULT_ICON, AiIconCatalog.orDefault("ri:md/MdDoesNotExist"));
+        assertEquals(AiIconCatalog.DEFAULT_ICON, AiIconCatalog.orDefault("lucide:does-not-exist"));
+        assertEquals(AiIconCatalog.DEFAULT_ICON, AiIconCatalog.orDefault("ri:md/MdWbSunny"));
         assertEquals(AiIconCatalog.DEFAULT_ICON, AiIconCatalog.orDefault(null));
         assertEquals(AiIconCatalog.DEFAULT_ICON, AiIconCatalog.orDefault(""));
     }
@@ -23,7 +24,7 @@ class AiIconCatalogTest {
     @Test
     void promptCatalogListsEveryIconWithLabel() {
         String catalog = AiIconCatalog.promptCatalog();
-        assertTrue(catalog.contains("ri:md/MdWbSunny"));
+        assertTrue(catalog.contains("lucide:sun"));
         assertTrue(catalog.contains("morning"));
     }
 }
