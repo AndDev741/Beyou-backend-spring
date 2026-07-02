@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.routine.snapshot;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -11,6 +12,11 @@ import java.util.UUID;
 
 public interface RoutineSnapshotRepository extends JpaRepository<RoutineSnapshot, UUID> {
     Optional<RoutineSnapshot> findByRoutineIdAndSnapshotDate(UUID routineId, LocalDate snapshotDate);
+
+    // All of a user's snapshots for one day, in a single query. Backed by
+    // idx_snapshot_user_routine_date; @EntityGraph eager-loads checks to avoid N+1.
+    @EntityGraph(attributePaths = "checks")
+    List<RoutineSnapshot> findAllByUserIdAndSnapshotDate(UUID userId, LocalDate snapshotDate);
 
     @Query("SELECT rs.snapshotDate FROM RoutineSnapshot rs WHERE rs.routine.id = :routineId AND rs.snapshotDate BETWEEN :startDate AND :endDate ORDER BY rs.snapshotDate")
     List<LocalDate> findSnapshotDatesByRoutineIdAndMonth(@Param("routineId") UUID routineId, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);

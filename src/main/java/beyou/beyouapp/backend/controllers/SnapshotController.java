@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.controllers;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.format.annotation.DateTimeFormat;
@@ -34,6 +35,14 @@ public class SnapshotController {
     private final SnapshotService snapshotService;
     private final SnapshotCheckService snapshotCheckService;
     private final AuthenticatedUser authenticatedUser;
+
+    // All snapshots for one day in a single call (routes ahead of /routine/{id} — literal wins over path var).
+    @GetMapping("/snapshot")
+    public ResponseEntity<List<SnapshotResponseDTO>> getSnapshotsForDay(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        User user = authenticatedUser.getAuthenticatedUser();
+        return ResponseEntity.ok(snapshotService.getSnapshotsForDay(date, user.getId()));
+    }
 
     @GetMapping("/{routineId}/snapshot")
     public ResponseEntity<SnapshotResponseDTO> getSnapshot(

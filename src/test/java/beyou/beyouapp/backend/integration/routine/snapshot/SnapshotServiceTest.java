@@ -179,6 +179,7 @@ class SnapshotServiceTest {
 
         assertNotNull(result);
         assertEquals(snapshot.getId(), result.id());
+        assertEquals(routineId, result.routineId());
         assertEquals(snapshotDate, result.snapshotDate());
         assertEquals("Morning Routine", result.routineName());
         assertEquals("icon-morning", result.routineIconId());
@@ -213,6 +214,35 @@ class SnapshotServiceTest {
                 () -> snapshotService.getSnapshot(routineId, snapshotDate, userId));
 
         assertEquals(ErrorKey.SNAPSHOT_NOT_OWNED, exception.getErrorKey());
+    }
+
+    // ---------------------------------------------------------------
+    // getSnapshotsForDay tests
+    // ---------------------------------------------------------------
+
+    @Test
+    void getSnapshotsForDay_returnsAllUserSnapshotsForDate() {
+        RoutineSnapshot snapshot = buildSnapshot(user);
+        when(snapshotRepository.findAllByUserIdAndSnapshotDate(userId, snapshotDate))
+                .thenReturn(List.of(snapshot));
+
+        List<SnapshotResponseDTO> result = snapshotService.getSnapshotsForDay(snapshotDate, userId);
+
+        assertEquals(1, result.size());
+        assertEquals(snapshot.getId(), result.get(0).id());
+        assertEquals(routineId, result.get(0).routineId());
+        verify(snapshotRepository).findAllByUserIdAndSnapshotDate(userId, snapshotDate);
+    }
+
+    @Test
+    void getSnapshotsForDay_returnsEmptyListWhenNoSnapshots() {
+        when(snapshotRepository.findAllByUserIdAndSnapshotDate(userId, snapshotDate))
+                .thenReturn(List.of());
+
+        List<SnapshotResponseDTO> result = snapshotService.getSnapshotsForDay(snapshotDate, userId);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
     }
 
     // ---------------------------------------------------------------
@@ -291,6 +321,7 @@ class SnapshotServiceTest {
         SnapshotResponseDTO result = snapshotService.toResponseDTO(snapshot);
 
         assertEquals(snapshot.getId(), result.id());
+        assertEquals(routineId, result.routineId());
         assertEquals(snapshotDate, result.snapshotDate());
         assertEquals("Morning Routine", result.routineName());
         assertEquals("icon-morning", result.routineIconId());
