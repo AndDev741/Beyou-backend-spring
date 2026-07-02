@@ -6,6 +6,6 @@ import java.util.List;
 import java.util.UUID;
 
 public record SnapshotResponseDTO(
-    UUID id, LocalDate snapshotDate, String routineName, String routineIconId,
+    UUID id, UUID routineId, LocalDate snapshotDate, String routineName, String routineIconId,
     boolean completed, @JsonRawValue String structure, List<SnapshotCheckResponseDTO> checks
 ) {}

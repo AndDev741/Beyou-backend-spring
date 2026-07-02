@@ -69,6 +69,13 @@ public class SnapshotService {
     }
 
     @Transactional(readOnly = true)
+    public List<SnapshotResponseDTO> getSnapshotsForDay(LocalDate date, UUID userId) {
+        return snapshotRepository.findAllByUserIdAndSnapshotDate(userId, date).stream()
+                .map(this::toResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public SnapshotMonthResponseDTO getSnapshotDatesForMonth(UUID routineId, String month, UUID userId) {
         DiaryRoutine routine = diaryRoutineRepository.findById(routineId)
                 .orElseThrow(() -> new BusinessException(ErrorKey.ROUTINE_NOT_FOUND,
@@ -96,6 +103,7 @@ public class SnapshotService {
 
         return new SnapshotResponseDTO(
                 snapshot.getId(),
+                snapshot.getRoutine().getId(),
                 snapshot.getSnapshotDate(),
                 snapshot.getRoutineName(),
                 snapshot.getRoutineIconId(),

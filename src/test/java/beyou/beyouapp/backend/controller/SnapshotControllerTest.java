@@ -95,6 +95,7 @@ class SnapshotControllerTest extends AbstractIntegrationTest {
 
         SnapshotResponseDTO responseDTO = new SnapshotResponseDTO(
                 snapshotId,
+                routineId,
                 date,
                 "Morning Routine",
                 "sun-icon",
@@ -122,6 +123,7 @@ class SnapshotControllerTest extends AbstractIntegrationTest {
                         .param("date", "2025-03-15"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(snapshotId.toString()))
+                .andExpect(jsonPath("$.routineId").value(routineId.toString()))
                 .andExpect(jsonPath("$.snapshotDate").value("2025-03-15"))
                 .andExpect(jsonPath("$.routineName").value("Morning Routine"))
                 .andExpect(jsonPath("$.routineIconId").value("sun-icon"))
@@ -132,6 +134,33 @@ class SnapshotControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.checks[0].itemName").value("Meditation"));
 
         verify(snapshotService).getSnapshot(routineId, date, userId);
+    }
+
+    @Test
+    void shouldGetSnapshotsForDay() throws Exception {
+        LocalDate date = LocalDate.of(2025, 3, 15);
+
+        SnapshotResponseDTO responseDTO = new SnapshotResponseDTO(
+                snapshotId,
+                routineId,
+                date,
+                "Morning Routine",
+                "sun-icon",
+                false,
+                "{\"sections\":[]}",
+                List.of());
+
+        when(snapshotService.getSnapshotsForDay(date, userId)).thenReturn(List.of(responseDTO));
+
+        mockMvc.perform(get("/routine/snapshot")
+                        .param("date", "2025-03-15"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id").value(snapshotId.toString()))
+                .andExpect(jsonPath("$[0].routineId").value(routineId.toString()))
+                .andExpect(jsonPath("$[0].snapshotDate").value("2025-03-15"));
+
+        verify(snapshotService).getSnapshotsForDay(date, userId);
     }
 
     @Test
