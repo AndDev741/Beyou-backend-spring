@@ -39,7 +39,7 @@ import lombok.ToString;
 @Entity
 @Getter
 @Setter
-@Table
+@Table(name = "habits")
 @AllArgsConstructor
 @NoArgsConstructor
 @ToString

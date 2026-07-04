@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.security;
+package beyou.beyouapp.backend.security.validators;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,7 +27,7 @@ class E2eSafetyCheckTest {
     void rejectsDevUrl() {
         assertThatThrownBy(() -> verify("jdbc:postgresql://localhost:5490/beyou"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("WIPE");
+                .hasMessageContaining("does not look like a throwaway database");
     }
 
     @Test

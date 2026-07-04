@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Tests use the `test` profile (`application-test.yml`) with an H2 in-memory database. Controller tests use `@SpringBootTest` + `@AutoConfigureMockMvc(addFilters = false)` + `@ActiveProfiles("test")` with `@MockBean` for service layer mocking.
 
-E2E tests (Playwright, in `../Beyou-e2e-tests/`) run against a real backend booted with `SPRING_PROFILES_ACTIVE=e2e` and a dedicated `beyou_e2e` Postgres database. `E2eSafetyCheck` refuses to start the backend in the `e2e` profile unless the JDBC URL contains `e2e` or `test`, so a misconfigured override can't silently wipe dev data (the e2e profile uses `ddl-auto: create-drop`).
+E2E tests (Playwright, in `../Beyou-e2e-tests/`) run against a real backend booted with `SPRING_PROFILES_ACTIVE=e2e` and a dedicated `beyou_e2e` Postgres database. `E2eSafetyCheck` refuses to start the backend in the `e2e` profile unless the JDBC URL contains `e2e` or `test`, so a misconfigured override can't silently pollute dev data (the e2e profile boots via Flyway migrate + Hibernate `validate`, the same schema path as prod).
 
 Surefire is configured with special JVM args for Mockito (`-Dmockito.mock-maker=mock-maker-subclass`, `-XX:+EnableDynamicAgentLoading`).
 
@@ -39,7 +39,7 @@ Base package: `beyou.beyouapp.backend`
 | `user/` | `User` entity (implements `UserDetails`), `UserService`, Google OAuth |
 | `exceptions/` | `GlobalExceptionHandler` (`@ControllerAdvice`), `BusinessException` + `ErrorKey` enum for domain errors |
 | `docs/` | Docs import system: architecture, api, project, blog, search — pulls markdown from GitHub repo |
-| `seed/` | `DatabaseSeeder` interface + `SeedOrchestrator` (CommandLineRunner) for startup data |
+| `seed/` | Removed in the Flyway cutover — startup reference data (`XpByLevel`) is now seeded by `db/migration/R__seed_xp_by_level.sql` |
 | `AOP/` | Aspect-based logging for controllers and service methods |
 | `notification/` | `EmailService` for mail sending (password reset) |
 
@@ -75,7 +75,7 @@ The `docs.import.*` properties configure which GitHub repository to pull documen
 
 Profile overlays:
 - `application-test.yml` — H2 in-memory for unit/integration tests
-- `application-e2e.yml` — Postgres `beyou_e2e`, `ddl-auto: create-drop`, auto-verify emails, rate limit off
+- `application-e2e.yml` — Postgres `beyou_e2e`, Flyway migrate + `validate` (was `create-drop` pre-cutover), auto-verify emails, rate limit off
 - `application-prod.yml` — `ddl-auto: validate`, CORS wildcard rejected, Swagger off, actuator localhost-only
 
 ## Known Issues & Security (re-checked 2026-05-24)
@@ -125,8 +125,8 @@ See full report: `../relatories/backend-deployment-readiness-report.md`
 - `CategoryRepository.findByUserId()` returns single Optional — likely dead code; `findAllByUserId` is the correct query
 - `@CachePut`/`@CacheEvict` only work on public methods called through the Spring proxy (external calls); internal `this.method()` calls bypass the cache
 - Tests bypass security filters (`addFilters = false` in MockMvc) and mock the service layer — they test HTTP binding, not business logic integration
-- `application.yaml` has a commented `# ddl-auto: create-drop` — never uncomment in any environment with real data
+- `application.yaml` hardcodes `ddl-auto: validate`; Flyway owns the schema and `SchemaOwnershipGuard` refuses boot if a mutating `ddl-auto` is set while Flyway is enabled
 - `GoalController PUT /goal/increase|decrease|complete` accepts a raw UUID as request body. Jackson deserializes from a JSON-encoded string (`"<uuid>"`), NOT a bare UUID. External clients (E2E `apiClient`) must `JSON.stringify(uuid)` or send the quoted form; the bare UUID returns 403.
 - `RoutineSnapshotScheduler` runs per-timezone — bottleneck at scale with many distinct user timezones
 - HikariCP pool at default 10 connections; configure explicitly for production load
-- `e2e` profile uses `ddl-auto: create-drop` — `E2eSafetyCheck` enforces that the JDBC URL contains `e2e` or `test`, so a misconfigured override can't wipe the dev `beyou` database
+- `e2e` profile boots via Flyway migrate + Hibernate `validate` (was `create-drop` pre-cutover) — `E2eSafetyCheck` still enforces that the JDBC URL contains `e2e` or `test`, so a misconfigured override can't point e2e at the dev `beyou` database. Local e2e data now persists across runs until manually reset

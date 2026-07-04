@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.routine.specializedRoutines;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
@@ -16,6 +17,7 @@ import java.util.List;
 import beyou.beyouapp.backend.domain.routine.Routine;
 
 @Entity
+@DiscriminatorValue("DiaryRoutine")
 @Getter
 @Setter
 @AllArgsConstructor

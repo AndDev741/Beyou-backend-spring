@@ -18,6 +18,7 @@ import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 
 @Entity
+@Table(name = "routine_sections")
 @Getter
 @Setter
 @AllArgsConstructor

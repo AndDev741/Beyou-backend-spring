@@ -11,6 +11,7 @@ import java.time.LocalTime;
 import java.util.UUID;
 
 @Entity
+@Table(name = "base_checks")
 @Inheritance(strategy = InheritanceType.JOINED)
 @Getter
 @Setter
@@ -19,7 +20,7 @@ import java.util.UUID;
 public abstract class BaseCheck {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     private LocalDate checkDate;

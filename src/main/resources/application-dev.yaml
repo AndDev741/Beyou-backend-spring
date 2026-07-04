@@ -4,9 +4,8 @@ spring:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5490/beyou}
     username: postgres
     password: ${DATABASE_PASSWORD:1516}
-  jpa:
-    hibernate:
-      ddl-auto: update
+  # No jpa override: Flyway migrates and Hibernate validates (application.yaml).
+  # First boot after the cutover needs a reset dev DB — see docs/flyway/cutover-notes.md.
 
 cookie:
   secure: false

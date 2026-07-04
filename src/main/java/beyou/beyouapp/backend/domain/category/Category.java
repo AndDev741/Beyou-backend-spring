@@ -33,8 +33,8 @@ import java.util.function.Function;
 @ToString
 public class Category {
      @Id
-     @GeneratedValue
-     @Column(updatable = false, nullable = false, unique = true)
+     @GeneratedValue(strategy = GenerationType.UUID)
+     @Column(updatable = false, nullable = false)
      private UUID id;
 
      @NotBlank(message = "Category can't be empty")

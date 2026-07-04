@@ -9,7 +9,10 @@ spring:
       minimum-idle: 0
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      # Flyway (inherited from application.yaml) migrates the Testcontainers DB;
+      # validate turns every integration test into a drift check between the
+      # migrations and the entity mappings.
+      ddl-auto: validate
     properties:
       hibernate:
         # Enable query/fetch counters for N+1 detection in tests.

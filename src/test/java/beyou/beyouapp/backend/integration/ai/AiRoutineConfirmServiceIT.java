@@ -10,8 +10,6 @@ import beyou.beyouapp.backend.domain.ai.dto.DraftSectionDTO;
 import beyou.beyouapp.backend.domain.ai.dto.DraftTaskItemDTO;
 import beyou.beyouapp.backend.domain.ai.dto.RoutineDraftDTO;
 import beyou.beyouapp.backend.domain.category.CategoryRepository;
-import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
-import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
@@ -45,7 +43,6 @@ class AiRoutineConfirmServiceIT extends AbstractIntegrationTest {
     @Autowired private TaskRepository taskRepository;
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private DiaryRoutineRepository diaryRoutineRepository;
-    @Autowired private XpByLevelRepository xpByLevelRepository;
     @Autowired private TransactionTemplate transactionTemplate;
 
     private User user;
@@ -57,9 +54,7 @@ class AiRoutineConfirmServiceIT extends AbstractIntegrationTest {
         user.setEmail("ai-confirm-" + UUID.randomUUID() + "@test.com");
         user.setPassword("password123");
         user = userRepository.saveAndFlush(user);
-        // XpByLevelSeeder runs at context boot, but make levels 0/1 explicit for safety:
-        if (xpByLevelRepository.findByLevel(0) == null) xpByLevelRepository.save(new XpByLevel(0, 0));
-        if (xpByLevelRepository.findByLevel(1) == null) xpByLevelRepository.save(new XpByLevel(1, 100));
+        // XpByLevel rows are seeded by Flyway's R__seed_xp_by_level.sql (all levels).
     }
 
     private RoutineDraftDTO fullDraft() {

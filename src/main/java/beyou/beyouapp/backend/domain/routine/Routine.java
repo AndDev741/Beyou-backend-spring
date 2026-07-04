@@ -15,7 +15,9 @@ import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.user.User;
 
 @Entity
+@Table(name = "routines")
 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+@DiscriminatorColumn(name = "dtype")
 @Getter
 @Setter
 @AllArgsConstructor
