@@ -14,6 +14,7 @@ import beyou.beyouapp.backend.user.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
@@ -30,13 +31,13 @@ import lombok.ToString;
 @Entity
 @Getter
 @Setter
-@Table
+@Table(name = "tasks")
 @NoArgsConstructor
 @ToString
 public class Task {
     @Id
-    @GeneratedValue
-    @Column(updatable = false, nullable = false, unique = true)
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(updatable = false, nullable = false)
     UUID id;
 
     String name;

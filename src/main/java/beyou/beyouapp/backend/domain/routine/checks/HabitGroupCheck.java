@@ -12,6 +12,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 
 @Entity
+@Table(name = "habit_group_checks")
 @Getter
 @Setter
 @AllArgsConstructor

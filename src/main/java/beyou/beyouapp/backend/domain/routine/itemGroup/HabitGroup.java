@@ -16,6 +16,7 @@ import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.routine.checks.HabitGroupCheck;
 
 @Entity
+@Table(name = "habit_groups")
 @Getter
 @Setter
 @AllArgsConstructor

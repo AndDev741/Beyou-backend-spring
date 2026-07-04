@@ -15,6 +15,7 @@ import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.routine.checks.TaskGroupCheck;
 
 @Entity
+@Table(name = "task_groups")
 @Getter
 @Setter
 @AllArgsConstructor
