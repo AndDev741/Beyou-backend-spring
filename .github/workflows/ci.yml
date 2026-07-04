@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # labeled/unlabeled re-run the migration-checks job so its escape-hatch
+    # labels (migration-rewrite, no-schema-change) take effect without a push.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 # Cancel in-progress runs when a new commit is pushed to the same branch
 concurrency:
@@ -16,6 +19,79 @@ permissions:
   packages: write
 
 jobs:
+  # Migration guardrails — conventions enforced by machinery, not memory.
+  # The deeper drift gate (Flyway + ddl-auto=validate + SchemaIndexParityTest)
+  # runs inside `mvn verify` in build-and-test.
+  migration-checks:
+    name: Migration checks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 10
+    # Lint-only job: never needs the workflow-level packages:write.
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Versioned migrations are immutable once merged: fix forward with a new
+      # V<n>. Pre-production only, a baseline squash (scripts/generate-baseline.sh)
+      # is allowed via the 'migration-rewrite' label + a repo tag.
+      - name: Immutability tripwire (V*.sql never modified/deleted/renamed)
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'migration-rewrite') }}
+        run: |
+          base="origin/${{ github.base_ref }}"
+          changed=$(git diff --name-status --diff-filter=MDR "$base"...HEAD -- 'src/main/resources/db/migration/V*.sql')
+          if [ -n "$changed" ]; then
+            echo "::error::Versioned migrations already on ${{ github.base_ref }} were modified, deleted, or renamed:"
+            echo "$changed"
+            echo "Write a new V<n> migration instead. (Pre-prod baseline squash: use the 'migration-rewrite' label.)"
+            exit 1
+          fi
+          echo "OK — no merged versioned migration was touched."
+
+      # An @Entity change without a migration is how schema drift starts.
+      # Java-only edits (no schema impact) opt out via the 'no-schema-change' label.
+      - name: Entity change requires a migration
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-schema-change') }}
+        run: |
+          base="origin/${{ github.base_ref }}"
+          entity_changed=""
+          for f in $(git diff --name-only "$base"...HEAD -- 'src/main/java/**/*.java'); do
+            # Check the file at HEAD *and* at the base: a deleted entity class
+            # (or a removed @Entity annotation) is a schema change too.
+            if { [ -f "$f" ] && grep -q "@Entity" "$f"; } \
+               || git show "$base:$f" 2>/dev/null | grep -q "@Entity"; then
+              entity_changed="$entity_changed $f"
+            fi
+          done
+          new_migrations=$(git diff --name-only --diff-filter=A "$base"...HEAD -- 'src/main/resources/db/migration/')
+          if [ -n "$entity_changed" ] && [ -z "$new_migrations" ]; then
+            echo "::error::Entity classes changed but no migration was added:$entity_changed"
+            echo "Add a V<n> migration under src/main/resources/db/migration/,"
+            echo "or add the 'no-schema-change' label if the edit has no schema impact."
+            exit 1
+          fi
+          echo "OK — entity and migration changes are consistent."
+
+      # Postgres lock-risk linting (squawkhq.com). The baseline is generated
+      # (not hand-written DDL) so it is excluded. require-concurrent-index-creation
+      # is excluded deliberately while pre-production (documented in
+      # V2__add_supporting_indexes.sql) — remove the exclusion before the first
+      # migration that touches a large production table.
+      - name: Squawk lint on added migrations
+        run: |
+          base="origin/${{ github.base_ref }}"
+          added=$(git diff --name-only --diff-filter=A "$base"...HEAD -- 'src/main/resources/db/migration/*.sql' | grep -v 'V1__baseline.sql' || true)
+          if [ -z "$added" ]; then
+            echo "No new migrations to lint."
+            exit 0
+          fi
+          # Pinned to a major so a squawk release can't silently change the gate.
+          npx --yes squawk-cli@2 --exclude=require-concurrent-index-creation $added
+
   build-and-test:
     name: Build & Test
     runs-on: ubuntu-latest
