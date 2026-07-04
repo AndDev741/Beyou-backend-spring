@@ -57,7 +57,7 @@ class AiRoutineConfirmServiceIT extends AbstractIntegrationTest {
         user.setEmail("ai-confirm-" + UUID.randomUUID() + "@test.com");
         user.setPassword("password123");
         user = userRepository.saveAndFlush(user);
-        // XpByLevelSeeder runs at context boot, but make levels 0/1 explicit for safety:
+        // Flyway's R__seed_xp_by_level.sql seeds all levels, but make 0/1 explicit for safety:
         if (xpByLevelRepository.findByLevel(0) == null) xpByLevelRepository.save(new XpByLevel(0, 0));
         if (xpByLevelRepository.findByLevel(1) == null) xpByLevelRepository.save(new XpByLevel(1, 100));
     }

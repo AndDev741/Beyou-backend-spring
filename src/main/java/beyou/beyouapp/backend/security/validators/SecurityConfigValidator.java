@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.security;
+package beyou.beyouapp.backend.security.validators;
 
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;

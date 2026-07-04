@@ -1,6 +1,6 @@
 package beyou.beyouapp.backend.unit.security;
 
-import beyou.beyouapp.backend.security.SecurityConfigValidator;
+import beyou.beyouapp.backend.security.validators.SecurityConfigValidator;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
 

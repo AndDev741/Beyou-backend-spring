@@ -6,9 +6,16 @@
 #
 # Differences from production:
 #   - Auto-verifies emails on registration (no SMTP needed)
-#   - Recreates the schema on every startup (clean state per test run)
 #   - Disables rate limiting so tests can hammer the API
 #   - Uses a noop mail config (no real SMTP server expected)
+#
+# Schema: Flyway migrates the (throwaway) beyou_e2e database on boot — the
+# exact path production takes. In the compose stack, clean state per run comes
+# from provisioning a fresh Postgres container. Against a long-lived local
+# Postgres (the localhost:5490 default below), the database persists between
+# runs: reset it once after the Flyway cutover (a pre-cutover beyou_e2e has
+# tables but no flyway_schema_history, which Flyway refuses), and expect data
+# to accumulate across local runs afterwards.
 
 spring:
   # Dummy AI key: the e2e profile swaps in CannedRoutineDraftGenerator, so the
@@ -18,9 +25,8 @@ spring:
       api-key: e2e-noop
   datasource:
     # Defaults to the dedicated `beyou_e2e` database — NOT the dev `beyou` DB.
-    # This profile uses ddl-auto: create-drop, which wipes the schema on every
-    # boot. E2eSafetyCheck refuses to start if this URL doesn't contain "e2e"
-    # or "test" so a misconfigured override can't silently destroy dev data.
+    # E2eSafetyCheck refuses to start if this URL doesn't contain "e2e" or
+    # "test" so a misconfigured override never points e2e at real data.
     #
     # Create the database once with:
     #   docker exec -it <postgres-container> psql -U postgres -c "CREATE DATABASE beyou_e2e;"
@@ -29,11 +35,8 @@ spring:
     url: ${DATABASE_E2E_URL:jdbc:postgresql://localhost:5490/beyou_e2e}
     username: ${DATABASE_USERNAME:postgres}
     password: ${DATABASE_PASSWORD:1516}
-  jpa:
-    hibernate:
-      # Drop and recreate the schema on every backend boot — the test container
-      # is throwaway, and we want consistent seed data per run.
-      ddl-auto: create-drop
+  # No jpa override: Flyway migrates and Hibernate validates (application.yaml),
+  # so e2e exercises the same schema-creation path production will use.
   mail:
     host: localhost
     port: 25

@@ -45,6 +45,23 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
 		</dependency>
+		<!-- Flyway owns the schema (versions managed by the Boot BOM). Boot 4
+		     modularized autoconfiguration: spring-boot-flyway carries the
+		     FlywayAutoConfiguration that used to live in spring-boot-autoconfigure.
+		     The flyway-database-postgresql module is mandatory since the Flyway 10
+		     module split. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-flyway</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
 		<!-- Testcontainers for integration tests (replaces H2) -->
 		<dependency>
 			<groupId>org.testcontainers</groupId>

@@ -62,7 +62,7 @@ class SnapshotIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        // XpByLevel is seeded automatically by SeedOrchestrator (CommandLineRunner).
+        // XpByLevel is seeded by Flyway's repeatable migration R__seed_xp_by_level.sql.
 
         // -- User --
         user = new User();

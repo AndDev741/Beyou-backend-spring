@@ -15,7 +15,15 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: ${DDL_AUTO:update}
+      # Flyway owns the schema in every environment; Hibernate only validates
+      # entity mappings against it. Guarded by SchemaOwnershipGuard — no env
+      # override on purpose (a stray `update` would mean two schema writers).
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
   ai:
     openai:
       # Non-empty default so the context always boots; without a real key the
