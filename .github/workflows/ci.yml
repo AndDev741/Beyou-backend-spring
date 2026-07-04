@@ -103,7 +103,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up JDK 25
         uses: actions/setup-java@v5
@@ -130,26 +130,26 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout backend (under test)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: backend
 
       - name: Checkout e2e tests
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: AndDev741/Beyou-e2e-tests
           ref: main
           path: e2e
 
       - name: Checkout dev-env
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: AndDev741/Beyou-dev-env
           ref: main
           path: dev-env
 
       - name: Checkout frontend (main, counterpart)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: AndDev741/Beyou-Frontend
           ref: main
@@ -201,7 +201,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Short SHA
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
