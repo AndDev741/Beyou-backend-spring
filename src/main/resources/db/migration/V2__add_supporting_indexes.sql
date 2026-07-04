@@ -30,8 +30,10 @@ CREATE INDEX IF NOT EXISTS idx_users_verification_token
     ON users (verification_token)
     WHERE verification_token IS NOT NULL;
 
--- Schedule → routine lookup (DiaryRoutineRepository.findByScheduleId)
-CREATE INDEX IF NOT EXISTS idx_routines_schedule_id ON routines (schedule_id);
+-- No explicit index on routines(schedule_id): the @OneToOne schedule FK already
+-- emits a UNIQUE constraint (routines_schedule_id_key in V1) whose implicit index
+-- serves DiaryRoutineRepository.findByScheduleId — a plain index here would only
+-- double write-path maintenance for no read benefit.
 
 -- Timezone-batched work: RoutineSnapshotScheduler queries users by timezone
 -- today; the planned notification system will lean on this harder.

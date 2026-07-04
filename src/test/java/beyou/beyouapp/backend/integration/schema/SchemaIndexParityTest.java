@@ -51,13 +51,18 @@ class SchemaIndexParityTest extends AbstractIntegrationTest {
             }
         });
 
-        // Sanity-check the metamodel scan BEFORE adding hand-picked names, so a
-        // broken scan can't hide behind them.
-        assertThat(declared).isNotEmpty();
+        // Sanity-check the metamodel scan works — assert entities were found,
+        // not that `declared` is populated (that would silently depend on some
+        // entity keeping a named @Index).
+        assertThat(entityManager.getMetamodel().getEntities()).isNotEmpty();
 
-        // Load-bearing V2 addition that exists only in SQL (no annotation):
-        // the timezone-batched scheduler queries (findAllByTimezone).
-        declared.add("idx_users_timezone");
+        // V2 indexes exist only in SQL (no @Index annotation), so enumerate them
+        // explicitly — otherwise dropping one from V2 wouldn't fail this test.
+        declared.addAll(List.of(
+                "idx_habits_user_id", "idx_tasks_user_id", "idx_goals_user_id",
+                "idx_categories_user_id", "idx_routines_user_id", "idx_refresh_tokens_user_id",
+                "idx_password_reset_user_created", "idx_users_verification_token",
+                "idx_users_timezone"));
 
         List<String> actual = entityManager
                 .createNativeQuery("SELECT indexname FROM pg_indexes WHERE schemaname = 'public' "

@@ -62,8 +62,8 @@ jobs:
           for f in $(git diff --name-only "$base"...HEAD -- 'src/main/java/**/*.java'); do
             # Check the file at HEAD *and* at the base: a deleted entity class
             # (or a removed @Entity annotation) is a schema change too.
-            if { [ -f "$f" ] && grep -q "@Entity" "$f"; } \
-               || git show "$base:$f" 2>/dev/null | grep -q "@Entity"; then
+            if { [ -f "$f" ] && grep -qE '@(Entity|Embeddable)([^A-Za-z]|$)' "$f"; } \
+               || git show "$base:$f" 2>/dev/null | grep -qE '@(Entity|Embeddable)([^A-Za-z]|$)'; then
               entity_changed="$entity_changed $f"
             fi
           done
@@ -96,6 +96,9 @@ jobs:
     name: Build & Test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # A bare label add/remove only needs migration-checks to re-run — skip the
+    # expensive build -> e2e -> publish chain (both need this job) on pure label events.
+    if: ${{ github.event.action != 'labeled' && github.event.action != 'unlabeled' }}
 
     steps:
       - name: Checkout

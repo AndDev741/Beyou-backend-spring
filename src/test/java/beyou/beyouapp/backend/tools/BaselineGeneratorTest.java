@@ -69,6 +69,16 @@ class BaselineGeneratorTest {
         String cleaned = clean(dump.getStdout());
         assertThat(cleaned).contains("CREATE TABLE");
 
+        // Fail loudly if pg_dump emitted noise the allowlist doesn't recognize
+        // (e.g. after a pg_dump format change) rather than baking it into V1.
+        assertThat(cleaned.lines().toList())
+                .as("unrecognized pg_dump noise survived clean() — update the allowlist in clean()")
+                .noneMatch(line -> {
+                    String t = line.strip();
+                    return t.startsWith("--") || t.startsWith("SET ")
+                            || t.startsWith("\\") || t.startsWith("SELECT pg_catalog.set_config");
+                });
+
         Path target = Path.of("src/main/resources/db/migration/V1__baseline.sql");
         Files.createDirectories(target.getParent());
         Files.writeString(target,

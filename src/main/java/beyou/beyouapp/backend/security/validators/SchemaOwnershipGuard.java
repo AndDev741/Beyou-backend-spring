@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -39,7 +40,7 @@ public class SchemaOwnershipGuard {
                     + "Only baseline generation should run like this.", ddlAuto);
             return;
         }
-        if (!SAFE_DDL_AUTO.contains(ddlAuto.toLowerCase())) {
+        if (!SAFE_DDL_AUTO.contains(ddlAuto.toLowerCase(Locale.ROOT))) {
             throw new IllegalStateException(
                     "REFUSING TO START: Flyway is enabled but spring.jpa.hibernate.ddl-auto is '"
                     + ddlAuto + "'. Two schema writers means silent drift — set ddl-auto to "
