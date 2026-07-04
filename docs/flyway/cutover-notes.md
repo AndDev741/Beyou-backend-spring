@@ -87,8 +87,8 @@ JVM run — nothing to do there.
 ## Deliberately deferred (revisit at first prod deploy)
 
 - `CREATE INDEX CONCURRENTLY` + removing squawk's
-  `require-concurrent-index-creation` exclusion — pointless on empty tables,
-  mandatory on populated ones.
+  `require-concurrent-index-creation` and `require-timeout-settings` exclusions —
+  pointless on empty tables, mandatory on populated ones.
 - Running migrations as a separate deploy step (vs. on app boot) — only
   matters with rolling/multi-replica deploys; today's single-container compose
   boot is fine.
