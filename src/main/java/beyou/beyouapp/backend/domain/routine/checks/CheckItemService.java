@@ -318,7 +318,7 @@ public class CheckItemService {
 
         //Update categories
         if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
-            Double newXp = CheckXpCalculator.calculate(dificulty, importance, 0); // tasks have no streak
+            double newXp = CheckXpCalculator.calculate(dificulty, importance, 0); // tasks have no streak
             check.setXpGenerated(newXp);
             xpCalculatorService.addXpToUserRoutineAndCategoriesAndPersist(
                 newXp,
