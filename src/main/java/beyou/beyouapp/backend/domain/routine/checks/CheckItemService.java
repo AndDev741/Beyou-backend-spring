@@ -44,7 +44,7 @@ public class CheckItemService {
 
     @Transactional
     public RefreshUiDTO checkOrUncheckItemGroup(CheckGroupRequestDTO checkGroupDTO) {
-        LocalDate date = LocalDate.now();
+        LocalDate date = checkGroupDTO.date() != null ? checkGroupDTO.date() : LocalDate.now();
         if(checkGroupDTO.habitGroupDTO() != null){
             HabitGroup habitGroup = itemGroupService.findHabitGroupByDTO(checkGroupDTO.routineId(), checkGroupDTO.habitGroupDTO().habitGroupId());
             return checkOrUncheckHabitGroup(habitGroup, date);

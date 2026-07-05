@@ -120,6 +120,29 @@ class CheckItemServiceUnitTest {
         }
 
         @Test
+        void checkHonorsExplicitDateFromDto() {
+            LocalDate yesterday = LocalDate.now().minusDays(1);
+            Category category = createCategory(0);
+            Habit habit = createHabit(2, 3, 0, 0, List.of(category));
+            HabitGroup habitGroup = createHabitGroup(habit);
+
+            DiaryRoutine routine = (DiaryRoutine) habitGroup.getRoutineSection().getRoutine();
+            UUID routineId = routine.getId();
+            when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
+
+            checkItemService.checkOrUncheckItemGroup(
+                    new CheckGroupRequestDTO(
+                            routineId,
+                            null,
+                            new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
+                            yesterday));
+
+            assertEquals(1, habitGroup.getHabitGroupChecks().size());
+            HabitGroupCheck check = habitGroup.getHabitGroupChecks().get(0);
+            assertEquals(yesterday, check.getCheckDate());
+        }
+
+        @Test
         void shouldUncheckHabitGroupAndRollbackXp() {
             LocalDate date = LocalDate.now();
             Category category = createCategory(40);
