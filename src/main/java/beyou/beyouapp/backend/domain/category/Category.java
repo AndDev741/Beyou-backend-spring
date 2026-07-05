@@ -10,8 +10,10 @@ import beyou.beyouapp.backend.user.User;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import org.hibernate.annotations.BatchSize;
+import org.springframework.data.domain.Persistable;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,7 +33,7 @@ import java.util.function.Function;
 @AllArgsConstructor
 @NoArgsConstructor
 @ToString
-public class Category {
+public class Category implements Persistable<UUID> {
      // No @GeneratedValue/@UuidGenerator: Hibernate 7.4's merge() throws
      // StaleObjectStateException when a manually-assigned id coexists with a
      // generator annotation on an entity that has never been persisted (the
@@ -43,6 +45,18 @@ public class Category {
      @Id
      @Column(updatable = false, nullable = false)
      private UUID id = UUID.randomUUID();
+
+     // Persistable.isNew() backing flag: defaults true for freshly-constructed
+     // (never-persisted) instances so save() calls entityManager.persist() —
+     // avoiding the merge()-triggered SELECT-then-INSERT "merge tax" on every
+     // create. @PostLoad/@PostPersist flip it false once Hibernate has seen the
+     // row, so update paths (which always load the managed entity first) keep
+     // going through merge()/dirty-checking. Excluded from Lombok's class-level
+     // @Getter/@Setter so the explicit isNew() override below doesn't collide.
+     @Transient
+     @Getter(AccessLevel.NONE)
+     @Setter(AccessLevel.NONE)
+     private boolean isNew = true;
 
      @NotBlank(message = "Category can't be empty")
      @Size(min = 2, max = 256, message = "Category need a minimum of 2 characters")
@@ -95,6 +109,17 @@ public class Category {
      protected void onUpdate(){
           LocalDate now = LocalDate.now();
           setUpdatedAt(Date.valueOf(now));
+     }
+
+     @PostLoad
+     @PostPersist
+     void markNotNew(){
+          this.isNew = false;
+     }
+
+     @Override
+     public boolean isNew(){
+          return this.isNew;
      }
 
      public Category(CategoryRequestDTO categoryRequestDTO, User user){

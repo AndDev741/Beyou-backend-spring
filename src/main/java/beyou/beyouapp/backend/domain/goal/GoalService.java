@@ -3,6 +3,7 @@ package beyou.beyouapp.backend.domain.goal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.cache.annotation.Cacheable;
@@ -55,6 +56,16 @@ public class GoalService {
 
     public ResponseEntity<Map<String, String>> createGoal(CreateGoalRequestDTO dto, User user) {
         log.info("[LOG] Creating Goal with DTO => {}", dto);
+        if (dto.id() != null) {
+            Optional<Goal> existing = goalRepository.findById(dto.id());
+            if (existing.isPresent()) {
+                checkIfGoalIsFromTheUserInContext(existing.get(), user.getId());
+                // Same user replaying a create (lost-response retry): true no-op —
+                // return the existing row untouched.
+                return ResponseEntity.ok(Map.of("success", "Goal created successfully"));
+            }
+        }
+
         List<Category> categories = dto.categoriesId().stream()
                 .distinct()
                 .map(catId -> categoryService.getCategory(catId, user.getId()))

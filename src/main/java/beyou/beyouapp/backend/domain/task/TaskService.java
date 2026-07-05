@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -99,6 +100,18 @@ public class TaskService {
 
     /** Core create: saves and returns the entity. Does NOT evict caches — callers decide. */
     public Task createTaskEntity(CreateTaskRequestDTO createTaskDTO, UUID userId){
+        if (createTaskDTO.id() != null) {
+            Optional<Task> existing = taskRepository.findById(createTaskDTO.id());
+            if (existing.isPresent()) {
+                if (!existing.get().getUser().getId().equals(userId)) {
+                    throw new BusinessException(ErrorKey.TASK_NOT_OWNED, "The task isn't of the user on context");
+                }
+                // Same user replaying a create (lost-response retry): true no-op —
+                // return the existing row untouched. This also keeps createdAt intact.
+                return existing.get();
+            }
+        }
+
         User user = userRepository.findById(userId).orElseThrow(() ->
         new UserNotFound("User not found when tried to create a task"));
 

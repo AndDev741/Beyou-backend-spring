@@ -3,6 +3,7 @@ package beyou.beyouapp.backend.domain.habit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,6 +71,18 @@ public class HabitService {
 
     /** Core create: saves and returns the entity. Does NOT evict caches — callers decide. */
     public Habit createHabitEntity(CreateHabitDTO createHabitDTO, UUID userId){
+        if (createHabitDTO.id() != null) {
+            Optional<Habit> existing = habitRepository.findById(createHabitDTO.id());
+            if (existing.isPresent()) {
+                if (!existing.get().getUser().getId().equals(userId)) {
+                    throw new BusinessException(ErrorKey.HABIT_NOT_OWNED, "The habit is not from the user in context");
+                }
+                // Same user replaying a create (lost-response retry): true no-op —
+                // return the existing row untouched. This also keeps createdAt intact.
+                return existing.get();
+            }
+        }
+
         User user = userRepository.findById(userId)
         .orElseThrow(() -> new UserNotFound("User not found"));
 

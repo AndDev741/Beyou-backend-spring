@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -65,6 +66,18 @@ public class CategoryService {
 
     /** Core create: saves and returns the entity. Does NOT evict caches — callers decide. */
     public Category createCategoryEntity(CategoryRequestDTO categoryRequestDTO, User user){
+        if (categoryRequestDTO.id() != null) {
+            Optional<Category> existing = categoryRepository.findById(categoryRequestDTO.id());
+            if (existing.isPresent()) {
+                if (!existing.get().getUser().getId().equals(user.getId())) {
+                    throw new BusinessException(ErrorKey.CATEGORY_NOT_OWNED, "This category does not belong to the user");
+                }
+                // Same user replaying a create (lost-response retry): true no-op —
+                // return the existing row untouched. This also keeps createdAt intact.
+                return existing.get();
+            }
+        }
+
         XpByLevel xpForNextLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.experience().getLevel() + 1);
         XpByLevel xpForActualLevel = xpByLevelRepository.findByLevel(categoryRequestDTO.experience().getLevel());
 

@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -108,6 +109,20 @@ public class DiaryRoutineService {
     @Transactional
     public DiaryRoutineResponseDTO createDiaryRoutine(DiaryRoutineRequestDTO dto, User user) {
         validateRequestDTO(dto);
+
+        if (dto.id() != null) {
+            Optional<DiaryRoutine> existing = diaryRoutineRepository.findById(dto.id());
+            if (existing.isPresent()) {
+                if (!existing.get().getUser().getId().equals(user.getId())) {
+                    throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED,
+                            "The user trying to get its different of the one in the object");
+                }
+                // Same user replaying a create (lost-response retry): true no-op —
+                // return the existing row untouched.
+                return mapper.toResponse(existing.get());
+            }
+        }
+
         DiaryRoutine diaryRoutine = mapper.toEntity(dto);
         diaryRoutine.setUser(user);
         DiaryRoutine saved = diaryRoutineRepository.save(diaryRoutine);

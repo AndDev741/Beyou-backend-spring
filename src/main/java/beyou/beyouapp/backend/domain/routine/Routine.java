@@ -1,10 +1,12 @@
 package beyou.beyouapp.backend.domain.routine;
 
 import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.domain.Persistable;
 
 import java.util.UUID;
 
@@ -22,7 +24,7 @@ import beyou.beyouapp.backend.user.User;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public abstract class Routine {
+public abstract class Routine implements Persistable<UUID> {
 
     // No @GeneratedValue: Hibernate 7.4's merge() throws StaleObjectStateException
     // when a manually-assigned id coexists with a generator annotation on an
@@ -34,6 +36,20 @@ public abstract class Routine {
     // and that select is the idempotency check.
     @Id
     private UUID id = UUID.randomUUID();
+
+    // Persistable.isNew() backing flag: defaults true for freshly-constructed
+    // (never-persisted) instances so save() calls entityManager.persist() —
+    // avoiding the merge()-triggered SELECT-then-INSERT "merge tax" on every
+    // create. @PostLoad/@PostPersist flip it false once Hibernate has seen the
+    // row, so update paths (which always load the managed entity first) keep
+    // going through merge()/dirty-checking. Excluded from Lombok's class-level
+    // @Getter/@Setter so the explicit isNew() override below doesn't collide.
+    // Declared on Routine (not DiaryRoutine) because this is where @Id lives —
+    // DiaryRoutine is the only Routine subtype today and inherits it.
+    @Transient
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private boolean isNew = true;
 
     @Column(nullable = false)
     private String name;
@@ -58,6 +74,17 @@ public abstract class Routine {
         getXpProgress().setNextLevelXp(0D);
         getXpProgress().setLevel(0);
         getXpProgress().setXp(0D);
+    }
+
+    @PostLoad
+    @PostPersist
+    void markNotNew(){
+        this.isNew = false;
+    }
+
+    @Override
+    public boolean isNew(){
+        return this.isNew;
     }
 
 }
