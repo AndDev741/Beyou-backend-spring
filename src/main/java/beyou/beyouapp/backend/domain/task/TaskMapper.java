@@ -22,7 +22,11 @@ public class TaskMapper {
 
     public Task toEntity(CreateTaskRequestDTO dto, List<Category> categories, User user) {
         List<Category> safeCategories = categories != null ? categories : Collections.emptyList();
-        return new Task(dto, Optional.of(safeCategories), user);
+        Task task = new Task(dto, Optional.of(safeCategories), user);
+        if (dto.id() != null) {
+            task.setId(dto.id());
+        }
+        return task;
     }
 
     public void updateEntity(Task task, EditTaskRequestDTO dto, List<Category> categories) {

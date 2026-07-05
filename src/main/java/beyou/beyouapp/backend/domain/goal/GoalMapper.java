@@ -20,7 +20,11 @@ public class GoalMapper {
 
     public Goal toEntity(CreateGoalRequestDTO dto, List<Category> categories, User user) {
         List<Category> safeCategories = categories != null ? categories : Collections.emptyList();
-        return new Goal(dto, safeCategories, user);
+        Goal goal = new Goal(dto, safeCategories, user);
+        if (dto.id() != null) {
+            goal.setId(dto.id());
+        }
+        return goal;
     }
 
     public void updateEntity(Goal goal, EditGoalRequestDTO dto, List<Category> categories) {

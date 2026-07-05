@@ -13,8 +13,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
@@ -33,10 +31,17 @@ import lombok.ToString;
 @ToString
 @Table(name = "goals")
 public class Goal {
+    // No @GeneratedValue: Hibernate 7.4's merge() throws StaleObjectStateException
+    // when a manually-assigned id coexists with a generator annotation on an
+    // entity that has never been persisted (the offline-sync replay path).
+    // Field-initializing the id keeps every other construction path working
+    // (AI materialize flow, seeds, tests) since the initializer runs on `new`,
+    // while letting the mapper overwrite it with a client-supplied UUID when
+    // present. save() on a pre-set id goes through merge() (select-then-insert),
+    // and that select is the idempotency check.
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(updatable = false, nullable = false)
-    private UUID id;
+    private UUID id = UUID.randomUUID();
 
     @Column(nullable = false)
     private String name;

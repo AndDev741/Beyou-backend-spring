@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.UUID;
 
 public record CreateHabitDTO(
+        UUID id,
         @NotBlank(message = "Name is Required") @Size(min = 2, max = 256, message = "Name must be between 2 and 256 characters") String name,
         @Size(max = 1000, message = "Description is too long") String description,
         @Size(max = 500, message = "Motivational phrase is too long") String motivationalPhrase,

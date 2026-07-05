@@ -133,7 +133,7 @@ public class goalServiceUnitTest {
     @Test
     void shouldCreateGoalSuccessfully() {
         CreateGoalRequestDTO dto = new CreateGoalRequestDTO(
-                "Name", "icon", "desc", 100.0, "unit", 0.0,
+                null, "Name", "icon", "desc", 100.0, "unit", 0.0,
                 List.of(UUID.randomUUID()), "motivation",
                 LocalDate.now(), LocalDate.now().plusDays(1),
                 GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
@@ -153,7 +153,7 @@ public class goalServiceUnitTest {
     @Test
     void shouldReturnBadRequest_whenCreateGoalSaveFails() {
         CreateGoalRequestDTO dto = new CreateGoalRequestDTO(
-                "Name", "icon", "desc", 100.0, "unit", 0.0,
+                null, "Name", "icon", "desc", 100.0, "unit", 0.0,
                 List.of(UUID.randomUUID()), "motivation",
                 LocalDate.now(), LocalDate.now().plusDays(1),
                 GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);

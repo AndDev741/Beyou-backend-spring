@@ -32,10 +32,17 @@ import java.util.function.Function;
 @NoArgsConstructor
 @ToString
 public class Category {
+     // No @GeneratedValue/@UuidGenerator: Hibernate 7.4's merge() throws
+     // StaleObjectStateException when a manually-assigned id coexists with a
+     // generator annotation on an entity that has never been persisted (the
+     // offline-sync replay path). Field-initializing the id keeps every other
+     // construction path working (AI materialize flow, seeds, tests) since the
+     // initializer runs on `new`, while letting mappers overwrite it with a
+     // client-supplied UUID when present. save() on a pre-set id goes through
+     // merge() (select-then-insert), and that select is the idempotency check.
      @Id
-     @GeneratedValue(strategy = GenerationType.UUID)
      @Column(updatable = false, nullable = false)
-     private UUID id;
+     private UUID id = UUID.randomUUID();
 
      @NotBlank(message = "Category can't be empty")
      @Size(min = 2, max = 256, message = "Category need a minimum of 2 characters")

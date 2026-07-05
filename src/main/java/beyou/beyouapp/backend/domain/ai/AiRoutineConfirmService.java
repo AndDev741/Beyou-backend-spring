@@ -80,7 +80,7 @@ public class AiRoutineConfirmService {
         Map<String, UUID> categoryIdByTempKey = new HashMap<>();
         for (DraftNewCategoryDTO newCategory : valid.newCategories()) {
             Category created = categoryService.createCategoryEntity(
-                    new CategoryRequestDTO(newCategory.name(), newCategory.icon(),
+                    new CategoryRequestDTO(null, newCategory.name(), newCategory.icon(),
                             newCategory.description(), ExperienceLevel.BEGINNER),
                     user);
             categoryIdByTempKey.put(newCategory.tempKey(), created.getId());
@@ -114,7 +114,7 @@ public class AiRoutineConfirmService {
         }
 
         // 3. the routine itself (existing validation + mapper + save)
-        DiaryRoutineRequestDTO requestDTO = new DiaryRoutineRequestDTO(valid.name(), valid.iconId(), sections);
+        DiaryRoutineRequestDTO requestDTO = new DiaryRoutineRequestDTO(null, valid.name(), valid.iconId(), sections);
         DiaryRoutineResponseDTO result;
         if (routineId == null) {
             result = diaryRoutineService.createDiaryRoutine(requestDTO, user);
@@ -149,7 +149,7 @@ public class AiRoutineConfirmService {
         List<UUID> newCategoryIds = new ArrayList<>();
         for (DraftNewCategoryDTO newCategory : valid.newCategories()) {
             Category created = categoryService.createCategoryEntity(
-                    new CategoryRequestDTO(newCategory.name(), newCategory.icon(),
+                    new CategoryRequestDTO(null, newCategory.name(), newCategory.icon(),
                             newCategory.description(), ExperienceLevel.BEGINNER),
                     user);
             categoryIdByTempKey.put(newCategory.tempKey(), created.getId());
@@ -199,13 +199,13 @@ public class AiRoutineConfirmService {
     }
 
     private CreateHabitDTO toCreateHabitDTO(DraftNewHabitDTO habit, Map<String, UUID> categoryIdByTempKey) {
-        return new CreateHabitDTO(habit.name(), habit.description(), habit.motivationalPhrase(),
+        return new CreateHabitDTO(null, habit.name(), habit.description(), habit.motivationalPhrase(),
                 habit.iconId(), habit.importance(), habit.dificulty(),
                 resolveCategoryRefs(habit.categoryRefs(), categoryIdByTempKey), ExperienceLevel.BEGINNER);
     }
 
     private CreateTaskRequestDTO toCreateTaskDTO(DraftNewTaskDTO task, Map<String, UUID> categoryIdByTempKey) {
-        return new CreateTaskRequestDTO(task.name(), task.description(), task.iconId(),
+        return new CreateTaskRequestDTO(null, task.name(), task.description(), task.iconId(),
                 task.importance(), task.difficulty(),
                 resolveCategoryRefs(task.categoryRefs(), categoryIdByTempKey), task.oneTimeTask());
     }

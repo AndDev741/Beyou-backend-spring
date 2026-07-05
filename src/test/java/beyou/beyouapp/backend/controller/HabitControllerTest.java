@@ -80,7 +80,7 @@ public class HabitControllerTest extends AbstractIntegrationTest {
         List<UUID> categories = new ArrayList<>(List.of(UUID.randomUUID()));
 
         CreateHabitDTO createHabitDTO = new CreateHabitDTO(
-        "name", "", "", "icon1", 2, 2, categories, ExperienceLevel.BEGINNER);
+        null, "name", "", "", "icon1", 2, 2, categories, ExperienceLevel.BEGINNER);
 
         ResponseEntity<Map<String, String>> successResponse = ResponseEntity.ok().body(Map.of("success", "Habit saved successfully"));
 

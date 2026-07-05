@@ -13,8 +13,6 @@ import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.user.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
@@ -35,10 +33,17 @@ import lombok.ToString;
 @NoArgsConstructor
 @ToString
 public class Task {
+    // No @GeneratedValue: Hibernate 7.4's merge() throws StaleObjectStateException
+    // when a manually-assigned id coexists with a generator annotation on an
+    // entity that has never been persisted (the offline-sync replay path).
+    // Field-initializing the id keeps every other construction path working
+    // (AI materialize flow, seeds, tests) since the initializer runs on `new`,
+    // while letting the mapper overwrite it with a client-supplied UUID when
+    // present. save() on a pre-set id goes through merge() (select-then-insert),
+    // and that select is the idempotency check.
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(updatable = false, nullable = false)
-    UUID id;
+    UUID id = UUID.randomUUID();
 
     String name;
 
@@ -61,11 +66,16 @@ public class Task {
     inverseJoinColumns = @JoinColumn(name = "category_id"))
     List<Category> categories;
 
+    // Field-initialized (not just @PrePersist) for the same reason as `id` above:
+    // an offline-sync replay merges a freshly-built transient graph onto the
+    // already-persisted row, and @PrePersist never fires on that UPDATE path —
+    // a null default here would null out the NOT NULL created_at/updated_at
+    // columns during merge.
     @Column(nullable = false)
-    private Date createdAt;
+    private Date createdAt = Date.valueOf(LocalDate.now());
 
     @Column(nullable = false)
-    private Date updatedAt;
+    private Date updatedAt = Date.valueOf(LocalDate.now());
 
     @ManyToOne
     @JsonIgnore

@@ -115,6 +115,7 @@ class RoutineControllerTest extends AbstractIntegrationTest {
     @Test
     void shouldCreateDiaryRoutine() throws Exception {
         DiaryRoutineRequestDTO requestDTO = new DiaryRoutineRequestDTO(
+                null,
                 "My routine",
                 "icon",
                 List.of(new RoutineSectionRequestDTO(null, "Morning", "sun", null, null, List.of(), List.of(), false)));
@@ -160,6 +161,7 @@ class RoutineControllerTest extends AbstractIntegrationTest {
     @Test
     void shouldUpdateDiaryRoutine() throws Exception {
         DiaryRoutineRequestDTO requestDTO = new DiaryRoutineRequestDTO(
+                null,
                 "Updated routine",
                 "icon-2",
                 List.of(new RoutineSectionRequestDTO(null, "Evening", "moon", null, null, List.of(), List.of(), true)));

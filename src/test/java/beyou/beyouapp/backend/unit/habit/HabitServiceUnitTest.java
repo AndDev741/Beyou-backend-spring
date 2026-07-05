@@ -102,7 +102,7 @@ public class HabitServiceUnitTest {
     @Test
     public void shouldCreateHabitSuccessfully(){
         CreateHabitDTO createHabitDTO = new CreateHabitDTO(
-        "name", "", "", "", 2, 2,
+        null, "name", "", "", "", 2, 2,
         categories, ExperienceLevel.BEGINNER);
 
         XpByLevel xpByLevel = new XpByLevel(0, 0);

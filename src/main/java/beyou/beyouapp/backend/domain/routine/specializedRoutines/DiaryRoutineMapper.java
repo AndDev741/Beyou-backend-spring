@@ -35,6 +35,9 @@ public class DiaryRoutineMapper {
 
     public DiaryRoutine toEntity(DiaryRoutineRequestDTO dto) {
         DiaryRoutine diaryRoutine = new DiaryRoutine();
+        if (dto.id() != null) {
+            diaryRoutine.setId(dto.id());
+        }
         diaryRoutine.setName(dto.name());
         diaryRoutine.setIconId(dto.iconId());
         diaryRoutine.setRoutineSections(mapToRoutineSections(dto.routineSections(), diaryRoutine));

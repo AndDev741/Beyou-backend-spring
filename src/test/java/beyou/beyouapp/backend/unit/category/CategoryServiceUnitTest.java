@@ -55,7 +55,7 @@ public class CategoryServiceUnitTest {
     UUID userId = UUID.randomUUID();
     Category category = new Category();
     UUID categoryId = UUID.randomUUID();
-    CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO("Life", "test", "My life in category", ExperienceLevel.BEGINNER);
+    CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO(null, "Life", "test", "My life in category", ExperienceLevel.BEGINNER);
     XpByLevel xpByLevel = new XpByLevel();
     XpByLevel xpByLevel2 = new XpByLevel();
     @BeforeEach
@@ -164,7 +164,7 @@ public class CategoryServiceUnitTest {
     @Test
     public void shouldThrowAExceptionOfUserNotFoundWhenTryingToCreateACategoryWithWrongUserId(){
         Exception exception = assertThrows(UserNotFound.class, () -> {
-            CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO("Life", "test",
+            CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO(null, "Life", "test",
                     "My life in category", ExperienceLevel.BEGINNER);
             categoryService.createCategory(categoryRequestDTO, UUID.randomUUID());
         });

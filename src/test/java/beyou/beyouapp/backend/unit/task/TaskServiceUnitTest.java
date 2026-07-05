@@ -95,10 +95,11 @@ public class TaskServiceUnitTest {
         category.setId(categoriesId.get(0));
 
         CreateTaskRequestDTO createTaskDTO = new CreateTaskRequestDTO(
+        null,
         "taskName",
-        "Task description", 
+        "Task description",
         "IconId",
-        2, 
+        2,
         2,
         categoriesId,
         false);
@@ -116,8 +117,9 @@ public class TaskServiceUnitTest {
     @Test
     public void shouldCreateACategoryWithoutTheOptionalAttributes(){
         CreateTaskRequestDTO createTaskDTO = new CreateTaskRequestDTO(
+        null,
         "taskName",
-        "Task description", 
+        "Task description",
         "IconId",
         null,
         null,
@@ -183,7 +185,7 @@ public class TaskServiceUnitTest {
     @Test
     public void shouldThrowExceptionWhenUserNotFoundCreatingTask() {
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
-        CreateTaskRequestDTO createTaskDTO = new CreateTaskRequestDTO("task", "desc", "icon", 1, 1, null, false);
+        CreateTaskRequestDTO createTaskDTO = new CreateTaskRequestDTO(null, "task", "desc", "icon", 1, 1, null, false);
         assertThrows(UserNotFound.class, () -> taskService.createTask(createTaskDTO, userId));
     }
 

@@ -58,7 +58,7 @@ public class CategoryControllerTest extends AbstractIntegrationTest {
         user.setId(userID);
 
         CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO(
-                "name", "icon", "desc",
+                null, "name", "icon", "desc",
                 ExperienceLevel.BEGINNER);
         category = new Category(categoryRequestDTO, user);
         categoryService.createCategory(categoryRequestDTO, userID);
@@ -78,7 +78,7 @@ public class CategoryControllerTest extends AbstractIntegrationTest {
     @Test
     void shouldCreateCategorySuccessfully() throws Exception {
         CategoryRequestDTO categoryRequestDTO = new CategoryRequestDTO(
-                "name", "icon", "desc",
+                null, "name", "icon", "desc",
                 ExperienceLevel.BEGINNER);
         Category category = new Category(categoryRequestDTO, user);
 

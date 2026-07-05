@@ -21,6 +21,9 @@ public class CategoryMapper {
 
     public Category toEntity(CategoryRequestDTO dto, User user, XpByLevel actualLevelXp, XpByLevel nextLevelXp) {
         Category category = new Category(dto, user);
+        if (dto.id() != null) {
+            category.setId(dto.id());
+        }
         XpProgress xpProgress = category.getXpProgress() != null ? category.getXpProgress() : new XpProgress();
         if (actualLevelXp != null) {
             xpProgress.setActualLevelXp(actualLevelXp.getXp());

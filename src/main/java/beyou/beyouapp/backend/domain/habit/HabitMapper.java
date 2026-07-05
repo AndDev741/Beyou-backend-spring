@@ -27,7 +27,11 @@ public class HabitMapper {
         List<Category> categoriesToUse = categories != null ? categories : Collections.emptyList();
         double nextXp = nextLevelXp != null ? nextLevelXp.getXp() : 0;
         double actualXp = actualBaseXp != null ? actualBaseXp.getXp() : 0;
-        return new Habit(dto, new ArrayList<>(categoriesToUse), nextXp, actualXp, user);
+        Habit habit = new Habit(dto, new ArrayList<>(categoriesToUse), nextXp, actualXp, user);
+        if (dto.id() != null) {
+            habit.setId(dto.id());
+        }
+        return habit;
     }
 
     public void updateEntity(Habit habit, EditHabitDTO dto, List<Category> categories) {

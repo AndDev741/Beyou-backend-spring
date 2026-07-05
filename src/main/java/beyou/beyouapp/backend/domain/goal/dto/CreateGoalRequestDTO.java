@@ -13,6 +13,7 @@ import beyou.beyouapp.backend.domain.goal.GoalStatus;
 import beyou.beyouapp.backend.domain.goal.GoalTerm;
 
 public record CreateGoalRequestDTO(
+    UUID id,
     @NotEmpty @Size(min = 2, max = 256)
     String name,
     String description,

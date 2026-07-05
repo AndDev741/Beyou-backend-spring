@@ -96,6 +96,7 @@ public class TaskControllerTest extends AbstractIntegrationTest {
     @Test
     void shouldCreateTaskSuccessfully() throws Exception {
         CreateTaskRequestDTO dto = new CreateTaskRequestDTO(
+            null,
             "Test Task",
             "Description",
             "icon1",

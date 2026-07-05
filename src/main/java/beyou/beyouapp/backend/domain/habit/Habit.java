@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.UUID;
 
 import org.hibernate.annotations.BatchSize;
-import org.hibernate.annotations.UuidGenerator;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
@@ -44,9 +43,16 @@ import lombok.ToString;
 @NoArgsConstructor
 @ToString
 public class Habit {
+    // No @UuidGenerator: Hibernate 7.4's merge() throws StaleObjectStateException
+    // when a manually-assigned id coexists with a generator annotation on an
+    // entity that has never been persisted (the offline-sync replay path).
+    // Field-initializing the id keeps every other construction path working
+    // (AI materialize flow, seeds, tests) since the initializer runs on `new`,
+    // while letting the mapper overwrite it with a client-supplied UUID when
+    // present. save() on a pre-set id goes through merge() (select-then-insert),
+    // and that select is the idempotency check.
     @Id
-    @UuidGenerator
-    private UUID id;
+    private UUID id = UUID.randomUUID();
 
     @Column(nullable = false)
     @Size(min = 2, max = 256, message = "Name need a minimum of 2 characters")
@@ -88,11 +94,16 @@ public class Habit {
     @Column(nullable = true)
     private int constance;
 
+    // Field-initialized (not just @PrePersist) for the same reason as `id` above:
+    // an offline-sync replay merges a freshly-built transient graph onto the
+    // already-persisted row, and @PrePersist never fires on that UPDATE path —
+    // a null default here would null out the NOT NULL created_at/updated_at
+    // columns during merge.
     @Column(nullable = false)
-    private Date createdAt;
+    private Date createdAt = Date.valueOf(LocalDate.now());
 
     @Column(nullable = false)
-    private Date updatedAt;
+    private Date updatedAt = Date.valueOf(LocalDate.now());
 
     @ManyToOne
     @JsonIgnore

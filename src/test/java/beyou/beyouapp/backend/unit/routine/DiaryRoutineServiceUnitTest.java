@@ -88,7 +88,7 @@ class DiaryRoutineServiceUnitTest {
         User user = new User();
         user.setId(userId);
 
-        validRequestDTO = new DiaryRoutineRequestDTO(
+        validRequestDTO = new DiaryRoutineRequestDTO(null, 
                 "Rotina Diária",
                 "routine-icon-123",
                 new ArrayList<>(
@@ -181,7 +181,7 @@ class DiaryRoutineServiceUnitTest {
     @Test
     @DisplayName("Should throw IllegalArgumentException when creating with empty name")
     void shouldThrowExceptionWhenCreatingWithEmptyName() {
-        DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(null, 
                 "",
                 "routine-icon-123",
                 validRequestDTO.routineSections());
@@ -197,7 +197,7 @@ class DiaryRoutineServiceUnitTest {
     @Test
     @DisplayName("Should allow overnight routine section time range")
     void shouldAllowOvernightSectionTimeRange() {
-        DiaryRoutineRequestDTO overnightDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO overnightDTO = new DiaryRoutineRequestDTO(null, 
                 "Rotina Diária",
                 "routine-icon-123",
                 List.of(
@@ -221,7 +221,7 @@ class DiaryRoutineServiceUnitTest {
     @Test
     @DisplayName("Should throw IllegalArgumentException when item endTime is before item startTime")
     void shouldThrowExceptionWhenItemEndTimeBeforeStartTime() {
-        DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(null, 
                 "Rotina Diária",
                 "routine-icon-123",
                 List.of(
@@ -253,7 +253,7 @@ class DiaryRoutineServiceUnitTest {
     @Test
     @DisplayName("Should throw IllegalArgumentException when item endTime is outside section bounds")
     void shouldThrowExceptionWhenItemEndTimeOutsideSectionBounds() {
-        DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(null, 
                 "Rotina Diária",
                 "routine-icon-123",
                 List.of(
@@ -323,7 +323,7 @@ class DiaryRoutineServiceUnitTest {
     @Test
     @DisplayName("Should update diary routine successfully")
     void shouldUpdateDiaryRoutineSuccessfully() {
-        DiaryRoutineRequestDTO updatedDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO updatedDTO = new DiaryRoutineRequestDTO(null, 
                 "New routine updated",
                 "routine-icon-updated",
                 new ArrayList<>(
@@ -517,7 +517,7 @@ class DiaryRoutineServiceUnitTest {
         assertEquals(1, existingSection.getHabitGroups().size(), "Precondition: should start with 1 habit group");
 
         // Send update with existing section ID but empty habitGroup list (keep taskGroup)
-        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(null, 
                 "Updated",
                 "icon",
                 List.of(new RoutineSectionRequestDTO(
@@ -550,7 +550,7 @@ class DiaryRoutineServiceUnitTest {
 
         assertEquals(1, existingSection.getTaskGroups().size(), "Precondition: should start with 1 task group");
 
-        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(null, 
                 "Updated",
                 "icon",
                 List.of(new RoutineSectionRequestDTO(
@@ -592,7 +592,7 @@ class DiaryRoutineServiceUnitTest {
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
         when(habitService.getHabit(newHabitId)).thenReturn(newHabit);
 
-        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(null, 
                 "Updated",
                 "icon",
                 List.of(new RoutineSectionRequestDTO(
@@ -633,7 +633,7 @@ class DiaryRoutineServiceUnitTest {
 
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
 
-        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(null, 
                 "Updated",
                 "icon",
                 List.of(new RoutineSectionRequestDTO(
@@ -669,7 +669,7 @@ class DiaryRoutineServiceUnitTest {
 
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
 
-        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(null, 
                 "Updated",
                 "icon",
                 List.of(new RoutineSectionRequestDTO(
@@ -705,7 +705,7 @@ class DiaryRoutineServiceUnitTest {
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
         when(habitService.getHabit(foreignHabitId)).thenReturn(foreignHabit);
 
-        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(null, 
                 "Updated",
                 "icon",
                 List.of(new RoutineSectionRequestDTO(
@@ -745,7 +745,7 @@ class DiaryRoutineServiceUnitTest {
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
         when(taskService.getTask(foreignTaskId)).thenReturn(foreignTask);
 
-        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
+        DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(null, 
                 "Updated",
                 "icon",
                 List.of(new RoutineSectionRequestDTO(

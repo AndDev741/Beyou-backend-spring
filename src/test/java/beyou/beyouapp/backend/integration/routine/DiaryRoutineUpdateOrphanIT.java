@@ -59,9 +59,9 @@ class DiaryRoutineUpdateOrphanIT extends AbstractIntegrationTest {
         if (xpByLevelRepository.findByLevel(1) == null) xpByLevelRepository.save(new XpByLevel(1, 100));
 
         Category category = categoryService.createCategoryEntity(
-                new CategoryRequestDTO("Health", "ic", null, ExperienceLevel.BEGINNER), user);
+                new CategoryRequestDTO(null, "Health", "ic", null, ExperienceLevel.BEGINNER), user);
         habitId = habitService.createHabitEntity(
-                new CreateHabitDTO("Read", null, null, "ic", 3, 3, List.of(category.getId()),
+                new CreateHabitDTO(null, "Read", null, null, "ic", 3, 3, List.of(category.getId()),
                         ExperienceLevel.BEGINNER),
                 user.getId()).getId();
     }
@@ -78,7 +78,7 @@ class DiaryRoutineUpdateOrphanIT extends AbstractIntegrationTest {
                 null, "B", "ic", LocalTime.of(8, 0), LocalTime.of(9, 0), List.of(), List.of(), false);
 
         DiaryRoutineResponseDTO created = diaryRoutineService.createDiaryRoutine(
-                new DiaryRoutineRequestDTO("R", "", List.of(sectionA, sectionB)), user);
+                new DiaryRoutineRequestDTO(null, "R", "", List.of(sectionA, sectionB)), user);
         assertEquals(2, created.routineSections().size());
         UUID routineId = created.id();
         UUID sectionBId = created.routineSections().stream()
@@ -87,7 +87,7 @@ class DiaryRoutineUpdateOrphanIT extends AbstractIntegrationTest {
         RoutineSectionRequestDTO keepB = new RoutineSectionRequestDTO(
                 sectionBId, "B", "ic", LocalTime.of(8, 0), LocalTime.of(9, 0), List.of(), List.of(), false);
         diaryRoutineService.updateDiaryRoutine(routineId,
-                new DiaryRoutineRequestDTO("R", "", List.of(keepB)), user.getId());
+                new DiaryRoutineRequestDTO(null, "R", "", List.of(keepB)), user.getId());
 
         transactionTemplate.executeWithoutResult(tx -> {
             DiaryRoutine routine = diaryRoutineRepository.findById(routineId).orElseThrow();
