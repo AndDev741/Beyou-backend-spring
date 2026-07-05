@@ -359,7 +359,7 @@ public class CheckItemService {
         check = checkIfHabitGroupIsAlreadyCheckedAndOverride(habitGroupToCheckOrUncheck, date);
 
         // Streak bonus uses constance BEFORE this check's increment (the streak entering today).
-        Double newXp = CheckXpCalculator.calculate(
+        double newXp = CheckXpCalculator.calculate(
                 habitChecked.getDificulty(), habitChecked.getImportance(), habitChecked.getConstance());
         xpCalculatorService.addXpToUserRoutineHabitAndCategoriesAndPersist(
             newXp, 
