@@ -26,6 +26,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.common.CheckXpCalculator;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.common.XpProgress;
@@ -113,7 +114,8 @@ class CheckItemServiceUnitTest {
             HabitGroupCheck check = habitGroup.getHabitGroupChecks().get(0);
             assertTrue(check.isChecked());
             assertEquals(today, check.getCheckDate());
-            double expectedXp = 10 * habit.getDificulty() * habit.getImportance();
+            double expectedXp = CheckXpCalculator.calculate(
+                    habit.getDificulty(), habit.getImportance(), 0); // constance 0 before this check
             assertEquals(expectedXp, check.getXpGenerated());
             assertEquals(1, habit.getConstance());
             verify(xpCalculatorService).addXpToUserRoutineHabitAndCategoriesAndPersist(expectedXp, routine, habit, habit.getCategories());
@@ -177,7 +179,8 @@ class CheckItemServiceUnitTest {
             TaskGroupCheck check = taskGroup.getTaskGroupChecks().get(0);
             assertTrue(check.isChecked());
             assertEquals(today, check.getCheckDate());
-            double expectedXp = 10 * task.getDificulty() * task.getImportance();
+            double expectedXp = CheckXpCalculator.calculate(
+                    task.getDificulty(), task.getImportance(), 0); // tasks have no streak
             assertEquals(expectedXp, check.getXpGenerated());
             assertEquals(today, task.getMarkedToDelete());
             verify(xpCalculatorService).addXpToUserRoutineAndCategoriesAndPersist(expectedXp, routine, task.getCategories());

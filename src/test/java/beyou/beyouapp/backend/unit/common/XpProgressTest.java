@@ -92,4 +92,22 @@ public class XpProgressTest {
 
         assertEquals(0.0, xpProgress.getXp(), "XP must never go below 0 even when starting at zero");
     }
+
+    @Test
+    void addXpShouldNotCrashOrLoopAtTopOfCurve() {
+        // Provider that has no row beyond level 5 (returns null) — mimics the seeded
+        // xp_by_level table topping out at its max level.
+        Function<Integer, XpByLevel> cappedProvider =
+                level -> XP_TABLE.containsKey(level) ? new XpByLevel(level, XP_TABLE.get(level)) : null;
+        xpProgress.setLevel(4);
+        xpProgress.setXp(1000.0);
+        xpProgress.setActualLevelXp(1000.0);
+        xpProgress.setNextLevelXp(1000.0);
+
+        xpProgress.addXp(5000.0, cappedProvider); // way past the top
+
+        assertEquals(6000.0, xpProgress.getXp());
+        assertEquals(5, xpProgress.getLevel(), "must not advance past the top level (no level 6 row)");
+        assertEquals(1000.0, xpProgress.getNextLevelXp(), "ceiling pinned to top threshold, no NPE");
+    }
 }
