@@ -142,8 +142,9 @@ class SnapshotCheckServiceTest {
         when(snapshotCheckRepository.findById(habitCheckId)).thenReturn(Optional.of(habitCheck));
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(routine));
         when(habitRepository.findById(habitCheck.getOriginalItemId())).thenReturn(Optional.of(habit));
-        when(xpDecayCalculator.calculateDecayedXp(eq(120.0), eq(XpDecayStrategy.GRADUAL), any(), any()))
-                .thenReturn(96.0);
+        // new base = 5 * (3 + 4) = 35; decay mocked to a realistic 1-day-late GRADUAL 0.8 -> 28
+        when(xpDecayCalculator.calculateDecayedXp(eq(35.0), eq(XpDecayStrategy.GRADUAL), any(), any()))
+                .thenReturn(28.0);
         when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
 
         RefreshUiDTO result = snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
@@ -152,10 +153,10 @@ class SnapshotCheckServiceTest {
         assertTrue(habitCheck.isChecked());
         assertFalse(habitCheck.isSkipped());
         assertNotNull(habitCheck.getCheckTime());
-        assertEquals(96.0, habitCheck.getXpGenerated(), 0.001);
+        assertEquals(28.0, habitCheck.getXpGenerated(), 0.001);
 
         verify(xpCalculatorService).addXpToUserRoutineHabitAndCategoriesAndPersist(
-                eq(user), eq(96.0), eq(routine), eq(habit), eq(categories));
+                eq(user), eq(28.0), eq(routine), eq(habit), eq(categories));
         verify(snapshotCheckRepository).save(habitCheck);
         verify(snapshotRepository).save(snapshot);
         verify(userRepository).save(user);
@@ -173,18 +174,19 @@ class SnapshotCheckServiceTest {
         when(snapshotCheckRepository.findById(taskCheckId)).thenReturn(Optional.of(taskCheck));
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(routine));
         when(taskRepository.findById(taskCheck.getOriginalItemId())).thenReturn(Optional.of(task));
-        when(xpDecayCalculator.calculateDecayedXp(eq(100.0), eq(XpDecayStrategy.GRADUAL), any(), any()))
-                .thenReturn(80.0);
+        // new base = 5 * (2 + 5) = 35; decay mocked to a realistic 1-day-late GRADUAL 0.8 -> 28
+        when(xpDecayCalculator.calculateDecayedXp(eq(35.0), eq(XpDecayStrategy.GRADUAL), any(), any()))
+                .thenReturn(28.0);
         when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
 
         RefreshUiDTO result = snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, taskCheckId);
 
         assertNotNull(result);
         assertTrue(taskCheck.isChecked());
-        assertEquals(80.0, taskCheck.getXpGenerated(), 0.001);
+        assertEquals(28.0, taskCheck.getXpGenerated(), 0.001);
 
         verify(xpCalculatorService).addXpToUserRoutineAndCategoriesAndPersist(
-                eq(user), eq(80.0), eq(routine), eq(categories));
+                eq(user), eq(28.0), eq(routine), eq(categories));
     }
 
     // ---------------------------------------------------------------
@@ -231,13 +233,13 @@ class SnapshotCheckServiceTest {
         when(snapshotCheckRepository.findById(habitCheckId)).thenReturn(Optional.of(habitCheck));
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(routine));
         when(habitRepository.findById(habitCheck.getOriginalItemId())).thenReturn(Optional.empty());
-        when(xpDecayCalculator.calculateDecayedXp(eq(120.0), eq(XpDecayStrategy.GRADUAL), any(), any()))
-                .thenReturn(96.0);
+        when(xpDecayCalculator.calculateDecayedXp(eq(35.0), eq(XpDecayStrategy.GRADUAL), any(), any()))
+                .thenReturn(28.0);
         when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
 
         snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
 
-        verify(xpCalculatorService).addXpToUserAndRoutineOnly(user, 96.0, routine);
+        verify(xpCalculatorService).addXpToUserAndRoutineOnly(user, 28.0, routine);
         verify(xpCalculatorService, never()).addXpToUserRoutineHabitAndCategoriesAndPersist(
                 any(User.class), anyDouble(), any(), any(Habit.class), anyList());
     }
@@ -249,13 +251,13 @@ class SnapshotCheckServiceTest {
         when(snapshotCheckRepository.findById(taskCheckId)).thenReturn(Optional.of(taskCheck));
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(routine));
         when(taskRepository.findById(taskCheck.getOriginalItemId())).thenReturn(Optional.empty());
-        when(xpDecayCalculator.calculateDecayedXp(eq(100.0), eq(XpDecayStrategy.GRADUAL), any(), any()))
-                .thenReturn(80.0);
+        when(xpDecayCalculator.calculateDecayedXp(eq(35.0), eq(XpDecayStrategy.GRADUAL), any(), any()))
+                .thenReturn(28.0);
         when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
 
         snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, taskCheckId);
 
-        verify(xpCalculatorService).addXpToUserAndRoutineOnly(user, 80.0, routine);
+        verify(xpCalculatorService).addXpToUserAndRoutineOnly(user, 28.0, routine);
         verify(xpCalculatorService, never()).addXpToUserRoutineAndCategoriesAndPersist(
                 any(User.class), anyDouble(), any(), anyList());
     }
@@ -533,17 +535,18 @@ class SnapshotCheckServiceTest {
         when(snapshotRepository.findById(snapshotId)).thenReturn(Optional.of(snapshot));
         when(snapshotCheckRepository.findById(habitCheckId)).thenReturn(Optional.of(habitCheck));
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.empty());
-        when(xpDecayCalculator.calculateDecayedXp(eq(120.0), eq(XpDecayStrategy.GRADUAL), any(), any()))
-                .thenReturn(96.0);
+        // new base = 5 * (3 + 4) = 35; decay mocked to a realistic 1-day-late GRADUAL 0.8 -> 28
+        when(xpDecayCalculator.calculateDecayedXp(eq(35.0), eq(XpDecayStrategy.GRADUAL), any(), any()))
+                .thenReturn(28.0);
         when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
 
         RefreshUiDTO result = snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
 
         assertNotNull(result);
         assertTrue(habitCheck.isChecked());
-        assertEquals(96.0, habitCheck.getXpGenerated(), 0.001);
+        assertEquals(28.0, habitCheck.getXpGenerated(), 0.001);
         // XP applied to user only since routine is deleted
-        verify(xpCalculatorService).addXpToUserOnly(user, 96.0);
+        verify(xpCalculatorService).addXpToUserOnly(user, 28.0);
     }
 
     @Test

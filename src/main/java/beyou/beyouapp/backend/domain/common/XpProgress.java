@@ -23,7 +23,9 @@ public class XpProgress {
     public void addXp(double amount, Function<Integer, XpByLevel> levelProvider){
         xp += amount;
 
-        while (xp >= nextLevelXp) {
+        // Stop at the top of the curve: when there is no level+1 row, recalculate
+        // pins nextLevelXp to the current threshold, so this loop would spin forever.
+        while (xp >= nextLevelXp && levelProvider.apply(level + 1) != null) {
             level++;
             recalculate(levelProvider);
         }
@@ -44,6 +46,8 @@ public class XpProgress {
         XpByLevel next = levelProvider.apply(level + 1);
 
         actualLevelXp = actual.getXp();
-        nextLevelXp = next.getXp();
+        // At the top level there is no next row; pin the ceiling to the current
+        // threshold instead of NPEing when a maxed entity gains more XP.
+        nextLevelXp = (next != null) ? next.getXp() : actualLevelXp;
     }
 }

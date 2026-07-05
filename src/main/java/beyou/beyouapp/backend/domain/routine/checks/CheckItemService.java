@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import beyou.beyouapp.backend.domain.common.CheckXpCalculator;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshItemCheckedDTO;
@@ -90,7 +91,7 @@ public class CheckItemService {
             // Uncheck: Remove check, subtract XP, adjust constance
             return uncheckHabitGroup(habitGroup, date);
         } else {
-            // Calculate the exp (Think in a good algorithm later on)
+            // XP earn formula lives in CheckXpCalculator
             return checkHabitGroup(habitGroup, date);
         }
     }
@@ -104,7 +105,7 @@ public class CheckItemService {
             // Uncheck: Remove check, subtract XP, adjust constance
             return uncheckTaskGroup(taskGroupToCheckOrUncheck, date);
         } else {
-            // Calculate the exp (Think in a good algorithm later on)
+            // XP earn formula lives in CheckXpCalculator
             return checkTaskGroup(taskGroupToCheckOrUncheck, date);            
         }
     }
@@ -317,7 +318,7 @@ public class CheckItemService {
 
         //Update categories
         if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
-            Double newXp = (double) (10 * dificulty * importance);
+            Double newXp = CheckXpCalculator.calculate(dificulty, importance, 0); // tasks have no streak
             check.setXpGenerated(newXp);
             xpCalculatorService.addXpToUserRoutineAndCategoriesAndPersist(
                 newXp,
@@ -357,7 +358,9 @@ public class CheckItemService {
 
         check = checkIfHabitGroupIsAlreadyCheckedAndOverride(habitGroupToCheckOrUncheck, date);
 
-        Double newXp = (double) (10 * habitChecked.getDificulty() * habitChecked.getImportance());
+        // Streak bonus uses constance BEFORE this check's increment (the streak entering today).
+        Double newXp = CheckXpCalculator.calculate(
+                habitChecked.getDificulty(), habitChecked.getImportance(), habitChecked.getConstance());
         xpCalculatorService.addXpToUserRoutineHabitAndCategoriesAndPersist(
             newXp, 
             routine, 

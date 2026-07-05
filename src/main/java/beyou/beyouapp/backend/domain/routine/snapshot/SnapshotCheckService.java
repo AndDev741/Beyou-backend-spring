@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import beyou.beyouapp.backend.domain.common.CheckXpCalculator;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
@@ -122,7 +123,9 @@ public class SnapshotCheckService {
     }
 
     private void checkSnapshotItem(User user, DiaryRoutine routine, RoutineSnapshot snapshot, SnapshotCheck check) {
-        double baseXp = 10.0 * check.getDifficulty() * check.getImportance();
+        // ponytail: no streak bonus on late check-ins (a late check already broke the streak);
+        // decay still applies below. Snapshot has no constance to read anyway.
+        double baseXp = CheckXpCalculator.calculate(check.getDifficulty(), check.getImportance(), 0);
 
         LocalDate userLocalDate = LocalDate.now(ZoneId.of(user.getTimezone()));
         double decayedXp = xpDecayCalculator.calculateDecayedXp(
