@@ -89,3 +89,6 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+
+app:
+  upload-dir: ${UPLOAD_DIR:/tmp/beyou-test-uploads}
