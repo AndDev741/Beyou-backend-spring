@@ -16,6 +16,7 @@ RUN mvn -DskipTests package
 FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /app
 RUN useradd -ms /bin/bash appuser
+RUN mkdir -p /data/uploads && chown appuser:appuser /data/uploads
 COPY --from=build /app/target/*.jar /app/app.jar
 USER appuser
 EXPOSE 8099
