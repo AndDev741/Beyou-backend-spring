@@ -63,6 +63,7 @@ public class User implements UserDetails {
 
     private String perfilPhraseAuthor;
 
+    @Column(length = 512)
     private String perfilPhoto;
 
     Set<LocalDate> completedDays = new HashSet<>();
