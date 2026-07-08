@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -39,10 +40,9 @@ public class UserPhotoController {
         return ResponseEntity.ok(Map.of("message", "Photo uploaded"));
     }
 
-    @GetMapping
-    public ResponseEntity<Resource> serve() {
-        User user = authenticatedUser.getAuthenticatedUser();
-        Resource resource = photoStorageService.serve(user.getId());
+    @GetMapping("/{userId}")
+    public ResponseEntity<Resource> serve(@PathVariable UUID userId) {
+        Resource resource = photoStorageService.serve(userId);
         if (resource == null) {
             return ResponseEntity.notFound().build();
         }

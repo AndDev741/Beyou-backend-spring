@@ -98,7 +98,7 @@ class UserPhotoControllerTest extends AbstractIntegrationTest {
     }
 
     @Nested
-    @DisplayName("GET /user/photo")
+    @DisplayName("GET /user/photo/{userId}")
     class Serve {
 
         @Test
@@ -106,7 +106,7 @@ class UserPhotoControllerTest extends AbstractIntegrationTest {
         void returns404WhenNoPhoto() throws Exception {
             when(photoStorageService.serve(userId)).thenReturn(null);
 
-            mockMvc.perform(get("/user/photo"))
+            mockMvc.perform(get("/user/photo/{userId}", userId))
                 .andExpect(status().isNotFound());
         }
     }

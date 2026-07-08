@@ -125,9 +125,10 @@ public class UserControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void shouldReturnBadRequestWhenPhotoUrlIsInvalid() throws Exception {
+    void shouldReturnBadRequestWhenPhotoUrlIsTooLong() throws Exception {
+        String longPhoto = "x".repeat(2049);
         UserEditDTO dto = new UserEditDTO(
-            null, "invalid-url",
+            null, longPhoto,
             null, null, null, null,
             null, null, null, null, null
         );

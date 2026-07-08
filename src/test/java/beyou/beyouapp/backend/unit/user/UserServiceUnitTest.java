@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.unit.user;
 
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
+import beyou.beyouapp.backend.user.PhotoStorageService;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserMapper;
 import beyou.beyouapp.backend.user.UserRepository;
@@ -58,6 +59,9 @@ public class UserServiceUnitTest {
     @Mock
     ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    PhotoStorageService photoStorageService;
+
     UserMapper userMapper = new UserMapper();
 
     private UserService userService;
@@ -78,7 +82,7 @@ public class UserServiceUnitTest {
         user.setPerfilPhraseAuthor("lg?");
         user.setWidgetsIdInUse(List.of("widget4, widget5"));
 
-        userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService, userMapper, eventPublisher);
+        userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService, userMapper, photoStorageService, eventPublisher);
     }
 
     @Nested
