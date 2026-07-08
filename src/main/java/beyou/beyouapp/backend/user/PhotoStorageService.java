@@ -108,6 +108,24 @@ public class PhotoStorageService {
         return null;
     }
 
+    /**
+     * Returns the file's last-modified time in millis, or null if no local photo
+     * exists. Used to version the photo URL so clients bust their image cache
+     * exactly when the photo changes (the served URL is otherwise stable).
+     */
+    public Long getVersion(UUID userId) {
+        Path path = resolvePath(userId);
+        if (!Files.exists(path)) {
+            return null;
+        }
+        try {
+            return Files.getLastModifiedTime(path).toMillis();
+        } catch (IOException e) {
+            log.warn("Could not read last-modified time for user {} photo", userId, e);
+            return null;
+        }
+    }
+
     // -- private helpers --
 
     private Path resolvePath(UUID userId) {

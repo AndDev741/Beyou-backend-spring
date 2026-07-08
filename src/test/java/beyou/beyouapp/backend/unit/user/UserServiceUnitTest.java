@@ -176,6 +176,8 @@ public class UserServiceUnitTest {
 
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(userRepository.save(user)).thenReturn(user);
+            // No uploaded photo file → response photo falls back to perfilPhoto.
+            when(photoStorageService.getVersion(userId)).thenReturn(null);
             // ACT
             UserResponseDTO editedUser = userService.editUser(userEditDTO, userId);
 
