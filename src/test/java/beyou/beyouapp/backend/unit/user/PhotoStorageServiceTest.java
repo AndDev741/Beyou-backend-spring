@@ -75,7 +75,6 @@ class PhotoStorageServiceTest {
 
             service.store(userId, file);
 
-            assertTrue(service.exists(userId));
             Path saved = service.getPath(userId);
             assertNotNull(saved);
             assertTrue(Files.exists(saved));
@@ -90,7 +89,7 @@ class PhotoStorageServiceTest {
             byte[] jpeg2 = createValidJpeg();
             service.store(userId, mockFile("b.jpg", jpeg2, "image/jpeg"));
 
-            assertTrue(service.exists(userId));
+            assertNotNull(service.getPath(userId));
         }
 
         @Test
@@ -145,20 +144,20 @@ class PhotoStorageServiceTest {
     }
 
     @Nested
-    @DisplayName("exists")
-    class Exists {
+    @DisplayName("getVersion")
+    class GetVersion {
 
         @Test
-        @DisplayName("returns false when user has no photo")
-        void returnsFalseWhenNoPhoto() {
-            assertFalse(service.exists(UUID.randomUUID()));
+        @DisplayName("returns null when user has no photo")
+        void returnsNullWhenNoPhoto() {
+            assertNull(service.getVersion(UUID.randomUUID()));
         }
 
         @Test
-        @DisplayName("returns true after store")
-        void returnsTrueAfterStore() throws IOException {
+        @DisplayName("returns a version after store")
+        void returnsVersionAfterStore() throws IOException {
             service.store(userId, mockFile("p.jpg", createValidJpeg(), "image/jpeg"));
-            assertTrue(service.exists(userId));
+            assertNotNull(service.getVersion(userId));
         }
     }
 

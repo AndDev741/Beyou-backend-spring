@@ -94,11 +94,6 @@ public class PhotoStorageService {
         return Files.exists(path) ? path : null;
     }
 
-    /** Returns true if a local photo file exists for this user. */
-    public boolean exists(UUID userId) {
-        return Files.exists(resolvePath(userId));
-    }
-
     /** Returns the photo as a Spring Resource, or null if none exists. */
     public Resource serve(UUID userId) {
         Path path = resolvePath(userId);
