@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Set;
 import java.util.UUID;
 
@@ -28,7 +27,6 @@ import lombok.extern.slf4j.Slf4j;
 public class PhotoStorageService {
 
     private static final int MAX_DIMENSION = 512;
-    private static final float JPEG_QUALITY = 0.85f;
     private static final Set<String> ALLOWED_TYPES = Set.of(
         "image/jpeg", "image/png", "image/webp", "image/gif"
     );
