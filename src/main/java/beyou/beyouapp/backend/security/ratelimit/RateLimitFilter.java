@@ -65,6 +65,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
             String ip = getClientIp(request);
             bucketKey = "docs:" + ip;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createDocsBucket());
+        } else if ("GET".equals(method) && path.startsWith("/user/photo")) {
+            // Public unauthenticated endpoint (no userId available) — throttle per IP
+            // so anonymous callers can't flood disk-read requests for arbitrary UUIDs.
+            String ip = getClientIp(request);
+            bucketKey = "photo:" + ip;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createPhotoBucket());
         } else if (WRITE_METHODS.contains(method)) {
             String userId = getUserIdFromRequest(request);
             if (userId == null) {

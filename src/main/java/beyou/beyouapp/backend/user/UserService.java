@@ -46,6 +46,7 @@ public class UserService {
     private final TokenService tokenService;
     private final RefreshTokenService refreshTokenService;
     private final UserMapper userMapper;
+    private final PhotoStorageService photoStorageService;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -157,7 +158,7 @@ public class UserService {
     public UserResponseDTO getProfile(UUID userId){
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFound("User not found by id"));
-        return userMapper.toResponseDTO(user);
+        return userMapper.toResponseDTO(user, photoStorageService.getVersion(userId));
     }
 
     public UserResponseDTO editUser(UserEditDTO userEdit, UUID userId){
@@ -193,7 +194,7 @@ public class UserService {
 
             try{
                 User saved = userRepository.save(user);
-                return userMapper.toResponseDTO(saved);
+                return userMapper.toResponseDTO(saved, photoStorageService.getVersion(userId));
             }catch(Exception e){
                throw e;
             }

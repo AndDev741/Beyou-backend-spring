@@ -175,6 +175,15 @@
 			<version>2.7.0</version>
 		</dependency>
 
+		<!-- WebP decode support for profile-photo uploads. Stock JDK ImageIO has no
+		     WebP reader, so without this every WebP upload (a common phone format)
+		     failed as PHOTO_UPLOAD_CORRUPT. Pure-Java, auto-registers via ServiceLoader. -->
+		<dependency>
+			<groupId>com.twelvemonkeys.imageio</groupId>
+			<artifactId>imageio-webp</artifactId>
+			<version>3.12.0</version>
+		</dependency>
+
 	</dependencies>
 
 	<dependencyManagement>

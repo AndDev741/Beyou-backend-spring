@@ -12,7 +12,7 @@ public record UserEditDTO(
     @Pattern(regexp = ".*\\S.*\\S.*", message = "Name require a minimum of 2 characters")
     String name,
     @Size(max = 2048, message = "Photo URL is too long")
-    @Pattern(regexp = "(?i)^(?:$|https?://.+)", message = "Photo URL is invalid")
+    @Pattern(regexp = "(?i)^(?:$|https?://.+|/api/v1/user/photo/.+)", message = "Photo URL is invalid")
     String photo,
     @Size(max = 256, message = "Phrase is too long")
     String phrase,

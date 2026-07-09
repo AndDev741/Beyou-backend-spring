@@ -59,6 +59,16 @@ public class RateLimitConfig {
                 .build();
     }
 
+    /** Public, unauthenticated GET /user/photo/** — per-IP so anonymous callers can't flood disk reads. */
+    public static Bucket createPhotoBucket() {
+        return Bucket.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(120)
+                        .refillGreedy(120, Duration.ofMinutes(1))
+                        .build())
+                .build();
+    }
+
     public static Bucket createDocsBucket() {
         return Bucket.builder()
                 .addLimit(Bandwidth.builder()
