@@ -50,8 +50,12 @@ spring:
             enable: true
   servlet:
     multipart:
-      max-file-size: 5MB
-      max-request-size: 5MB
+      # Slightly above the service-level 5MB check so a 5-6MB upload reaches
+      # PhotoStorageService and gets the friendly PHOTO_UPLOAD_TOO_LARGE message
+      # (with the actual size); anything larger is rejected at the container with
+      # the same error key via GlobalExceptionHandler.
+      max-file-size: 6MB
+      max-request-size: 6MB
 
 app:
   upload-dir: ${UPLOAD_DIR:./uploads}

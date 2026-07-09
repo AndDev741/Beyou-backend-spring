@@ -58,6 +58,14 @@ class PhotoStorageServiceTest {
         return baos.toByteArray();
     }
 
+    /** Small PNG WITH an alpha channel — the JDK JPEG writer silently fails on these unless flattened. */
+    private byte[] createTransparentPng() throws IOException {
+        BufferedImage img = new BufferedImage(120, 120, BufferedImage.TYPE_INT_ARGB);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(img, "png", baos);
+        return baos.toByteArray();
+    }
+
     // ponytail: MockMultipartFile from Spring test; no custom stub needed
     private org.springframework.mock.web.MockMultipartFile mockFile(String name, byte[] content, String contentType) {
         return new org.springframework.mock.web.MockMultipartFile(name, name, contentType, content);
@@ -140,6 +148,22 @@ class PhotoStorageServiceTest {
             BufferedImage result = ImageIO.read(saved.toFile());
             assertEquals(100, result.getWidth());
             assertEquals(100, result.getHeight());
+        }
+
+        @Test
+        @DisplayName("stores a small transparent PNG as a non-empty, readable JPEG (alpha flattened)")
+        void flattensTransparentPng() throws IOException {
+            var file = mockFile("avatar.png", createTransparentPng(), "image/png");
+
+            service.store(userId, file);
+
+            Path saved = service.getPath(userId);
+            assertNotNull(saved);
+            assertTrue(Files.size(saved) > 0, "flattened JPEG must not be a 0-byte file");
+            BufferedImage result = ImageIO.read(saved.toFile());
+            assertNotNull(result, "stored file must be a decodable JPEG");
+            assertEquals(120, result.getWidth());
+            assertEquals(120, result.getHeight());
         }
     }
 

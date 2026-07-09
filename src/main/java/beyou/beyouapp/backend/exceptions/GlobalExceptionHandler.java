@@ -13,6 +13,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -86,6 +87,15 @@ public class GlobalExceptionHandler {
         ApiErrorResponse response = new ApiErrorResponse(ErrorKey.AI_GENERATION_FAILED.name(),
                 "AI generation is unavailable right now, try again later", null);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex){
+        // Container-level multipart limit exceeded (larger than the service's own
+        // 5MB check can report). Map to the same key/message contract the client expects.
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.PHOTO_UPLOAD_TOO_LARGE.name(),
+                "Photo must be under 5MB", null);
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

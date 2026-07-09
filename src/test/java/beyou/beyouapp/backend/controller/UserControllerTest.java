@@ -141,6 +141,22 @@ public class UserControllerTest extends AbstractIntegrationTest {
             .andExpect(jsonPath("$.details.photo").exists());
     }
 
+    @Test
+    void shouldReturnBadRequestWhenPhotoUrlHasUnsafeScheme() throws Exception {
+        UserEditDTO dto = new UserEditDTO(
+            null, "javascript:alert(1)",
+            null, null, null, null,
+            null, null, null, null, null
+        );
+
+        mockMvc.perform(put("/user")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+            .andExpect(jsonPath("$.details.photo").exists());
+    }
+
     //Exceptions
 
         // @Test
