@@ -48,7 +48,12 @@ public class PhotoStorageService {
         try {
             Files.createDirectories(this.uploadDir);
         } catch (IOException e) {
-            throw new RuntimeException("Could not create upload directory: " + this.uploadDir, e);
+            // Best-effort at startup. Photo upload is an optional feature — a
+            // non-writable dir must NOT take down the whole application context
+            // (auth, routines, etc.). store() recreates the directory on the write
+            // path and surfaces a proper PHOTO_UPLOAD error if it genuinely can't.
+            log.warn("Could not pre-create upload directory {} at startup; will retry on first upload",
+                this.uploadDir, e);
         }
     }
 
