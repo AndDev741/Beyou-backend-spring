@@ -2,4 +2,11 @@
 -- URLs routinely exceed 255 characters (e.g. lh3.googleusercontent.com/...).
 -- Uploaded photos use the local /api/v1/user/photo endpoint and do not store
 -- a value in this column at all, but existing CDN URLs must fit.
+--
+-- Squawk lock-risk rules are ignored for this one statement on the same
+-- pre-production rationale documented in V2 (small/empty tables → the ACCESS
+-- EXCLUSIVE lock is instant, and widening a varchar is a catalog-only change
+-- with no table rewrite). Flyway wraps each migration in a transaction, so
+-- prefer-robust-stmts is moot here.
+-- squawk-ignore prefer-robust-stmts, changing-column-type, prefer-text-field
 ALTER TABLE users ALTER COLUMN perfil_photo TYPE VARCHAR(512);
