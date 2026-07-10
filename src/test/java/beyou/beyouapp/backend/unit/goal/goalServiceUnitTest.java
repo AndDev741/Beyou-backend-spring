@@ -38,6 +38,7 @@ import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.goal.GoalNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserRepository;
 import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDate;
@@ -61,6 +62,9 @@ public class goalServiceUnitTest {
 
     @Mock
     UserCacheEvictService userCacheEvictService;
+
+    @Mock
+    UserRepository userRepository;
 
     private GoalMapper goalMapper = new GoalMapper();
 
@@ -86,7 +90,7 @@ public class goalServiceUnitTest {
         goal.setUser(user);
 
         goalService = new GoalService(goalRepository, categoryService, goalMapper, xpCalculatorService,
-                refreshUiDtoBuilder, userCacheEvictService);
+                refreshUiDtoBuilder, userCacheEvictService, userRepository);
 
     }
 
@@ -139,10 +143,11 @@ public class goalServiceUnitTest {
                 GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
         Category cat = new Category();
         cat.setId(dto.categoriesId().get(0));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(categoryService.getCategory(dto.categoriesId().get(0), user.getId())).thenReturn(cat);
         when(goalRepository.save(any(Goal.class))).thenReturn(goal);
 
-        ResponseEntity<Map<String, String>> response = goalService.createGoal(dto, user);
+        ResponseEntity<Map<String, String>> response = goalService.createGoal(dto, userId);
 
         assertEquals(200, response.getStatusCode().value());
         Map<String, String> body = response.getBody();
@@ -157,11 +162,12 @@ public class goalServiceUnitTest {
                 List.of(UUID.randomUUID()), "motivation",
                 LocalDate.now(), LocalDate.now().plusDays(1),
                 GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(categoryService.getCategory(any(UUID.class), any(UUID.class))).thenReturn(new Category());
         doThrow(new RuntimeException()).when(goalRepository).save(any(Goal.class));
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> goalService.createGoal(dto, user));
+                () -> goalService.createGoal(dto, userId));
         assertEquals(ErrorKey.GOAL_CREATE_FAILED, exception.getErrorKey());
         assertEquals("Error trying to create goal", exception.getMessage());
     }

@@ -24,6 +24,7 @@ import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.goal.GoalNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,7 @@ public class GoalService {
     private final XpCalculatorService xpCalculatorService;
     private final RefreshUiDtoBuilder refreshUiDtoBuilder;
     private final UserCacheEvictService userCacheEvictService;
+    private final UserRepository userRepository;
 
     public Goal getGoal(UUID goalId) {
         return goalRepository.findById(goalId)
@@ -53,17 +55,20 @@ public class GoalService {
                 .toList();
     }
 
-    public ResponseEntity<Map<String, String>> createGoal(CreateGoalRequestDTO dto, User user) {
+    public ResponseEntity<Map<String, String>> createGoal(CreateGoalRequestDTO dto, UUID userId) {
         log.info("[LOG] Creating Goal with DTO => {}", dto);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User not found when trying to create a goal"));
+
         List<Category> categories = dto.categoriesId().stream()
                 .distinct()
-                .map(catId -> categoryService.getCategory(catId, user.getId()))
+                .map(catId -> categoryService.getCategory(catId, userId))
                 .toList();
 
         Goal goal = goalMapper.toEntity(dto, categories, user);
         try {
             goalRepository.save(goal);
-            userCacheEvictService.evictAllUserCaches(user.getId());
+            userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok(Map.of("success", "Goal created successfully"));
         } catch (Exception e) {
             throw new BusinessException(ErrorKey.GOAL_CREATE_FAILED, "Error trying to create goal");
