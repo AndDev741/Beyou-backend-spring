@@ -22,6 +22,8 @@ import lombok.extern.slf4j.Slf4j;
 public class ChatService {
 
     private static final String DEFAULT_TITLE = "New chat";
+    public static final int GLOBAL_CONTEXT_MAX = 2000;
+    public static final int CHAT_CONTEXT_MAX = 1000;
 
     private final ChatRepository chatRepository;
     private final UserRepository userRepository;
@@ -52,10 +54,37 @@ public class ChatService {
         return ChatResponseDTO.from(chatRepository.save(chat));
     }
 
-    /** Bump updatedAt so the chat list stays ordered by recent activity. */
-    public void touch(Chat chat) {
+    /**
+     * Bump updatedAt so the chat list stays ordered by recent activity.
+     * Reloads by id: the caller's Chat instance may be stale — a tool call
+     * (updateChatContext) can have re-saved the row mid-request, and saving
+     * the old detached entity would overwrite the fresh context.
+     */
+    public void touch(UUID chatId, UUID userId) {
+        Chat chat = getChat(chatId, userId);
         chat.setUpdatedAt(java.time.LocalDateTime.now());
         chatRepository.save(chat);
+    }
+
+    /** Overwrites the user's cross-chat agent memory (clamped to {@value #GLOBAL_CONTEXT_MAX} chars). */
+    public void updateGlobalContext(String context, UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User not found when trying to update global context"));
+        user.setUserContext(clamp(context, GLOBAL_CONTEXT_MAX));
+        userRepository.save(user);
+    }
+
+    /** Overwrites this chat's agent memory (clamped to {@value #CHAT_CONTEXT_MAX} chars). */
+    public void updateChatContext(String context, UUID chatId, UUID userId) {
+        Chat chat = getChat(chatId, userId);
+        chat.setUserContextInChat(clamp(context, CHAT_CONTEXT_MAX));
+        chatRepository.save(chat);
+    }
+
+    private String clamp(String text, int max) {
+        if (text == null) return null;
+        String trimmed = text.trim();
+        return trimmed.length() <= max ? trimmed : trimmed.substring(0, max);
     }
 
     @Transactional

@@ -43,6 +43,10 @@ public class Chat {
     @Column(nullable = false)
     private String title;
 
+    /** AI agent chat-scoped memory — rewritten by the model via updateChatContext. */
+    @Column(length = 1000)
+    private String userContextInChat;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 

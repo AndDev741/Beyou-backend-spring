@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
+import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
@@ -23,6 +24,15 @@ import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
+import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
+import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
+import beyou.beyouapp.backend.domain.routine.schedule.dto.ScheduleResponseDTO;
+import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
@@ -43,9 +53,19 @@ public class Tools {
     private TaskService taskService;
     @Autowired
     private GoalService goalService;
+    @Autowired
+    private ChatService chatService;
+    @Autowired
+    private DiaryRoutineService diaryRoutineService;
+    @Autowired
+    private ScheduleService scheduleService;
 
     private UUID userId(ToolContext toolContext) {
         return (UUID) toolContext.getContext().get("userId");
+    }
+
+    private UUID chatId(ToolContext toolContext) {
+        return (UUID) toolContext.getContext().get("chatId");
     }
 
     // Habits
@@ -172,5 +192,109 @@ public class Tools {
     GoalResponseDTO decreaseUserGoalValue(UUID goalId, ToolContext toolContext) {
         log.info("AI agent is decreasing goal {} for user: {}", goalId, userId(toolContext));
         return goalService.decreaseCurrentValue(goalId, userId(toolContext));
+    }
+
+    // Context memory
+    @Tool(description = "Remember stable user preferences across ALL chats (name, tone, language, "
+            + "standing goals). OVERWRITES the previous global context — always send the full compact "
+            + "summary, max 2000 characters. Never store secrets or sensitive data")
+    Map<String, String> updateGlobalContext(String context, ToolContext toolContext) {
+        log.info("AI agent is updating global context for user: {}", userId(toolContext));
+        chatService.updateGlobalContext(context, userId(toolContext));
+        return Map.of("success", "Global context updated");
+    }
+
+    @Tool(description = "Remember facts about THIS conversation only (task at hand, decisions made). "
+            + "OVERWRITES the previous chat context — always send the full compact summary, max 1000 "
+            + "characters. Never store secrets or sensitive data")
+    Map<String, String> updateChatContext(String context, ToolContext toolContext) {
+        log.info("AI agent is updating chat context for chat {} of user: {}",
+                chatId(toolContext), userId(toolContext));
+        chatService.updateChatContext(context, chatId(toolContext), userId(toolContext));
+        return Map.of("success", "Chat context updated");
+    }
+
+    // Routines
+    @Tool(description = "Get all user routines with their sections, habit groups and task groups "
+            + "(includes the group ids needed for check/skip and the schedule if any)")
+    List<DiaryRoutineResponseDTO> getUserRoutines(ToolContext toolContext) {
+        log.info("AI agent is using routines tool for user: {}", userId(toolContext));
+        return diaryRoutineService.getAllDiaryRoutines(userId(toolContext)).stream()
+                .limit(MAX_ITEMS_PER_TYPE)
+                .toList();
+    }
+
+    @Tool(description = "Get the routine scheduled for today, or null if none is scheduled")
+    DiaryRoutineResponseDTO getTodayRoutine(ToolContext toolContext) {
+        log.info("AI agent is using today-routine tool for user: {}", userId(toolContext));
+        return diaryRoutineService.getTodayRoutineScheduled(userId(toolContext));
+    }
+
+    @Tool(description = "Create a new routine. Sections need name, iconId and HH:mm start/end times; "
+            + "habitGroup/taskGroup items reference existing habitId/taskId and their times must be "
+            + "inside the section time window")
+    DiaryRoutineResponseDTO createUserRoutine(DiaryRoutineRequestDTO routine, ToolContext toolContext) {
+        log.info("AI agent is creating a routine for user: {}", userId(toolContext));
+        return diaryRoutineService.createDiaryRoutine(routine, userId(toolContext));
+    }
+
+    @Tool(description = "Edit an existing routine by its id. The structure REPLACES the current one: "
+            + "send the complete routine (all sections and items), fetched first via getUserRoutines")
+    DiaryRoutineResponseDTO editUserRoutine(UUID routineId, DiaryRoutineRequestDTO routine, ToolContext toolContext) {
+        log.info("AI agent is editing routine {} for user: {}", routineId, userId(toolContext));
+        return diaryRoutineService.updateDiaryRoutine(routineId, routine, userId(toolContext));
+    }
+
+    @Tool(description = "Delete a user routine by its id (also removes its snapshots and schedule)")
+    Map<String, String> deleteUserRoutine(UUID routineId, ToolContext toolContext) {
+        log.info("AI agent is deleting routine {} for user: {}", routineId, userId(toolContext));
+        diaryRoutineService.deleteDiaryRoutine(routineId, userId(toolContext));
+        return Map.of("success", "Routine deleted successfully");
+    }
+
+    // Schedules
+    @Tool(description = "Get all routine schedules (which routine runs on which week days)")
+    List<ScheduleResponseDTO> getUserSchedules(ToolContext toolContext) {
+        log.info("AI agent is using schedules tool for user: {}", userId(toolContext));
+        return scheduleService.findAll(userId(toolContext));
+    }
+
+    @Tool(description = "Schedule a routine on week days (MONDAY..SUNDAY). A day can only have one "
+            + "routine — scheduling over an already-taken day moves that day to this routine")
+    ScheduleResponseDTO createUserSchedule(CreateScheduleDTO schedule, ToolContext toolContext) {
+        log.info("AI agent is creating a schedule for user: {}", userId(toolContext));
+        return ScheduleResponseDTO.from(scheduleService.create(schedule, userId(toolContext)));
+    }
+
+    @Tool(description = "Update a schedule's week days by scheduleId")
+    ScheduleResponseDTO updateUserSchedule(UpdateScheduleDTO schedule, ToolContext toolContext) {
+        log.info("AI agent is updating schedule {} for user: {}", schedule.scheduleId(), userId(toolContext));
+        return ScheduleResponseDTO.from(scheduleService.update(schedule, userId(toolContext)));
+    }
+
+    @Tool(description = "Delete a schedule by its id (the routine stays, just unscheduled)")
+    Map<String, String> deleteUserSchedule(UUID scheduleId, ToolContext toolContext) {
+        log.info("AI agent is deleting schedule {} for user: {}", scheduleId, userId(toolContext));
+        scheduleService.delete(scheduleId, userId(toolContext));
+        return Map.of("success", "Schedule deleted successfully");
+    }
+
+    // Routine check-in
+    @Tool(description = "Toggle done/not-done for ONE routine item on a date. Send routineId, the date "
+            + "(YYYY-MM-DD, usually today) and EITHER habitGroupDTO {habitGroupId, startTime} OR "
+            + "taskGroupDTO {taskGroupId, startTime} — group ids come from the routine structure, NOT "
+            + "habit/task ids. Checking awards XP: only call on explicit user request")
+    RefreshUiDTO checkRoutineItem(CheckGroupRequestDTO checkRequest, ToolContext toolContext) {
+        log.info("AI agent is checking a routine item on routine {} for user: {}",
+                checkRequest.routineId(), userId(toolContext));
+        return diaryRoutineService.checkAndUncheckGroup(checkRequest, userId(toolContext));
+    }
+
+    @Tool(description = "Skip or unskip ONE routine item on a date (skipped items don't hurt the "
+            + "streak). Same shape as checkRoutineItem plus skip=true|false")
+    RefreshUiDTO skipRoutineItem(SkipGroupRequestDTO skipRequest, ToolContext toolContext) {
+        log.info("AI agent is skipping a routine item on routine {} for user: {}",
+                skipRequest.routineId(), userId(toolContext));
+        return diaryRoutineService.skipOrUnskipGroup(skipRequest, userId(toolContext));
     }
 }

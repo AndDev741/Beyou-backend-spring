@@ -131,14 +131,54 @@ public class ChatServiceUnitTest {
     }
 
     @Test
-    void shouldBumpUpdatedAtOnTouch() {
+    void shouldBumpUpdatedAtOnTouch_reloadingById() {
         LocalDateTime before = chat.getUpdatedAt();
+        when(chatRepository.findById(chatId)).thenReturn(Optional.of(chat));
 
-        chatService.touch(chat);
+        chatService.touch(chatId, userId);
 
         assertNotNull(chat.getUpdatedAt());
         assertEquals(true, chat.getUpdatedAt().isAfter(before));
         verify(chatRepository).save(chat);
+    }
+
+    @Test
+    void shouldUpdateGlobalContextClampedToMax() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        chatService.updateGlobalContext("x".repeat(5000), userId);
+
+        assertEquals(ChatService.GLOBAL_CONTEXT_MAX, user.getUserContext().length());
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void shouldThrowUserNotFound_whenUpdatingGlobalContextForUnknownUser() {
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        assertThrows(UserNotFound.class, () -> chatService.updateGlobalContext("ctx", userId));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void shouldUpdateChatContextClampedToMax() {
+        when(chatRepository.findById(chatId)).thenReturn(Optional.of(chat));
+
+        chatService.updateChatContext("y".repeat(5000), chatId, userId);
+
+        assertEquals(ChatService.CHAT_CONTEXT_MAX, chat.getUserContextInChat().length());
+        verify(chatRepository).save(chat);
+    }
+
+    @Test
+    void shouldNotUpdateChatContextOfAnotherUser() {
+        when(chatRepository.findById(chatId)).thenReturn(Optional.of(chat));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> chatService.updateChatContext("ctx", chatId, UUID.randomUUID()));
+
+        assertEquals(ErrorKey.CHAT_NOT_OWNED, exception.getErrorKey());
+        verify(chatRepository, never()).save(any(Chat.class));
     }
 
     @Test

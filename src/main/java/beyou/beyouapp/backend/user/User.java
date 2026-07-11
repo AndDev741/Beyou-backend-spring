@@ -103,6 +103,10 @@ public class User implements UserDetails {
 
     private String languageInUse;
 
+    /** AI agent global memory — compact profile the model rewrites via updateGlobalContext. */
+    @Column(length = 2000)
+    private String userContext;
+
     @Enumerated(EnumType.STRING)
     private ConstanceConfiguration constanceConfiguration;
 
