@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.aiAgent;
 
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -9,6 +10,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
+import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ import beyou.beyouapp.backend.domain.aiAgent.chat.Chat;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatMessageDTO;
 import beyou.beyouapp.backend.user.User;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @Service
 public class AiAgentService {
@@ -25,17 +28,22 @@ public class AiAgentService {
     private final ChatClient chatClient;
     private final ChatMemory chatMemory;
     private final ChatService chatService;
-    private final Tools tools;
+    private final Object[] toolCallbacks;
     private final Resource systemTemplate;
 
     public AiAgentService(DeepSeekChatModel chatModel,
             ChatMemory chatMemory,
             ChatService chatService,
             Tools tools,
+            MeterRegistry meterRegistry,
             @Value("classpath:/prompts/aiAgent.st") Resource systemTemplate) {
         this.chatMemory = chatMemory;
         this.chatService = chatService;
-        this.tools = tools;
+        // Metered wrappers feed the beyou.ai.tool timer on the Grafana AI dashboard.
+        // tools(Object...) dispatches ToolCallback instances directly (2.0 unified API).
+        this.toolCallbacks = Arrays.stream(ToolCallbacks.from(tools))
+                .map(callback -> (Object) new MeteredToolCallback(callback, meterRegistry))
+                .toArray();
         this.systemTemplate = systemTemplate;
         this.chatClient = ChatClient.builder(chatModel)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
@@ -55,7 +63,7 @@ public class AiAgentService {
                         .param("today", LocalDate.now().toString()))
                 .user(userInput)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chat.getId().toString()))
-                .tools(tools)
+                .tools(toolCallbacks)
                 .toolContext(Map.of("userId", userId, "chatId", chatId))
                 .call()
                 .content();
