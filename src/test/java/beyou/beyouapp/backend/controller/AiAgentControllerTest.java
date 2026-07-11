@@ -104,7 +104,7 @@ public class AiAgentControllerTest extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"userInput\": \"Hello\"}"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Hi! How can I help?"));
+                .andExpect(jsonPath("$.reply").value("Hi! How can I help?"));
     }
 
     @Test

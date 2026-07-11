@@ -46,10 +46,10 @@ public class AiAgentController {
     }
 
     @PostMapping("/chats/{chatId}")
-    public String processMessage(@PathVariable UUID chatId, @RequestBody @Valid AiAgentRequest request) {
+    public Map<String, String> processMessage(@PathVariable UUID chatId, @RequestBody @Valid AiAgentRequest request) {
         UUID userId = authenticatedUser.getAuthenticatedUser().getId();
         log.info("Receiving agent message on chat {} for user {}", chatId, userId);
-        return agentService.processMessage(chatId, request.userInput(), userId);
+        return Map.of("reply", agentService.processMessage(chatId, request.userInput(), userId));
     }
 
     @GetMapping("/chats/{chatId}/messages")
