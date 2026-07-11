@@ -11,7 +11,6 @@ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.support.ToolCallbacks;
-import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -29,7 +28,7 @@ public class AiAgentService {
     private final ChatClient chatClient;
     private final ChatMemory chatMemory;
     private final ChatService chatService;
-    private final List<ToolCallback> toolCallbacks;
+    private final Object[] toolCallbacks;
     private final Resource systemTemplate;
 
     public AiAgentService(DeepSeekChatModel chatModel,
@@ -41,9 +40,10 @@ public class AiAgentService {
         this.chatMemory = chatMemory;
         this.chatService = chatService;
         // Metered wrappers feed the beyou.ai.tool timer on the Grafana AI dashboard.
+        // tools(Object...) dispatches ToolCallback instances directly (2.0 unified API).
         this.toolCallbacks = Arrays.stream(ToolCallbacks.from(tools))
-                .map(callback -> (ToolCallback) new MeteredToolCallback(callback, meterRegistry))
-                .toList();
+                .map(callback -> (Object) new MeteredToolCallback(callback, meterRegistry))
+                .toArray();
         this.systemTemplate = systemTemplate;
         this.chatClient = ChatClient.builder(chatModel)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
@@ -63,7 +63,7 @@ public class AiAgentService {
                         .param("today", LocalDate.now().toString()))
                 .user(userInput)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chat.getId().toString()))
-                .toolCallbacks(toolCallbacks)
+                .tools(toolCallbacks)
                 .toolContext(Map.of("userId", userId, "chatId", chatId))
                 .call()
                 .content();
