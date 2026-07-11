@@ -17,6 +17,9 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutin
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.HabitGroupDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
+import beyou.beyouapp.backend.domain.task.TaskService;
+import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +44,7 @@ class DiaryRoutineUpdateOrphanIT extends AbstractIntegrationTest {
     @Autowired private HabitRepository habitRepository;
     @Autowired private CategoryService categoryService;
     @Autowired private HabitService habitService;
+    @Autowired private TaskService taskService;
     @Autowired private UserRepository userRepository;
     @Autowired private XpByLevelRepository xpByLevelRepository;
     @Autowired private TransactionTemplate transactionTemplate;
@@ -98,5 +102,40 @@ class DiaryRoutineUpdateOrphanIT extends AbstractIntegrationTest {
 
         assertTrue(habitRepository.findById(habitId).isPresent(),
                 "habit survives — only its routine membership was deleted");
+    }
+
+    /**
+     * Regression: adding a NEW task group on update used to NPE in
+     * toResponse (TaskGroup.taskGroupChecks was left null by the
+     * mergeTaskGroups create path) — surfaced by the AI agent, but any
+     * PUT /routine adding a task hit it, rolling the whole edit back.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void updateAddingNewTaskGroupSucceedsWithEmptyChecks() {
+        RoutineSectionRequestDTO section = new RoutineSectionRequestDTO(
+                null, "A", "ic", LocalTime.of(6, 0), LocalTime.of(7, 0), List.of(), List.of(), false);
+        DiaryRoutineResponseDTO created = diaryRoutineService.createDiaryRoutine(
+                new DiaryRoutineRequestDTO("R", "", List.of(section)), user);
+        UUID routineId = created.id();
+        UUID sectionId = created.routineSections().get(0).id();
+
+        UUID taskId = taskService.createTaskEntity(
+                new CreateTaskRequestDTO("Estudar", null, "ic", 3, 3, List.of(), false),
+                user.getId()).getId();
+
+        RoutineSectionRequestDTO withTask = new RoutineSectionRequestDTO(
+                sectionId, "A", "ic", LocalTime.of(6, 0), LocalTime.of(7, 0),
+                List.of(new TaskGroupDTO(null, taskId, LocalTime.of(6, 0), LocalTime.of(6, 30), null)),
+                List.of(), false);
+
+        DiaryRoutineResponseDTO updated = diaryRoutineService.updateDiaryRoutine(routineId,
+                new DiaryRoutineRequestDTO("R", "", List.of(withTask)), user.getId());
+
+        var taskGroups = updated.routineSections().get(0).taskGroup();
+        assertEquals(1, taskGroups.size());
+        assertEquals(taskId, taskGroups.get(0).taskId());
+        assertTrue(taskGroups.get(0).taskGroupChecks().isEmpty(),
+                "a freshly added group has an empty (never null) check list");
     }
 }

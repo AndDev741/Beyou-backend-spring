@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.hibernate.annotations.BatchSize;
@@ -29,5 +30,5 @@ public class TaskGroup extends ItemGroup {
     
     @OneToMany(mappedBy = "taskGroup", cascade = CascadeType.ALL, orphanRemoval = false)
     @BatchSize(size = 50)
-    private List<TaskGroupCheck> taskGroupChecks;
+    private List<TaskGroupCheck> taskGroupChecks = new ArrayList<>();
 }
