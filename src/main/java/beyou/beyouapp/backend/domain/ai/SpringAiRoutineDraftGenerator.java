@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.ai;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.converter.BeanOutputConverter;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.Resource;
@@ -14,8 +15,9 @@ import beyou.beyouapp.backend.domain.ai.dto.RoutineDraftDTO;
 import beyou.beyouapp.backend.exceptions.ai.AiGenerationException;
 
 /**
- * ChatClient-based generator. Provider-agnostic: which model answers is purely
- * a function of which spring-ai starter + properties are on the classpath.
+ * ChatClient-based generator pinned to OpenAI (the agent chat runs on DeepSeek;
+ * with two providers on the classpath each consumer picks its model explicitly
+ * and the auto-configured ChatClient.Builder is disabled).
  * Structured output via BeanOutputConverter ({format} placeholder in the
  * system template carries the JSON schema instructions).
  */
@@ -32,9 +34,9 @@ public class SpringAiRoutineDraftGenerator implements RoutineDraftGenerator {
     private final BeanOutputConverter<RoutineDraftDTO> outputConverter =
             new BeanOutputConverter<>(RoutineDraftDTO.class);
 
-    public SpringAiRoutineDraftGenerator(ChatClient.Builder chatClientBuilder,
+    public SpringAiRoutineDraftGenerator(OpenAiChatModel chatModel,
             @Value("classpath:/prompts/routine-generation.st") Resource systemTemplate) {
-        this.chatClient = chatClientBuilder.build();
+        this.chatClient = ChatClient.builder(chatModel).build();
         this.systemTemplate = systemTemplate;
     }
 

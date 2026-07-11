@@ -22,7 +22,9 @@ import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
+import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -55,6 +57,7 @@ public class DiaryRoutineService {
     private final HabitService habitService;
     private final TaskService taskService;
     private final RoutineSnapshotRepository routineSnapshotRepository;
+    private final UserRepository userRepository;
 
     @Cacheable(cacheNames = "routine", key = "#userId + '_' + #id")
     @Transactional(readOnly = true)
@@ -103,6 +106,14 @@ public class DiaryRoutineService {
     public List<DiaryRoutine> getAllDiaryRoutinesModels(UUID userId) {
         return diaryRoutineRepository.findAllByUserId(userId).stream()
                 .collect(Collectors.toList());
+    }
+
+    /** Overload for callers that only carry the id (e.g. AI agent tools). */
+    @Transactional
+    public DiaryRoutineResponseDTO createDiaryRoutine(DiaryRoutineRequestDTO dto, UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User not found when trying to create a routine"));
+        return createDiaryRoutine(dto, user);
     }
 
     @Transactional

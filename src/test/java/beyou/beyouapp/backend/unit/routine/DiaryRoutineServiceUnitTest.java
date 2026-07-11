@@ -26,6 +26,7 @@ import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.routine.DiaryRoutineNotFoundException;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -68,6 +69,9 @@ class DiaryRoutineServiceUnitTest {
 
     @Mock
     private RoutineSnapshotRepository routineSnapshotRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     private DiaryRoutineMapper mapper;
 
@@ -159,7 +163,7 @@ class DiaryRoutineServiceUnitTest {
         section.setRoutine(diaryRoutine);
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(section)));
 
-        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, mapper, checkItemService, userCacheEvictService, habitService, taskService, routineSnapshotRepository);
+        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, mapper, checkItemService, userCacheEvictService, habitService, taskService, routineSnapshotRepository, userRepository);
     }
 
     @Test

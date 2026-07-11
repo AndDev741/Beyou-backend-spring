@@ -49,7 +49,7 @@ class AiRoutineConfirmRollbackIT extends AbstractIntegrationTest {
 
     @Test
     void rollsBackCategoriesAndHabitsWhenRoutineCreationFails() {
-        when(diaryRoutineService.createDiaryRoutine(any(), any()))
+        when(diaryRoutineService.createDiaryRoutine(any(), any(User.class)))
                 .thenThrow(new RuntimeException("simulated failure at the last step"));
 
         RoutineDraftDTO draft = new RoutineDraftDTO(

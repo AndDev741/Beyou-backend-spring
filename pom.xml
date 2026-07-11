@@ -29,15 +29,8 @@
 	</scm>
 	<properties>
 		<java.version>25</java.version>
-		<!-- Override Spring Boot 3.5.14 BOM (manages 42.7.10) to patch CVE-2026-42198 (CVSS 7.5) -->
 		<postgresql.version>42.7.11</postgresql.version>
-		<!-- Override Spring Boot 3.5.14 BOM (manages 2.24.3) to patch CVE-2026-34479 (CVSS v3.1 7.5).
-		     Vulnerable code lives in the log4j-1.2-api bridge (Log4j1XmlLayout) + log4j-core,
-		     neither on our classpath (we only pull log4j-api + log4j-to-slf4j -> Logback),
-		     so this is a false positive; bumping past the fixed version (2.25.4) clears the gate. -->
 		<log4j2.version>2.25.4</log4j2.version>
-		<!-- Spring AI 2.0.x is the Boot 4 / Framework 7 line. RC1 is the newest on
-		     Maven Central as of 2026-06-06 — bump to GA when released. -->
 		<spring-ai.version>2.0.0</spring-ai.version>
 	</properties>
 	<dependencies>
@@ -45,11 +38,6 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
 		</dependency>
-		<!-- Flyway owns the schema (versions managed by the Boot BOM). Boot 4
-		     modularized autoconfiguration: spring-boot-flyway carries the
-		     FlywayAutoConfiguration that used to live in spring-boot-autoconfigure.
-		     The flyway-database-postgresql module is mandatory since the Flyway 10
-		     module split. -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-flyway</artifactId>
@@ -62,7 +50,6 @@
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
-		<!-- Testcontainers for integration tests (replaces H2) -->
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>testcontainers-postgresql</artifactId>
@@ -161,14 +148,21 @@
 			<version>8.10.1</version>
 		</dependency>
 
-		<!-- AI routine generation (provider-agnostic ChatClient; swap starter to change provider) -->
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-starter-model-openai</artifactId>
 		</dependency>
 
-		<!-- Google ID token verification (mobile Google sign-in: verifies the ID token
-		     from expo-auth-session against Google's public keys; offline cert caching) -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-model-deepseek</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>com.google.api-client</groupId>
 			<artifactId>google-api-client</artifactId>
