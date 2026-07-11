@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.aiAgent;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -238,11 +239,39 @@ public class Tools {
         return diaryRoutineService.createDiaryRoutine(routine, userId(toolContext));
     }
 
-    @Tool(description = "Edit an existing routine by its id. The structure REPLACES the current one: "
-            + "send the complete routine (all sections and items), fetched first via getUserRoutines")
+    @Tool(description = "FULL RESTRUCTURE of a routine: the structure REPLACES the current one — any "
+            + "section or item you omit is DELETED. Send the complete routine fetched first via "
+            + "getUserRoutines. For adding or removing a single item prefer addTaskToRoutineSection / "
+            + "addHabitToRoutineSection / removeRoutineItem")
     DiaryRoutineResponseDTO editUserRoutine(UUID routineId, DiaryRoutineRequestDTO routine, ToolContext toolContext) {
         log.info("AI agent is editing routine {} for user: {}", routineId, userId(toolContext));
         return diaryRoutineService.updateDiaryRoutine(routineId, routine, userId(toolContext));
+    }
+
+    @Tool(description = "Add ONE existing task to a routine section. Times are HH:mm inside the "
+            + "section window. routineId/sectionId come from getUserRoutines, taskId from getUserTasks")
+    DiaryRoutineResponseDTO addTaskToRoutineSection(UUID routineId, UUID sectionId, UUID taskId,
+            String startTime, String endTime, ToolContext toolContext) {
+        log.info("AI agent is adding task {} to routine {} for user: {}", taskId, routineId, userId(toolContext));
+        return diaryRoutineService.addTaskToSection(routineId, sectionId, taskId,
+                LocalTime.parse(startTime), LocalTime.parse(endTime), userId(toolContext));
+    }
+
+    @Tool(description = "Add ONE existing habit to a routine section. Times are HH:mm inside the "
+            + "section window. routineId/sectionId come from getUserRoutines, habitId from getUserHabits")
+    DiaryRoutineResponseDTO addHabitToRoutineSection(UUID routineId, UUID sectionId, UUID habitId,
+            String startTime, String endTime, ToolContext toolContext) {
+        log.info("AI agent is adding habit {} to routine {} for user: {}", habitId, routineId, userId(toolContext));
+        return diaryRoutineService.addHabitToSection(routineId, sectionId, habitId,
+                LocalTime.parse(startTime), LocalTime.parse(endTime), userId(toolContext));
+    }
+
+    @Tool(description = "Remove ONE item from a routine by its GROUP id (habitGroup/taskGroup id from "
+            + "the routine structure, NOT the habit/task id). The habit/task itself is kept. Confirm "
+            + "with the user before removing")
+    DiaryRoutineResponseDTO removeRoutineItem(UUID routineId, UUID groupId, ToolContext toolContext) {
+        log.info("AI agent is removing group {} from routine {} for user: {}", groupId, routineId, userId(toolContext));
+        return diaryRoutineService.removeItemFromRoutine(routineId, groupId, userId(toolContext));
     }
 
     @Tool(description = "Delete a user routine by its id (also removes its snapshots and schedule)")

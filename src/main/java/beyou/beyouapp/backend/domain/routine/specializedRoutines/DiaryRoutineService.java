@@ -317,6 +317,79 @@ public class DiaryRoutineService {
 
     }
 
+    // ── Targeted single-item edits ────────────────────────────────────────
+    // "Patch-shaped" operations for the AI agent tools: full-replace via
+    // updateDiaryRoutine forces the model to echo the whole routine tree
+    // perfectly (any omitted group is silently REMOVED by the merge). These
+    // mutate exactly one item and reuse the same time-window validation.
+
+    @Transactional
+    public DiaryRoutineResponseDTO addTaskToSection(UUID routineId, UUID sectionId, UUID taskId,
+            LocalTime startTime, LocalTime endTime, UUID userId) {
+        DiaryRoutine routine = getDiaryRoutineModelById(routineId, userId);
+        RoutineSection section = findSection(routine, sectionId);
+        validateItemTimeBounds(sectionView(section), startTime, endTime, "task");
+
+        TaskGroup group = new TaskGroup();
+        group.setTask(getOwnedTask(taskId, userId));
+        group.setStartTime(startTime);
+        group.setEndTime(endTime);
+        group.setRoutineSection(section);
+        section.getTaskGroups().add(group);
+
+        userCacheEvictService.evictAllUserCaches(userId);
+        return mapper.toResponse(routine);
+    }
+
+    @Transactional
+    public DiaryRoutineResponseDTO addHabitToSection(UUID routineId, UUID sectionId, UUID habitId,
+            LocalTime startTime, LocalTime endTime, UUID userId) {
+        DiaryRoutine routine = getDiaryRoutineModelById(routineId, userId);
+        RoutineSection section = findSection(routine, sectionId);
+        validateItemTimeBounds(sectionView(section), startTime, endTime, "habit");
+
+        HabitGroup group = new HabitGroup();
+        group.setHabit(getOwnedHabit(habitId, userId));
+        group.setStartTime(startTime);
+        group.setEndTime(endTime);
+        group.setRoutineSection(section);
+        section.getHabitGroups().add(group);
+
+        userCacheEvictService.evictAllUserCaches(userId);
+        return mapper.toResponse(routine);
+    }
+
+    /** Removes ONE habit/task group by its group id (orphanRemoval deletes the row + checks). */
+    @Transactional
+    public DiaryRoutineResponseDTO removeItemFromRoutine(UUID routineId, UUID groupId, UUID userId) {
+        DiaryRoutine routine = getDiaryRoutineModelById(routineId, userId);
+
+        boolean removed = routine.getRoutineSections().stream().anyMatch(section ->
+                section.getHabitGroups().removeIf(g -> groupId.equals(g.getId()))
+                        || section.getTaskGroups().removeIf(g -> groupId.equals(g.getId())));
+        if (!removed) {
+            throw new BusinessException(ErrorKey.ROUTINE_ITEM_NOT_FOUND,
+                    "No habit or task group with this id in the routine");
+        }
+
+        userCacheEvictService.evictAllUserCaches(userId);
+        return mapper.toResponse(routine);
+    }
+
+    private RoutineSection findSection(DiaryRoutine routine, UUID sectionId) {
+        return routine.getRoutineSections().stream()
+                .filter(section -> section.getId().equals(sectionId))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorKey.ROUTINE_SECTION_NOT_FOUND,
+                        "Section not found in this routine"));
+    }
+
+    /** Read-only DTO view of a persisted section, just for the shared time validators. */
+    private RoutineSectionRequestDTO sectionView(RoutineSection section) {
+        return new RoutineSectionRequestDTO(section.getId(), section.getName(), section.getIconId(),
+                section.getStartTime(), section.getEndTime(), List.of(), List.of(), section.getFavorite());
+    }
+
     private void validateRequestDTO(DiaryRoutineRequestDTO dto) {
         if (dto.name() == null || dto.name().trim().isEmpty()) {
             throw new BusinessException(ErrorKey.ROUTINE_NAME_REQUIRED, "DiaryRoutine name cannot be null or empty");
