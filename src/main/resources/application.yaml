@@ -37,6 +37,11 @@ spring:
           # structured JSON generation; use "minimal" if still slow.
           # (Note: these models reject custom temperature — do not re-add it.)
           reasoning-effort: ${AI_REASONING_EFFORT:low}
+    chat:
+      memory:
+        repository:
+          jdbc:
+            initialize-schema: never
   mail:
     host: ${MAIL_HOST}
     port: ${MAIL_PORT}
