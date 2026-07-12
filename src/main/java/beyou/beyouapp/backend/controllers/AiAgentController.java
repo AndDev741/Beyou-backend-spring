@@ -17,10 +17,10 @@ import beyou.beyouapp.backend.domain.aiAgent.AiAgentService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatMessageDTO;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatResponseDTO;
+import beyou.beyouapp.backend.domain.aiAgent.dto.CreateChatRequest;
+import beyou.beyouapp.backend.domain.aiAgent.dto.AiAgentRequest;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -66,11 +66,4 @@ public class AiAgentController {
         return ResponseEntity.ok(Map.of("success", "Chat deleted successfully"));
     }
 
-    /** currentPage: app route the user is on when sending (e.g. "/habits") — optional. */
-    public record AiAgentRequest(@NotBlank @Size(max = 4000) String userInput,
-            @Size(max = 200) String currentPage) {
-    }
-
-    public record CreateChatRequest(@Size(max = 255) String title) {
-    }
 }
