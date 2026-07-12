@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.aiAgent;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -37,6 +38,9 @@ import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
+import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserService;
+import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import lombok.extern.slf4j.Slf4j;
 
 @Component
@@ -59,6 +63,8 @@ public class Tools {
     private DiaryRoutineService diaryRoutineService;
     @Autowired
     private ScheduleService scheduleService;
+    @Autowired
+    private UserService userService;
 
     private UUID userId(ToolContext toolContext) {
         return (UUID) toolContext.getContext().get("userId");
@@ -238,11 +244,39 @@ public class Tools {
         return diaryRoutineService.createDiaryRoutine(routine, userId(toolContext));
     }
 
-    @Tool(description = "Edit an existing routine by its id. The structure REPLACES the current one: "
-            + "send the complete routine (all sections and items), fetched first via getUserRoutines")
+    @Tool(description = "FULL RESTRUCTURE of a routine: the structure REPLACES the current one — any "
+            + "section or item you omit is DELETED. Send the complete routine fetched first via "
+            + "getUserRoutines. For adding or removing a single item prefer addTaskToRoutineSection / "
+            + "addHabitToRoutineSection / removeRoutineItem")
     DiaryRoutineResponseDTO editUserRoutine(UUID routineId, DiaryRoutineRequestDTO routine, ToolContext toolContext) {
         log.info("AI agent is editing routine {} for user: {}", routineId, userId(toolContext));
         return diaryRoutineService.updateDiaryRoutine(routineId, routine, userId(toolContext));
+    }
+
+    @Tool(description = "Add ONE existing task to a routine section. Times are HH:mm inside the "
+            + "section window. routineId/sectionId come from getUserRoutines, taskId from getUserTasks")
+    DiaryRoutineResponseDTO addTaskToRoutineSection(UUID routineId, UUID sectionId, UUID taskId,
+            String startTime, String endTime, ToolContext toolContext) {
+        log.info("AI agent is adding task {} to routine {} for user: {}", taskId, routineId, userId(toolContext));
+        return diaryRoutineService.addTaskToSection(routineId, sectionId, taskId,
+                LocalTime.parse(startTime), LocalTime.parse(endTime), userId(toolContext));
+    }
+
+    @Tool(description = "Add ONE existing habit to a routine section. Times are HH:mm inside the "
+            + "section window. routineId/sectionId come from getUserRoutines, habitId from getUserHabits")
+    DiaryRoutineResponseDTO addHabitToRoutineSection(UUID routineId, UUID sectionId, UUID habitId,
+            String startTime, String endTime, ToolContext toolContext) {
+        log.info("AI agent is adding habit {} to routine {} for user: {}", habitId, routineId, userId(toolContext));
+        return diaryRoutineService.addHabitToSection(routineId, sectionId, habitId,
+                LocalTime.parse(startTime), LocalTime.parse(endTime), userId(toolContext));
+    }
+
+    @Tool(description = "Remove ONE item from a routine by its GROUP id (habitGroup/taskGroup id from "
+            + "the routine structure, NOT the habit/task id). The habit/task itself is kept. Confirm "
+            + "with the user before removing")
+    DiaryRoutineResponseDTO removeRoutineItem(UUID routineId, UUID groupId, ToolContext toolContext) {
+        log.info("AI agent is removing group {} from routine {} for user: {}", groupId, routineId, userId(toolContext));
+        return diaryRoutineService.removeItemFromRoutine(routineId, groupId, userId(toolContext));
     }
 
     @Tool(description = "Delete a user routine by its id (also removes its snapshots and schedule)")
@@ -296,5 +330,48 @@ public class Tools {
         log.info("AI agent is skipping a routine item on routine {} for user: {}",
                 skipRequest.routineId(), userId(toolContext));
         return diaryRoutineService.skipOrUnskipGroup(skipRequest, userId(toolContext));
+    }
+
+    // User configuration
+    // Frontend-owned catalogs (packages/theme listOfThemes.ts, packages/state
+    // dashboard/widgets.ts) — same vendoring precedent as AiIconCatalog.
+    private static final List<String> AVAILABLE_THEMES = List.of(
+            "beYou", "beYouDark", "Sunset", "Amethyst", "Midnight",
+            "Cyberpunk", "Mocha", "Polar", "Late Latte");
+    private static final List<String> AVAILABLE_WIDGETS = List.of(
+            "worstArea", "constance", "betterArea", "dailyProgress",
+            "fastTips", "levelProgress", "categoryBalance");
+
+    @Tool(description = "Get the user's current configuration (name, profile phrase, theme, language, "
+            + "timezone, streak/constance mode, XP decay strategy, dashboard widgets) plus the valid "
+            + "options for theme and widgets")
+    Map<String, Object> getUserConfiguration(ToolContext toolContext) {
+        log.info("AI agent is reading configuration for user: {}", userId(toolContext));
+        User user = userService.findUserById(userId(toolContext));
+        Map<String, Object> current = new java.util.HashMap<>();
+        current.put("name", user.getName());
+        current.put("perfilPhrase", user.getPerfilPhrase());
+        current.put("perfilPhraseAuthor", user.getPerfilPhraseAuthor());
+        current.put("theme", user.getThemeInUse());
+        current.put("language", user.getLanguageInUse());
+        current.put("timezone", user.getTimezone());
+        current.put("constanceConfiguration", user.getConstanceConfiguration());
+        current.put("xpDecayStrategy", user.getXpDecayStrategy());
+        current.put("widgetsInUse", user.getWidgetsIdInUse());
+        return Map.of(
+                "currentConfiguration", current,
+                "availableThemes", AVAILABLE_THEMES,
+                "availableWidgets", AVAILABLE_WIDGETS,
+                "availableLanguages", List.of("en", "pt"));
+    }
+
+    @Tool(description = "Update the user's configuration. PATCH semantics: only send the fields to "
+            + "change, omit the rest. theme/widgetsId must come from getUserConfiguration's available "
+            + "options (widgetsId REPLACES the whole widget list, in display order); language is en|pt; "
+            + "timezone is an IANA zone id. Do not change name/photo unless explicitly asked")
+    Map<String, String> updateUserConfiguration(UserEditDTO configUpdate, ToolContext toolContext) {
+        log.info("AI agent is updating configuration for user: {}", userId(toolContext));
+        userService.editUser(configUpdate, userId(toolContext));
+        return Map.of("success", "Configuration updated");
     }
 }

@@ -50,7 +50,7 @@ public class AiAgentService {
                 .build();
     }
 
-    public String processMessage(UUID chatId, String userInput, UUID userId) {
+    public String processMessage(UUID chatId, String userInput, UUID userId, String currentPage) {
         Chat chat = chatService.getChat(chatId, userId);
         User user = chat.getUser();
 
@@ -60,6 +60,7 @@ public class AiAgentService {
                         .param("iconCatalog", AiIconCatalog.promptCatalog())
                         .param("userContext", orNone(user.getUserContext()))
                         .param("userChatContext", orNone(chat.getUserContextInChat()))
+                        .param("currentPage", orNone(currentPage))
                         .param("today", LocalDate.now().toString()))
                 .user(userInput)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chat.getId().toString()))

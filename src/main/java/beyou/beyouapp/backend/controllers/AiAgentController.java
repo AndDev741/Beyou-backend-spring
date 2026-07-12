@@ -17,10 +17,10 @@ import beyou.beyouapp.backend.domain.aiAgent.AiAgentService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatMessageDTO;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatResponseDTO;
+import beyou.beyouapp.backend.domain.aiAgent.dto.CreateChatRequest;
+import beyou.beyouapp.backend.domain.aiAgent.dto.AiAgentRequest;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -49,7 +49,8 @@ public class AiAgentController {
     public Map<String, String> processMessage(@PathVariable UUID chatId, @RequestBody @Valid AiAgentRequest request) {
         UUID userId = authenticatedUser.getAuthenticatedUser().getId();
         log.info("Receiving agent message on chat {} for user {}", chatId, userId);
-        return Map.of("reply", agentService.processMessage(chatId, request.userInput(), userId));
+        return Map.of("reply",
+                agentService.processMessage(chatId, request.userInput(), userId, request.currentPage()));
     }
 
     @GetMapping("/chats/{chatId}/messages")
@@ -65,9 +66,4 @@ public class AiAgentController {
         return ResponseEntity.ok(Map.of("success", "Chat deleted successfully"));
     }
 
-    public record AiAgentRequest(@NotBlank @Size(max = 4000) String userInput) {
-    }
-
-    public record CreateChatRequest(@Size(max = 255) String title) {
-    }
 }
