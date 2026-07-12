@@ -38,6 +38,9 @@ import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
+import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserService;
+import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import lombok.extern.slf4j.Slf4j;
 
 @Component
@@ -60,6 +63,8 @@ public class Tools {
     private DiaryRoutineService diaryRoutineService;
     @Autowired
     private ScheduleService scheduleService;
+    @Autowired
+    private UserService userService;
 
     private UUID userId(ToolContext toolContext) {
         return (UUID) toolContext.getContext().get("userId");
@@ -325,5 +330,48 @@ public class Tools {
         log.info("AI agent is skipping a routine item on routine {} for user: {}",
                 skipRequest.routineId(), userId(toolContext));
         return diaryRoutineService.skipOrUnskipGroup(skipRequest, userId(toolContext));
+    }
+
+    // User configuration
+    // Frontend-owned catalogs (packages/theme listOfThemes.ts, packages/state
+    // dashboard/widgets.ts) — same vendoring precedent as AiIconCatalog.
+    private static final List<String> AVAILABLE_THEMES = List.of(
+            "beYou", "beYouDark", "Sunset", "Amethyst", "Midnight",
+            "Cyberpunk", "Mocha", "Polar", "Late Latte");
+    private static final List<String> AVAILABLE_WIDGETS = List.of(
+            "worstArea", "constance", "betterArea", "dailyProgress",
+            "fastTips", "levelProgress", "categoryBalance");
+
+    @Tool(description = "Get the user's current configuration (name, profile phrase, theme, language, "
+            + "timezone, streak/constance mode, XP decay strategy, dashboard widgets) plus the valid "
+            + "options for theme and widgets")
+    Map<String, Object> getUserConfiguration(ToolContext toolContext) {
+        log.info("AI agent is reading configuration for user: {}", userId(toolContext));
+        User user = userService.findUserById(userId(toolContext));
+        Map<String, Object> current = new java.util.HashMap<>();
+        current.put("name", user.getName());
+        current.put("perfilPhrase", user.getPerfilPhrase());
+        current.put("perfilPhraseAuthor", user.getPerfilPhraseAuthor());
+        current.put("theme", user.getThemeInUse());
+        current.put("language", user.getLanguageInUse());
+        current.put("timezone", user.getTimezone());
+        current.put("constanceConfiguration", user.getConstanceConfiguration());
+        current.put("xpDecayStrategy", user.getXpDecayStrategy());
+        current.put("widgetsInUse", user.getWidgetsIdInUse());
+        return Map.of(
+                "currentConfiguration", current,
+                "availableThemes", AVAILABLE_THEMES,
+                "availableWidgets", AVAILABLE_WIDGETS,
+                "availableLanguages", List.of("en", "pt"));
+    }
+
+    @Tool(description = "Update the user's configuration. PATCH semantics: only send the fields to "
+            + "change, omit the rest. theme/widgetsId must come from getUserConfiguration's available "
+            + "options (widgetsId REPLACES the whole widget list, in display order); language is en|pt; "
+            + "timezone is an IANA zone id. Do not change name/photo unless explicitly asked")
+    Map<String, String> updateUserConfiguration(UserEditDTO configUpdate, ToolContext toolContext) {
+        log.info("AI agent is updating configuration for user: {}", userId(toolContext));
+        userService.editUser(configUpdate, userId(toolContext));
+        return Map.of("success", "Configuration updated");
     }
 }

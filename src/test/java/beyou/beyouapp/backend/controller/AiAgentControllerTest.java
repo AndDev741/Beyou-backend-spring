@@ -98,13 +98,24 @@ public class AiAgentControllerTest extends AbstractIntegrationTest {
 
     @Test
     void shouldSendMessageAndReturnReply() throws Exception {
-        when(agentService.processMessage(chatId, "Hello", userId)).thenReturn("Hi! How can I help?");
+        when(agentService.processMessage(chatId, "Hello", userId, null)).thenReturn("Hi! How can I help?");
 
         mockMvc.perform(post("/ai/agent/chats/" + chatId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"userInput\": \"Hello\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reply").value("Hi! How can I help?"));
+    }
+
+    @Test
+    void shouldForwardCurrentPageWhenProvided() throws Exception {
+        when(agentService.processMessage(chatId, "create one", userId, "/habits")).thenReturn("Done!");
+
+        mockMvc.perform(post("/ai/agent/chats/" + chatId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"userInput\": \"create one\", \"currentPage\": \"/habits\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reply").value("Done!"));
     }
 
     @Test

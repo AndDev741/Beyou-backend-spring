@@ -49,7 +49,8 @@ public class AiAgentController {
     public Map<String, String> processMessage(@PathVariable UUID chatId, @RequestBody @Valid AiAgentRequest request) {
         UUID userId = authenticatedUser.getAuthenticatedUser().getId();
         log.info("Receiving agent message on chat {} for user {}", chatId, userId);
-        return Map.of("reply", agentService.processMessage(chatId, request.userInput(), userId));
+        return Map.of("reply",
+                agentService.processMessage(chatId, request.userInput(), userId, request.currentPage()));
     }
 
     @GetMapping("/chats/{chatId}/messages")
@@ -65,7 +66,9 @@ public class AiAgentController {
         return ResponseEntity.ok(Map.of("success", "Chat deleted successfully"));
     }
 
-    public record AiAgentRequest(@NotBlank @Size(max = 4000) String userInput) {
+    /** currentPage: app route the user is on when sending (e.g. "/habits") — optional. */
+    public record AiAgentRequest(@NotBlank @Size(max = 4000) String userInput,
+            @Size(max = 200) String currentPage) {
     }
 
     public record CreateChatRequest(@Size(max = 255) String title) {
