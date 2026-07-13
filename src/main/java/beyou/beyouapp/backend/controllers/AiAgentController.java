@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import beyou.beyouapp.backend.domain.aiAgent.AiAgentService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
@@ -51,6 +53,13 @@ public class AiAgentController {
         log.info("Receiving agent message on chat {} for user {}", chatId, userId);
         return Map.of("reply",
                 agentService.processMessage(chatId, request.userInput(), userId, request.currentPage()));
+    }
+
+    @PostMapping(value = "/chats/{chatId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamMessage(@PathVariable UUID chatId, @RequestBody @Valid AiAgentRequest request) {
+        UUID userId = authenticatedUser.getAuthenticatedUser().getId();
+        log.info("Receiving agent message on chat {} for user {}", chatId, userId);
+        return agentService.streamMessage(chatId, request.userInput(), userId, request.currentPage());
     }
 
     @GetMapping("/chats/{chatId}/messages")
