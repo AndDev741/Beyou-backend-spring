@@ -34,17 +34,17 @@ public final class AgentToolDomains {
             // Routines
             Map.entry("createUserRoutine", List.of("routines")),
             Map.entry("editUserRoutine", List.of("routines")),
-            Map.entry("deleteUserRoutine", List.of("routines", "schedules")),
+            Map.entry("deleteUserRoutine", List.of("routines")),
             Map.entry("addTaskToRoutineSection", List.of("routines")),
             Map.entry("addHabitToRoutineSection", List.of("routines")),
             Map.entry("removeRoutineItem", List.of("routines")),
             // Check-in (check awards XP -> perfil; skip only marks the item)
             Map.entry("checkRoutineItem", List.of("routines", "perfil")),
             Map.entry("skipRoutineItem", List.of("routines")),
-            // Schedules
-            Map.entry("createUserSchedule", List.of("schedules")),
-            Map.entry("updateUserSchedule", List.of("schedules")),
-            Map.entry("deleteUserSchedule", List.of("schedules")),
+            // Schedules live inside routines on the client — no separate slice.
+            Map.entry("createUserSchedule", List.of("routines")),
+            Map.entry("updateUserSchedule", List.of("routines")),
+            Map.entry("deleteUserSchedule", List.of("routines")),
             // Configuration
             Map.entry("updateUserConfiguration", List.of("perfil")));
 
