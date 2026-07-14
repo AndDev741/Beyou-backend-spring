@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
@@ -26,7 +27,6 @@ import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -60,6 +60,9 @@ public class HabitService {
         .orElseThrow(() -> new HabitNotFound("Habit not found"));
     }
 
+    // Transactional so the mapper can walk lazy habitGroups: OSIV covers this
+    // on the request thread, but agent tools run on a boundedElastic thread.
+    @Transactional(readOnly = true)
     @Cacheable(cacheNames = "habits", key = "#userId")
     public List<HabitResponseDTO> getHabits(UUID userId){
         ArrayList<Habit> habits = habitRepository.findAllByUserId(userId);

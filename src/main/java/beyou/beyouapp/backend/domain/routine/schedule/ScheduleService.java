@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.routine.schedule;
 
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
@@ -24,6 +25,10 @@ public class ScheduleService {
     private final DiaryRoutineService diaryRoutineService;
     private final UserCacheEvictService userCacheEvictService;
 
+    // Transactional so ScheduleResponseDTO.from can copy the lazy days set:
+    // OSIV covers this on the request thread, but agent tools run on a
+    // boundedElastic thread.
+    @Transactional(readOnly = true)
     @Cacheable(cacheNames = "schedules", key = "#userId")
     public List<ScheduleResponseDTO> findAll(UUID userId) {
         List<DiaryRoutine> routines = diaryRoutineService.getAllDiaryRoutinesModels(userId);

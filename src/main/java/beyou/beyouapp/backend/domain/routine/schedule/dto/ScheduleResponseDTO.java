@@ -11,6 +11,8 @@ public record ScheduleResponseDTO(
     Set<WeekDay> days
 ) {
     public static ScheduleResponseDTO from(Schedule schedule) {
-        return new ScheduleResponseDTO(schedule.getId(), schedule.getDays());
+        // Copy eagerly while the session is open: the lazy collection must not
+        // leak into the DTO — streaming serializes on a thread with no session.
+        return new ScheduleResponseDTO(schedule.getId(), Set.copyOf(schedule.getDays()));
     }
 }

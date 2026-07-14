@@ -21,6 +21,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -70,7 +71,7 @@ public class DiaryRoutineMapper {
         if (schedule == null) {
             return null;
         }
-        return new DiaryRoutineResponseDTO.ScheduleResponseDTO(schedule.getId(), schedule.getDays());
+        return new DiaryRoutineResponseDTO.ScheduleResponseDTO(schedule.getId(), Set.copyOf(schedule.getDays()));
     }
 
     public List<RoutineSection> mapToRoutineSections(List<RoutineSectionRequestDTO> dtos, DiaryRoutine diaryRoutine) {
