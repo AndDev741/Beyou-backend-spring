@@ -16,6 +16,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import jakarta.servlet.DispatcherType;
+
 
 @Configuration
 @EnableWebSecurity
@@ -35,6 +37,14 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                        // ASYNC dispatch (SseEmitter re-dispatch for streaming) is permitted:
+                        // DispatcherType.ASYNC is set only by the container on re-dispatch, never
+                        // by a client, and SecurityFilter (OncePerRequestFilter) skips async
+                        // dispatch. INVARIANT: every protected endpoint must authenticate + run its
+                        // ownership check on the INITIAL REQUEST dispatch (the agent stream does, via
+                        // getChat(chatId, userId)) — anything relying on auth during async re-dispatch
+                        // would be silently permitted here.
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         .requestMatchers(
                             "/auth/login",
                             "/auth/register",

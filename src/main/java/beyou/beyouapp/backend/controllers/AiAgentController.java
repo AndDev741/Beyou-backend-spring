@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,14 +13,16 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import beyou.beyouapp.backend.domain.aiAgent.AiAgentService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
-import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatMessageDTO;
+import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatResponseDTO;
 import beyou.beyouapp.backend.domain.aiAgent.dto.CreateChatRequest;
 import beyou.beyouapp.backend.domain.aiAgent.dto.AiAgentRequest;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,8 +56,20 @@ public class AiAgentController {
                 agentService.processMessage(chatId, request.userInput(), userId, request.currentPage()));
     }
 
+    @PostMapping(value = "/chats/{chatId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamMessage(@PathVariable UUID chatId, @RequestBody @Valid AiAgentRequest request,
+            HttpServletResponse response) {
+        UUID userId = authenticatedUser.getAuthenticatedUser().getId();
+        log.info("Receiving agent message on chat {} for user {}", chatId, userId);
+        // Tell nginx (and any proxy honoring it) not to buffer this response,
+        // so tokens flush to the client immediately instead of in one blob.
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Cache-Control", "no-cache");
+        return agentService.streamMessage(chatId, request.userInput(), userId, request.currentPage());
+    }
+
     @GetMapping("/chats/{chatId}/messages")
-    public List<ChatMessageDTO> getMessages(@PathVariable UUID chatId) {
+    public List<AgentMessageDTO> getMessages(@PathVariable UUID chatId) {
         UUID userId = authenticatedUser.getAuthenticatedUser().getId();
         return agentService.getMessages(chatId, userId);
     }

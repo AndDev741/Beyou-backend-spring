@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
@@ -25,7 +26,6 @@ import beyou.beyouapp.backend.exceptions.goal.GoalNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -46,6 +46,9 @@ public class GoalService {
                 .orElseThrow(() -> new GoalNotFound("Goal not found"));
     }
 
+    // Transactional so the mapper can walk lazy category relations: OSIV covers
+    // this on the request thread, but agent tools run on a boundedElastic thread.
+    @Transactional(readOnly = true)
     @Cacheable(cacheNames = "goals", key = "#userId")
     public List<GoalResponseDTO> getAllGoals(UUID userId) {
         return goalRepository.findAllByUserId(userId)
@@ -129,7 +132,8 @@ public class GoalService {
             LocalDate.now(),
             null,
             goal.getCategories(),
-            null
+            null,
+            goal.getUser()
         );
     }
 
@@ -138,7 +142,7 @@ public class GoalService {
         goal.setStatus(GoalStatus.COMPLETED);
         goal.setCompleteDate(LocalDate.now());
 
-        xpCalculatorService.addXpToUserGoalAndCategoriesAndPersist(xpReward, goal, goal.getCategories());
+        xpCalculatorService.addXpToUserGoalAndCategoriesAndPersist(goal.getUser(), xpReward, goal, goal.getCategories());
     }
 
     private void removeCompletedOfAGoalAndRemoveXp(Goal goal, double xpReward){
@@ -146,7 +150,7 @@ public class GoalService {
         goal.setStatus(GoalStatus.IN_PROGRESS);
         goal.setCompleteDate(null);
 
-        xpCalculatorService.removeXpOfUserGoalAndCategoriesAndPersist(xpReward, goal, goal.getCategories());
+        xpCalculatorService.removeXpOfUserGoalAndCategoriesAndPersist(goal.getUser(), xpReward, goal, goal.getCategories());
     }
 
     public GoalResponseDTO increaseCurrentValue (UUID goalId, UUID userId) {

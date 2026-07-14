@@ -16,6 +16,7 @@ import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshItemCheckedDTO;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.habit.Habit;
+import beyou.beyouapp.backend.domain.routine.Routine;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroupService;
@@ -26,7 +27,6 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.S
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
-import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserService;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +39,6 @@ public class CheckItemService {
 
     private final ItemGroupService itemGroupService;
     private final XpCalculatorService xpCalculatorService;
-    private final AuthenticatedUser authenticatedUser;
     private final UserService userService;
     private final RefreshUiDtoBuilder refreshUiDtoBuilder;
 
@@ -63,7 +62,7 @@ public class CheckItemService {
         if(skipGroupDTO.habitGroupDTO() != null){
             HabitGroup habitGroup = itemGroupService.findHabitGroupByDTO(skipGroupDTO.routineId(), skipGroupDTO.habitGroupDTO().habitGroupId());
             if (isHabitGroupChecked(habitGroup, date)) {
-                return buildNoOpRefresh(habitGroup.getId(), getHabitGroupChecked(habitGroup, date), date);
+                return buildNoOpRefresh(habitGroup.getId(), getHabitGroupChecked(habitGroup, date), date, habitGroup.getRoutineSection().getRoutine());
             }
             return skipGroupDTO.skip()
                 ? skipHabitGroup(habitGroup, date)
@@ -71,7 +70,7 @@ public class CheckItemService {
         }else if(skipGroupDTO.taskGroupDTO() != null){
             TaskGroup taskGroup = itemGroupService.findTaskGroupByDTO(skipGroupDTO.routineId(), skipGroupDTO.taskGroupDTO().taskGroupId());
             if (isTaskGroupChecked(taskGroup, date)) {
-                return buildNoOpRefresh(taskGroup.getId(), getTaskGroupChecked(taskGroup, date), date);
+                return buildNoOpRefresh(taskGroup.getId(), getTaskGroupChecked(taskGroup, date), date, taskGroup.getRoutineSection().getRoutine());
             }
             return skipGroupDTO.skip()
                 ? skipTaskGroup(taskGroup, date)
@@ -144,7 +143,8 @@ public class CheckItemService {
                 date,
                 null,
                 null,
-                new RefreshItemCheckedDTO(habitGroup.getId(), check)
+                new RefreshItemCheckedDTO(habitGroup.getId(), check),
+                routine.getUser()
         );
     }
 
@@ -158,7 +158,8 @@ public class CheckItemService {
                 date,
                 null,
                 null,
-                new RefreshItemCheckedDTO(habitGroup.getId(), check)
+                new RefreshItemCheckedDTO(habitGroup.getId(), check),
+                routine.getUser()
         );
     }
 
@@ -172,7 +173,8 @@ public class CheckItemService {
                 date,
                 null,
                 null,
-                new RefreshItemCheckedDTO(taskGroup.getId(), check)
+                new RefreshItemCheckedDTO(taskGroup.getId(), check),
+                routine.getUser()
         );
     }
 
@@ -186,16 +188,18 @@ public class CheckItemService {
                 date,
                 null,
                 null,
-                new RefreshItemCheckedDTO(taskGroup.getId(), check)
+                new RefreshItemCheckedDTO(taskGroup.getId(), check),
+                routine.getUser()
         );
     }
 
-    private RefreshUiDTO buildNoOpRefresh(UUID groupId, BaseCheck check, LocalDate date) {
+    private RefreshUiDTO buildNoOpRefresh(UUID groupId, BaseCheck check, LocalDate date, Routine routine) {
         return refreshUiDtoBuilder.buildRefreshUiDto(
                 date,
                 null,
                 null,
-                new RefreshItemCheckedDTO(groupId, check)
+                new RefreshItemCheckedDTO(groupId, check),
+                routine.getUser()
         );
     }
 
@@ -272,9 +276,10 @@ public class CheckItemService {
         // Remove xp, decrease level if needed and remove constance
         habitGroupToUncheck.getHabitGroupChecks().remove(existingCheck);
         xpCalculatorService.removeXpOfUserRoutineHabitAndCategoriesAndPersist(
+            routine.getUser(),
             existingCheck.getXpGenerated(),
-            routine, 
-            habitToCheck, 
+            routine,
+            habitToCheck,
             habitToCheck.getCategories()
         );
         habitToCheck.setConstance(habitToCheck.getConstance() - 1);
@@ -292,7 +297,8 @@ public class CheckItemService {
             date, 
             habitToCheck, 
             habitToCheck.getCategories(), 
-            new RefreshItemCheckedDTO(habitGroupToUncheck.getId(), existingCheck)
+            new RefreshItemCheckedDTO(habitGroupToUncheck.getId(), existingCheck),
+            routine.getUser()
         );
     }
 
@@ -321,8 +327,9 @@ public class CheckItemService {
             double newXp = CheckXpCalculator.calculate(dificulty, importance, 0); // tasks have no streak
             check.setXpGenerated(newXp);
             xpCalculatorService.addXpToUserRoutineAndCategoriesAndPersist(
+                routine.getUser(),
                 newXp,
-                routine, 
+                routine,
                 taskChecked.getCategories()
             );
         }
@@ -345,7 +352,8 @@ public class CheckItemService {
                 new RefreshItemCheckedDTO(
                     taskGroupToCheck.getId(),
                     check
-                )
+                ),
+                routine.getUser()
             );
     }
 
@@ -362,9 +370,10 @@ public class CheckItemService {
         double newXp = CheckXpCalculator.calculate(
                 habitChecked.getDificulty(), habitChecked.getImportance(), habitChecked.getConstance());
         xpCalculatorService.addXpToUserRoutineHabitAndCategoriesAndPersist(
-            newXp, 
-            routine, 
-            habitChecked, 
+            routine.getUser(),
+            newXp,
+            routine,
+            habitChecked,
             habitChecked.getCategories()
         );
         habitChecked.setConstance(habitChecked.getConstance() + 1);
@@ -389,7 +398,8 @@ public class CheckItemService {
             new RefreshItemCheckedDTO(
                 habitGroupToCheckOrUncheck.getId(),
                 check
-            )
+            ),
+            routine.getUser()
         );
     }
 
@@ -408,8 +418,9 @@ public class CheckItemService {
         taskGroupUnchecked.getTaskGroupChecks().remove(existingCheck);
         if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
             xpCalculatorService.removeXpOfUserRoutineAndCategoriesAndPersist(
+                routine.getUser(),
                 existingCheck.getXpGenerated(),
-                routine, 
+                routine,
                 taskChecked.getCategories()
             );
         }
@@ -435,7 +446,8 @@ public class CheckItemService {
             new RefreshItemCheckedDTO(
                 taskGroupUnchecked.getId(),
                 existingCheck
-            )
+            ),
+            routine.getUser()
         );
     }
 
@@ -466,7 +478,9 @@ public class CheckItemService {
     }
 
     private void decreaseUserConstanceIfNeeded(DiaryRoutine routine, LocalDate date) {
-        User user = authenticatedUser.getAuthenticatedUser();
+        // Identity travels with the data (the routine's owner), not a ThreadLocal:
+        // agent tools run on a boundedElastic thread with no SecurityContext.
+        User user = routine.getUser();
         user.setCompletedDays(user.getCompletedDays() == null ? new HashSet<>() : user.getCompletedDays());
 
         log.info("[DEBUG] Checking date => {} in user dates {}", date, user.getCompletedDays());
@@ -492,7 +506,9 @@ public class CheckItemService {
     }
 
     private void increaseUserConstanceIfNeeded(DiaryRoutine routine, LocalDate date) {
-        User user = authenticatedUser.getAuthenticatedUser();
+        // Identity travels with the data (the routine's owner), not a ThreadLocal:
+        // agent tools run on a boundedElastic thread with no SecurityContext.
+        User user = routine.getUser();
 
         user.setCompletedDays(user.getCompletedDays() == null ? new HashSet<>() : user.getCompletedDays());
         if(user.getCompletedDays().contains(date) == true) return ; //Already increased today

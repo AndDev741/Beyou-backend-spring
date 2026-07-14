@@ -44,7 +44,6 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.C
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.HabitGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
-import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
@@ -57,9 +56,6 @@ class CheckItemServiceUnitTest {
 
     @Mock
     private XpCalculatorService xpCalculatorService;
-
-    @Mock
-    AuthenticatedUser authenticatedUser;
 
     @Mock
     UserService userService;
@@ -86,8 +82,7 @@ class CheckItemServiceUnitTest {
             user.setXpProgress(xpProgress);
             user.setMaxConstance(2);
 
-            when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
-            when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any()))
+            when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
             .thenAnswer(invocation -> new RefreshUiDTO(null, null, null, invocation.getArgument(3)));
         }
         
@@ -118,7 +113,7 @@ class CheckItemServiceUnitTest {
                     habit.getDificulty(), habit.getImportance(), 0); // constance 0 before this check
             assertEquals(expectedXp, check.getXpGenerated());
             assertEquals(1, habit.getConstance());
-            verify(xpCalculatorService).addXpToUserRoutineHabitAndCategoriesAndPersist(expectedXp, routine, habit, habit.getCategories());
+            verify(xpCalculatorService).addXpToUserRoutineHabitAndCategoriesAndPersist(user, expectedXp, routine, habit, habit.getCategories());
         }
 
         @Test
@@ -152,7 +147,7 @@ class CheckItemServiceUnitTest {
             assertFalse(check.isChecked());
             assertEquals(0, check.getXpGenerated());
             assertEquals(1, habit.getConstance());
-            verify(xpCalculatorService).removeXpOfUserRoutineHabitAndCategoriesAndPersist(xpGenerated, routine, habit, habit.getCategories());
+            verify(xpCalculatorService).removeXpOfUserRoutineHabitAndCategoriesAndPersist(user, xpGenerated, routine, habit, habit.getCategories());
         }
 
         @Test
@@ -183,7 +178,7 @@ class CheckItemServiceUnitTest {
                     task.getDificulty(), task.getImportance(), 0); // tasks have no streak
             assertEquals(expectedXp, check.getXpGenerated());
             assertEquals(today, task.getMarkedToDelete());
-            verify(xpCalculatorService).addXpToUserRoutineAndCategoriesAndPersist(expectedXp, routine, task.getCategories());
+            verify(xpCalculatorService).addXpToUserRoutineAndCategoriesAndPersist(user, expectedXp, routine, task.getCategories());
         }
 
         @Test
@@ -217,7 +212,7 @@ class CheckItemServiceUnitTest {
             assertFalse(check.isChecked());
             assertEquals(0, check.getXpGenerated());
             assertNull(task.getMarkedToDelete());
-            verify(xpCalculatorService).removeXpOfUserRoutineAndCategoriesAndPersist(xpGenerated, routine, task.getCategories());
+            verify(xpCalculatorService).removeXpOfUserRoutineAndCategoriesAndPersist(user, xpGenerated, routine, task.getCategories());
         }
     }
 
@@ -235,8 +230,7 @@ class CheckItemServiceUnitTest {
             user.setXpProgress(xpProgress);
             user.setMaxConstance(2);
 
-            when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
-            when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any()))
+            when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
             .thenAnswer(invocation -> new RefreshUiDTO(null, null, null, invocation.getArgument(3)));        }
 
         @Test
@@ -343,6 +337,7 @@ class CheckItemServiceUnitTest {
         section.setTaskGroups(new ArrayList<>());
         DiaryRoutine routine = new DiaryRoutine();
         routine.setId(UUID.randomUUID());
+        routine.setUser(user);
         routine.setRoutineSections(new ArrayList<>(List.of(section)));
         section.setRoutine(routine);
         habitGroup.setRoutineSection(section);
@@ -370,6 +365,7 @@ class CheckItemServiceUnitTest {
         section.setHabitGroups(new ArrayList<>());
         DiaryRoutine routine = new DiaryRoutine();
         routine.setId(UUID.randomUUID());
+        routine.setUser(user);
         routine.setRoutineSections(new ArrayList<>(List.of(section)));
         section.setRoutine(routine);
         taskGroup.setRoutineSection(section);

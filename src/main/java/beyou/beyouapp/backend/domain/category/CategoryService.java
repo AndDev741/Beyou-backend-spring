@@ -12,6 +12,7 @@ import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -53,6 +54,10 @@ public class CategoryService {
         return category;
     }
 
+    // Transactional so the mapper can walk lazy habits/tasks/goals relations:
+    // OSIV covers this on the request thread, but agent tools run on a
+    // boundedElastic thread.
+    @Transactional(readOnly = true)
     @Cacheable(cacheNames = "categories", key = "#userId")
     public List<CategoryResponseDTO> getAllCategories(UUID userId){
         ArrayList<Category> categories = categoryRepository.findAllByUserId(userId)

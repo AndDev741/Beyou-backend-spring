@@ -62,7 +62,9 @@ public class HabitMapper {
                 habit.getIconId(),
                 habit.getImportance(),
                 habit.getDificulty(),
-                habit.getCategories(),
+                // Copy eagerly while the session is open: the lazy collection must
+                // not leak into the DTO — streaming serializes with no session.
+                habit.getCategories() != null ? new ArrayList<>(habit.getCategories()) : List.of(),
                 xpProgress != null ? xpProgress.getXp() : 0,
                 xpProgress != null ? xpProgress.getActualLevelXp() : 0,
                 xpProgress != null ? xpProgress.getNextLevelXp() : 0,

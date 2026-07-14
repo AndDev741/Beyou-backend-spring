@@ -37,7 +37,6 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.H
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
-import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
@@ -52,9 +51,6 @@ class CheckItemServiceSkipUnitTest {
     private XpCalculatorService xpCalculatorService;
 
     @Mock
-    private AuthenticatedUser authenticatedUser;
-
-    @Mock
     private UserService userService;
 
     @Mock
@@ -67,11 +63,10 @@ class CheckItemServiceSkipUnitTest {
         checkItemService = new CheckItemService(
                 itemGroupService,
                 xpCalculatorService,
-                authenticatedUser,
                 userService,
                 refreshUiDtoBuilder
         );
-        when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any()))
+        when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
                 .thenReturn(new RefreshUiDTO(null, null, null, null));
     }
 
@@ -85,7 +80,7 @@ class CheckItemServiceSkipUnitTest {
         when(itemGroupService.findHabitGroupByDTO(routineId, habitGroupId)).thenReturn(habitGroup);
 
         User user = buildUser(ConstanceConfiguration.COMPLETE);
-        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+        habitGroup.getRoutineSection().getRoutine().setUser(user);
 
         SkipGroupRequestDTO dto = new SkipGroupRequestDTO(
                 routineId,
@@ -114,7 +109,7 @@ class CheckItemServiceSkipUnitTest {
         when(itemGroupService.findHabitGroupByDTO(routineId, habitGroupId)).thenReturn(habitGroup);
 
         User user = buildUser(ConstanceConfiguration.ANY);
-        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+        habitGroup.getRoutineSection().getRoutine().setUser(user);
 
         SkipGroupRequestDTO dto = new SkipGroupRequestDTO(
                 routineId,

@@ -292,7 +292,7 @@ public class goalServiceUnitTest {
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
         double xp = GoalXpCalculator.calculateXp(goal);
 
-        when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any()))
+        when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
         .thenAnswer(invocation -> new RefreshUiDTO(null, invocation.getArgument(1), null, null));
 
         RefreshUiDTO response = goalService.checkGoal(goalId, userId);
@@ -300,7 +300,7 @@ public class goalServiceUnitTest {
         assertNotNull(response);
         assertEquals(GoalStatus.COMPLETED, goal.getStatus());
         assertEquals(LocalDate.now(), goal.getCompleteDate());
-        verify(xpCalculatorService, times(1)).addXpToUserGoalAndCategoriesAndPersist(xp, goal, goal.getCategories());
+        verify(xpCalculatorService, times(1)).addXpToUserGoalAndCategoriesAndPersist(goal.getUser(), xp, goal, goal.getCategories());
     }
 
     @Test
@@ -309,7 +309,7 @@ public class goalServiceUnitTest {
         double xp = GoalXpCalculator.calculateXp(goal);
 
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
-        when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any()))
+        when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
         .thenAnswer(invocation -> new RefreshUiDTO(null, invocation.getArgument(1), null, null));
 
         RefreshUiDTO response = goalService.checkGoal(goalId, userId);
@@ -318,7 +318,7 @@ public class goalServiceUnitTest {
         assertEquals(false, goal.getComplete());
         assertEquals(GoalStatus.IN_PROGRESS, goal.getStatus());
         assertEquals(null, goal.getCompleteDate());
-        verify(xpCalculatorService, times(1)).removeXpOfUserGoalAndCategoriesAndPersist(xp, goal, goal.getCategories());
+        verify(xpCalculatorService, times(1)).removeXpOfUserGoalAndCategoriesAndPersist(goal.getUser(), xp, goal, goal.getCategories());
     }
 
     @Test
