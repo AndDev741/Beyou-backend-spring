@@ -59,6 +59,21 @@ public class RateLimitConfig {
                 .build();
     }
 
+    /**
+     * AI agent chat streams: each opens a long-lived SSE emitter, calls the LLM,
+     * and runs a tool loop — expensive, but conversational, so more generous than
+     * one-shot generation. 30/hour per user caps external-billing abuse while
+     * leaving room for a real back-and-forth.
+     */
+    public static Bucket createAgentChatBucket() {
+        return Bucket.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(30)
+                        .refillGreedy(30, Duration.ofHours(1))
+                        .build())
+                .build();
+    }
+
     /** Public, unauthenticated GET /user/photo/** — per-IP so anonymous callers can't flood disk reads. */
     public static Bucket createPhotoBucket() {
         return Bucket.builder()

@@ -37,6 +37,9 @@ public class AgentMessageService {
     /** Persist one user->assistant exchange as two ordered rows. */
     @Transactional
     public void recordTurn(UUID chatId, String userInput, List<AgentSegment> assistantSegments) {
+        // Lock this chat's transcript writes so concurrent turns can't read the
+        // same count and assign duplicate sequence ids (uq constraint is the backstop).
+        agentMessageRepository.lockChatForTranscript(chatId.toString());
         long seq = agentMessageRepository.countByChatId(chatId);
         agentMessageRepository.save(new AgentMessage(
                 chatId, USER, toJson(List.of(AgentSegment.text(userInput))), seq));

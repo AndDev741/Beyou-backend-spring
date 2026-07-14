@@ -33,6 +33,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
     /** AI generation gets its own (much tighter) bucket — see RateLimitConfig.createAiBucket. */
     private static final String AI_GENERATE_PATH = "/ai/routine/generate";
 
+    /** AI agent chat streams get their own bucket, NOT the generic write bucket:
+     *  each stream is an expensive long-lived LLM call. */
+    private static boolean isAgentStreamPath(String path) {
+        return path.startsWith("/ai/agent/chats/") && path.endsWith("/stream");
+    }
+
     @Override
     public void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                   FilterChain filterChain) throws ServletException, IOException {
@@ -61,6 +67,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
             bucketKey = "ai:" + userId;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAiBucket());
+        } else if (isAgentStreamPath(path)) {
+            String userId = getUserIdFromRequest(request);
+            if (userId == null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            bucketKey = "agent-stream:" + userId;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAgentChatBucket());
         } else if (path.startsWith("/docs") && !path.startsWith("/docs/admin")) {
             String ip = getClientIp(request);
             bucketKey = "docs:" + ip;
