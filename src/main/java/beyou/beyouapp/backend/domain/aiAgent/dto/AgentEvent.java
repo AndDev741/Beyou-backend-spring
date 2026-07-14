@@ -4,6 +4,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
+
 public record AgentEvent(
         String type,
         Map<String, Object> data) {
@@ -24,8 +26,9 @@ public record AgentEvent(
         return new AgentEvent("tool", data);
     }
 
-    public static AgentEvent done(String fullReply) {
-        return new AgentEvent("done", Map.of("done", fullReply));
+    /** Authoritative structured turn — the client swaps its live-built segments for this. */
+    public static AgentEvent done(List<AgentSegment> segments) {
+        return new AgentEvent("done", Map.of("segments", segments));
     }
 
     public static AgentEvent error(String errorKey) {

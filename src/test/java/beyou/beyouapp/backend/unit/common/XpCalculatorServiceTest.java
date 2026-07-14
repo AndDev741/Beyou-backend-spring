@@ -25,7 +25,6 @@ import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
-import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 
@@ -34,9 +33,6 @@ class XpCalculatorServiceTest {
 
     @Mock
     private XpByLevelRepository xpByLevelRepository;
-
-    @Mock
-    private AuthenticatedUser authenticatedUser;
 
     @Mock
     private UserRepository userRepository;
@@ -76,13 +72,11 @@ class XpCalculatorServiceTest {
         category.setId(UUID.randomUUID());
         seedXp(category.getXpProgress(), 0);
         categories = new ArrayList<>(List.of(category));
-
-        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
     }
 
     @Test
     void shouldAddXpToUserRoutineHabitAndCategories() {
-        xpCalculatorService.addXpToUserRoutineHabitAndCategoriesAndPersist(50.0, routine, habit, categories);
+        xpCalculatorService.addXpToUserRoutineHabitAndCategoriesAndPersist(user, 50.0, routine, habit, categories);
 
         assertEquals(50.0, user.getXpProgress().getXp());
         assertEquals(50.0, routine.getXpProgress().getXp());
@@ -99,7 +93,7 @@ class XpCalculatorServiceTest {
     void shouldAddXpToUserRoutineAndCategoriesWithoutHabit() {
         seedXp(habit.getXpProgress(), 100.0);
 
-        xpCalculatorService.addXpToUserRoutineAndCategoriesAndPersist(30.0, routine, categories);
+        xpCalculatorService.addXpToUserRoutineAndCategoriesAndPersist(user, 30.0, routine, categories);
 
         assertEquals(30.0, user.getXpProgress().getXp());
         assertEquals(30.0, routine.getXpProgress().getXp());
@@ -119,7 +113,7 @@ class XpCalculatorServiceTest {
         seedXp(habit.getXpProgress(), 80.0);
         seedXp(categories.get(0).getXpProgress(), 80.0);
 
-        xpCalculatorService.removeXpOfUserRoutineHabitAndCategoriesAndPersist(30.0, routine, habit, categories);
+        xpCalculatorService.removeXpOfUserRoutineHabitAndCategoriesAndPersist(user, 30.0, routine, habit, categories);
 
         assertEquals(50.0, user.getXpProgress().getXp());
         assertEquals(50.0, routine.getXpProgress().getXp());
@@ -137,7 +131,7 @@ class XpCalculatorServiceTest {
         seedXp(user.getXpProgress(), 60.0);
         seedXp(routine.getXpProgress(), 60.0);
 
-        xpCalculatorService.removeXpOfUserRoutineAndCategoriesAndPersist(10.0, routine, new ArrayList<>());
+        xpCalculatorService.removeXpOfUserRoutineAndCategoriesAndPersist(user, 10.0, routine, new ArrayList<>());
 
         assertEquals(50.0, user.getXpProgress().getXp());
         assertEquals(50.0, routine.getXpProgress().getXp());

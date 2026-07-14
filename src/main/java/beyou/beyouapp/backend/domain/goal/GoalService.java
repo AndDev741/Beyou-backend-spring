@@ -132,7 +132,8 @@ public class GoalService {
             LocalDate.now(),
             null,
             goal.getCategories(),
-            null
+            null,
+            goal.getUser()
         );
     }
 
@@ -141,7 +142,7 @@ public class GoalService {
         goal.setStatus(GoalStatus.COMPLETED);
         goal.setCompleteDate(LocalDate.now());
 
-        xpCalculatorService.addXpToUserGoalAndCategoriesAndPersist(xpReward, goal, goal.getCategories());
+        xpCalculatorService.addXpToUserGoalAndCategoriesAndPersist(goal.getUser(), xpReward, goal, goal.getCategories());
     }
 
     private void removeCompletedOfAGoalAndRemoveXp(Goal goal, double xpReward){
@@ -149,7 +150,7 @@ public class GoalService {
         goal.setStatus(GoalStatus.IN_PROGRESS);
         goal.setCompleteDate(null);
 
-        xpCalculatorService.removeXpOfUserGoalAndCategoriesAndPersist(xpReward, goal, goal.getCategories());
+        xpCalculatorService.removeXpOfUserGoalAndCategoriesAndPersist(goal.getUser(), xpReward, goal, goal.getCategories());
     }
 
     public GoalResponseDTO increaseCurrentValue (UUID goalId, UUID userId) {

@@ -20,9 +20,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import beyou.beyouapp.backend.domain.ai.AiIconCatalog;
+import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessageService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.Chat;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
-import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatMessageDTO;
+import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
+import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
 import beyou.beyouapp.backend.domain.aiAgent.dto.AgentEvent;
 import beyou.beyouapp.backend.user.User;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -35,19 +37,20 @@ import reactor.core.publisher.Flux;
 public class AiAgentService {
 
     private final ChatClient chatClient;
-    private final ChatMemory chatMemory;
     private final ChatService chatService;
+    private final AgentMessageService agentMessageService;
     private final Object[] toolCallbacks;
     private final Resource systemTemplate;
 
     public AiAgentService(DeepSeekChatModel chatModel,
             ChatMemory chatMemory,
             ChatService chatService,
+            AgentMessageService agentMessageService,
             Tools tools,
             MeterRegistry meterRegistry,
             @Value("classpath:/prompts/aiAgent.st") Resource systemTemplate) {
-        this.chatMemory = chatMemory;
         this.chatService = chatService;
+        this.agentMessageService = agentMessageService;
         this.toolCallbacks = Arrays.stream(ToolCallbacks.from(tools))
                 .map(callback -> (Object) new MeteredToolCallback(callback, meterRegistry))
                 .toArray();
@@ -64,6 +67,9 @@ public class AiAgentService {
                 .call()
                 .content();
 
+        // Non-streaming path (mobile): no ordered tool capture, so the transcript
+        // is text-only. Interleaved tool segments arrive once mobile streams too.
+        agentMessageService.recordTurn(chatId, userInput, List.of(AgentSegment.text(reply)));
         // Reload-by-id: tools may have re-saved the chat during the call above.
         chatService.touch(chatId, userId);
         return reply;
@@ -74,7 +80,12 @@ public class AiAgentService {
 
         SseEmitter emitter = new SseEmitter(180_000L);
 
+        // Every event flows through here in causal order (tokens from the Flux,
+        // tools from MeteredToolCallback). The builder observes FIRST, so a
+        // dead client (send throwing) never costs us the persisted transcript.
+        AgentTurnBuilder turn = new AgentTurnBuilder();
         Consumer<AgentEvent> send = event -> {
+            turn.observe(event);
             try {
                 emitter.send(SseEmitter.event()
                         .name(event.type())
@@ -88,12 +99,8 @@ public class AiAgentService {
                 .stream()
                 .content();
 
-        StringBuilder fullReply = new StringBuilder();
         Disposable subscription = tokens.subscribe(
-                token -> {
-                    fullReply.append(token);
-                    send.accept(AgentEvent.token(token));
-                },
+                token -> send.accept(AgentEvent.token(token)),
                 error -> {
                     log.error("Error on agent stream subscription -> {}", error.getMessage(), error);
                     try {
@@ -105,14 +112,17 @@ public class AiAgentService {
                     }
                 },
                 () -> {
-                    try{
-                        String response = fullReply.toString();
-                        send.accept(AgentEvent.done(response));
-                    }catch(RuntimeException e){
+                    List<AgentSegment> segments = turn.build();
+                    try {
+                        agentMessageService.recordTurn(chatId, userInput, segments);
+                        send.accept(AgentEvent.done(segments));
+                    } catch (RuntimeException e) {
                         log.error("Error trying to emit complete... {}", e.getClass().getSimpleName(), e);
-                    }finally{
+                    } finally {
                         emitter.complete();
-                        // Blocking call inside a event loop thread, hope will never cause a problem, move to publishOn(Schedulers.boundedElastic()) if stream latency ever spikes
+                        // Blocking JPA call on the netty event loop — fine at
+                        // our volume, move to publishOn(Schedulers.boundedElastic()) if
+                        // stream latency ever spikes.
                         chatService.touch(chatId, userId);
                     }
                 });
@@ -121,7 +131,6 @@ public class AiAgentService {
         emitter.onCompletion(subscription::dispose);
 
         return emitter;
-
     }
 
     private ChatClient.ChatClientRequestSpec buildPrompt(Chat chat, String userInput, String currentPage, Map<String, Object> toolContext) {
@@ -140,12 +149,10 @@ public class AiAgentService {
             .toolContext(toolContext);
     }
 
-    /** Window-limited history (the model's working memory), oldest first. */
-    public List<ChatMessageDTO> getMessages(UUID chatId, UUID userId) {
-        Chat chat = chatService.getChat(chatId, userId);
-        return chatMemory.get(chat.getId().toString()).stream()
-                .map(message -> new ChatMessageDTO(message.getMessageType().name(), message.getText()))
-                .toList();
+    /** Full display transcript, oldest first (ownership checked here). */
+    public List<AgentMessageDTO> getMessages(UUID chatId, UUID userId) {
+        chatService.getChat(chatId, userId);
+        return agentMessageService.getMessages(chatId);
     }
 
     private String orNone(String value) {

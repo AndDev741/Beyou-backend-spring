@@ -17,7 +17,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import beyou.beyouapp.backend.domain.aiAgent.AiAgentService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
-import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatMessageDTO;
+import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatResponseDTO;
 import beyou.beyouapp.backend.domain.aiAgent.dto.CreateChatRequest;
 import beyou.beyouapp.backend.domain.aiAgent.dto.AiAgentRequest;
@@ -63,7 +63,7 @@ public class AiAgentController {
     }
 
     @GetMapping("/chats/{chatId}/messages")
-    public List<ChatMessageDTO> getMessages(@PathVariable UUID chatId) {
+    public List<AgentMessageDTO> getMessages(@PathVariable UUID chatId) {
         UUID userId = authenticatedUser.getAuthenticatedUser().getId();
         return agentService.getMessages(chatId, userId);
     }

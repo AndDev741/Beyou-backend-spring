@@ -28,7 +28,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.aiAgent.AiAgentService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
-import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatMessageDTO;
+import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
+import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatResponseDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
@@ -129,12 +130,14 @@ public class AiAgentControllerTest extends AbstractIntegrationTest {
     @Test
     void shouldGetMessages() throws Exception {
         when(agentService.getMessages(chatId, userId))
-                .thenReturn(List.of(new ChatMessageDTO("USER", "Hello"), new ChatMessageDTO("ASSISTANT", "Hi!")));
+                .thenReturn(List.of(
+                        new AgentMessageDTO("USER", List.of(AgentSegment.text("Hello"))),
+                        new AgentMessageDTO("ASSISTANT", List.of(AgentSegment.text("Hi!")))));
 
         mockMvc.perform(get("/ai/agent/chats/" + chatId + "/messages"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].role").value("USER"))
-                .andExpect(jsonPath("$[1].text").value("Hi!"));
+                .andExpect(jsonPath("$[1].segments[0].text").value("Hi!"));
     }
 
     @Test
