@@ -22,6 +22,7 @@ import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatResponseDTO;
 import beyou.beyouapp.backend.domain.aiAgent.dto.CreateChatRequest;
 import beyou.beyouapp.backend.domain.aiAgent.dto.AiAgentRequest;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,9 +57,14 @@ public class AiAgentController {
     }
 
     @PostMapping(value = "/chats/{chatId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamMessage(@PathVariable UUID chatId, @RequestBody @Valid AiAgentRequest request) {
+    public SseEmitter streamMessage(@PathVariable UUID chatId, @RequestBody @Valid AiAgentRequest request,
+            HttpServletResponse response) {
         UUID userId = authenticatedUser.getAuthenticatedUser().getId();
         log.info("Receiving agent message on chat {} for user {}", chatId, userId);
+        // Tell nginx (and any proxy honoring it) not to buffer this response,
+        // so tokens flush to the client immediately instead of in one blob.
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Cache-Control", "no-cache");
         return agentService.streamMessage(chatId, request.userInput(), userId, request.currentPage());
     }
 

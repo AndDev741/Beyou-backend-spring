@@ -6,6 +6,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import org.springframework.ai.chat.client.ChatClient;
@@ -36,11 +40,24 @@ import reactor.core.publisher.Flux;
 @Slf4j
 public class AiAgentService {
 
+    /** SSE comment sent on this cadence keeps idle connections alive through
+     *  proxies while the agent thinks or runs a slow tool. */
+    private static final long HEARTBEAT_SECONDS = 15;
+
     private final ChatClient chatClient;
     private final ChatService chatService;
     private final AgentMessageService agentMessageService;
     private final Object[] toolCallbacks;
     private final Resource systemTemplate;
+
+    // ponytail: one daemon thread — pings are trivial writes; bump the pool
+    // only if heartbeat latency across many concurrent streams ever shows up.
+    private final ScheduledExecutorService heartbeatScheduler =
+            Executors.newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "agent-sse-heartbeat");
+                thread.setDaemon(true);
+                return thread;
+            });
 
     public AiAgentService(DeepSeekChatModel chatModel,
             ChatMemory chatMemory,
@@ -80,18 +97,24 @@ public class AiAgentService {
 
         SseEmitter emitter = new SseEmitter(180_000L);
 
+        // The heartbeat thread and the reactor thread both write to this one
+        // emitter — serialize every write so events never interleave mid-frame.
+        Object streamLock = new Object();
+
         // Every event flows through here in causal order (tokens from the Flux,
         // tools from MeteredToolCallback). The builder observes FIRST, so a
         // dead client (send throwing) never costs us the persisted transcript.
         AgentTurnBuilder turn = new AgentTurnBuilder();
         Consumer<AgentEvent> send = event -> {
             turn.observe(event);
-            try {
-                emitter.send(SseEmitter.event()
-                        .name(event.type())
-                        .data(event.data(), MediaType.APPLICATION_JSON));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            synchronized (streamLock) {
+                try {
+                    emitter.send(SseEmitter.event()
+                            .name(event.type())
+                            .data(event.data(), MediaType.APPLICATION_JSON));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             }
         };
 
@@ -127,8 +150,24 @@ public class AiAgentService {
                     }
                 });
 
-        emitter.onTimeout(subscription::dispose);
-        emitter.onCompletion(subscription::dispose);
+        // Heartbeat: also the ONLY dead-client detector during quiet pauses
+        // (no token send to fail on) — its failure aborts the stream.
+        ScheduledFuture<?> heartbeat = heartbeatScheduler.scheduleAtFixedRate(() -> {
+            synchronized (streamLock) {
+                try {
+                    emitter.send(SseEmitter.event().comment("ping"));
+                } catch (Exception e) {
+                    emitter.complete(); // -> onCompletion cancels heartbeat + disposes
+                }
+            }
+        }, HEARTBEAT_SECONDS, HEARTBEAT_SECONDS, TimeUnit.SECONDS);
+
+        Runnable cleanup = () -> {
+            heartbeat.cancel(false);
+            subscription.dispose();
+        };
+        emitter.onTimeout(cleanup);
+        emitter.onCompletion(cleanup);
 
         return emitter;
     }
