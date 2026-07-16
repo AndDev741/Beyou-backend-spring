@@ -24,6 +24,7 @@ public class ChatService {
     private static final String DEFAULT_TITLE = "New chat";
     public static final int GLOBAL_CONTEXT_MAX = 2000;
     public static final int CHAT_CONTEXT_MAX = 1000;
+    public static final int TITLE_MAX = 255; // matches the chats.title column (V5)
 
     private final ChatRepository chatRepository;
     private final UserRepository userRepository;
@@ -96,6 +97,35 @@ public class ChatService {
         } catch (Exception e) {
             log.error("Error trying to delete chat {}", chatId, e);
             throw new BusinessException(ErrorKey.CHAT_DELETE_FAILED, "Error trying to delete chat");
+        }
+    }
+
+    /** Rename a chat (ownership-checked). Title is trimmed and capped to the column width. */
+    public ChatResponseDTO renameChat(UUID chatId, UUID userId, String title) {
+        Chat chat = getChat(chatId, userId);
+        chat.setTitle(clamp(title, TITLE_MAX));
+        return ChatResponseDTO.from(chatRepository.save(chat));
+    }
+
+    /**
+     * "Reset the agent": delete ALL of the user's chats (cascades messages via
+     * the agent_message FK) and clear the model's memory of them — both the
+     * Spring AI window per chat and the cross-chat global context on the user.
+     */
+    @Transactional
+    public void deleteAllChats(UUID userId) {
+        List<Chat> chats = chatRepository.findAllByUserIdOrderByUpdatedAtDesc(userId);
+        try {
+            chats.forEach(chat -> chatMemory.clear(chat.getId().toString()));
+            chatRepository.deleteAll(chats);
+
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new UserNotFound("User not found when resetting the agent"));
+            user.setUserContext(null);
+            userRepository.save(user);
+        } catch (Exception e) {
+            log.error("Error resetting agent for user {}", userId, e);
+            throw new BusinessException(ErrorKey.CHAT_DELETE_FAILED, "Error trying to reset the agent");
         }
     }
 }

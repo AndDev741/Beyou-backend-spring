@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,6 +21,7 @@ import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatResponseDTO;
 import beyou.beyouapp.backend.domain.aiAgent.dto.CreateChatRequest;
+import beyou.beyouapp.backend.domain.aiAgent.dto.RenameChatRequest;
 import beyou.beyouapp.backend.domain.aiAgent.dto.AiAgentRequest;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import jakarta.servlet.http.HttpServletResponse;
@@ -74,11 +76,25 @@ public class AiAgentController {
         return agentService.getMessages(chatId, userId);
     }
 
+    @PutMapping("/chats/{chatId}")
+    public ChatResponseDTO renameChat(@PathVariable UUID chatId, @RequestBody @Valid RenameChatRequest request) {
+        UUID userId = authenticatedUser.getAuthenticatedUser().getId();
+        return chatService.renameChat(chatId, userId, request.title());
+    }
+
     @DeleteMapping("/chats/{chatId}")
     public ResponseEntity<Map<String, String>> deleteChat(@PathVariable UUID chatId) {
         UUID userId = authenticatedUser.getAuthenticatedUser().getId();
         chatService.deleteChat(chatId, userId);
         return ResponseEntity.ok(Map.of("success", "Chat deleted successfully"));
+    }
+
+    /** Reset the agent: delete all chats and clear its remembered context. */
+    @DeleteMapping("/chats")
+    public ResponseEntity<Map<String, String>> deleteAllChats() {
+        UUID userId = authenticatedUser.getAuthenticatedUser().getId();
+        chatService.deleteAllChats(userId);
+        return ResponseEntity.ok(Map.of("success", "All chats deleted successfully"));
     }
 
 }
