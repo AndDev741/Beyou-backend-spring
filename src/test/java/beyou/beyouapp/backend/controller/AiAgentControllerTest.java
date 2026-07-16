@@ -1,11 +1,14 @@
 package beyou.beyouapp.backend.controller;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -147,6 +150,39 @@ public class AiAgentControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.success").value("Chat deleted successfully"));
 
         verify(chatService).deleteChat(chatId, userId);
+    }
+
+    @Test
+    void shouldRenameChat() throws Exception {
+        when(chatService.renameChat(chatId, userId, "Weekly planning"))
+                .thenReturn(new ChatResponseDTO(chatId, "Weekly planning", LocalDateTime.now(), LocalDateTime.now()));
+
+        mockMvc.perform(put("/ai/agent/chats/" + chatId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\": \"Weekly planning\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Weekly planning"));
+
+        verify(chatService).renameChat(chatId, userId, "Weekly planning");
+    }
+
+    @Test
+    void shouldRejectBlankRenameTitle() throws Exception {
+        mockMvc.perform(put("/ai/agent/chats/" + chatId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\": \"   \"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(chatService, never()).renameChat(any(), any(), any());
+    }
+
+    @Test
+    void shouldDeleteAllChats() throws Exception {
+        mockMvc.perform(delete("/ai/agent/chats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value("All chats deleted successfully"));
+
+        verify(chatService).deleteAllChats(userId);
     }
 
 }

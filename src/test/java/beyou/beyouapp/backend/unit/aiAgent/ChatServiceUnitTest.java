@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.unit.aiAgent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -208,6 +209,57 @@ public class ChatServiceUnitTest {
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> chatService.deleteChat(chatId, userId));
+
+        assertEquals(ErrorKey.CHAT_DELETE_FAILED, exception.getErrorKey());
+    }
+
+    @Test
+    void shouldRenameChatWithTrimmedTitle() {
+        when(chatRepository.findById(chatId)).thenReturn(Optional.of(chat));
+        when(chatRepository.save(any(Chat.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ChatResponseDTO renamed = chatService.renameChat(chatId, userId, "  Weekly planning  ");
+
+        assertEquals("Weekly planning", renamed.title());
+        verify(chatRepository).save(chat);
+    }
+
+    @Test
+    void shouldNotRenameChatOfAnotherUser() {
+        when(chatRepository.findById(chatId)).thenReturn(Optional.of(chat));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> chatService.renameChat(chatId, UUID.randomUUID(), "Hacked"));
+
+        assertEquals(ErrorKey.CHAT_NOT_OWNED, exception.getErrorKey());
+        verify(chatRepository, never()).save(any(Chat.class));
+    }
+
+    @Test
+    void shouldDeleteAllChatsClearMemoryAndWipeGlobalContext() {
+        user.setUserContext("remembered stuff");
+        Chat other = new Chat();
+        other.setId(UUID.randomUUID());
+        other.setUser(user);
+        when(chatRepository.findAllByUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of(chat, other));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        chatService.deleteAllChats(userId);
+
+        verify(chatMemory).clear(chatId.toString());
+        verify(chatMemory).clear(other.getId().toString());
+        verify(chatRepository).deleteAll(List.of(chat, other));
+        assertNull(user.getUserContext());
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void shouldThrowDeleteFailed_whenResetFails() {
+        when(chatRepository.findAllByUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of(chat));
+        doThrow(new RuntimeException()).when(chatRepository).deleteAll(any());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> chatService.deleteAllChats(userId));
 
         assertEquals(ErrorKey.CHAT_DELETE_FAILED, exception.getErrorKey());
     }
