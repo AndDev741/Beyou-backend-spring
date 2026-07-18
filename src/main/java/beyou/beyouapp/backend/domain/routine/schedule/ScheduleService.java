@@ -25,9 +25,7 @@ public class ScheduleService {
     private final DiaryRoutineService diaryRoutineService;
     private final UserCacheEvictService userCacheEvictService;
 
-    // Transactional so ScheduleResponseDTO.from can copy the lazy days set:
-    // OSIV covers this on the request thread, but agent tools run on a
-    // boundedElastic thread.
+
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = "schedules", key = "#userId")
     public List<ScheduleResponseDTO> findAll(UUID userId) {
@@ -43,6 +41,7 @@ public class ScheduleService {
         return scheduleRepository.findById(id);
     }
 
+    @Transactional
     public Schedule create(CreateScheduleDTO scheduleDTO, UUID userId) {
         DiaryRoutine routine = diaryRoutineService.getDiaryRoutineModelById(scheduleDTO.routineId(), userId);
         Schedule schedule = new Schedule();
@@ -62,6 +61,7 @@ public class ScheduleService {
         return schedule;
     }
 
+    @Transactional
     public Schedule update(UpdateScheduleDTO updatedSchedule, UUID userId) {
         Schedule schedule = scheduleRepository.findById(updatedSchedule.scheduleId())
         .orElseThrow(() -> new ScheduleNotFoundException("Schedule not found by ID: " + updatedSchedule.scheduleId()));
@@ -77,6 +77,7 @@ public class ScheduleService {
         return updatedScheduleEntity;
     }
 
+    @Transactional
     public void delete(UUID id, UUID userId) {
 
         if (!scheduleRepository.existsById(id)) {
