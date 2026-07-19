@@ -1,6 +1,6 @@
-package beyou.beyouapp.backend.unit.ai;
+package beyou.beyouapp.backend.unit.aiAgent;
 
-import beyou.beyouapp.backend.domain.ai.AiIconCatalog;
+import beyou.beyouapp.backend.domain.aiAgent.AiIconCatalog;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

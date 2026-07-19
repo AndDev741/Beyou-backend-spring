@@ -49,16 +49,6 @@ public class RateLimitConfig {
                 .build();
     }
 
-    /** AI generations are the most expensive call in the system: 10 per hour per user. */
-    public static Bucket createAiBucket() {
-        return Bucket.builder()
-                .addLimit(Bandwidth.builder()
-                        .capacity(10)
-                        .refillGreedy(10, Duration.ofHours(1))
-                        .build())
-                .build();
-    }
-
     /**
      * AI agent chat streams: each opens a long-lived SSE emitter, calls the LLM,
      * and runs a tool loop — expensive, but conversational, so more generous than

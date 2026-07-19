@@ -26,7 +26,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import beyou.beyouapp.backend.domain.ai.AiIconCatalog;
+import beyou.beyouapp.backend.domain.aiAgent.AiIconCatalog;
 import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessageService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.Chat;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;

@@ -25,10 +25,10 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Assembles the agent's LLM fallback chain. Free providers are manual
- * OpenAiChatModel instances (NOT beans — keeps the auto-configured
- * OpenAiChatModel unambiguous for SpringAiRoutineDraftGenerator); DeepSeek
- * is the existing starter bean. Providers without an API key are skipped,
- * so dev/e2e boot with a DeepSeek-only chain and zero new env vars.
+ * OpenAiChatModel instances built from the spring-ai-openai library (not
+ * Spring beans); DeepSeek is the only auto-configured chat model
+ * (spring.ai.model.chat: deepseek). Providers without an API key are
+ * skipped, so dev/e2e boot with a DeepSeek-only chain and zero new env vars.
  */
 @Configuration
 @EnableConfigurationProperties(LlmChainProperties.class)
