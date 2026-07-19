@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.deepseek.DeepSeekChatModel;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -71,7 +71,7 @@ public class AiAgentService {
     // active-user set, so they're left in place rather than pruned on zero.
     private final ConcurrentMap<UUID, AtomicInteger> activeStreams = new ConcurrentHashMap<>();
 
-    public AiAgentService(DeepSeekChatModel chatModel,
+    public AiAgentService(ChatModel chatModel,
             ChatMemory chatMemory,
             ChatService chatService,
             AgentMessageService agentMessageService,

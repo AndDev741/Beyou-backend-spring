@@ -112,6 +112,27 @@ rate-limit:
 ai:
   routine:
     enabled: ${AI_ROUTINE_ENABLED:true}
+  llm-chain:
+    order: ${LLM_CHAIN_ORDER:mistral,gemini,glm,nvidia,deepseek}
+    cooldown-rate-limit-seconds: ${LLM_COOLDOWN_RATELIMIT:300}
+    cooldown-error-seconds: ${LLM_COOLDOWN_ERROR:30}
+    providers:
+      gemini:
+        base-url: https://generativelanguage.googleapis.com/v1beta/openai
+        api-key: ${GEMINI_API_KEY:}
+        model: ${GEMINI_MODEL:gemini-2.5-flash}
+      mistral:
+        base-url: https://api.mistral.ai/v1
+        api-key: ${MISTRAL_API_KEY:}
+        model: ${MISTRAL_MODEL:mistral-small-latest}
+      glm:
+        base-url: https://api.z.ai/api/paas/v4
+        api-key: ${GLM_API_KEY:}
+        model: ${GLM_MODEL:glm-4.7-flash}
+      nvidia:
+        base-url: https://integrate.api.nvidia.com/v1
+        api-key: ${NVIDIA_API_KEY:}
+        model: ${NVIDIA_MODEL:meta/llama-3.3-70b-instruct}
 
 docs:
   import:
