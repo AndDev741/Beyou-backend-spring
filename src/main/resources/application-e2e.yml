@@ -18,11 +18,6 @@
 # to accumulate across local runs afterwards.
 
 spring:
-  # Dummy AI key: the e2e profile swaps in CannedRoutineDraftGenerator, so the
-  # real provider is never called — this only lets the autoconfiguration boot.
-  ai:
-    openai:
-      api-key: e2e-noop
   datasource:
     # Defaults to the dedicated `beyou_e2e` database — NOT the dev `beyou` DB.
     # E2eSafetyCheck refuses to start if this URL doesn't contain "e2e" or

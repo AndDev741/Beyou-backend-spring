@@ -30,9 +30,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "DELETE", "PATCH");
 
-    /** AI generation gets its own (much tighter) bucket — see RateLimitConfig.createAiBucket. */
-    private static final String AI_GENERATE_PATH = "/ai/routine/generate";
-
     /** AI agent chat streams get their own bucket, NOT the generic write bucket:
      *  each stream is an expensive long-lived LLM call. */
     private static boolean isAgentStreamPath(String path) {
@@ -59,14 +56,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
             String ip = getClientIp(request);
             bucketKey = "auth:" + ip;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAuthBucket());
-        } else if (AI_GENERATE_PATH.equals(path)) {
-            String userId = getUserIdFromRequest(request);
-            if (userId == null) {
-                filterChain.doFilter(request, response);
-                return;
-            }
-            bucketKey = "ai:" + userId;
-            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAiBucket());
         } else if (isAgentStreamPath(path)) {
             String userId = getUserIdFromRequest(request);
             if (userId == null) {

@@ -25,17 +25,21 @@ spring:
     baseline-on-migrate: false
     validate-on-migrate: true
   ai:
+    # Only DeepSeek is auto-configured as a chat model; the free providers in
+    # the fallback chain are built manually in LlmChainConfig from the
+    # spring-ai-openai lib.
+    model:
+      chat: deepseek
+    openai:
+      # No OpenAI consumer remains (routine generation was removed), but the
+      # starter's other modality autoconfigs (audio/embedding/image) still
+      # demand a credential at boot. Noop key keeps them quiet.
+      api-key: dev-noop
     deepseek:
       api-key: ${DEEP_API_KEY:dev-noop}
       chat:
         options:
           model: ${AI_AGENT_MODEL:deepseek-v4-flash}
-    openai:
-      api-key: ${AI_API_KEY:dev-noop}
-      chat:
-        options:
-          model: ${AI_ROUTINE_MODEL:gpt-5-mini}
-          reasoning-effort: ${AI_REASONING_EFFORT:low}
     chat:
       client:
         enabled: false
@@ -110,8 +114,6 @@ rate-limit:
   enabled: true
 
 ai:
-  routine:
-    enabled: ${AI_ROUTINE_ENABLED:true}
   llm-chain:
     order: ${LLM_CHAIN_ORDER:mistral,gemini,glm,nvidia,deepseek}
     cooldown-rate-limit-seconds: ${LLM_COOLDOWN_RATELIMIT:300}

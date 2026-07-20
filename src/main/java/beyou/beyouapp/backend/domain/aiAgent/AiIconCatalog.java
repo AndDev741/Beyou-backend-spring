@@ -1,4 +1,4 @@
-package beyou.beyouapp.backend.domain.ai;
+package beyou.beyouapp.backend.domain.aiAgent;
 
 import java.util.List;
 import java.util.Set;

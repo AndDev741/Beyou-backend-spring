@@ -1,6 +1,5 @@
 package beyou.beyouapp.backend.exceptions;
 
-import beyou.beyouapp.backend.exceptions.ai.AiGenerationException;
 import beyou.beyouapp.backend.exceptions.security.JwtNotFoundException;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenDontMatchRaw;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenExpiredException;
@@ -78,15 +77,6 @@ public class GlobalExceptionHandler {
         ApiErrorResponse response = new ApiErrorResponse(ErrorKey.EXTERNAL_SERVICE_ERROR.name(),
                 "An upstream service request failed, try again later", null);
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
-    }
-
-    @ExceptionHandler(AiGenerationException.class)
-    public ResponseEntity<ApiErrorResponse> handleAiGenerationException(AiGenerationException ex){
-        // Log the provider failure server-side; return a generic message to the client.
-        log.warn("AI generation failed: {}", ex.getMessage());
-        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.AI_GENERATION_FAILED.name(),
-                "AI generation is unavailable right now, try again later", null);
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
