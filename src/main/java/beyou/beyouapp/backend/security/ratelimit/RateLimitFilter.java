@@ -74,6 +74,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
             String ip = getClientIp(request);
             bucketKey = "photo:" + ip;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createPhotoBucket());
+        } else if ("POST".equals(method) && path.equals("/onboarding/suggestions")) {
+            // LLM-backed onboarding suggestions share the agent-chat quota shape but their own key
+            String userId = getUserIdFromRequest(request);
+            if (userId == null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            bucketKey = "onboarding:" + userId;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAgentChatBucket());
         } else if (WRITE_METHODS.contains(method)) {
             String userId = getUserIdFromRequest(request);
             if (userId == null) {
