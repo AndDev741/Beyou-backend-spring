@@ -127,7 +127,7 @@ public class OnboardingSuggestionService {
                 by their EXACT names — do not invent items). 3-5 sections covering the day, each with name, \
                 iconId, startTime and endTime in HH:mm. Place each item in a fitting section with startTime \
                 and endTime inside that section's window. Also pick scheduleDays: a subset of \
-                MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY that fits the routine.
+                Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday that fits the routine.
                 """ + (feedback.isBlank() ? "" : "\nAdapt the draft to this user feedback: \"" + feedback + "\"");
     }
 
@@ -204,16 +204,37 @@ public class OnboardingSuggestionService {
                 clamp(t.importance()), clamp(t.difficulty()))).toList();
     }
 
+    /** Canonical wire format for schedule days — the frontend and the backend WeekDay enum
+     *  both expect capitalized names; LLM output is normalized case-insensitively. */
+    private static final List<String> WEEK_DAYS = List.of(
+            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday");
+
     private RoutineSuggestion sanitizeRoutine(RoutineSuggestion routine) {
         List<SectionSuggestion> sections = routine.sections() == null ? List.of()
                 : routine.sections().stream().limit(8).map(s -> new SectionSuggestion(
                         truncate(s.name(), 256), AiIconCatalog.orDefault(s.iconId()),
                         s.startTime(), s.endTime(),
-                        s.habits() != null ? s.habits() : List.of(),
-                        s.tasks() != null ? s.tasks() : List.of())).toList();
+                        sanitizeItems(s.habits()),
+                        sanitizeItems(s.tasks()))).toList();
         return new RoutineSuggestion(truncate(routine.name(), 256),
                 AiIconCatalog.orDefault(routine.iconId()),
-                routine.scheduleDays() != null ? routine.scheduleDays() : List.of(), sections);
+                normalizeDays(routine.scheduleDays()), sections);
+    }
+
+    private List<ItemPlacement> sanitizeItems(List<ItemPlacement> items) {
+        if (items == null) return List.of();
+        return items.stream().limit(MAX_ITEMS).map(i -> new ItemPlacement(
+                truncate(i.name(), 256), i.startTime(), i.endTime())).toList();
+    }
+
+    /** Case-insensitive match against the canonical day names; unknown values dropped. */
+    private List<String> normalizeDays(List<String> days) {
+        if (days == null) return List.of();
+        return days.stream()
+                .map(d -> WEEK_DAYS.stream().filter(w -> w.equalsIgnoreCase(d)).findFirst().orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
     private List<GoalSuggestion> sanitizeGoals(List<GoalSuggestion> goals) {

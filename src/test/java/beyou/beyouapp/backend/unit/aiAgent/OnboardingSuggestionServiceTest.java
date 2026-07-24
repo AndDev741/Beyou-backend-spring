@@ -90,6 +90,28 @@ public class OnboardingSuggestionServiceTest {
     }
 
     @Test
+    public void routineNormalizesScheduleDaysAndSanitizesItems() {
+        // LLM returned uppercase days (old prompt style), an unknown day, a dup,
+        // and an over-long item name — all must be normalized/sanitized.
+        String longName = "x".repeat(300);
+        when(chatModel.call(any(Prompt.class))).thenReturn(ok("""
+                {"name":"Morning flow","iconId":"bogus",
+                 "scheduleDays":["MONDAY","monday","Tuesday","Funday"],
+                 "sections":[{"name":"Wake","iconId":"bogus","startTime":"07:00","endTime":"08:00",
+                   "habits":[{"name":"%s","startTime":"07:00","endTime":"07:30"}],
+                   "tasks":null}]}""".formatted(longName)));
+
+        OnboardingSuggestions result = service.suggest(new OnboardingSuggestionRequest(
+                OnboardingStep.ROUTINE, null,
+                new OnboardingSuggestionRequest.OnboardingContext(List.of("Health"), null, null, null, null), null), user());
+
+        assertThat(result.routine().scheduleDays()).containsExactly("Monday", "Tuesday");
+        assertThat(result.routine().sections().get(0).habits().get(0).name()).hasSize(256);
+        assertThat(result.routine().sections().get(0).tasks()).isEmpty();
+        assertThat(result.routine().iconId()).isEqualTo(AiIconCatalog.DEFAULT_ICON);
+    }
+
+    @Test
     public void retriesOnceOnParseFailureThenSucceeds() {
         when(chatModel.call(any(Prompt.class)))
                 .thenReturn(ok("not json at all"))
