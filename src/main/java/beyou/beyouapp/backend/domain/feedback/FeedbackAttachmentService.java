@@ -34,6 +34,7 @@ public class FeedbackAttachmentService {
     private final FeedbackRepository feedbackRepository;
     private final FeedbackAttachmentRepository attachmentRepository;
     private final FeedbackAttachmentStorageService storageService;
+    private final FeedbackMapper feedbackMapper;
 
     /**
      * Validates and stores one image against a submission the caller owns.
@@ -111,15 +112,12 @@ public class FeedbackAttachmentService {
         throw new BusinessException(ErrorKey.FEEDBACK_NOT_OWNED, "This feedback belongs to another user");
     }
 
+    /**
+     * Delegated so the served-bytes URL is built in exactly one place — the
+     * admin detail view (U5) renders the same attachments and must not grow a
+     * second copy of this path that can drift from the serving route.
+     */
     private FeedbackAttachmentDTO toDTO(FeedbackAttachment attachment, UUID feedbackId) {
-        return new FeedbackAttachmentDTO(
-                attachment.getId(),
-                feedbackId,
-                "/feedback/" + feedbackId + "/attachments/" + attachment.getId(),
-                FeedbackAttachmentStorageService.STORED_CONTENT_TYPE,
-                attachment.getWidth(),
-                attachment.getHeight(),
-                attachment.getSizeBytes(),
-                attachment.getCreatedAt());
+        return feedbackMapper.toAttachmentDTO(attachment, feedbackId);
     }
 }
