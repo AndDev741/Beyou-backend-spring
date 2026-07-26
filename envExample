@@ -64,6 +64,16 @@ SENTRY_DSN=
 SENTRY_RELEASE=
 # Groups events by deployment: local, staging, prod. Defaults to "local".
 SENTRY_ENVIRONMENT=
+# With a DSN set, the Logback integration is also on (see `sentry.logging` in
+# application.yaml): ERROR log lines become events of their own — which is how failures
+# that code catches and logs itself, such as a failed async e-mail send, become visible —
+# and INFO+ lines become breadcrumbs attached to the next captured event. Loggers whose
+# lines carry user content or a third-party response body are excluded in
+# config/SentryLoggerExclusions.
+# No variable is needed to switch this on. To switch it OFF for one deployment without a
+# rebuild, uncomment the line below — environment variables outrank application.yaml.
+# Leave it commented rather than empty: an empty value binds as `false`.
+# SENTRY_LOGGING_ENABLED=false
 
 # Heartbeat for the scheduled snapshot job (RoutineSnapshotScheduler).
 # The job runs hourly and checks in here after every completed cycle; GlitchTip

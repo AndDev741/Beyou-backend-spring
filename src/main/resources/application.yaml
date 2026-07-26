@@ -169,13 +169,45 @@ sentry:
   # Never capture request bodies — they carry habit/goal/task text written by users.
   # NONE is also the SDK default; pinned so a future SDK default change can't leak it.
   max-request-body-size: none
-  # The Logback integration turns every ERROR log into an event and every INFO+ log
-  # into a breadcrumb, which would drag logged payloads (e.g. the upstream response
-  # body GlobalExceptionHandler logs for HttpClientErrorException) into the collector.
-  # Unhandled exceptions already reach Sentry through the MVC exception resolver, so
-  # the appender only adds PII risk.
+  # The Logback integration (io.sentry:sentry-logback) buys two things the MVC exception
+  # resolver cannot:
+  #   * breadcrumbs — a captured exception arrives with the log lines that led to it
+  #     instead of a bare stack trace;
+  #   * events for handled failures — code that catches and logs its own exception is
+  #     otherwise invisible. The async listeners in notification/EmailService do exactly
+  #     that on purpose (a failed send must never cost a user's feedback submission), so
+  #     a dead SMTP server used to be silent on both ends.
+  #
+  # It also drags whatever a log line interpolates into the collector, which is why
+  # SentryBreadcrumbFilter exists. Both thresholds below are load-bearing:
+  #   * breadcrumbs at INFO — the app's useful trail (LLM provider fallbacks, failed
+  #     e-mail sends, snapshot decisions, connection-pool warnings) is logged at INFO/WARN.
+  #   * events at ERROR — GlobalExceptionHandler logs an upstream response body at WARN.
+  #     Lowering this would turn that body into an event message, which no breadcrumb
+  #     filter can intercept. Locked in by SentryTelemetryConfigTest.
+  # Which loggers are excluded from each channel, and why, lives in
+  # config/SentryLoggerExclusions.
   logging:
-    enabled: false
+    enabled: true
+    minimum-breadcrumb-level: info
+    minimum-event-level: error
+  # Load-bearing once the Logback appender is on: an unhandled exception is logged at ERROR
+  # by ServiceMethodsLogging, logged again by ControllerLogging, and then captured by the
+  # MVC exception resolver — three captures of one fault. Deduplication (an SDK default,
+  # pinned here so a future default change can't quietly triple the issue count) keeps only
+  # the first. It runs as an event processor, i.e. BEFORE SentryEventFilter, which is why
+  # the duplicates must not be dropped by logger name in that callback — doing so would
+  # leave the throwable registered as seen and suppress the real report too.
+  #
+  # Verified against the live collector with a forced 500 (paused Postgres): the aspects'
+  # two ERROR logs and the MVC resolver collapsed into ONE issue. One residual duplicate
+  # survives — Tomcat logs the same failure a second time with its ROOT CAUSE
+  # ("Servlet.service() … with root cause"), a different throwable instance, so
+  # deduplication cannot match it and it lands as its own issue titled after the root
+  # cause. Left in deliberately: that log line is also the only signal for exceptions
+  # thrown in the servlet filter chain, which never reach the MVC resolver at all, and
+  # excluding it would mean matching a logger name that embeds the servlet context path.
+  enable-deduplication: true
   # Ties an event to the build that produced it. CI publishes images tagged
   # `sha-<short sha>` — pass the matching value, e.g. beyou-backend@sha-1a2b3c4.
   release: ${SENTRY_RELEASE:beyou-backend@local}

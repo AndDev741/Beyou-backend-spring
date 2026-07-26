@@ -61,6 +61,15 @@ class SentryEventFilterTest {
     }
 
     @Test
+    void keepsEventsLoggedBySelfHandlingCodeThatSwallowsItsOwnFailures() {
+        SentryEvent fromEmailListener = new SentryEvent(new IllegalStateException("SMTP is down"));
+        fromEmailListener.setLogger("beyou.beyouapp.backend.notification.EmailService");
+
+        assertSame(fromEmailListener, filter.execute(fromEmailListener, new Hint()),
+                "a swallowed async failure reaches the collector through its ERROR log or not at all");
+    }
+
+    @Test
     void doesNotLoopOnSelfReferentialCauseChain() {
         Throwable selfCausing = new RuntimeException("boom") {
             @Override

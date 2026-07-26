@@ -99,6 +99,14 @@ app:
 # to prove this override still wins.
 sentry:
   enabled: false
+  # Belt and braces for the same hazard. `enabled: false` already makes Sentry.init a
+  # no-op, but the Logback appender is attached to the root logger by a separate
+  # autoconfiguration keyed only on `sentry.logging.enabled` (default true once
+  # sentry-logback is on the classpath). Pinning it false means no appender is ever
+  # attached during a test run, so no log line can take a route to a collector at all.
+  # Locked in by SentryTelemetryConfigTest, which asserts the appender is absent.
+  logging:
+    enabled: false
 
 # Snapshot heartbeat OFF — pinned to empty rather than left to the
 # ${SNAPSHOT_HEARTBEAT_URL:} default, for the same reason sentry.enabled is pinned

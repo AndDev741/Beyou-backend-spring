@@ -7,7 +7,8 @@ import io.sentry.SentryOptions;
 import org.springframework.stereotype.Component;
 
 /**
- * Drops handled business outcomes before they are sent to the error collector.
+ * Drops handled business outcomes, and duplicate reports of the same fault, before they
+ * are sent to the error collector.
  *
  * <p>{@link BusinessException} (and its subclasses — CategoryNotFound, UserNotFound,
  * GoalNotFound, …) is how this codebase expresses ordinary domain results: not found,
@@ -16,11 +17,21 @@ import org.springframework.stereotype.Component;
  * for a deleted habit is not an incident. Reporting them would bury the genuine
  * unhandled exceptions the collector exists to surface.
  *
+ * <p>Duplicate reports of one fault are deliberately NOT handled here. With the Logback
+ * integration on, the two logging aspects log an unhandled exception at ERROR on its way
+ * out and Spring MVC's resolver captures it again, so the same throwable is captured
+ * several times. That is collapsed by the SDK's own deduplication (pinned as
+ * {@code sentry.enable-deduplication} in application.yaml), which runs as an event
+ * processor — i.e. BEFORE this callback. Discarding the first capture here would leave the
+ * throwable already registered as "seen", so the later captures would be deduplicated away
+ * too and the fault would vanish entirely. Proven by
+ * {@code SentryLogAppenderPipelineTest#deduplicationIsDecidedBeforeBeforeSendSoTheFirstCaptureMustBeAllowedToWin}.
+ *
  * <p>Sentry's autoconfiguration picks this bean up as the single
  * {@link SentryOptions.BeforeSendCallback} and runs it on every capture path (the MVC
- * exception resolver, the uncaught-exception handler, manual captures), so the
- * exclusion does not depend on Spring MVC resolver ordering. Returning {@code null}
- * discards the event.
+ * exception resolver, the Logback appender, the uncaught-exception handler, manual
+ * captures), so the exclusions do not depend on Spring MVC resolver ordering. Returning
+ * {@code null} discards the event.
  *
  * <p>The bean is harmless when telemetry is off: without a {@code sentry.dsn} no Sentry
  * autoconfiguration runs at all and this is just an unused POJO in the context.
