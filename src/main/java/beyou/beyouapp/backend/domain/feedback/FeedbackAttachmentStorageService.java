@@ -10,7 +10,9 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Comparator;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -202,6 +204,50 @@ public class FeedbackAttachmentStorageService {
                     // best-effort cleanup of the temp file on the failure path
                 }
             }
+        }
+    }
+
+    /**
+     * R21 — removes every byte stored for one submission, directory included.
+     *
+     * The database cascades attachment ROWS away with their submission (V10),
+     * but nothing in the database reaches the files, so this is the only thing
+     * standing between a deleted account and images that live forever. Called
+     * from the account-deletion path.
+     *
+     * Deliberately best-effort: it never throws. A filesystem that refuses a
+     * delete must not be able to block someone from deleting their account, and
+     * the caller has no better recovery than the loud log left here.
+     *
+     * @return true when nothing of the submission remains on disk
+     */
+    public boolean deleteAllForFeedback(UUID feedbackId) {
+        Path dir = uploadDir.resolve(feedbackId.toString());
+        if (!Files.exists(dir)) {
+            return true;
+        }
+
+        try (var paths = Files.walk(dir)) {
+            // Deepest first — a directory only goes once it is empty.
+            List<Path> ordered = paths.sorted(Comparator.reverseOrder()).toList();
+            boolean complete = true;
+            for (Path path : ordered) {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    complete = false;
+                    log.error("Could not delete feedback attachment file {} — it will outlive its submission {}",
+                        path, feedbackId, e);
+                }
+            }
+            if (complete) {
+                log.info("Attachment files removed for feedback {}", feedbackId);
+            }
+            return complete;
+        } catch (IOException e) {
+            log.error("Could not walk the attachment directory for feedback {} — files may be left behind",
+                feedbackId, e);
+            return false;
         }
     }
 

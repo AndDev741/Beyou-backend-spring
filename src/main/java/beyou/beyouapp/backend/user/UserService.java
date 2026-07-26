@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
@@ -48,6 +49,8 @@ public class UserService {
     private final UserMapper userMapper;
     private final PhotoStorageService photoStorageService;
     private final ApplicationEventPublisher eventPublisher;
+    /** Only used by {@link #deleteUser(User)} — attachment bytes do not cascade. */
+    private final FeedbackAttachmentService feedbackAttachmentService;
 
     /**
      * When true, newly registered users are immediately marked as verified and
@@ -146,8 +149,28 @@ public class UserService {
         }
     }
 
+    /**
+     * R21 — deleting an account takes the account's content with it.
+     *
+     * Every owned domain (categories, habits, goals, tasks, routines, feedback)
+     * is carried off by the database's ON DELETE CASCADE inside this
+     * transaction. Feedback ATTACHMENTS are the exception: their rows cascade,
+     * but their bytes sit on disk where no foreign key reaches, so they are
+     * purged explicitly — otherwise a deleted account's screenshots live
+     * forever.
+     *
+     * The purge runs BEFORE the delete because that is the only moment the
+     * files are still reachable: they are addressed by feedback id, and the
+     * cascade takes those rows away. Nothing is lost by going first — the
+     * feedback schema (V9/V10/V12) cascades precisely so this delete cannot be
+     * blocked by a foreign key — and the purge itself never throws, so a
+     * stubborn filesystem cannot strand someone with an account they asked to
+     * remove.
+     */
+    @Transactional
     public ResponseEntity<Map<String, String>> deleteUser(User user){
         try{
+            feedbackAttachmentService.purgeStoredFilesForUser(user.getId());
             userRepository.delete(user);
             return ResponseEntity.ok(Map.of("success", "User deleted successfully"));
         }catch(Exception e){

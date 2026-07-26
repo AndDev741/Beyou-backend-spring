@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.domain.category.CategoryRepository;
+import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.goal.GoalRepository;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
 import beyou.beyouapp.backend.domain.task.TaskRepository;
@@ -24,6 +25,7 @@ public class UserExportService {
     private final HabitRepository habitRepository;
     private final GoalRepository goalRepository;
     private final TaskRepository taskRepository;
+    private final FeedbackService feedbackService;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -91,6 +93,11 @@ public class UserExportService {
             map.put("difficulty", t.getDificulty());
             return map;
         }).toList());
+
+        // Feedback (R21) — submissions, the replies they got back, and
+        // references to any attached images. Assembled by the feedback domain
+        // itself; the shape of a submission is not this class's business.
+        export.put("feedback", feedbackService.exportForUser(userId));
 
         return export;
     }

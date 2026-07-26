@@ -101,6 +101,24 @@ public class FeedbackAttachmentService {
         return resource;
     }
 
+    /**
+     * R21 — removes the attachment bytes of every submission this account made.
+     *
+     * The rows go on their own: the database cascades feedback and its
+     * attachments away with the user (V9/V10). The FILES do not cascade, and
+     * once the rows are gone nothing points at them any more, so they have to be
+     * found here, while the submissions still exist. That is why the
+     * account-deletion path calls this BEFORE it deletes the user.
+     *
+     * Best-effort by construction — {@link FeedbackAttachmentStorageService#deleteAllForFeedback}
+     * logs and swallows: a filesystem that refuses a delete must not be able to
+     * block someone from deleting their account.
+     */
+    @Transactional(readOnly = true)
+    public void purgeStoredFilesForUser(UUID userId) {
+        feedbackRepository.findIdsByUserId(userId).forEach(storageService::deleteAllForFeedback);
+    }
+
     private Feedback requireFeedback(UUID feedbackId, User requester, boolean adminMayAct) {
         Feedback feedback = feedbackRepository.findById(feedbackId)
                 .orElseThrow(() -> new BusinessException(ErrorKey.FEEDBACK_NOT_FOUND, "Feedback not found"));

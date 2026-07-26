@@ -11,6 +11,18 @@ import java.util.UUID;
 public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     List<Feedback> findAllByUserIdOrderByCreatedAtDesc(UUID userId);
 
+    /**
+     * R21 — the ids of one user's submissions, and deliberately nothing else.
+     *
+     * Used by the account-deletion path to find the attachment directories on
+     * disk. It must NOT return entities: this runs inside the transaction that
+     * then removes the owner, and a managed {@code Feedback} pointing at a
+     * just-removed {@code User} makes Hibernate fail the flush with
+     * {@code TransientPropertyValueException}. Ids carry no such reference.
+     */
+    @Query("SELECT f.id FROM Feedback f WHERE f.user.id = :userId")
+    List<UUID> findIdsByUserId(UUID userId);
+
     /*
      * Admin inbox listing (R12). Each filter combination is its own derived
      * query rather than one query with nullable parameters: the parameters are

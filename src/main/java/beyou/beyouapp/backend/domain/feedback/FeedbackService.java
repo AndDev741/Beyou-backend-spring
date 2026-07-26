@@ -23,6 +23,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -150,6 +152,60 @@ public class FeedbackService {
         long closed = counts.getOrDefault(FeedbackStatus.CLOSED, 0L);
 
         return new FeedbackStatusCountsDTO(open, takingCare, closed, open + takingCare + closed);
+    }
+
+    /**
+     * R21 — the user's own feedback, shaped for the account data export.
+     *
+     * Everything they wrote and everything written back to them, newest first.
+     * The query is keyed on the owner, so one user's export can never reach
+     * another's submissions. Attachments are exported as references rather than
+     * bytes — the URL comes from {@link FeedbackMapper#toAttachmentDTO}, the one
+     * place that path is built, so an export can never point somewhere the
+     * serving route does not.
+     *
+     * Returns plain maps rather than a DTO because that is the shape
+     * {@code UserExportService} assembles the rest of the payload in.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> exportForUser(UUID userId) {
+        return feedbackRepository.findAllByUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(this::toExportMap)
+                .toList();
+    }
+
+    private Map<String, Object> toExportMap(Feedback feedback) {
+        UUID feedbackId = feedback.getId();
+
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", feedbackId);
+        map.put("category", feedback.getCategory());
+        map.put("body", feedback.getBody());
+        map.put("status", feedback.getStatus());
+        map.put("createdAt", feedback.getCreatedAt());
+        map.put("updatedAt", feedback.getUpdatedAt());
+        map.put("attachments", feedbackAttachmentRepository
+                .findAllByFeedbackIdOrderByCreatedAtAsc(feedbackId).stream()
+                .map(attachment -> feedbackMapper.toAttachmentDTO(attachment, feedbackId))
+                .toList());
+        map.put("replies", feedbackReplyRepository
+                .findAllByFeedbackIdOrderByCreatedAtAsc(feedbackId).stream()
+                .map(FeedbackService::toReplyExportMap)
+                .toList());
+        return map;
+    }
+
+    /**
+     * A reply as its recipient's export sees it: what was said and when. The
+     * author is deliberately left out — this is the submitter's data export,
+     * not a directory of the staff who answered them.
+     */
+    private static Map<String, Object> toReplyExportMap(FeedbackReply reply) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", reply.getId());
+        map.put("body", reply.getBody());
+        map.put("createdAt", reply.getCreatedAt());
+        return map;
     }
 
     /**
