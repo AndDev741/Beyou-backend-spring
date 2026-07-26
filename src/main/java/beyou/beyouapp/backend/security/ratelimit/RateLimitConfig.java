@@ -64,6 +64,25 @@ public class RateLimitConfig {
                 .build();
     }
 
+    /** Feedback submissions allowed per user per hour — see {@link #createFeedbackBucket()}. */
+    public static final int FEEDBACK_SUBMISSIONS_PER_HOUR = 10;
+
+    /**
+     * Feedback submission (POST /feedback) gets its own per-user bucket rather
+     * than competing with routine domain writes: a burst of feedback must not
+     * eat the budget a user needs to check off habits, and a spammer must not
+     * be able to flood the admin queue on the generous write allowance.
+     * Ten an hour is far more than an honest user ever needs.
+     */
+    public static Bucket createFeedbackBucket() {
+        return Bucket.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(FEEDBACK_SUBMISSIONS_PER_HOUR)
+                        .refillGreedy(FEEDBACK_SUBMISSIONS_PER_HOUR, Duration.ofHours(1))
+                        .build())
+                .build();
+    }
+
     /** Public, unauthenticated GET /user/photo/** — per-IP so anonymous callers can't flood disk reads. */
     public static Bucket createPhotoBucket() {
         return Bucket.builder()

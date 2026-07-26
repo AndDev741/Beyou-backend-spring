@@ -83,6 +83,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
             bucketKey = "onboarding:" + userId;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAgentChatBucket());
+        } else if ("POST".equals(method) && path.equals("/feedback")) {
+            // Feedback submission gets its own per-user budget, ahead of the generic
+            // write branch: a burst of submissions must not eat the user's habit/routine
+            // write allowance, and the admin queue must not be floodable on it either.
+            String userId = getUserIdFromRequest(request);
+            if (userId == null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            bucketKey = "feedback:" + userId;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createFeedbackBucket());
         } else if (WRITE_METHODS.contains(method)) {
             String userId = getUserIdFromRequest(request);
             if (userId == null) {
