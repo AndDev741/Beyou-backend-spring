@@ -196,7 +196,10 @@ public class User implements UserDetails {
     //UserDetails methods
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        // Rows predating the role column (and any row a manual UPDATE left null)
+        // must still authenticate — as ordinary users, never as admins.
+        UserRole effectiveRole = userRole != null ? userRole : UserRole.USER;
+        return List.of(new SimpleGrantedAuthority("ROLE_" + effectiveRole.name()));
     }
 
     @Override
