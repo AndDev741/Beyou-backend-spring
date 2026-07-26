@@ -102,3 +102,10 @@ docs:
 # this override every e2e run would flood the collector and bury real signal.
 sentry:
   enabled: false
+
+# Snapshot heartbeat OFF — the e2e stack shares dev's .env, and a check-in from a
+# throwaway Playwright backend would hold the monitor green while the real
+# scheduled job could be dead.
+monitoring:
+  heartbeat:
+    snapshot-url: ""

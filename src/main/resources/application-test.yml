@@ -99,3 +99,12 @@ app:
 # to prove this override still wins.
 sentry:
   enabled: false
+
+# Snapshot heartbeat OFF — pinned to empty rather than left to the
+# ${SNAPSHOT_HEARTBEAT_URL:} default, for the same reason sentry.enabled is pinned
+# above: a SNAPSHOT_HEARTBEAT_URL exported in a developer's shell or a CI runner's
+# env would bind straight through and let a test run check in to a real collector,
+# keeping a monitor green for a job that isn't running anywhere.
+monitoring:
+  heartbeat:
+    snapshot-url: ""

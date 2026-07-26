@@ -190,6 +190,21 @@ sentry:
   # BeforeSendCallback, which runs for every capture path.
   exception-resolver-order: 2147483647
 
+# Liveness signal for the scheduled snapshot job.
+#
+# The collector's uptime check against /actuator/health proves the process answers.
+# It cannot prove RoutineSnapshotScheduler is still firing — a wedged scheduler thread
+# keeps health green while snapshots silently stop. So the job checks in after every
+# completed hourly cycle and the collector alerts on a MISSING check-in.
+#
+# Empty = disabled, and nothing outbound is ever attempted. Create a Heartbeat monitor
+# in GlitchTip, copy its endpoint URL here, and set the monitor's expected interval to
+# 5400s (the job's hourly cadence plus 30 minutes of slack, so one slow or skipped run
+# is not an alert). See Beyou-dev-env/README.md.
+monitoring:
+  heartbeat:
+    snapshot-url: ${SNAPSHOT_HEARTBEAT_URL:}
+
 management:
   server:
     port: ${MANAGEMENT_PORT:9091}

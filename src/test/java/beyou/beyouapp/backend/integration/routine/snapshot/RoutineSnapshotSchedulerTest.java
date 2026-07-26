@@ -9,6 +9,7 @@ import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotCheckMigrator;
 import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
+import beyou.beyouapp.backend.monitoring.SnapshotJobHeartbeat;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +24,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDate;
 import java.util.*;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -44,6 +48,9 @@ class RoutineSnapshotSchedulerTest {
 
     @Mock
     private SnapshotCheckMigrator checkMigrator;
+
+    @Mock
+    private SnapshotJobHeartbeat heartbeat;
 
     @InjectMocks
     private RoutineSnapshotScheduler scheduler;
@@ -244,6 +251,63 @@ class RoutineSnapshotSchedulerTest {
 
         // user's routines still get backfilled despite user2's failure
         verify(snapshotService, atLeastOnce()).createSnapshot(eq(routine), eq(user), any());
+    }
+
+    // ---------------------------------------------------------------
+    // Heartbeat tests
+    // ---------------------------------------------------------------
+    // The collector's monitor for this job alerts on the ABSENCE of a
+    // check-in, so the value of the whole mechanism rests on exactly
+    // when the signal is and is not sent.
+
+    @Test
+    void processSnapshots_signalsHeartbeatAfterASuccessfulCycle() {
+        when(userRepository.findDistinctTimezones()).thenReturn(List.of("UTC"));
+        // Whether this run lands on midnight UTC depends on the wall clock, so tolerate
+        // both branches: either way the cycle must reach its end and check in.
+        lenient().when(userRepository.findAllByTimezone(anyString())).thenReturn(List.of());
+
+        scheduler.processSnapshots();
+
+        verify(heartbeat).signalCycleCompleted();
+    }
+
+    @Test
+    void processSnapshots_doesNotSignalHeartbeatWhenTheRunThrows() {
+        // A signal from a run that then blew up would make the monitor a permanent
+        // green light — the exact failure the heartbeat exists to catch.
+        when(userRepository.findDistinctTimezones())
+                .thenThrow(new RuntimeException("database unreachable"));
+
+        assertThatThrownBy(() -> scheduler.processSnapshots())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("database unreachable");
+
+        verify(heartbeat, never()).signalCycleCompleted();
+    }
+
+    @Test
+    void processSnapshots_survivesAFailingHeartbeatSignal() {
+        // Monitoring must never become a cause of the outage it is watching.
+        when(userRepository.findDistinctTimezones()).thenReturn(List.of());
+        doThrow(new RuntimeException("collector unreachable"))
+                .when(heartbeat).signalCycleCompleted();
+
+        assertThatCode(() -> scheduler.processSnapshots()).doesNotThrowAnyException();
+
+        verify(heartbeat).signalCycleCompleted();
+    }
+
+    @Test
+    void backfillMissedSnapshots_doesNotSignalHeartbeat() {
+        // Startup backfill is not the scheduled cycle. If it checked in, a backend
+        // stuck in a crash-restart loop would keep the monitor green forever.
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of());
+
+        scheduler.backfillMissedSnapshots();
+
+        verify(heartbeat, never()).signalCycleCompleted();
     }
 
     // ---------------------------------------------------------------
