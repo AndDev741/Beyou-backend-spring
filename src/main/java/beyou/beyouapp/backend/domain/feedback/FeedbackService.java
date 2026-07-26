@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.feedback;
 
+import org.springframework.util.StringUtils;
 import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackRequestDTO;
 import beyou.beyouapp.backend.domain.feedback.dto.FeedbackAdminDetailDTO;
 import beyou.beyouapp.backend.domain.feedback.dto.FeedbackAdminItemDTO;
@@ -87,11 +88,24 @@ public class FeedbackService {
                 this,
                 saved.getId(),
                 user.getEmail(),
-                user.getLanguageInUse(),
+                acknowledgementLanguage(saved, user),
                 saved.getCategory(),
                 saved.getBody()));
 
         return feedbackMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * The acknowledgement is immediate, so the language the interface was
+     * actually showing at submission — captured as context per R4 — is the
+     * truest signal. The stored profile preference is only the fallback: it
+     * stays null until the user visits the configuration screen, so reading it
+     * first sent every new account an English receipt no matter which language
+     * they were browsing in.
+     */
+    private String acknowledgementLanguage(Feedback feedback, User user) {
+        String contextLanguage = feedback.getContext() == null ? null : feedback.getContext().getLanguage();
+        return StringUtils.hasText(contextLanguage) ? contextLanguage : user.getLanguageInUse();
     }
 
     /**

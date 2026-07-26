@@ -243,6 +243,18 @@ class FeedbackNotificationIntegrationTest extends AbstractIntegrationTest {
                 .doesNotContain("null");
     }
 
+    private UUID submitWithLanguage(String category, String body, String language) throws Exception {
+        MvcResult result = mockMvc.perform(post("/feedback")
+                        .header("authorization", "Bearer " + login(EMAIL))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"category\": \"" + category + "\", \"body\": \"" + body
+                                + "\", \"context\": {\"language\": \"" + language + "\"}}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        return UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.id"));
+    }
+
     private UUID submit(String category, String body) throws Exception {
         MvcResult result = mockMvc.perform(post("/feedback")
                         .header("authorization", "Bearer " + login(EMAIL))
@@ -343,5 +355,38 @@ class FeedbackNotificationIntegrationTest extends AbstractIntegrationTest {
                 .andReturn();
 
         return result.getResponse().getHeader("X-Access-Token");
+    }
+
+    @Test
+    @DisplayName("an account that never set a language is acknowledged in the language it was browsing in")
+    void acknowledgementFallsBackToTheSubmissionContextLanguage() throws Exception {
+        // languageInUse stays null until the user visits the configuration
+        // screen, so reading it first sent every new account an English
+        // receipt no matter which language the interface was showing.
+        author.setLanguageInUse(null);
+        userRepository.saveAndFlush(author);
+
+        submitWithLanguage("BUG", "Enviado com a interface em portugues.", "pt");
+
+        MimeMessage ack = awaitMessage(ACK_SUBJECTS);
+
+        assertThat(subjectOf(ack)).containsIgnoringCase("recebemos seu feedback");
+    }
+
+    @Test
+    @DisplayName("a stored preference outranks the language the submission was written in")
+    void replyPrefersTheStoredPreferenceOverTheSubmissionContext() throws Exception {
+        author.setLanguageInUse("pt");
+        userRepository.saveAndFlush(author);
+
+        UUID feedbackId = submitWithLanguage("BUG", "Written while the interface was in English.", "en");
+        awaitMessage(ACK_SUBJECTS);
+
+        feedbackReplyService.reply(feedbackId, admin.getId(),
+                new CreateFeedbackReplyRequestDTO("Ja esta corrigido."));
+
+        MimeMessage reply = awaitMessage(REPLY_SUBJECTS);
+
+        assertThat(subjectOf(reply)).containsIgnoringCase("respondemos seu feedback");
     }
 }

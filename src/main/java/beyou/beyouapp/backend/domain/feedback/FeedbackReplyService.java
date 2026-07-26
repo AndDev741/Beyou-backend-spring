@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.feedback;
 
+import org.springframework.util.StringUtils;
 import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackReplyRequestDTO;
 import beyou.beyouapp.backend.domain.feedback.dto.FeedbackReplyDTO;
 import beyou.beyouapp.backend.domain.feedback.event.FeedbackRepliedEvent;
@@ -77,7 +78,7 @@ public class FeedbackReplyService {
                 this,
                 feedbackId,
                 recipient.getEmail(),
-                recipient.getLanguageInUse(),
+                replyLanguage(feedback, recipient),
                 feedback.getBody(),
                 saved.getBody()));
 
@@ -91,5 +92,18 @@ public class FeedbackReplyService {
                 reply.getBody(),
                 reply.getAuthor() == null ? null : reply.getAuthor().getName(),
                 reply.getCreatedAt());
+    }
+
+    /**
+     * A reply lands days after the submission, so the recipient's current
+     * preference outranks whichever language they happened to be using when
+     * they wrote. The submission context (R4) is the fallback for an account
+     * that never set a preference.
+     */
+    private String replyLanguage(Feedback feedback, User recipient) {
+        if (StringUtils.hasText(recipient.getLanguageInUse())) {
+            return recipient.getLanguageInUse();
+        }
+        return feedback.getContext() == null ? null : feedback.getContext().getLanguage();
     }
 }
