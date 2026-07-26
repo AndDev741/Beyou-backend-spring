@@ -87,3 +87,15 @@ management:
 
 app:
   upload-dir: ${UPLOAD_DIR:/tmp/beyou-test-uploads}
+
+# Error telemetry OFF — the suite must emit nothing to the collector.
+#
+# application.yaml never declares `sentry.dsn`, so Sentry's
+# @ConditionalOnProperty("sentry.dsn") autoconfiguration normally doesn't even
+# engage. But a SENTRY_DSN exported in a developer's shell (or a CI runner's env)
+# would leak straight into the suite via relaxed binding. `enabled: false` makes
+# Sentry.init a no-op regardless of the DSN, so no event can ever be sent from a
+# test run. Locked in by SentryTelemetryConfigTest, which injects a DSN on purpose
+# to prove this override still wins.
+sentry:
+  enabled: false

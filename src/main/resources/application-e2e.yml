@@ -94,3 +94,11 @@ docs:
   import:
     secret: e2e-noop
     token: e2e-noop
+
+# Error telemetry OFF — Playwright runs deliberately provoke failures (bad
+# credentials, validation errors, forced 500s), and none of that is a real
+# production incident. application.yaml never declares `sentry.dsn`, but the e2e
+# stack runs from the same .env as dev, where SENTRY_DSN may well be set; without
+# this override every e2e run would flood the collector and bury real signal.
+sentry:
+  enabled: false

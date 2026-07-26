@@ -151,6 +151,45 @@ docs:
     token: ${DOCS_IMPORT_TOKEN:}
     secret: ${DOCS_IMPORT_SECRET:}
 
+# Error telemetry — unhandled exceptions are shipped to the self-hosted GlitchTip
+# collector (Sentry-API compatible) run by Beyou-dev-env's monitoring overlay.
+#
+# `sentry.dsn` is deliberately NOT declared here with a `${SENTRY_DSN:}` default.
+# Sentry's autoconfiguration is @ConditionalOnProperty("sentry.dsn"), and an empty
+# string still counts as "present" — declaring it would wire every Sentry bean into
+# every environment. Spring's relaxed binding maps the SENTRY_DSN environment
+# variable straight onto `sentry.dsn`, so setting that env var is the ONLY way the
+# integration switches on. No DSN in the environment = no Sentry beans at all.
+sentry:
+  # Hard requirement: no PII reaches the collector. With send-default-pii=false
+  # SentryRequestResolver drops every sensitive request header (Authorization,
+  # Cookie, X-Api-Key, X-Forwarded-For, Proxy-Authorization, the CSRF headers…),
+  # never attaches cookies, and SentryUserFilter never attaches the caller's IP.
+  send-default-pii: false
+  # Never capture request bodies — they carry habit/goal/task text written by users.
+  # NONE is also the SDK default; pinned so a future SDK default change can't leak it.
+  max-request-body-size: none
+  # The Logback integration turns every ERROR log into an event and every INFO+ log
+  # into a breadcrumb, which would drag logged payloads (e.g. the upstream response
+  # body GlobalExceptionHandler logs for HttpClientErrorException) into the collector.
+  # Unhandled exceptions already reach Sentry through the MVC exception resolver, so
+  # the appender only adds PII risk.
+  logging:
+    enabled: false
+  # Ties an event to the build that produced it. CI publishes images tagged
+  # `sha-<short sha>` — pass the matching value, e.g. beyou-backend@sha-1a2b3c4.
+  release: ${SENTRY_RELEASE:beyou-backend@local}
+  environment: ${SENTRY_ENVIRONMENT:local}
+  # No GitProperties bean is produced by this build, so git-based releases would
+  # silently resolve to nothing. Off, so `release` above is the single source.
+  use-git-commit-id-as-release: false
+  # Run Sentry's capturing HandlerExceptionResolver LAST (Ordered.LOWEST_PRECEDENCE)
+  # so anything GlobalExceptionHandler (@ControllerAdvice) already resolved never
+  # reaches it. Defence in depth for the MVC path only — the real guarantee that a
+  # handled BusinessException is never reported is SentryEventFilter's
+  # BeforeSendCallback, which runs for every capture path.
+  exception-resolver-order: 2147483647
+
 management:
   server:
     port: ${MANAGEMENT_PORT:9091}

@@ -52,5 +52,18 @@ DOCS_IMPORT_SECRET=
 MANAGEMENT_PORT=9091
 ACTUATOR_ENDPOINTS=health,metrics,prometheus
 
+# Error telemetry (GlitchTip — self-hosted, Sentry-API compatible)
+# Leave SENTRY_DSN empty to disable error reporting completely: with no DSN the
+# Sentry autoconfiguration never engages and no Sentry bean is created. Get the
+# value from the GlitchTip UI under Settings -> Projects -> beyou-backend ->
+# Client Keys (DSN). See Beyou-dev-env/README.md for first-run setup.
+SENTRY_DSN=
+# Ties reported events to the build they came from. CI publishes backend images
+# tagged sha-<short sha> — pass the matching identifier, e.g.
+# SENTRY_RELEASE=beyou-backend@sha-1a2b3c4. Defaults to beyou-backend@local.
+SENTRY_RELEASE=
+# Groups events by deployment: local, staging, prod. Defaults to "local".
+SENTRY_ENVIRONMENT=
+
 # Spring Profile (dev or prod)
 SPRING_PROFILES_ACTIVE=dev
