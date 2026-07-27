@@ -48,7 +48,6 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
     MockMvc mockMvc;
 
     @Autowired
-    @Autowired
     private FeedbackReplyRepository feedbackReplyRepository;
     @Autowired
     private FeedbackAttachmentRepository feedbackAttachmentRepository;
