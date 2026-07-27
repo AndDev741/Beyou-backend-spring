@@ -21,6 +21,9 @@ import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.notification.EmailService;
+import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentRepository;
+import beyou.beyouapp.backend.domain.feedback.FeedbackReplyRepository;
+import beyou.beyouapp.backend.domain.feedback.FeedbackRepository;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenRepository;
 import beyou.beyouapp.backend.security.passwordreset.PasswordResetToken;
 import beyou.beyouapp.backend.security.passwordreset.PasswordResetTokenRepository;
@@ -45,7 +48,15 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
     MockMvc mockMvc;
 
     @Autowired
+    @Autowired
+    private FeedbackReplyRepository feedbackReplyRepository;
+    @Autowired
+    private FeedbackAttachmentRepository feedbackAttachmentRepository;
+    @Autowired
+    private FeedbackRepository feedbackRepository;
+    @Autowired
     private RefreshTokenRepository refreshTokenRepository;
+    @Autowired
     private UserRepository userRepository;
 
     @Autowired
@@ -66,9 +77,13 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setup() {
-        // Must go before userRepository.deleteAll() — the FK on refresh_tokens
-        // blocks a DELETE FROM users while any token row references it.
+        // Delete dependent rows (FK order) so userRepository.deleteAll()
+        // never hits a foreign-key violation.  Integration tests run without
+        // @Transactional, so data from other test classes can be committed.
         refreshTokenRepository.deleteAll();
+        feedbackReplyRepository.deleteAll();
+        feedbackAttachmentRepository.deleteAll();
+        feedbackRepository.deleteAll();
         userRepository.deleteAll();
         UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!");
         userService.registerUser(register);
