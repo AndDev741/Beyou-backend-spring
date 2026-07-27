@@ -82,7 +82,7 @@ SENTRY_ENVIRONMENT=
 # Leave empty to disable — nothing outbound is attempted without it.
 # Create the monitor in GlitchTip under Uptime Monitors -> New Monitor, type
 # "Heartbeat", expected interval 5400s. Copy the endpoint URL it gives you, e.g.
-# SNAPSHOT_HEARTBEAT_URL=http://glitchtip:8000/api/<org-slug>/heartbeat/<uuid>/
+# SNAPSHOT_HEARTBEAT_URL=http://glitchtip:8000/api/0/organizations/<org-slug>/heartbeat_check/<endpoint-id>/
 # Use the in-network host (http://glitchtip:8000) when the backend runs in the
 # compose stack. See Beyou-dev-env/README.md.
 SNAPSHOT_HEARTBEAT_URL=
