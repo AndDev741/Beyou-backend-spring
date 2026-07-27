@@ -14,9 +14,9 @@
 CREATE TABLE IF NOT EXISTS feedback_attachment (
     id uuid NOT NULL,
     feedback_id uuid NOT NULL,
-    -- squawk-ignore
+    -- squawk-ignore prefer-bigint-over-int
     width integer NOT NULL,
-    -- squawk-ignore
+    -- squawk-ignore prefer-bigint-over-int
     height integer NOT NULL,
     size_bytes bigint NOT NULL,
     -- squawk-ignore prefer-timestamp-tz
