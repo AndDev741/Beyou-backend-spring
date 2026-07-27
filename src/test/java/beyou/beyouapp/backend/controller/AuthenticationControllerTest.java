@@ -21,6 +21,7 @@ import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.notification.EmailService;
+import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenRepository;
 import beyou.beyouapp.backend.security.passwordreset.PasswordResetToken;
 import beyou.beyouapp.backend.security.passwordreset.PasswordResetTokenRepository;
 import beyou.beyouapp.backend.user.GoogleIdTokenVerifierService;
@@ -44,6 +45,7 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
     MockMvc mockMvc;
 
     @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
     private UserRepository userRepository;
 
     @Autowired
@@ -64,7 +66,10 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setup() {
-        userRepository.deleteAll(); // Clean before all tests
+        // Must go before userRepository.deleteAll() — the FK on refresh_tokens
+        // blocks a DELETE FROM users while any token row references it.
+        refreshTokenRepository.deleteAll();
+        userRepository.deleteAll();
         UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!");
         userService.registerUser(register);
 
