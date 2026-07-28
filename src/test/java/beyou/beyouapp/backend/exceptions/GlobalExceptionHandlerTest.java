@@ -7,7 +7,11 @@ import beyou.beyouapp.backend.exceptions.security.RefreshTokenNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -88,6 +92,64 @@ class GlobalExceptionHandlerTest {
         assertEquals("Could not fetch architecture docs from the source repository",
                 response.getBody().message());
         assertNull(response.getBody().details());
+    }
+
+    /**
+     * The container's multipart cap fires before any controller runs, so the
+     * only thing left to tell a photo upload from a feedback attachment is the
+     * request path. Both endpoints have their own documented error key and the
+     * clients match on it for i18n, so a path-blind handler tells a user
+     * uploading a screenshot that their "photo" was rejected.
+     */
+    @Test
+    void handleMaxUploadSize_onFeedbackAttachment_reportsTheFeedbackKey() {
+        ResponseEntity<ApiErrorResponse> response = handler.handleMaxUploadSizeExceededException(
+                new MaxUploadSizeExceededException(6L * 1024 * 1024),
+                requestTo("/feedback/" + UUID.randomUUID() + "/attachments"));
+
+        assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(ErrorKey.FEEDBACK_ATTACHMENT_TOO_LARGE.name(), response.getBody().errorKey());
+        assertEquals("Attachment must be under 5MB", response.getBody().message());
+    }
+
+    @Test
+    void handleMaxUploadSize_onFeedbackAttachment_reportsTheFeedbackKeyBehindTheContextPath() {
+        MockHttpServletRequest request = requestTo(
+                "/api/v1/feedback/" + UUID.randomUUID() + "/attachments");
+        request.setContextPath("/api/v1");
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleMaxUploadSizeExceededException(
+                new MaxUploadSizeExceededException(6L * 1024 * 1024), request);
+
+        assertNotNull(response.getBody());
+        assertEquals(ErrorKey.FEEDBACK_ATTACHMENT_TOO_LARGE.name(), response.getBody().errorKey());
+    }
+
+    @Test
+    void handleMaxUploadSize_onProfilePhoto_stillReportsThePhotoKey() {
+        ResponseEntity<ApiErrorResponse> response = handler.handleMaxUploadSizeExceededException(
+                new MaxUploadSizeExceededException(6L * 1024 * 1024), requestTo("/user/photo"));
+
+        assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(ErrorKey.PHOTO_UPLOAD_TOO_LARGE.name(), response.getBody().errorKey());
+        assertEquals("Photo must be under 5MB", response.getBody().message());
+    }
+
+    @Test
+    void handleMaxUploadSize_onAnUnrelatedPath_fallsBackToThePhotoKey() {
+        ResponseEntity<ApiErrorResponse> response = handler.handleMaxUploadSizeExceededException(
+                new MaxUploadSizeExceededException(6L * 1024 * 1024), requestTo("/something/else"));
+
+        assertNotNull(response.getBody());
+        assertEquals(ErrorKey.PHOTO_UPLOAD_TOO_LARGE.name(), response.getBody().errorKey());
+    }
+
+    private static MockHttpServletRequest requestTo(String uri) {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", uri);
+        request.setRequestURI(uri);
+        return request;
     }
 
     @Test

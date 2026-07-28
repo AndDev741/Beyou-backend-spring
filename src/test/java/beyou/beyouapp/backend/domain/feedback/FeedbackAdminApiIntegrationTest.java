@@ -185,6 +185,49 @@ class FeedbackAdminApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.items[0].context.platform").value("web"));
     }
 
+    /**
+     * The pagination bounds are declared as {@code @Min}/{@code @Max} on the
+     * handler's own parameters, which is a different validation path from a
+     * {@code @Valid} request body — nothing in the body path handles it. A
+     * hand-edited query string must still come back as a 400 inside the
+     * standard {@code ApiErrorResponse} envelope, not as an unhandled 500 that
+     * clients cannot read.
+     */
+    @Test
+    @DisplayName("an out-of-range page is a 400 in the standard error envelope")
+    void anOutOfRangePageIsRejectedInTheStandardEnvelope() throws Exception {
+        mockMvc.perform(adminGet("/feedback/admin/items?page=-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").exists());
+    }
+
+    @Test
+    @DisplayName("a page size past the cap is a 400 in the standard error envelope")
+    void aPageSizePastTheCapIsRejectedInTheStandardEnvelope() throws Exception {
+        mockMvc.perform(adminGet("/feedback/admin/items?size=" + (FeedbackService.MAX_PAGE_SIZE + 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("a zero page size is a 400 in the standard error envelope")
+    void aZeroPageSizeIsRejectedInTheStandardEnvelope() throws Exception {
+        mockMvc.perform(adminGet("/feedback/admin/items?size=0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("the bounds themselves still let a legal page through")
+    void theBoundsStillLetALegalPageThrough() throws Exception {
+        submit("BUG", "A submission to page over.");
+
+        mockMvc.perform(adminGet("/feedback/admin/items?page=0&size=" + FeedbackService.MAX_PAGE_SIZE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(FeedbackService.MAX_PAGE_SIZE));
+    }
+
     // ----------------------------------------------------------------- counts
 
     @Test

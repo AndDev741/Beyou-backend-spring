@@ -86,6 +86,71 @@ class FeedbackRateLimitTest {
                 .isEqualTo(200);
     }
 
+    /**
+     * KTD9 — attachment uploads are not ordinary writes. Each one decodes an
+     * image, allocates the full raster, downscales it and re-encodes it, so a
+     * handful in flight is tens of megabytes of transient heap. Left in the
+     * generic 30-per-minute write bucket, an authenticated user could hold the
+     * server at that cost continuously.
+     */
+    @Test
+    @DisplayName("attachment uploads are metered by their own bucket, not the generic write bucket")
+    void attachmentUploadsHaveTheirOwnBucket() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        for (int i = 0; i < RateLimitConfig.FEEDBACK_ATTACHMENT_UPLOADS_PER_HOUR; i++) {
+            assertThat(uploadAttachmentAs(userId).getStatus())
+                    .as("upload %d of the budget should pass", i + 1)
+                    .isEqualTo(200);
+        }
+
+        assertThat(uploadAttachmentAs(userId).getStatus())
+                .as("the upload past the budget is rejected")
+                .isEqualTo(429);
+
+        assertThat(uploadAttachmentAs(UUID.randomUUID()).getStatus())
+                .as("a different user's upload still succeeds")
+                .isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("an exhausted attachment budget leaves the generic write and feedback budgets alone")
+    void attachmentBudgetIsSeparateFromTheOtherBudgets() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        for (int i = 0; i < RateLimitConfig.FEEDBACK_ATTACHMENT_UPLOADS_PER_HOUR + 1; i++) {
+            uploadAttachmentAs(userId);
+        }
+
+        assertThat(perform(userId, "POST", "/category").getStatus())
+                .as("routine domain writes keep their own budget")
+                .isEqualTo(200);
+        assertThat(submitFeedbackAs(userId).getStatus())
+                .as("submitting feedback keeps its own budget")
+                .isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("an exhausted generic write budget does not stop an attachment upload")
+    void genericWriteBudgetDoesNotStarveAttachmentUploads() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        for (int i = 0; i < 31; i++) {
+            perform(userId, "POST", "/category");
+        }
+        assertThat(perform(userId, "POST", "/category").getStatus())
+                .as("the generic write budget is spent")
+                .isEqualTo(429);
+
+        assertThat(uploadAttachmentAs(userId).getStatus())
+                .as("the upload is metered separately, so it still passes")
+                .isEqualTo(200);
+    }
+
+    private MockHttpServletResponse uploadAttachmentAs(UUID userId) throws Exception {
+        return perform(userId, "POST", "/feedback/" + UUID.randomUUID() + "/attachments");
+    }
+
     private MockHttpServletResponse submitFeedbackAs(UUID userId) throws Exception {
         return perform(userId, "POST", "/feedback");
     }

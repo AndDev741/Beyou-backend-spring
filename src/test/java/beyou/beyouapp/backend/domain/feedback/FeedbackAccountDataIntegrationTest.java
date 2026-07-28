@@ -1,6 +1,8 @@
 package beyou.beyouapp.backend.domain.feedback;
 
 import beyou.beyouapp.backend.AbstractIntegrationTest;
+import beyou.beyouapp.backend.domain.aiAgent.chat.Chat;
+import beyou.beyouapp.backend.domain.aiAgent.chat.ChatRepository;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenRepository;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
@@ -33,6 +35,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -81,6 +84,9 @@ class FeedbackAccountDataIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     FeedbackReplyRepository replyRepository;
+
+    @Autowired
+    ChatRepository chatRepository;
 
     @Value("${app.upload-dir}")
     String uploadDir;
@@ -178,6 +184,79 @@ class FeedbackAccountDataIntegrationTest extends AbstractIntegrationTest {
         assertThat(dir).as("the submission's directory must not be left behind either").doesNotExist();
     }
 
+    /**
+     * The realistic case: an account that has logged in holds a refresh token,
+     * and {@code refresh_tokens.user_id} is a plain non-cascading foreign key
+     * (V1__baseline.sql) that {@code User} maps no {@code @OneToMany} for. The
+     * sibling tests above delete those rows by hand first; nothing outside a
+     * test ever would, so the deletion path has to clear them itself.
+     */
+    @Test
+    @DisplayName("deleting an account that still holds a refresh token succeeds and takes its attachment files")
+    void accountDeletionClearsItsOwnRefreshTokens() throws Exception {
+        String ownerToken = login(OWNER_EMAIL);
+        UUID feedbackId = submitFeedback(ownerToken, OWNER_BODY);
+        UUID attachmentId = attachAndReturnId(feedbackId, ownerToken);
+
+        User owner = userRepository.findByEmail(OWNER_EMAIL).orElseThrow();
+        UUID ownerId = owner.getId();
+        assertThat(refreshTokenRepository.findAllByUserId(ownerId))
+                .as("logging in leaves a refresh token behind")
+                .isNotEmpty();
+
+        Path file = Path.of(uploadDir).resolve("feedback-attachments")
+                .resolve(feedbackId.toString()).resolve(attachmentId + ".jpg");
+        assertThat(file).exists();
+
+        userService.deleteUser(owner);
+
+        assertThat(userRepository.findByEmail(OWNER_EMAIL))
+                .as("the account the user asked to remove must actually be gone")
+                .isEmpty();
+        assertThat(refreshTokenRepository.findAllByUserId(ownerId)).isEmpty();
+        assertThat(file).as("its attachment bytes go with it").doesNotExist();
+    }
+
+    /**
+     * The counterpart promise: when something DOES block the row delete, the
+     * bytes must still be there afterwards. {@code chats.user_id} (V5__chat.sql)
+     * is another plain non-cascading foreign key, so a user who has used the
+     * agent chat is exactly such a case — and this test also documents that
+     * blocker.
+     */
+    @Test
+    @DisplayName("a delete blocked by a foreign key leaves the attachment files on disk")
+    void blockedAccountDeletionLeavesTheAttachmentFilesOnDisk() throws Exception {
+        String ownerToken = login(OWNER_EMAIL);
+        UUID feedbackId = submitFeedback(ownerToken, OWNER_BODY);
+        UUID attachmentId = attachAndReturnId(feedbackId, ownerToken);
+
+        User owner = userRepository.findByEmail(OWNER_EMAIL).orElseThrow();
+        UUID ownerId = owner.getId();
+
+        Chat blocker = new Chat();
+        blocker.setUser(owner);
+        blocker.setTitle("blocks the delete");
+        chatRepository.saveAndFlush(blocker);
+
+        Path file = Path.of(uploadDir).resolve("feedback-attachments")
+                .resolve(feedbackId.toString()).resolve(attachmentId + ".jpg");
+        assertThat(file).exists();
+
+        // However it surfaces — a bad-request body or a rollback thrown out of
+        // the proxy — what must NOT happen is a destroyed screenshot.
+        catchThrowable(() -> userService.deleteUser(owner));
+
+        assertThat(userRepository.findById(ownerId))
+                .as("the delete was blocked, so the account is still here")
+                .isPresent();
+        assertThat(file)
+                .as("a blocked delete must not have already destroyed the bytes")
+                .exists();
+
+        chatRepository.delete(blocker);
+    }
+
     // -- helpers --
 
     private UUID submitFeedback(String token, String body) throws Exception {
@@ -242,6 +321,7 @@ class FeedbackAccountDataIntegrationTest extends AbstractIntegrationTest {
                     .filter(r -> r.getAuthor() != null && r.getAuthor().getId().equals(existing.getId()))
                     .forEach(replyRepository::delete);
             refreshTokenRepository.deleteAll(refreshTokenRepository.findAllByUserId(existing.getId()));
+            chatRepository.deleteAll(chatRepository.findAllByUserIdOrderByUpdatedAtDesc(existing.getId()));
             userRepository.delete(existing);
         });
     }

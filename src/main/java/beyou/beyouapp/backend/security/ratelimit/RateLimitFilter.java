@@ -36,6 +36,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return path.startsWith("/ai/agent/chats/") && path.endsWith("/stream");
     }
 
+    /** {@code POST /feedback/{feedbackId}/attachments} — see {@link RateLimitConfig#createFeedbackAttachmentBucket()}. */
+    private static boolean isFeedbackAttachmentPath(String path) {
+        return path.startsWith("/feedback/") && path.endsWith("/attachments");
+    }
+
     @Override
     public void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                   FilterChain filterChain) throws ServletException, IOException {
@@ -94,6 +99,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
             bucketKey = "feedback:" + userId;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createFeedbackBucket());
+        } else if ("POST".equals(method) && isFeedbackAttachmentPath(path)) {
+            // Also ahead of the generic write branch, and for a different reason
+            // than submission: each upload decodes, downscales and re-encodes an
+            // image, so a handful in flight is tens of megabytes of transient
+            // heap. That cost does not belong in a 30-per-minute write bucket.
+            String userId = getUserIdFromRequest(request);
+            if (userId == null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            bucketKey = "feedback-attachment:" + userId;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createFeedbackAttachmentBucket());
         } else if (WRITE_METHODS.contains(method)) {
             String userId = getUserIdFromRequest(request);
             if (userId == null) {

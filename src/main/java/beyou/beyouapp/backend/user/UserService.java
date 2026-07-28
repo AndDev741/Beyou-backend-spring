@@ -32,6 +32,7 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -159,21 +160,47 @@ public class UserService {
      * purged explicitly — otherwise a deleted account's screenshots live
      * forever.
      *
-     * The purge runs BEFORE the delete because that is the only moment the
-     * files are still reachable: they are addressed by feedback id, and the
-     * cascade takes those rows away. Nothing is lost by going first — the
-     * feedback schema (V9/V10/V12) cascades precisely so this delete cannot be
-     * blocked by a foreign key — and the purge itself never throws, so a
-     * stubborn filesystem cannot strand someone with an account they asked to
-     * remove.
+     * The order below is the whole point of this method.
+     *
+     * <ol>
+     *   <li>Read the submission ids. Attachment files are addressed by feedback
+     *       id, and the cascade is about to take those rows away, so this is
+     *       the last moment they can be found.</li>
+     *   <li>Delete the refresh tokens. NOT everything referencing a user
+     *       cascades: {@code refresh_tokens.user_id} is a plain foreign key
+     *       (V1__baseline.sql) that {@code User} maps no {@code @OneToMany}
+     *       for, so every account that has ever logged in holds a row that
+     *       blocks the delete until something clears it.</li>
+     *   <li>Delete the user, and flush, so a foreign key that still blocks it
+     *       fails HERE rather than at commit — outside this method, past the
+     *       point where the outcome can still be acted on.</li>
+     *   <li>Only now purge the files. Doing it first would mean a delete that
+     *       gets blocked leaves the account standing with its screenshots
+     *       already destroyed and no way to recover them; going last means a
+     *       failure costs nothing. The purge itself never throws, so a stubborn
+     *       filesystem still cannot undo an account removal that has already
+     *       committed to the database.</li>
+     * </ol>
+     *
+     * Not every non-cascading reference is cleared here: {@code chats.user_id}
+     * (V5__chat.sql) and {@code password_reset_tokens.user_id} are plain
+     * foreign keys too. They will block the delete for the accounts that hold
+     * them — but with this ordering they block it before anything is destroyed,
+     * which is the property that matters.
      */
     @Transactional
     public ResponseEntity<Map<String, String>> deleteUser(User user){
         try{
-            feedbackAttachmentService.purgeStoredFilesForUser(user.getId());
+            List<UUID> submissionIds = feedbackAttachmentService.findSubmissionIdsForUser(user.getId());
+
+            refreshTokenService.deleteAllForUser(user.getId());
             userRepository.delete(user);
+            userRepository.flush();
+
+            feedbackAttachmentService.purgeStoredFiles(submissionIds);
             return ResponseEntity.ok(Map.of("success", "User deleted successfully"));
         }catch(Exception e){
+            log.error("Could not delete user {} — nothing was purged from disk", user.getId(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }

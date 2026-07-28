@@ -115,6 +115,9 @@ public class FeedbackService {
      *
      * Authorization is NOT enforced here: every caller arrives through
      * {@code /feedback/admin/**}, which SecurityConfig gates to ROLE_ADMIN.
+     *
+     * Every branch fetches the submitter with the page — the rows carry one,
+     * and leaving it to Hibernate costs an extra select per row.
      */
     @Transactional(readOnly = true)
     public FeedbackAdminPageDTO listForAdmin(FeedbackStatus status, FeedbackCategory category, int page, int size) {
@@ -122,13 +125,13 @@ public class FeedbackService {
 
         Page<Feedback> found;
         if (status != null && category != null) {
-            found = feedbackRepository.findAllByStatusAndCategory(status, category, pageable);
+            found = feedbackRepository.findAllByStatusAndCategoryWithSubmitter(status, category, pageable);
         } else if (status != null) {
-            found = feedbackRepository.findAllByStatus(status, pageable);
+            found = feedbackRepository.findAllByStatusWithSubmitter(status, pageable);
         } else if (category != null) {
-            found = feedbackRepository.findAllByCategory(category, pageable);
+            found = feedbackRepository.findAllByCategoryWithSubmitter(category, pageable);
         } else {
-            found = feedbackRepository.findAll(pageable);
+            found = feedbackRepository.findAllWithSubmitter(pageable);
         }
 
         return new FeedbackAdminPageDTO(

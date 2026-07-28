@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -44,12 +46,18 @@ public class FeedbackAttachmentService {
      * bytes hit the disk. A write failure rolls the row back with the
      * transaction; a save failure never leaves an orphan file, because nothing
      * has been written yet.
+     *
+     * The submission row is locked for the duration. The cap is a count
+     * followed by an insert, and read-then-insert with nothing in between is
+     * not a cap at all: two uploads that both read four both write a fifth, and
+     * the submission ends up over the limit with no error raised anywhere. The
+     * lock makes the count each request reads the count it inserts against.
      */
     @Transactional
     public FeedbackAttachmentDTO addAttachment(UUID feedbackId, User requester, MultipartFile file) {
         // Uploading is the submitter's act, not a triage action: an admin has no
         // business adding images to somebody else's report.
-        Feedback feedback = requireFeedback(feedbackId, requester, false);
+        Feedback feedback = requireFeedback(feedbackId, requester, false, true);
 
         long existing = attachmentRepository.countByFeedbackId(feedbackId);
         if (existing >= MAX_ATTACHMENTS_PER_FEEDBACK) {
@@ -102,25 +110,52 @@ public class FeedbackAttachmentService {
     }
 
     /**
-     * R21 — removes the attachment bytes of every submission this account made.
+     * R21 — the ids of every submission this account made, for the deletion path.
      *
-     * The rows go on their own: the database cascades feedback and its
-     * attachments away with the user (V9/V10). The FILES do not cascade, and
-     * once the rows are gone nothing points at them any more, so they have to be
-     * found here, while the submissions still exist. That is why the
-     * account-deletion path calls this BEFORE it deletes the user.
+     * Attachment files are addressed by feedback id and nothing in the database
+     * reaches them, so the ids have to be read while the submissions still
+     * exist — the cascade (V9/V10) takes those rows away with the user. Reading
+     * them is all this does; see {@link #purgeStoredFiles(Collection)} for the
+     * half that touches disk, which must not run until the delete has actually
+     * succeeded.
+     */
+    @Transactional(readOnly = true)
+    public List<UUID> findSubmissionIdsForUser(UUID userId) {
+        return feedbackRepository.findIdsByUserId(userId);
+    }
+
+    /**
+     * R21 — removes the attachment bytes of the given submissions.
+     *
+     * Deliberately takes ids rather than a user: by the time this is safe to
+     * call, the account and its rows are already gone, so there is nothing left
+     * to look them up from. Call it only AFTER the delete has committed to the
+     * database — running it first destroys the files of an account that may yet
+     * survive a failed delete, and there is no recovering them.
      *
      * Best-effort by construction — {@link FeedbackAttachmentStorageService#deleteAllForFeedback}
      * logs and swallows: a filesystem that refuses a delete must not be able to
-     * block someone from deleting their account.
+     * undo an account removal that has already happened.
      */
-    @Transactional(readOnly = true)
-    public void purgeStoredFilesForUser(UUID userId) {
-        feedbackRepository.findIdsByUserId(userId).forEach(storageService::deleteAllForFeedback);
+    public void purgeStoredFiles(Collection<UUID> feedbackIds) {
+        feedbackIds.forEach(storageService::deleteAllForFeedback);
     }
 
     private Feedback requireFeedback(UUID feedbackId, User requester, boolean adminMayAct) {
-        Feedback feedback = feedbackRepository.findById(feedbackId)
+        return requireFeedback(feedbackId, requester, adminMayAct, false);
+    }
+
+    /**
+     * @param lockForWrite takes a pessimistic write lock on the submission row.
+     *                     Upload only: it is what makes the attachment count a
+     *                     limit rather than a suggestion. Read paths must pass
+     *                     false — serving an image is no reason to make
+     *                     concurrent readers queue behind each other.
+     */
+    private Feedback requireFeedback(UUID feedbackId, User requester, boolean adminMayAct, boolean lockForWrite) {
+        Feedback feedback = (lockForWrite
+                ? feedbackRepository.findByIdForUpdate(feedbackId)
+                : feedbackRepository.findById(feedbackId))
                 .orElseThrow(() -> new BusinessException(ErrorKey.FEEDBACK_NOT_FOUND, "Feedback not found"));
 
         boolean isOwner = feedback.getUser().getId().equals(requester.getId());
