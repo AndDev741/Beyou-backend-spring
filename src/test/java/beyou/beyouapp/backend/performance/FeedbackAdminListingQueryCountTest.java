@@ -6,6 +6,7 @@ import beyou.beyouapp.backend.domain.feedback.Feedback;
 import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
 import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.feedback.FeedbackStatus;
+import beyou.beyouapp.backend.domain.feedback.dto.FeedbackAdminPageDTO;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import jakarta.persistence.EntityManager;
@@ -23,16 +24,29 @@ import java.time.ZoneOffset;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * R12 — one page of the admin inbox must cost one page's worth of queries.
+ * R12 — one page of the admin inbox must cost one page's worth of queries, on
+ * EVERY filter combination the console can ask for.
  *
- * Every row of the listing carries its submitter ({@code FeedbackAdminItemDTO}
+ * <p>Every row of the listing carries its submitter ({@code FeedbackAdminItemDTO}
  * has a {@code submitter}), and {@code Feedback.user} is a plain
  * {@code @ManyToOne} — EAGER by JPA default, but Hibernate does NOT turn an
  * EAGER to-one into a join for a JPQL/criteria query: it issues a secondary
  * select per row instead. A hundred-row page therefore costs a hundred extra
  * round trips unless the query fetches the submitter itself.
  *
- * The assertion is a count, not a comment: the only thing that keeps a JOIN
+ * <p>{@code FeedbackService.listForAdmin} branches to FOUR different repository
+ * methods — status+category, status, category, and unfiltered — and each one
+ * carries its own {@code JOIN FETCH}. Four independent places to lose it, so all
+ * four are exercised here. Guarding only one is worse than it looks: the
+ * unfiltered variant is what the console loads when it first opens, so the one
+ * shape every admin hits on every visit was the shape nothing covered.
+ *
+ * <p>The persistence context is cleared between variants. Without that the first
+ * listing leaves all ten submitters in the L1 cache and the later ones resolve
+ * their {@code user} references without touching the database — an N+1 hidden by
+ * the test's own warm-up.
+ *
+ * <p>The assertion is a count, not a comment: the only thing that keeps a JOIN
  * FETCH from being dropped in a later refactor is a test that fails when it is.
  */
 @Transactional
@@ -47,6 +61,16 @@ class FeedbackAdminListingQueryCountTest extends AbstractIntegrationTest {
      */
     private static final int MAX_STATEMENTS = 3;
 
+    /** Marks the seeded rows so a stray row from another class cannot pass as one. */
+    private static final String SEED_MARKER = "query count seed ";
+
+    /**
+     * A combination the rest of the suite does not create, so the two filtered
+     * variants see exactly the seeded page.
+     */
+    private static final FeedbackStatus SEED_STATUS = FeedbackStatus.TAKING_CARE;
+    private static final FeedbackCategory SEED_CATEGORY = FeedbackCategory.FEATURE_REQUEST;
+
     @Autowired
     private EntityManagerFactory emf;
 
@@ -60,28 +84,54 @@ class FeedbackAdminListingQueryCountTest extends AbstractIntegrationTest {
     private FeedbackService feedbackService;
 
     @Test
-    @DisplayName("an admin listing page costs a bounded number of queries regardless of how many submitters it holds")
-    void adminListingIsBoundedRegardlessOfSubmitterCount() {
+    @DisplayName("every admin listing filter combination costs a bounded number of queries, including the unfiltered one the console opens on")
+    void everyListingVariantIsBoundedRegardlessOfSubmitterCount() {
         for (int i = 0; i < SUBMISSION_COUNT; i++) {
             seedSubmission(seedUser(i), i);
         }
         em.flush();
+
+        // The seeded rows are the newest in the table, and the listing sorts
+        // newest-first, so a page of exactly SUBMISSION_COUNT is exactly them —
+        // which is what lets the unfiltered variant be asserted as precisely as
+        // the filtered ones despite whatever else the suite has committed.
+        assertListingIsBounded("status + category",
+                () -> feedbackService.listForAdmin(SEED_STATUS, SEED_CATEGORY, 0, SUBMISSION_COUNT));
+        assertListingIsBounded("status only",
+                () -> feedbackService.listForAdmin(SEED_STATUS, null, 0, SUBMISSION_COUNT));
+        assertListingIsBounded("category only",
+                () -> feedbackService.listForAdmin(null, SEED_CATEGORY, 0, SUBMISSION_COUNT));
+        assertListingIsBounded("unfiltered (the console's first load)",
+                () -> feedbackService.listForAdmin(null, null, 0, SUBMISSION_COUNT));
+    }
+
+    /**
+     * Runs one listing variant from a cold persistence context and holds it to
+     * the statement budget.
+     */
+    private void assertListingIsBounded(String variant, java.util.function.Supplier<FeedbackAdminPageDTO> listing) {
+        // Cold: no submitter may already be resident, or an N+1 costs no queries.
         em.clear();
 
         var stats = new HibernateStatistics(emf);
+        FeedbackAdminPageDTO page = listing.get();
 
-        var page = feedbackService.listForAdmin(
-                FeedbackStatus.TAKING_CARE, FeedbackCategory.FEATURE_REQUEST, 0, SUBMISSION_COUNT * 2);
-
-        assertThat(page.items()).hasSize(SUBMISSION_COUNT);
         assertThat(page.items())
-                .as("the submitter is part of the row, so it has to come back with it")
-                .allSatisfy(item -> assertThat(item.submitter()).isNotNull());
-        assertThat(page.items().get(0).submitter().email()).isNotBlank();
+                .as("%s — the page has to be the seeded rows for the count below to mean anything", variant)
+                .hasSize(SUBMISSION_COUNT)
+                .allSatisfy(item -> assertThat(item.body()).startsWith(SEED_MARKER));
+        assertThat(page.items())
+                .as("%s — the submitter is part of the row, so it has to come back with it", variant)
+                .allSatisfy(item -> assertThat(item.submitter()).isNotNull())
+                .allSatisfy(item -> assertThat(item.submitter().email()).isNotBlank());
+        assertThat(page.items().stream().map(item -> item.submitter().email()).distinct().count())
+                .as("%s — %d distinct submitters, so an N+1 really would be %d extra selects",
+                        variant, SUBMISSION_COUNT, SUBMISSION_COUNT)
+                .isEqualTo(SUBMISSION_COUNT);
 
         assertThat(stats.statementCount())
-                .as("N+1 would mean ~%d statements for %d rows. Stats: %s",
-                        2 + SUBMISSION_COUNT, SUBMISSION_COUNT, stats)
+                .as("%s — N+1 would mean ~%d statements for %d rows. Stats: %s",
+                        variant, 2 + SUBMISSION_COUNT, SUBMISSION_COUNT, stats)
                 .isLessThanOrEqualTo(MAX_STATEMENTS);
     }
 
@@ -99,11 +149,9 @@ class FeedbackAdminListingQueryCountTest extends AbstractIntegrationTest {
     private void seedSubmission(User user, int index) {
         Feedback feedback = new Feedback();
         feedback.setUser(user);
-        // A combination the rest of the suite does not create, so a stray row
-        // from another class cannot quietly widen this page.
-        feedback.setCategory(FeedbackCategory.FEATURE_REQUEST);
-        feedback.setStatus(FeedbackStatus.TAKING_CARE);
-        feedback.setBody("query count seed " + index);
+        feedback.setCategory(SEED_CATEGORY);
+        feedback.setStatus(SEED_STATUS);
+        feedback.setBody(SEED_MARKER + index);
         em.persist(feedback);
     }
 }

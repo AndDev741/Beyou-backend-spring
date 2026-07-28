@@ -41,22 +41,48 @@ public class FeedbackAttachmentService {
     /**
      * Validates and stores one image against a submission the caller owns.
      *
-     * Ordering matters: the image is validated and encoded in memory first, so
-     * the row can be written with its real dimensions, and only then do the
-     * bytes hit the disk. A write failure rolls the row back with the
-     * transaction; a save failure never leaves an orphan file, because nothing
-     * has been written yet.
+     * <p>Ordering matters, in three separate ways.
      *
-     * The submission row is locked for the duration. The cap is a count
-     * followed by an insert, and read-then-insert with nothing in between is
-     * not a cap at all: two uploads that both read four both write a fifth, and
-     * the submission ends up over the limit with no error raised anywhere. The
-     * lock makes the count each request reads the count it inserts against.
+     * <p><b>1. Authorization before work.</b> The submission is read and the
+     * requester checked WITHOUT a lock first. Uploading is the submitter's act,
+     * not a triage action — an admin has no business adding images to somebody
+     * else's report — and refusing an unauthorized or unknown submission has to
+     * cost less than serving it, or the 403 path becomes the cheapest way to
+     * make the server decode 25 megapixels.
+     *
+     * <p><b>2. Decode before the lock.</b> {@code validateAndEncode} allocates
+     * the full raster, downscales it and re-encodes to JPEG — for a 25 MP upload
+     * (the header-check ceiling) that is a hundred megabytes of allocation and a
+     * bilinear resample, all CPU-bound and all unbounded by anything the
+     * database knows about. It touches no shared state, so it does not belong in
+     * a critical section, and holding a row lock across it would serialise every
+     * concurrent upload to the same submission behind the slowest decode.
+     *
+     * <p><b>3. Lock only the count-and-insert-and-write.</b> The cap is a count
+     * followed by an insert, and read-then-insert with nothing in between is not
+     * a cap at all: two uploads that both read four both write a fifth, and the
+     * submission ends up over the limit with no error raised anywhere. So the
+     * row is re-read under a pessimistic write lock — one extra primary-key
+     * SELECT, the price of taking the decode out of the critical section — and
+     * from there the count each request reads is the count it inserts against.
+     *
+     * <p>The disk write stays INSIDE the locked section deliberately. It has to
+     * stay inside the transaction: {@link FeedbackAttachmentStorageService#write}
+     * throwing is what rolls the row back, and the row is written first so it
+     * carries the real dimensions, so there is no ordering that keeps that
+     * guarantee and drops the lock. The cost is bounded in a way the decode is
+     * not — by this point the image is a downscaled JPEG of at most
+     * {@link FeedbackAttachmentStorageService#MAX_DIMENSION} on its longest edge,
+     * so it is a few hundred kilobytes to a temp file plus an atomic rename,
+     * regardless of what arrived on the wire.
      */
     @Transactional
     public FeedbackAttachmentDTO addAttachment(UUID feedbackId, User requester, MultipartFile file) {
-        // Uploading is the submitter's act, not a triage action: an admin has no
-        // business adding images to somebody else's report.
+        requireFeedback(feedbackId, requester, false);
+
+        FeedbackAttachmentStorageService.EncodedAttachment encoded = storageService.validateAndEncode(file);
+
+        // --- critical section starts here ---
         Feedback feedback = requireFeedback(feedbackId, requester, false, true);
 
         long existing = attachmentRepository.countByFeedbackId(feedbackId);
@@ -64,8 +90,6 @@ public class FeedbackAttachmentService {
             throw new BusinessException(ErrorKey.FEEDBACK_ATTACHMENT_LIMIT_REACHED,
                     "A submission can carry at most " + MAX_ATTACHMENTS_PER_FEEDBACK + " attachments");
         }
-
-        FeedbackAttachmentStorageService.EncodedAttachment encoded = storageService.validateAndEncode(file);
 
         FeedbackAttachment attachment = new FeedbackAttachment();
         attachment.setFeedback(feedback);
@@ -129,9 +153,11 @@ public class FeedbackAttachmentService {
      *
      * Deliberately takes ids rather than a user: by the time this is safe to
      * call, the account and its rows are already gone, so there is nothing left
-     * to look them up from. Call it only AFTER the delete has committed to the
-     * database — running it first destroys the files of an account that may yet
-     * survive a failed delete, and there is no recovering them.
+     * to look them up from. Call it only AFTER the delete has COMMITTED —
+     * running it any earlier, the flush included, destroys the files of an
+     * account that may yet survive a rollback, and there is no recovering them.
+     * {@code UserService.deleteUser} honours that by registering this on the
+     * transaction's {@code afterCommit} callback rather than calling it inline.
      *
      * Best-effort by construction — {@link FeedbackAttachmentStorageService#deleteAllForFeedback}
      * logs and swallows: a filesystem that refuses a delete must not be able to
@@ -147,8 +173,11 @@ public class FeedbackAttachmentService {
 
     /**
      * @param lockForWrite takes a pessimistic write lock on the submission row.
-     *                     Upload only: it is what makes the attachment count a
-     *                     limit rather than a suggestion. Read paths must pass
+     *                     Upload only, and only for the count-and-insert step:
+     *                     it is what makes the attachment count a limit rather
+     *                     than a suggestion, and holding it any wider than that
+     *                     just makes concurrent uploaders queue for no benefit
+     *                     (see {@link #addAttachment}). Read paths must pass
      *                     false — serving an image is no reason to make
      *                     concurrent readers queue behind each other.
      */

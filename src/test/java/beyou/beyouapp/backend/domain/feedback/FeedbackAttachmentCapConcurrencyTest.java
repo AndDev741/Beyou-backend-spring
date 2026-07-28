@@ -3,6 +3,7 @@ package beyou.beyouapp.backend.domain.feedback;
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackRequestDTO;
 import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenRepository;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
@@ -27,7 +28,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Queue;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -110,7 +113,12 @@ class FeedbackAttachmentCapConcurrencyTest extends AbstractIntegrationTest {
         assertThat(attachmentRepository.countByFeedbackId(feedbackId)).isEqualTo(PRE_EXISTING);
 
         AtomicInteger accepted = new AtomicInteger();
-        AtomicInteger rejected = new AtomicInteger();
+        AtomicInteger rejectedByTheCap = new AtomicInteger();
+        // Every other way an upload can end. Collected rather than swallowed:
+        // a thread that died of a connection-pool timeout, a lock timeout or a
+        // NullPointerException also fails to add an attachment, and without this
+        // the count assertions below would read that as the cap doing its job.
+        Queue<Throwable> failedForAnotherReason = new ConcurrentLinkedQueue<>();
         CountDownLatch start = new CountDownLatch(1);
         CountDownLatch done = new CountDownLatch(CONCURRENT_UPLOADS);
 
@@ -123,9 +131,16 @@ class FeedbackAttachmentCapConcurrencyTest extends AbstractIntegrationTest {
                         attachmentService.addAttachment(feedbackId, uploader, screenshot());
                         accepted.incrementAndGet();
                     } catch (BusinessException e) {
-                        rejected.incrementAndGet();
-                    } catch (Exception e) {
-                        // Anything else is a genuine failure; the count assertions below expose it.
+                        // Only THIS key is the cap refusing an upload. Any other
+                        // BusinessException (a missing submission, a storage
+                        // failure) is a different bug wearing the same type.
+                        if (e.getErrorKey() == ErrorKey.FEEDBACK_ATTACHMENT_LIMIT_REACHED) {
+                            rejectedByTheCap.incrementAndGet();
+                        } else {
+                            failedForAnotherReason.add(e);
+                        }
+                    } catch (Throwable e) {
+                        failedForAnotherReason.add(e);
                     } finally {
                         done.countDown();
                     }
@@ -140,14 +155,26 @@ class FeedbackAttachmentCapConcurrencyTest extends AbstractIntegrationTest {
             pool.shutdownNow();
         }
 
+        assertThat(failedForAnotherReason)
+                .as("an upload that died of anything other than the cap proves nothing about the cap; "
+                        + "the test profile pins the Hikari pool to 2 connections against %d threads, "
+                        + "so a pool timeout here is a live failure mode, not a theoretical one",
+                        CONCURRENT_UPLOADS)
+                .isEmpty();
+
         assertThat(attachmentRepository.countByFeedbackId(feedbackId))
                 .as("the cap must hold no matter how the uploads interleave "
-                        + "(accepted=%d, rejected=%d)", accepted.get(), rejected.get())
+                        + "(accepted=%d, rejectedByTheCap=%d)", accepted.get(), rejectedByTheCap.get())
                 .isEqualTo(FeedbackAttachmentService.MAX_ATTACHMENTS_PER_FEEDBACK);
 
         assertThat(accepted.get())
                 .as("exactly one of the racing uploads may take the last slot")
                 .isEqualTo(1);
+
+        assertThat(rejectedByTheCap.get())
+                .as("and every other upload has to have been turned away BY THE CAP — "
+                        + "this is what makes the count above evidence rather than a coincidence")
+                .isEqualTo(CONCURRENT_UPLOADS - 1);
     }
 
     // -- helpers --

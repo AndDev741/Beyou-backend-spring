@@ -35,6 +35,11 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
      * makes it hold; the read paths deliberately keep using
      * {@code findById}, because serving an image is no reason to make readers
      * queue.
+     *
+     * <p>Called AFTER the upload has already been authorized and decoded through
+     * an unlocked {@code findById} — the extra read is deliberate, so the lock
+     * covers the count-and-insert and not the image decode. See
+     * {@code FeedbackAttachmentService#addAttachment}.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT f FROM Feedback f WHERE f.id = :id")
