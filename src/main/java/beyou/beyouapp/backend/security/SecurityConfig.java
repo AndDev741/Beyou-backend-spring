@@ -60,6 +60,9 @@ public class SecurityConfig {
                         .requestMatchers("/docs/admin/**").authenticated()
                         .requestMatchers("/docs/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/user/photo/**").permitAll()
+                        // Admin console. The ADMIN role is granted only by a manual
+                        // database UPDATE — no code path assigns it.
+                        .requestMatchers("/feedback/admin/**").hasRole("ADMIN")
                         .anyRequest()
                         .authenticated()
                 )

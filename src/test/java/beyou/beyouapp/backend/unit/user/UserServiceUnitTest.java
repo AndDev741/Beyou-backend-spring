@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.unit.user;
 
+import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentService;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.PhotoStorageService;
@@ -62,6 +63,9 @@ public class UserServiceUnitTest {
     @Mock
     PhotoStorageService photoStorageService;
 
+    @Mock
+    FeedbackAttachmentService feedbackAttachmentService;
+
     UserMapper userMapper = new UserMapper();
 
     private UserService userService;
@@ -82,7 +86,7 @@ public class UserServiceUnitTest {
         user.setPerfilPhraseAuthor("lg?");
         user.setWidgetsIdInUse(List.of("widget4, widget5"));
 
-        userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService, userMapper, photoStorageService, eventPublisher);
+        userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService, userMapper, photoStorageService, eventPublisher, feedbackAttachmentService);
     }
 
     @Nested

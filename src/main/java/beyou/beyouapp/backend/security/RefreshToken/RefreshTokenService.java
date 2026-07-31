@@ -123,6 +123,22 @@ public class RefreshTokenService {
         repository.saveAll(tokens);
     }
 
+    /**
+     * R21 — deletes this account's refresh tokens, as opposed to
+     * {@link #revokeAllForUser(User)}, which only stamps them revoked.
+     *
+     * Revoking is right when the account survives and the sessions must not.
+     * This is for the account NOT surviving: the rows carry a non-cascading
+     * foreign key to {@code users}, so they have to be gone before the user row
+     * can be, and a revoked row still references it.
+     *
+     * @return how many token rows were removed
+     */
+    @Transactional
+    public int deleteAllForUser(UUID userId){
+        return repository.deleteAllByUserId(userId);
+    }
+
     public boolean isTokenExpired(RefreshToken token) {
         return token.getExpiresAt().before(Timestamp.from(Instant.now()));
     }

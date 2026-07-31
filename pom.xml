@@ -32,6 +32,7 @@
 		<postgresql.version>42.7.11</postgresql.version>
 		<log4j2.version>2.25.4</log4j2.version>
 		<spring-ai.version>2.0.0</spring-ai.version>
+		<sentry.version>8.50.1</sentry.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -176,6 +177,38 @@
 			<groupId>com.twelvemonkeys.imageio</groupId>
 			<artifactId>imageio-webp</artifactId>
 			<version>3.14.0</version>
+		</dependency>
+
+		<!-- Error telemetry. Reports unhandled exceptions to the self-hosted
+		     GlitchTip collector (Sentry-API compatible) — see Beyou-dev-env's
+		     docker-compose.monitoring.yml.
+
+		     `sentry-spring-boot-4` is the Spring Boot 4 module (it pulls
+		     sentry-spring-7, i.e. Spring Framework 7). The commonly-referenced
+		     `sentry-spring-boot-starter-jakarta` targets Boot 3 and does NOT
+		     work here. Configuration lives under `sentry:` in application.yaml;
+		     the whole integration stays dormant unless SENTRY_DSN is set. -->
+		<dependency>
+			<groupId>io.sentry</groupId>
+			<artifactId>sentry-spring-boot-4</artifactId>
+			<version>${sentry.version}</version>
+		</dependency>
+
+		<!-- Logback integration for the telemetry above. Its presence is what makes
+		     `sentry.logging.*` in application.yaml do anything: Sentry's
+		     SentryLogbackInitializer is @ConditionalOnClass(SentryAppender) and only
+		     then attaches the appender to the root logger. That gives captured
+		     exceptions a breadcrumb trail of the log lines leading up to them, and
+		     turns ERROR logs from self-handling code paths (the async listeners in
+		     notification/EmailService, which swallow their own failures so a dead SMTP
+		     server never costs a user's submission) into real events.
+
+		     Version must track sentry-spring-boot-4 — mixed SDK versions on one
+		     classpath is unsupported. -->
+		<dependency>
+			<groupId>io.sentry</groupId>
+			<artifactId>sentry-logback</artifactId>
+			<version>${sentry.version}</version>
 		</dependency>
 
 	</dependencies>

@@ -3,6 +3,7 @@ package beyou.beyouapp.backend.domain.routine.snapshot;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
+import beyou.beyouapp.backend.monitoring.SnapshotJobHeartbeat;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class RoutineSnapshotScheduler {
     private final RoutineSnapshotRepository snapshotRepository;
     private final SnapshotService snapshotService;
     private final SnapshotCheckMigrator checkMigrator;
+    private final SnapshotJobHeartbeat heartbeat;
 
     /**
      * Self-reference injected lazily to allow calling @Transactional methods
@@ -83,6 +85,23 @@ public class RoutineSnapshotScheduler {
         log.info("Startup backfill completed");
     }
 
+    /**
+     * Runs at the top of every hour. Most hours are a no-op — the cycle only writes
+     * snapshots for the timezones where the local clock has just crossed midnight — but
+     * it runs hourly regardless, which is what makes it usable as a liveness signal.
+     *
+     * <p>On completion it checks in with the collector (see {@link SnapshotJobHeartbeat}).
+     * The collector's monitor alerts when a check-in fails to ARRIVE, which is the only
+     * way to learn that this job stopped running: a wedged scheduler thread leaves
+     * {@code /actuator/health} answering 200 while snapshots quietly stop being written.
+     * Hourly, rather than only on the midnight branch, so detection is measured in hours
+     * instead of a day.
+     *
+     * <p>Scope of the signal: it means "the cycle ran to completion", not "every user's
+     * snapshot was written". The per-timezone and per-user failures below stay isolated
+     * and logged, deliberately — one user with an unparseable timezone must not blind you
+     * to whether the job itself is alive. Those failures surface as ERROR logs.
+     */
     @Scheduled(cron = "0 0 * * * *")
     public void processSnapshots() {
         log.info("Starting snapshot processing cycle");
@@ -116,6 +135,25 @@ public class RoutineSnapshotScheduler {
         }
 
         log.info("Snapshot processing cycle completed");
+
+        // Last statement on purpose. Anything that escapes the loop above (the timezone
+        // query failing, for instance) propagates before this line and leaves the
+        // collector waiting — which is exactly the alert we want. A signal on entry, or
+        // in a finally block, would report "the job is fine" for a job that just died.
+        signalHeartbeat();
+    }
+
+    /**
+     * The heartbeat already swallows delivery failures; this guards the remaining
+     * surface (a misconfiguration or bug inside the signal path itself). Monitoring must
+     * never be the reason the snapshot job fails.
+     */
+    private void signalHeartbeat() {
+        try {
+            heartbeat.signalCycleCompleted();
+        } catch (Exception e) {
+            log.error("Snapshot job heartbeat signalling failed", e);
+        }
     }
 
     @Transactional

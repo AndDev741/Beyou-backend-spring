@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
@@ -23,6 +24,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import beyou.beyouapp.backend.user.validation.PasswordValidator;
@@ -31,6 +34,7 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -48,6 +52,8 @@ public class UserService {
     private final UserMapper userMapper;
     private final PhotoStorageService photoStorageService;
     private final ApplicationEventPublisher eventPublisher;
+    /** Only used by {@link #deleteUser(User)} — attachment bytes do not cascade. */
+    private final FeedbackAttachmentService feedbackAttachmentService;
 
     /**
      * When true, newly registered users are immediately marked as verified and
@@ -146,13 +152,167 @@ public class UserService {
         }
     }
 
+    /**
+     * R21 — deleting an account takes the account's content with it.
+     *
+     * <p><b>Nothing in the application calls this.</b> Account self-deletion is
+     * not shipping in this release and no controller exposes it, so the only
+     * caller today is an operator working by hand — see <i>Operator
+     * procedure</i> at the bottom. The method exists ahead of the route so that
+     * whoever adds the route inherits the ordering below instead of
+     * rediscovering it.
+     *
+     * <p>Every owned domain (categories, habits, goals, tasks, routines,
+     * feedback) is carried off by the database's ON DELETE CASCADE inside this
+     * transaction. Feedback ATTACHMENTS are the exception: their rows cascade,
+     * but their bytes sit on disk where no foreign key reaches, so they are
+     * purged explicitly — otherwise a deleted account's screenshots live
+     * forever.
+     *
+     * <p>The order below is the whole point of this method.
+     *
+     * <ol>
+     *   <li>Refuse to proceed at all unless a transaction is actually in
+     *       progress. Called through the Spring proxy this always holds; called
+     *       with the proxy bypassed it does not, and then the row delete would
+     *       auto-commit on its own while step 5 had no commit callback to hang
+     *       the purge on — files orphaned, account gone. Failing here costs
+     *       nothing because nothing has happened yet.</li>
+     *   <li>Read the submission ids. Attachment files are addressed by feedback
+     *       id, and the cascade is about to take those rows away, so this is
+     *       the last moment they can be found.</li>
+     *   <li>Delete the refresh tokens. NOT everything referencing a user
+     *       cascades: {@code refresh_tokens.user_id} is a plain foreign key
+     *       (V1__baseline.sql) that {@code User} maps no {@code @OneToMany}
+     *       for, so every account that has ever logged in holds a row that
+     *       blocks the delete until something clears it.</li>
+     *   <li>Delete the user, and flush, so a foreign key that still blocks it
+     *       fails HERE rather than at commit — outside this method, past the
+     *       point where the outcome can still be acted on.</li>
+     *   <li>REGISTER the purge; do not perform it. It runs from this
+     *       transaction's {@code afterCommit} callback. Performing it inline —
+     *       even after the flush — destroys the files inside the transaction,
+     *       and everything between the flush and the commit can still roll the
+     *       delete back: a deferred constraint, a dropped connection, a
+     *       rollback marked by an outer transaction this one joined. Any of
+     *       those would leave the account standing with its screenshots
+     *       already gone and nothing to recover them from.</li>
+     * </ol>
+     *
+     * <p><b>Guaranteed:</b> no attachment byte is destroyed unless the account
+     * row is committed as deleted. A rollback anywhere, at any phase, leaves
+     * both the account and its files intact.
+     *
+     * <p><b>NOT guaranteed — the converse.</b> Once the commit lands the account
+     * is gone whether or not the purge then succeeds:
+     * <ul>
+     *   <li>{@link FeedbackAttachmentService#purgeStoredFiles} is best-effort and
+     *       never throws, by design — a filesystem refusing a delete must not be
+     *       able to undo an account removal. A refused delete leaves files behind
+     *       and a loud ERROR log is the only signal; there is no retry and no
+     *       reconciliation job.</li>
+     *   <li>The purge runs after the commit, so a JVM crash in that window
+     *       orphans the files with nothing left that knows their ids.</li>
+     *   <li>The 200 body is built and returned from inside the transaction,
+     *       before the commit and therefore before the purge. It reports the
+     *       delete, not the purge.</li>
+     * </ul>
+     * A periodic sweep of {@code {app.upload-dir}/feedback-attachments} for
+     * directories with no matching {@code feedback} row would close both holes.
+     * There is no such sweep today.
+     *
+     * <p>Nor is the 400 from the catch below the whole story: when the flush
+     * fails, Hibernate has already marked the transaction rollback-only, so the
+     * proxy raises {@code UnexpectedRollbackException} after this method
+     * returns and a caller sees a 500. The 400 is only reachable for failures
+     * that leave the transaction committable. Either way nothing is purged,
+     * which is the property that matters.
+     *
+     * <p>Not every non-cascading reference is cleared here: {@code chats.user_id}
+     * (V5__chat.sql) and {@code password_reset_tokens.user_id} are plain
+     * foreign keys too. They will block the delete for the accounts that hold
+     * them — but with this ordering they block it before anything is destroyed,
+     * which is the property that matters.
+     *
+     * <p><b>Operator procedure.</b> With no route and no CLI, deleting one
+     * account is a manual job. Run it in the same order this method uses, in one
+     * transaction, and only touch the disk once the transaction has committed:
+     *
+     * <pre>{@code
+     * -- 1. the attachment directories, noted BEFORE the rows go
+     * SELECT id FROM feedback WHERE user_id = :userId;
+     *
+     * BEGIN;
+     * -- 2. the plain foreign keys that block the delete
+     * DELETE FROM refresh_tokens        WHERE user_id = :userId;
+     * DELETE FROM password_reset_tokens WHERE user_id = :userId;
+     * DELETE FROM chats                 WHERE user_id = :userId;
+     * -- 3. the account; everything owned cascades with it
+     * DELETE FROM users WHERE id = :userId;
+     * COMMIT;   -- if this fails, STOP: keep the directories
+     *
+     * -- 4. only now, and only for the ids from step 1
+     * rm -rf "$UPLOAD_DIR/feedback-attachments/<feedbackId>"
+     * }</pre>
+     *
+     * <p>Where an operator-only statement should LIVE is a gap this shares with
+     * the plan's OQ5 — the one-off admin-granting UPDATE, which KD10 keeps out
+     * of application code and out of Flyway alike, and which as of now is only
+     * alluded to by {@code V11__users_allow_admin_role.sql} rather than written
+     * down anywhere runnable. Same shape of hole, same reason. This procedure is
+     * parked here, beside the code it mirrors, because that is the one place a
+     * person following the deletion path is certain to look; when OQ5 gets a real
+     * home for operator runbooks, this belongs there next to the grant.
+     */
+    @Transactional
     public ResponseEntity<Map<String, String>> deleteUser(User user){
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            // Step 1. Before the ids are read and before anything is deleted:
+            // with no transaction there is no commit callback to defer the purge
+            // to, and the row delete below would commit on its own.
+            throw new IllegalStateException(
+                    "deleteUser must run inside a transaction — the attachment purge is deferred to its commit");
+        }
+
         try{
+            List<UUID> submissionIds = feedbackAttachmentService.findSubmissionIdsForUser(user.getId());
+
+            refreshTokenService.deleteAllForUser(user.getId());
             userRepository.delete(user);
+            userRepository.flush();
+
+            purgeAttachmentsAfterCommit(user.getId(), submissionIds);
             return ResponseEntity.ok(Map.of("success", "User deleted successfully"));
         }catch(Exception e){
+            log.error("Could not delete user {} — nothing was purged from disk", user.getId(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    /**
+     * Hands the file purge to the transaction's commit callback.
+     *
+     * <p>Deliberately a synchronization rather than an
+     * {@code @TransactionalEventListener(AFTER_COMMIT)}: an event published
+     * without an active transaction is silently DROPPED, which for this purge
+     * means files quietly outliving their account. Registering fails loudly
+     * instead — and the guard at the top of {@link #deleteUser} makes sure it
+     * fails before anything is destroyed rather than after.
+     *
+     * <p>Deliberately not split into a transactional delete plus a
+     * caller-driven purge either: that makes the guarantee the caller's to
+     * remember, and the caller that matters most is the route that does not
+     * exist yet.
+     */
+    private void purgeAttachmentsAfterCommit(UUID userId, List<UUID> submissionIds) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                log.info("User {} deleted — purging attachment files for {} submission(s)",
+                        userId, submissionIds.size());
+                feedbackAttachmentService.purgeStoredFiles(submissionIds);
+            }
+        });
     }
 
     public UserResponseDTO getProfile(UUID userId){

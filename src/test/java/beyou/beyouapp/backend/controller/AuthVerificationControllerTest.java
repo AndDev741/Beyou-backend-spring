@@ -1,6 +1,10 @@
 package beyou.beyouapp.backend.controller;
 
+import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentRepository;
+import beyou.beyouapp.backend.domain.feedback.FeedbackReplyRepository;
+import beyou.beyouapp.backend.domain.feedback.FeedbackRepository;
 import beyou.beyouapp.backend.notification.EmailService;
+import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenRepository;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserService;
@@ -30,6 +34,14 @@ public class AuthVerificationControllerTest extends AbstractIntegrationTest {
     MockMvc mockMvc;
 
     @Autowired
+    private FeedbackReplyRepository feedbackReplyRepository;
+    @Autowired
+    private FeedbackAttachmentRepository feedbackAttachmentRepository;
+    @Autowired
+    private FeedbackRepository feedbackRepository;
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+    @Autowired
     private UserRepository userRepository;
 
     @Autowired
@@ -40,6 +52,10 @@ public class AuthVerificationControllerTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setup() {
+        refreshTokenRepository.deleteAll();
+        feedbackReplyRepository.deleteAll();
+        feedbackAttachmentRepository.deleteAll();
+        feedbackRepository.deleteAll();
         userRepository.deleteAll();
     }
 

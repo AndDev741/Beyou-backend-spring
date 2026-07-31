@@ -87,3 +87,32 @@ management:
 
 app:
   upload-dir: ${UPLOAD_DIR:/tmp/beyou-test-uploads}
+
+# Error telemetry OFF — the suite must emit nothing to the collector.
+#
+# application.yaml never declares `sentry.dsn`, so Sentry's
+# @ConditionalOnProperty("sentry.dsn") autoconfiguration normally doesn't even
+# engage. But a SENTRY_DSN exported in a developer's shell (or a CI runner's env)
+# would leak straight into the suite via relaxed binding. `enabled: false` makes
+# Sentry.init a no-op regardless of the DSN, so no event can ever be sent from a
+# test run. Locked in by SentryTelemetryConfigTest, which injects a DSN on purpose
+# to prove this override still wins.
+sentry:
+  enabled: false
+  # Belt and braces for the same hazard. `enabled: false` already makes Sentry.init a
+  # no-op, but the Logback appender is attached to the root logger by a separate
+  # autoconfiguration keyed only on `sentry.logging.enabled` (default true once
+  # sentry-logback is on the classpath). Pinning it false means no appender is ever
+  # attached during a test run, so no log line can take a route to a collector at all.
+  # Locked in by SentryTelemetryConfigTest, which asserts the appender is absent.
+  logging:
+    enabled: false
+
+# Snapshot heartbeat OFF — pinned to empty rather than left to the
+# ${SNAPSHOT_HEARTBEAT_URL:} default, for the same reason sentry.enabled is pinned
+# above: a SNAPSHOT_HEARTBEAT_URL exported in a developer's shell or a CI runner's
+# env would bind straight through and let a test run check in to a real collector,
+# keeping a monitor green for a job that isn't running anywhere.
+monitoring:
+  heartbeat:
+    snapshot-url: ""
