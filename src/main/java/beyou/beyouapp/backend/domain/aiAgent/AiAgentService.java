@@ -3,6 +3,7 @@ package beyou.beyouapp.backend.domain.aiAgent;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -92,7 +93,7 @@ public class AiAgentService {
     public String processMessage(UUID chatId, String userInput, UUID userId, String currentPage) {
         Chat chat = chatService.getChat(chatId, userId);
 
-        String reply = buildPrompt(chat, userInput, currentPage, Map.of("userId", userId, "chatId", chatId))
+        String reply = buildPrompt(chat, userInput, currentPage, toolContext(userId, chatId, currentPage))
                 .call()
                 .content();
 
@@ -146,7 +147,9 @@ public class AiAgentService {
             }
         };
 
-        Flux<String> tokens = buildPrompt(chat, userInput, currentPage, Map.of("userId", userId, "chatId", chatId, MeteredToolCallback.EVENTS_KEY, send))
+        Map<String, Object> toolContext = toolContext(userId, chatId, currentPage);
+        toolContext.put(MeteredToolCallback.EVENTS_KEY, send);
+        Flux<String> tokens = buildPrompt(chat, userInput, currentPage, toolContext)
                 .stream()
                 .content();
 
@@ -211,6 +214,17 @@ public class AiAgentService {
         emitter.onCompletion(cleanup);
 
         return emitter;
+    }
+
+    /** What every tool sees. currentPage is optional client info (Map.of rejects nulls). */
+    private Map<String, Object> toolContext(UUID userId, UUID chatId, String currentPage) {
+        Map<String, Object> context = new HashMap<>();
+        context.put("userId", userId);
+        context.put("chatId", chatId);
+        if (currentPage != null && !currentPage.isBlank()) {
+            context.put("currentPage", currentPage);
+        }
+        return context;
     }
 
     /** Persist a turn without letting a DB failure escape; returns whether it stuck.
