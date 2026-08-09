@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.domain.task.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -13,7 +15,7 @@ public record EditTaskRequestDTO(
         String description,
         String iconId,
         @NotNull @Min(1) @Max(5) Integer importance,
-        @NotNull @Min(1) @Max(5) Integer difficulty,
+        @JsonAlias("dificulty") @NotNull @Min(1) @Max(5) Integer difficulty,
         List<UUID> categoriesId,
         boolean oneTimeTask) {
 }

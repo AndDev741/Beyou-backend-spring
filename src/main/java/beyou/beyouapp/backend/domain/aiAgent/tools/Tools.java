@@ -3,10 +3,13 @@ package beyou.beyouapp.backend.domain.aiAgent;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -17,6 +20,10 @@ import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
+import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
+import beyou.beyouapp.backend.domain.feedback.FeedbackService;
+import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackRequestDTO;
+import beyou.beyouapp.backend.domain.feedback.dto.FeedbackContextDTO;
 import beyou.beyouapp.backend.domain.goal.GoalService;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
@@ -41,6 +48,8 @@ import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
 
 @Component
@@ -65,6 +74,10 @@ public class Tools {
     private ScheduleService scheduleService;
     @Autowired
     private UserService userService;
+    @Autowired
+    private FeedbackService feedbackService;
+    @Autowired
+    private Validator validator;
 
     private UUID userId(ToolContext toolContext) {
         return (UUID) toolContext.getContext().get("userId");
@@ -72,6 +85,29 @@ public class Tools {
 
     private UUID chatId(ToolContext toolContext) {
         return (UUID) toolContext.getContext().get("chatId");
+    }
+
+    private String currentPage(ToolContext toolContext) {
+        return (String) toolContext.getContext().get("currentPage");
+    }
+
+    /**
+     * The REST controllers enforce Bean Validation via @Valid, but tool calls
+     * reach the services directly — the LLM can omit or mangle fields the UI
+     * makes mandatory (e.g. a habit with importance but no dificulty). Same
+     * constraints, enforced here; the message lists every violated field so
+     * the model can fix its next attempt.
+     */
+    private <T> T valid(T dto) {
+        Set<ConstraintViolation<T>> violations = validator.validate(dto);
+        if (!violations.isEmpty()) {
+            String details = violations.stream()
+                    .map(violation -> violation.getPropertyPath() + " " + violation.getMessage())
+                    .sorted()
+                    .collect(Collectors.joining("; "));
+            throw new IllegalArgumentException("Invalid " + dto.getClass().getSimpleName() + ": " + details);
+        }
+        return dto;
     }
 
     // Habits
@@ -86,13 +122,13 @@ public class Tools {
     @Tool(description = "Create a new user habit")
     ResponseEntity<Map<String, String>> createUserHabit(CreateHabitDTO habit, ToolContext toolContext) {
         log.info("AI agent is creating a habit for user: {}", userId(toolContext));
-        return habitService.createHabit(habit, userId(toolContext));
+        return habitService.createHabit(valid(habit), userId(toolContext));
     }
 
     @Tool(description = "Edit an existing user habit. All fields are required, send the current values for fields that should not change")
     Map<String, String> editUserHabit(EditHabitDTO habit, ToolContext toolContext) {
         log.info("AI agent is editing habit {} for user: {}", habit.habitId(), userId(toolContext));
-        return habitService.editHabit(habit, userId(toolContext)).getBody();
+        return habitService.editHabit(valid(habit), userId(toolContext)).getBody();
     }
 
     @Tool(description = "Delete a user habit by its id. Fails if the habit is used in a routine")
@@ -113,13 +149,13 @@ public class Tools {
     @Tool(description = "Create a new user category")
     Map<String, Object> createUserCategory(CategoryRequestDTO category, ToolContext toolContext) {
         log.info("AI agent is creating a category for user: {}", userId(toolContext));
-        return categoryService.createCategory(category, userId(toolContext)).getBody();
+        return categoryService.createCategory(valid(category), userId(toolContext)).getBody();
     }
 
     @Tool(description = "Edit an existing user category. All fields are required, send the current values for fields that should not change")
     Map<String, Object> editUserCategory(CategoryEditRequestDTO category, ToolContext toolContext) {
         log.info("AI agent is editing category {} for user: {}", category.categoryId(), userId(toolContext));
-        return categoryService.editCategory(category, userId(toolContext)).getBody();
+        return categoryService.editCategory(valid(category), userId(toolContext)).getBody();
     }
 
     @Tool(description = "Delete a user category by its id. Fails if the category is used in a habit")
@@ -140,13 +176,13 @@ public class Tools {
     @Tool(description = "Create a new user task")
     Map<String, String> createUserTask(CreateTaskRequestDTO task, ToolContext toolContext) {
         log.info("AI agent is creating a task for user: {}", userId(toolContext));
-        return taskService.createTask(task, userId(toolContext)).getBody();
+        return taskService.createTask(valid(task), userId(toolContext)).getBody();
     }
 
     @Tool(description = "Edit an existing user task. All fields are required, send the current values for fields that should not change")
     Map<String, String> editUserTask(EditTaskRequestDTO task, ToolContext toolContext) {
         log.info("AI agent is editing task {} for user: {}", task.taskId(), userId(toolContext));
-        return taskService.editTask(task, userId(toolContext)).getBody();
+        return taskService.editTask(valid(task), userId(toolContext)).getBody();
     }
 
     @Tool(description = "Delete a user task by its id. Fails if the task is used in a routine")
@@ -167,13 +203,13 @@ public class Tools {
     @Tool(description = "Create a new user goal")
     Map<String, String> createUserGoal(CreateGoalRequestDTO goal, ToolContext toolContext) {
         log.info("AI agent is creating a goal for user: {}", userId(toolContext));
-        return goalService.createGoal(goal, userId(toolContext)).getBody();
+        return goalService.createGoal(valid(goal), userId(toolContext)).getBody();
     }
 
     @Tool(description = "Edit an existing user goal. All fields are required, send the current values for fields that should not change")
     Map<String, String> editUserGoal(EditGoalRequestDTO goal, ToolContext toolContext) {
         log.info("AI agent is editing goal {} for user: {}", goal.goalId(), userId(toolContext));
-        return goalService.editGoal(goal, userId(toolContext)).getBody();
+        return goalService.editGoal(valid(goal), userId(toolContext)).getBody();
     }
 
     @Tool(description = "Delete a user goal by its id")
@@ -241,7 +277,7 @@ public class Tools {
             + "inside the section time window")
     DiaryRoutineResponseDTO createUserRoutine(DiaryRoutineRequestDTO routine, ToolContext toolContext) {
         log.info("AI agent is creating a routine for user: {}", userId(toolContext));
-        return diaryRoutineService.createDiaryRoutine(routine, userId(toolContext));
+        return diaryRoutineService.createDiaryRoutine(valid(routine), userId(toolContext));
     }
 
     @Tool(description = "FULL RESTRUCTURE of a routine: the structure REPLACES the current one — any "
@@ -250,7 +286,7 @@ public class Tools {
             + "addHabitToRoutineSection / removeRoutineItem")
     DiaryRoutineResponseDTO editUserRoutine(UUID routineId, DiaryRoutineRequestDTO routine, ToolContext toolContext) {
         log.info("AI agent is editing routine {} for user: {}", routineId, userId(toolContext));
-        return diaryRoutineService.updateDiaryRoutine(routineId, routine, userId(toolContext));
+        return diaryRoutineService.updateDiaryRoutine(routineId, valid(routine), userId(toolContext));
     }
 
     @Tool(description = "Add ONE existing task to a routine section. Times are HH:mm inside the "
@@ -297,13 +333,13 @@ public class Tools {
             + "routine — scheduling over an already-taken day moves that day to this routine")
     ScheduleResponseDTO createUserSchedule(CreateScheduleDTO schedule, ToolContext toolContext) {
         log.info("AI agent is creating a schedule for user: {}", userId(toolContext));
-        return ScheduleResponseDTO.from(scheduleService.create(schedule, userId(toolContext)));
+        return ScheduleResponseDTO.from(scheduleService.create(valid(schedule), userId(toolContext)));
     }
 
     @Tool(description = "Update a schedule's week days by scheduleId")
     ScheduleResponseDTO updateUserSchedule(UpdateScheduleDTO schedule, ToolContext toolContext) {
         log.info("AI agent is updating schedule {} for user: {}", schedule.scheduleId(), userId(toolContext));
-        return ScheduleResponseDTO.from(scheduleService.update(schedule, userId(toolContext)));
+        return ScheduleResponseDTO.from(scheduleService.update(valid(schedule), userId(toolContext)));
     }
 
     @Tool(description = "Delete a schedule by its id (the routine stays, just unscheduled)")
@@ -321,7 +357,7 @@ public class Tools {
     RefreshUiDTO checkRoutineItem(CheckGroupRequestDTO checkRequest, ToolContext toolContext) {
         log.info("AI agent is checking a routine item on routine {} for user: {}",
                 checkRequest.routineId(), userId(toolContext));
-        return diaryRoutineService.checkAndUncheckGroup(checkRequest, userId(toolContext));
+        return diaryRoutineService.checkAndUncheckGroup(valid(checkRequest), userId(toolContext));
     }
 
     @Tool(description = "Skip or unskip ONE routine item on a date (skipped items don't hurt the "
@@ -329,7 +365,7 @@ public class Tools {
     RefreshUiDTO skipRoutineItem(SkipGroupRequestDTO skipRequest, ToolContext toolContext) {
         log.info("AI agent is skipping a routine item on routine {} for user: {}",
                 skipRequest.routineId(), userId(toolContext));
-        return diaryRoutineService.skipOrUnskipGroup(skipRequest, userId(toolContext));
+        return diaryRoutineService.skipOrUnskipGroup(valid(skipRequest), userId(toolContext));
     }
 
     // User configuration
@@ -371,7 +407,25 @@ public class Tools {
             + "timezone is an IANA zone id. Do not change name/photo unless explicitly asked")
     Map<String, String> updateUserConfiguration(UserEditDTO configUpdate, ToolContext toolContext) {
         log.info("AI agent is updating configuration for user: {}", userId(toolContext));
-        userService.editUser(configUpdate, userId(toolContext));
+        userService.editUser(valid(configUpdate), userId(toolContext));
         return Map.of("success", "Configuration updated");
+    }
+
+    // Feedback
+    @Tool(description = "Send feedback to the BeYou team on the user's behalf (bug report, feature "
+            + "request or anything else). Only call when the user explicitly asks to send feedback, "
+            + "and confirm the final text with them first — the body must be the user's words, not "
+            + "your own summary. The user gets an acknowledgement email")
+    Map<String, String> submitUserFeedback(
+            @ToolParam(description = "BUG | FEATURE_REQUEST | OTHER") FeedbackCategory category,
+            @ToolParam(description = "The feedback text, in the user's own words") String body,
+            ToolContext toolContext) {
+        log.info("AI agent is submitting feedback for user: {}", userId(toolContext));
+        FeedbackContextDTO context = new FeedbackContextDTO(
+                currentPage(toolContext), null, "agent", null, null);
+        feedbackService.submitFeedback(
+                valid(new CreateFeedbackRequestDTO(category, body, context)),
+                userId(toolContext));
+        return Map.of("success", "Feedback submitted to the BeYou team");
     }
 }

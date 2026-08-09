@@ -3,6 +3,8 @@ package beyou.beyouapp.backend.domain.task.dto;
 import java.util.List;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -18,7 +20,7 @@ public record CreateTaskRequestDTO(
     @NotBlank
     String iconId,
     @NotNull @Min(1) @Max(5) Integer importance,
-    @NotNull @Min(1) @Max(5) Integer difficulty,
+    @JsonAlias("dificulty") @NotNull @Min(1) @Max(5) Integer difficulty,
     List<UUID> categoriesId,
     boolean oneTimeTask
 ) {

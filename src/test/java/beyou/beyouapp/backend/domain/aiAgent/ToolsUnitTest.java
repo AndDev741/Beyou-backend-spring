@@ -1,0 +1,175 @@
+package beyou.beyouapp.backend.domain.aiAgent;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.model.ToolContext;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import beyou.beyouapp.backend.domain.common.ExperienceLevel;
+import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
+import beyou.beyouapp.backend.domain.feedback.FeedbackService;
+import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackRequestDTO;
+import beyou.beyouapp.backend.domain.habit.HabitService;
+import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
+import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
+import beyou.beyouapp.backend.domain.task.TaskService;
+import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
+import jakarta.validation.Validation;
+
+/**
+ * The agent tool layer must enforce the same Bean Validation the REST
+ * controllers get from @Valid — the LLM can omit fields the UI makes
+ * mandatory (a habit with importance but no dificulty) — and must expose
+ * feedback submission.
+ */
+@ExtendWith(MockitoExtension.class)
+public class ToolsUnitTest {
+
+    @Mock
+    private HabitService habitService;
+
+    @Mock
+    private TaskService taskService;
+
+    @Mock
+    private FeedbackService feedbackService;
+
+    @InjectMocks
+    private Tools tools;
+
+    private final UUID userId = UUID.randomUUID();
+    private final ToolContext toolContext = new ToolContext(Map.of("userId", userId, "currentPage", "/habits"));
+    private final UUID categoryId = UUID.randomUUID();
+
+    @BeforeEach
+    void setup() {
+        ReflectionTestUtils.setField(tools, "validator",
+                Validation.buildDefaultValidatorFactory().getValidator());
+    }
+
+    private CreateHabitDTO habit(Integer importance, Integer dificulty, List<UUID> categoriesId) {
+        return new CreateHabitDTO("Read a book", null, null, "book",
+                importance, dificulty, categoriesId, ExperienceLevel.BEGINNER);
+    }
+
+    @Test
+    void createHabitWithoutDificultyIsRejectedBeforeTheService() {
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> tools.createUserHabit(habit(3, null, List.of(categoryId)), toolContext));
+
+        assertTrue(error.getMessage().contains("dificulty"), error.getMessage());
+        verify(habitService, never()).createHabit(any(), any());
+    }
+
+    @Test
+    void createHabitWithZeroImportanceIsRejectedBeforeTheService() {
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> tools.createUserHabit(habit(0, 3, List.of(categoryId)), toolContext));
+
+        assertTrue(error.getMessage().contains("importance"), error.getMessage());
+        verify(habitService, never()).createHabit(any(), any());
+    }
+
+    @Test
+    void createHabitWithoutCategoriesIsRejectedBeforeTheService() {
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> tools.createUserHabit(habit(3, 3, List.of()), toolContext));
+
+        assertTrue(error.getMessage().contains("categoriesId"), error.getMessage());
+        verify(habitService, never()).createHabit(any(), any());
+    }
+
+    @Test
+    void validHabitReachesTheService() {
+        CreateHabitDTO dto = habit(3, 4, List.of(categoryId));
+        when(habitService.createHabit(dto, userId))
+                .thenReturn(ResponseEntity.ok(Map.of("success", "Habit saved successfully")));
+
+        tools.createUserHabit(dto, toolContext);
+
+        verify(habitService).createHabit(dto, userId);
+    }
+
+    @Test
+    void createTaskWithoutDifficultyIsRejectedBeforeTheService() {
+        CreateTaskRequestDTO dto = new CreateTaskRequestDTO(
+                "Clean the desk", null, "broom", 3, null, List.of(), false);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> tools.createUserTask(dto, toolContext));
+
+        assertTrue(error.getMessage().contains("difficulty"), error.getMessage());
+        verify(taskService, never()).createTask(any(), any());
+    }
+
+    @Test
+    void submitFeedbackDelegatesWithAgentContext() {
+        Map<String, String> result = tools.submitUserFeedback(
+                FeedbackCategory.BUG, "The streak counter resets at the wrong hour", toolContext);
+
+        ArgumentCaptor<CreateFeedbackRequestDTO> captor = ArgumentCaptor.forClass(CreateFeedbackRequestDTO.class);
+        verify(feedbackService).submitFeedback(captor.capture(), eq(userId));
+        CreateFeedbackRequestDTO sent = captor.getValue();
+        assertEquals(FeedbackCategory.BUG, sent.category());
+        assertEquals("The streak counter resets at the wrong hour", sent.body());
+        assertEquals("agent", sent.context().platform());
+        assertEquals("/habits", sent.context().screen());
+        assertEquals("Feedback submitted to the BeYou team", result.get("success"));
+    }
+
+    @Test
+    void submitFeedbackWithBlankBodyIsRejectedBeforeTheService() {
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> tools.submitUserFeedback(FeedbackCategory.OTHER, "  ", toolContext));
+
+        assertTrue(error.getMessage().contains("body"), error.getMessage());
+        verify(feedbackService, never()).submitFeedback(any(), any());
+    }
+
+    @Test
+    void habitDtosAcceptTheCorrectlySpelledDifficultyAlias() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+
+        CreateHabitDTO created = mapper.readValue("""
+                {"name":"Read","iconId":"book","importance":3,"difficulty":4,
+                 "categoriesId":["%s"],"experience":"BEGINNER"}""".formatted(categoryId),
+                CreateHabitDTO.class);
+        assertEquals(4, created.dificulty());
+
+        EditHabitDTO edited = mapper.readValue("""
+                {"habitId":"%s","name":"Read","iconId":"book","importance":2,"difficulty":5,
+                 "categoriesId":["%s"]}""".formatted(UUID.randomUUID(), categoryId),
+                EditHabitDTO.class);
+        assertEquals(5, edited.dificulty());
+    }
+
+    @Test
+    void taskDtoAcceptsTheMisspelledDificultyAlias() throws Exception {
+        CreateTaskRequestDTO dto = new ObjectMapper().readValue("""
+                {"name":"Clean","iconId":"broom","importance":2,"dificulty":3,
+                 "categoriesId":[],"oneTimeTask":false}""",
+                CreateTaskRequestDTO.class);
+        assertEquals(3, dto.difficulty());
+    }
+}
