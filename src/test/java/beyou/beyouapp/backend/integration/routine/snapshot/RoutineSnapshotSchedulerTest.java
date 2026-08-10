@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.integration.routine.snapshot;
 
+import beyou.beyouapp.backend.domain.checkday.DayCloseService;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
@@ -22,6 +24,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -51,6 +55,12 @@ class RoutineSnapshotSchedulerTest {
 
     @Mock
     private SnapshotJobHeartbeat heartbeat;
+
+    @Mock
+    private DayCloseService dayCloseService;
+
+    @Mock
+    private UserCacheEvictService userCacheEvictService;
 
     @InjectMocks
     private RoutineSnapshotScheduler scheduler;
@@ -311,8 +321,119 @@ class RoutineSnapshotSchedulerTest {
     }
 
     // ---------------------------------------------------------------
+    // Day-close branch (U5)
+    // ---------------------------------------------------------------
+    // The branch is gated on the local hour, and processSnapshots reads the
+    // wall clock. Rather than freeze time, these tests pick a real timezone
+    // whose local hour is the one under test — there is always one, because
+    // UTC offsets span more than 24 hours.
+
+    @Test
+    void processSnapshots_closesThePreviousDayAtTheGraceHour() {
+        String timezone = zoneWhereLocalHourIs(DAY_CLOSE_GRACE_HOUR);
+        LocalDate closingDay = ZonedDateTime.now(ZoneId.of(timezone)).toLocalDate().minusDays(1);
+
+        when(userRepository.findDistinctTimezones()).thenReturn(List.of(timezone));
+        when(userRepository.findAllByTimezone(timezone)).thenReturn(List.of(user));
+        when(dayCloseService.closeDay(user, closingDay)).thenReturn(3);
+
+        scheduler.processSnapshots();
+
+        verify(dayCloseService).closeDay(user, closingDay);
+        verify(snapshotService, never()).createSnapshot(any(), any(), any());
+    }
+
+    @Test
+    void processSnapshots_doesNotCloseTheDayOutsideTheGraceHour() {
+        // An hour that is neither midnight (snapshots) nor the grace hour.
+        String timezone = zoneWhereLocalHourIs(DAY_CLOSE_GRACE_HOUR + 3);
+
+        when(userRepository.findDistinctTimezones()).thenReturn(List.of(timezone));
+
+        scheduler.processSnapshots();
+
+        verifyNoInteractions(dayCloseService);
+        verify(userRepository, never()).findAllByTimezone(anyString());
+    }
+
+    @Test
+    void processSnapshots_clearsTheSharedRoutineCacheOnceForTheWholeBatch() {
+        // The `routine` cache is keyed userId_routineId, so it can only be cleared
+        // wholesale. Clearing it per user would flush it once for every account in
+        // the timezone — the exact waste the UserCacheEvictService split exists to stop.
+        String timezone = zoneWhereLocalHourIs(DAY_CLOSE_GRACE_HOUR);
+        LocalDate closingDay = ZonedDateTime.now(ZoneId.of(timezone)).toLocalDate().minusDays(1);
+        List<User> crowd = List.of(userWithId(), userWithId(), userWithId());
+
+        when(userRepository.findDistinctTimezones()).thenReturn(List.of(timezone));
+        when(userRepository.findAllByTimezone(timezone)).thenReturn(crowd);
+        when(dayCloseService.closeDay(any(), eq(closingDay))).thenReturn(4);
+
+        scheduler.processSnapshots();
+
+        verify(dayCloseService, times(3)).closeDay(any(), eq(closingDay));
+        verify(userCacheEvictService).clearSharedRoutineCache();
+        verify(userCacheEvictService, never()).evictAllUserCaches(any());
+    }
+
+    @Test
+    void processSnapshots_stillSignalsTheHeartbeatWhenOneUsersDayCloseBlowsUp() {
+        // One bad account must not read as "the snapshot job is dead".
+        String timezone = zoneWhereLocalHourIs(DAY_CLOSE_GRACE_HOUR);
+        LocalDate closingDay = ZonedDateTime.now(ZoneId.of(timezone)).toLocalDate().minusDays(1);
+        User doomed = userWithId();
+        User healthy = userWithId();
+
+        when(userRepository.findDistinctTimezones()).thenReturn(List.of(timezone));
+        when(userRepository.findAllByTimezone(timezone)).thenReturn(List.of(doomed, healthy));
+        when(dayCloseService.closeDay(doomed, closingDay))
+                .thenThrow(new RuntimeException("constraint violation"));
+        when(dayCloseService.closeDay(healthy, closingDay)).thenReturn(2);
+
+        assertThatCode(() -> scheduler.processSnapshots()).doesNotThrowAnyException();
+
+        verify(dayCloseService).closeDay(healthy, closingDay);
+        verify(heartbeat).signalCycleCompleted();
+    }
+
+    @Test
+    void backfillMissedSnapshots_neverClosesDays() {
+        // The backfill walks 7 days on every boot. Closing them would stamp MISSED on
+        // days an entity did not exist for — downtime read back as failure (KTD19).
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of());
+
+        scheduler.backfillMissedSnapshots();
+
+        verifyNoInteractions(dayCloseService);
+        verifyNoInteractions(userCacheEvictService);
+    }
+
+    // ---------------------------------------------------------------
     // Helper methods
     // ---------------------------------------------------------------
+
+    /** Mirrors RoutineSnapshotScheduler.DAY_CLOSE_GRACE_HOUR, which is private. */
+    private static final int DAY_CLOSE_GRACE_HOUR = 2;
+
+    /**
+     * A real zone id whose local time is currently at {@code hour}. Offsets run from -12 to
+     * +14, so every hour of the day is somebody's right now.
+     */
+    private static String zoneWhereLocalHourIs(int hour) {
+        int wanted = Math.floorMod(hour, 24);
+        return ZoneId.getAvailableZoneIds().stream()
+                .filter(id -> ZonedDateTime.now(ZoneId.of(id)).getHour() == wanted)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No timezone is currently at hour " + wanted));
+    }
+
+    private User userWithId() {
+        User other = new User();
+        other.setId(UUID.randomUUID());
+        other.setTimezone("UTC");
+        return other;
+    }
 
     private RoutineSnapshot buildSnapshot(LocalDate date) {
         RoutineSnapshot snapshot = new RoutineSnapshot();
