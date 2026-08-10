@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.task;
 
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -22,7 +23,14 @@ public class TaskCleanupScheduler {
     @Scheduled(cron = "0 0 0 * * *")
     @Transactional
     public void cleanupMarkedTasks() {
-        List<Task> markedTasks = taskRepository.findAllByMarkedToDeleteBefore(LocalDate.now());
+        // Coarse pre-filter only. A task is deletable when markedToDelete < the OWNER's local
+        // day, and the latest local day anywhere on earth is the one at UTC+18 (ZoneOffset.MAX),
+        // so every deletable task necessarily has markedToDelete before that date. Widening here
+        // over-fetches by at most a day; TaskService.deleteAllMarked applies the owner-timezone
+        // decision. A server-zone LocalDate.now() would instead MISS tasks owned by users whose
+        // day has already rolled over ahead of the server.
+        LocalDate latestDayAnywhere = LocalDate.now(ZoneOffset.MAX);
+        List<Task> markedTasks = taskRepository.findAllByMarkedToDeleteBefore(latestDayAnywhere);
         if (markedTasks.isEmpty()) {
             return;
         }

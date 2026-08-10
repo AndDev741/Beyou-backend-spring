@@ -37,6 +37,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
@@ -465,6 +466,8 @@ class DiaryRoutineServiceUnitTest {
         User user = new User();
         UUID userId = UUID.randomUUID();
         user.setId(userId);
+        // Pinned to the server zone: this case asserts against the server's weekday.
+        user.setTimezone(ZoneId.systemDefault().getId());
         String today = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
 
         Schedule schedule = new Schedule();
@@ -506,6 +509,49 @@ class DiaryRoutineServiceUnitTest {
         DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId);
 
         assertNull(result);
+    }
+
+    @Test
+    @DisplayName("R15: today's routine is picked by the owner's local weekday, not the server's")
+    void shouldPickTodaysRoutineByTheOwnersLocalWeekday() {
+        ZoneId ownerZone = zoneWhoseTodayDiffersFromServer();
+        UUID userId = UUID.randomUUID();
+        User user = new User();
+        user.setId(userId);
+        user.setTimezone(ownerZone.getId());
+
+        String ownerWeekday = LocalDate.now(ownerZone).getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+        String serverWeekday = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+        assertNotEquals(serverWeekday, ownerWeekday, "Precondition: the two zones must sit on different weekdays");
+
+        Schedule schedule = new Schedule();
+        schedule.setDays(Set.of(WeekDay.valueOf(ownerWeekday)));
+
+        diaryRoutine.setName("Owner Local Routine");
+        diaryRoutine.setSchedule(schedule);
+        diaryRoutine.setUser(user);
+
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(diaryRoutine));
+
+        DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId);
+
+        assertNotNull(result, "Routine scheduled for the owner's local weekday should be returned");
+        assertEquals("Owner Local Routine", result.name());
+    }
+
+    /**
+     * UTC+14 and UTC-12 sit 26 hours apart, so their local dates never coincide — at any
+     * instant at least one of them is on a different calendar day (and weekday) than the server.
+     */
+    private static ZoneId zoneWhoseTodayDiffersFromServer() {
+        LocalDate serverToday = LocalDate.now();
+        for (String zoneId : List.of("Etc/GMT-14", "Etc/GMT+12")) {
+            ZoneId zone = ZoneId.of(zoneId);
+            if (!LocalDate.now(zone).equals(serverToday)) {
+                return zone;
+            }
+        }
+        throw new IllegalStateException("No zone differed from the server's day — impossible by construction");
     }
 
     // --- mergeSections: habitGroup/taskGroup merge tests ---

@@ -1,6 +1,5 @@
 package beyou.beyouapp.backend.domain.task;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +16,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
@@ -56,11 +56,15 @@ public class TaskService {
         return tasks.stream().map(taskMapper::toResponseDTO).toList();
     }
 
-    void deleteAllMarked(List<Task> tasks, UUID userId) {
-        LocalDate today = LocalDate.now();
-        
+    /**
+     * Authoritative cleanup filter: a marked task dies only once the day it was marked has
+     * passed in ITS OWNER's timezone. The scheduler's query is only a coarse pre-filter, so
+     * this re-check is what actually decides — never widen it back to a server-zone date.
+     */
+    public void deleteAllMarked(List<Task> tasks, UUID userId) {
         List<Task> tasksToDelete = tasks.stream()
-            .filter(task -> task.getMarkedToDelete() != null && task.getMarkedToDelete().isBefore(today))
+            .filter(task -> task.getMarkedToDelete() != null
+                && task.getMarkedToDelete().isBefore(UserDateResolver.today(task.getUser())))
             .collect(Collectors.toList());
 
         log.info("Tasks to be deleted => {}", tasksToDelete);

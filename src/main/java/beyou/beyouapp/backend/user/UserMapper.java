@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 import org.springframework.stereotype.Component;
 
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 
 @Component
@@ -20,6 +21,10 @@ public class UserMapper {
      *                     cache exactly when the photo changes.
      */
     public UserResponseDTO toResponseDTO(User user, Long photoVersion) {
+        // Streak scalars are read against the owner's local day: a user checking in at 21:00
+        // local must not see "not completed today" because the server already rolled over.
+        LocalDate ownerToday = UserDateResolver.today(user);
+
         String photo;
         if (photoVersion != null) {
             photo = "/api/v1/user/photo/" + user.getId() + "?v=" + photoVersion;
@@ -31,7 +36,7 @@ public class UserMapper {
             user.getEmail(),
             user.getPerfilPhrase(),
             user.getPerfilPhraseAuthor(),
-            user.getCurrentConstance(LocalDate.now()),
+            user.getCurrentConstance(ownerToday),
             photo,
             user.isGoogleAccount(),
             user.getWidgetsIdInUse(),
@@ -41,7 +46,7 @@ public class UserMapper {
             user.getXpProgress().getNextLevelXp(),
             user.getXpProgress().getLevel(),
             user.getConstanceConfiguration(),
-            user.getCompletedDays().contains(LocalDate.now()),
+            user.getCompletedDays().contains(ownerToday),
             user.getMaxConstance(),
             user.isTutorialCompleted(),
             user.getLanguageInUse(),

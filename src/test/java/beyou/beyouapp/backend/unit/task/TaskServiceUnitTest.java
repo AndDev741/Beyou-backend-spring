@@ -2,8 +2,11 @@ package beyou.beyouapp.backend.unit.task;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +15,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
@@ -164,6 +168,55 @@ public class TaskServiceUnitTest {
         ResponseEntity<Map<String, String>> deleteTaskResponse = taskService.deleteTask(taskId, userId);
 
         assertEquals(ResponseEntity.ok(Map.of("success", "Task deleted Successfully!")), deleteTaskResponse);
+    }
+
+    /**
+     * R15: cleanup dates resolve in the owning user's timezone. A one-time task marked on the
+     * owner's local day must survive until that local day has passed — the server's calendar day
+     * has no say. Uses an owner zone whose local date provably differs from the server's right
+     * now (think an America/Los_Angeles user against a UTC server, but deterministic at any hour).
+     */
+    @Test
+    public void shouldOnlyDeleteMarkedTasksOnceTheOwnersLocalDayHasPassed() {
+        ZoneId ownerZone = zoneWhoseTodayDiffersFromServer();
+        user.setId(userId);
+        user.setTimezone(ownerZone.getId());
+        LocalDate ownerToday = LocalDate.now(ownerZone);
+
+        Task markedToday = new Task();
+        markedToday.setId(UUID.randomUUID());
+        markedToday.setUser(user);
+        markedToday.setMarkedToDelete(ownerToday);
+
+        Task markedYesterday = new Task();
+        markedYesterday.setId(UUID.randomUUID());
+        markedYesterday.setUser(user);
+        markedYesterday.setMarkedToDelete(ownerToday.minusDays(1));
+
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of());
+
+        taskService.deleteAllMarked(new ArrayList<>(List.of(markedToday, markedYesterday)), userId);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Task>> captor = ArgumentCaptor.forClass(List.class);
+        verify(taskRepository).deleteAll(captor.capture());
+        assertEquals(List.of(markedYesterday), captor.getValue(),
+                "Only the task whose owner-local day already passed may be deleted");
+    }
+
+    /**
+     * UTC+14 and UTC-12 sit 26 hours apart, so their local dates never coincide — at any
+     * instant at least one of them is on a different calendar day than the server.
+     */
+    private static ZoneId zoneWhoseTodayDiffersFromServer() {
+        LocalDate serverToday = LocalDate.now();
+        for (String zoneId : List.of("Etc/GMT-14", "Etc/GMT+12")) {
+            ZoneId zone = ZoneId.of(zoneId);
+            if (!LocalDate.now(zone).equals(serverToday)) {
+                return zone;
+            }
+        }
+        throw new IllegalStateException("No zone differed from the server's day — impossible by construction");
     }
 
     //Exceptions

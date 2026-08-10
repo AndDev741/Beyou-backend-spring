@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.domain.common.CheckXpCalculator;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshItemCheckedDTO;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
@@ -44,13 +45,14 @@ public class CheckItemService {
 
     @Transactional
     public RefreshUiDTO checkOrUncheckItemGroup(CheckGroupRequestDTO checkGroupDTO) {
-        LocalDate date = LocalDate.now();
+        // The day is resolved only once the group (and with it its owner) is in hand: a check
+        // row is permanent history, so it must carry the owner's local day, not the server's.
         if(checkGroupDTO.habitGroupDTO() != null){
             HabitGroup habitGroup = itemGroupService.findHabitGroupByDTO(checkGroupDTO.routineId(), checkGroupDTO.habitGroupDTO().habitGroupId());
-            return checkOrUncheckHabitGroup(habitGroup, date);
+            return checkOrUncheckHabitGroup(habitGroup, ownerToday(habitGroup.getRoutineSection().getRoutine()));
         }else if(checkGroupDTO.taskGroupDTO() != null){
             TaskGroup taskGroup = itemGroupService.findTaskGroupByDTO(checkGroupDTO.routineId(), checkGroupDTO.taskGroupDTO().taskGroupId());
-            return checkOrUncheckTaskGroup(taskGroup, date);
+            return checkOrUncheckTaskGroup(taskGroup, ownerToday(taskGroup.getRoutineSection().getRoutine()));
         }else{
             throw new BusinessException(ErrorKey.ITEM_GROUP_REQUIRED, "No Item group found in the request");
         }
@@ -58,9 +60,11 @@ public class CheckItemService {
 
     @Transactional
     public RefreshUiDTO skipOrUnskipItemGroup(SkipGroupRequestDTO skipGroupDTO) {
-        LocalDate date = skipGroupDTO.date() != null ? skipGroupDTO.date() : LocalDate.now();
         if(skipGroupDTO.habitGroupDTO() != null){
             HabitGroup habitGroup = itemGroupService.findHabitGroupByDTO(skipGroupDTO.routineId(), skipGroupDTO.habitGroupDTO().habitGroupId());
+            LocalDate date = skipGroupDTO.date() != null
+                ? skipGroupDTO.date()
+                : ownerToday(habitGroup.getRoutineSection().getRoutine());
             if (isHabitGroupChecked(habitGroup, date)) {
                 return buildNoOpRefresh(habitGroup.getId(), getHabitGroupChecked(habitGroup, date), date, habitGroup.getRoutineSection().getRoutine());
             }
@@ -69,6 +73,9 @@ public class CheckItemService {
                 : unskipHabitGroup(habitGroup, date);
         }else if(skipGroupDTO.taskGroupDTO() != null){
             TaskGroup taskGroup = itemGroupService.findTaskGroupByDTO(skipGroupDTO.routineId(), skipGroupDTO.taskGroupDTO().taskGroupId());
+            LocalDate date = skipGroupDTO.date() != null
+                ? skipGroupDTO.date()
+                : ownerToday(taskGroup.getRoutineSection().getRoutine());
             if (isTaskGroupChecked(taskGroup, date)) {
                 return buildNoOpRefresh(taskGroup.getId(), getTaskGroupChecked(taskGroup, date), date, taskGroup.getRoutineSection().getRoutine());
             }
@@ -78,6 +85,15 @@ public class CheckItemService {
         }else{
             throw new BusinessException(ErrorKey.ITEM_GROUP_REQUIRED, "No Item group found in the request");
         }
+    }
+
+    /**
+     * Today in the routine owner's timezone. Identity travels with the data (the routine's
+     * owner), not a ThreadLocal: agent tools run on a boundedElastic thread with no
+     * SecurityContext, so the security context is never consulted here.
+     */
+    private LocalDate ownerToday(Routine routine) {
+        return UserDateResolver.today(routine.getUser());
     }
 
     private RefreshUiDTO checkOrUncheckHabitGroup(HabitGroup habitGroup, LocalDate date) {
@@ -334,9 +350,10 @@ public class CheckItemService {
             );
         }
         
-        //Mark to delete if one time task
+        //Mark to delete if one time task — dated in the owner's zone, same as the check row,
+        //so cleanup ("delete once that day has passed") agrees with what the user saw.
         if(taskChecked.isOneTimeTask()){
-            taskChecked.setMarkedToDelete(LocalDate.now());
+            taskChecked.setMarkedToDelete(date);
         }
 
         //Update entities

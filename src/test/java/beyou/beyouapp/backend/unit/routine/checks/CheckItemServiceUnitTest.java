@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.unit.routine.checks;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -12,7 +13,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -42,6 +45,7 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.HabitGroupRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.user.User;
@@ -81,11 +85,14 @@ class CheckItemServiceUnitTest {
             user.setCompletedDays(Set.of(LocalDate.now().minusDays(1))); // Simulating that the user has a constance of 1 day
             user.setXpProgress(xpProgress);
             user.setMaxConstance(2);
+            // These cases assert against LocalDate.now(): pin the owner to the server zone so the
+            // owner-timezone resolution can't shift the expected day out from under them.
+            user.setTimezone(ZoneId.systemDefault().getId());
 
             when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
             .thenAnswer(invocation -> new RefreshUiDTO(null, null, null, invocation.getArgument(3)));
         }
-        
+
         @Test
         void shouldCheckHabitGroupAndIncreaseXpAndConstance() {
             LocalDate today = LocalDate.now();
@@ -229,6 +236,8 @@ class CheckItemServiceUnitTest {
             user.setCompletedDays(Set.of(LocalDate.now().minusDays(1))); // Simulating that the user has a constance of 1 day
             user.setXpProgress(xpProgress);
             user.setMaxConstance(2);
+            // Pinned to the server zone for the same reason as CheckTests above.
+            user.setTimezone(ZoneId.systemDefault().getId());
 
             when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
             .thenAnswer(invocation -> new RefreshUiDTO(null, null, null, invocation.getArgument(3)));        }
@@ -287,6 +296,131 @@ class CheckItemServiceUnitTest {
 
     }
 
+    /**
+     * R15/KTD10: every date decision in the check path must resolve in the owning user's
+     * timezone. These cases pick an owner zone whose local date provably differs from the
+     * server's right now, so the assertions are deterministic at any hour of any day.
+     */
+    @Nested
+    class OwnerTimezoneTests {
+
+        @BeforeEach
+        void setup() {
+            user.setXpProgress(new XpProgress(0D, 0, 0D, 50D));
+            user.setCompletedDays(new HashSet<>());
+            user.setMaxConstance(0);
+
+            when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
+                    .thenAnswer(invocation -> new RefreshUiDTO(null, null, null, invocation.getArgument(3)));
+        }
+
+        @Test
+        void shouldDateHabitCheckInTheOwnersTimezoneNotTheServersDay() {
+            ZoneId ownerZone = zoneWhoseTodayDiffersFromServer();
+            user.setTimezone(ownerZone.getId());
+
+            Habit habit = createHabit(2, 3, 0, 0, List.of(createCategory(0)));
+            HabitGroup habitGroup = createHabitGroup(habit);
+            UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
+            when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
+
+            checkItemService.checkOrUncheckItemGroup(
+                    new CheckGroupRequestDTO(
+                            routineId,
+                            null,
+                            new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
+                            null));
+
+            HabitGroupCheck check = habitGroup.getHabitGroupChecks().get(0);
+            assertEquals(LocalDate.now(ownerZone), check.getCheckDate());
+            assertNotEquals(LocalDate.now(), check.getCheckDate());
+        }
+
+        @Test
+        void shouldDateSkipInTheOwnersTimezoneWhenTheRequestCarriesNoDate() {
+            ZoneId ownerZone = zoneWhoseTodayDiffersFromServer();
+            user.setTimezone(ownerZone.getId());
+
+            Habit habit = createHabit(2, 3, 0, 0, List.of(createCategory(0)));
+            HabitGroup habitGroup = createHabitGroup(habit);
+            UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
+            when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
+
+            checkItemService.skipOrUnskipItemGroup(
+                    new SkipGroupRequestDTO(
+                            routineId,
+                            null,
+                            new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
+                            null,
+                            true));
+
+            HabitGroupCheck check = habitGroup.getHabitGroupChecks().get(0);
+            assertTrue(check.getSkipped());
+            assertEquals(LocalDate.now(ownerZone), check.getCheckDate());
+            assertNotEquals(LocalDate.now(), check.getCheckDate());
+        }
+
+        @Test
+        void shouldMarkOneTimeTaskForDeletionOnTheOwnersLocalDay() {
+            ZoneId ownerZone = zoneWhoseTodayDiffersFromServer();
+            user.setTimezone(ownerZone.getId());
+
+            Task task = createTask(2, 3, true, List.of(createCategory(0)));
+            TaskGroup taskGroup = createTaskGroup(task);
+            UUID routineId = taskGroup.getRoutineSection().getRoutine().getId();
+            when(itemGroupService.findTaskGroupByDTO(routineId, taskGroup.getId())).thenReturn(taskGroup);
+
+            checkItemService.checkOrUncheckItemGroup(
+                    new CheckGroupRequestDTO(
+                            routineId,
+                            new TaskGroupRequestDTO(taskGroup.getId(), taskGroup.getStartTime()),
+                            null,
+                            null));
+
+            assertEquals(LocalDate.now(ownerZone), taskGroup.getTaskGroupChecks().get(0).getCheckDate());
+            assertEquals(LocalDate.now(ownerZone), task.getMarkedToDelete());
+            assertNotEquals(LocalDate.now(), task.getMarkedToDelete());
+        }
+
+        @Test
+        void shouldFallBackToTheServerZoneWhenTheOwnerHasNoTimezone() {
+            user.setTimezone(null);
+
+            Habit habit = createHabit(2, 3, 0, 0, List.of(createCategory(0)));
+            HabitGroup habitGroup = createHabitGroup(habit);
+            UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
+            when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
+
+            checkItemService.checkOrUncheckItemGroup(
+                    new CheckGroupRequestDTO(
+                            routineId,
+                            null,
+                            new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
+                            null));
+
+            assertEquals(LocalDate.now(), habitGroup.getHabitGroupChecks().get(0).getCheckDate());
+        }
+
+        @Test
+        void shouldFallBackToTheServerZoneWhenTheOwnersTimezoneIsGarbage() {
+            user.setTimezone("Not/AZone");
+
+            Habit habit = createHabit(2, 3, 0, 0, List.of(createCategory(0)));
+            HabitGroup habitGroup = createHabitGroup(habit);
+            UUID routineId = habitGroup.getRoutineSection().getRoutine().getId();
+            when(itemGroupService.findHabitGroupByDTO(routineId, habitGroup.getId())).thenReturn(habitGroup);
+
+            checkItemService.checkOrUncheckItemGroup(
+                    new CheckGroupRequestDTO(
+                            routineId,
+                            null,
+                            new HabitGroupRequestDTO(habitGroup.getId(), habitGroup.getStartTime()),
+                            null));
+
+            assertEquals(LocalDate.now(), habitGroup.getHabitGroupChecks().get(0).getCheckDate());
+        }
+    }
+
     @Nested
     class ExceptionCases {
         @Test
@@ -298,6 +432,22 @@ class CheckItemServiceUnitTest {
 
             assertEquals("No Item group found in the request", exception.getMessage());
         }
+    }
+
+    /**
+     * UTC+14 and UTC-12 sit 26 hours apart, so their local dates never coincide — at any
+     * instant at least one of them is on a different calendar day than the server. Picking
+     * whichever differs keeps the owner-timezone assertions deterministic without a Clock seam.
+     */
+    private static ZoneId zoneWhoseTodayDiffersFromServer() {
+        LocalDate serverToday = LocalDate.now();
+        for (String zoneId : List.of("Etc/GMT-14", "Etc/GMT+12")) {
+            ZoneId zone = ZoneId.of(zoneId);
+            if (!LocalDate.now(zone).equals(serverToday)) {
+                return zone;
+            }
+        }
+        throw new IllegalStateException("No zone differed from the server's day — impossible by construction");
     }
 
     private Category createCategory(double xp) {
