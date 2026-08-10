@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./mvnw package -DskipTests                # Build JAR without tests
 ```
 
-Tests use the `test` profile (`application-test.yml`) with an H2 in-memory database. Controller tests use `@SpringBootTest` + `@AutoConfigureMockMvc(addFilters = false)` + `@ActiveProfiles("test")` with `@MockBean` for service layer mocking.
+Tests use the `test` profile (`application-test.yml`) against a singleton Testcontainers PostgreSQL 15 owned by `AbstractIntegrationTest`, with Flyway migrating it and `ddl-auto: validate`, so every integration test doubles as a schema-drift check. Controller tests use `@SpringBootTest` + `@AutoConfigureMockMvc(addFilters = false)` + `@ActiveProfiles("test")` with `@MockBean` for service layer mocking.
 
 E2E tests (Playwright, in `../Beyou-e2e-tests/`) run against a real backend booted with `SPRING_PROFILES_ACTIVE=e2e` and a dedicated `beyou_e2e` Postgres database. `E2eSafetyCheck` refuses to start the backend in the `e2e` profile unless the JDBC URL contains `e2e` or `test`, so a misconfigured override can't silently pollute dev data (the e2e profile boots via Flyway migrate + Hibernate `validate`, the same schema path as prod).
 
@@ -20,7 +20,7 @@ Surefire is configured with special JVM args for Mockito (`-Dmockito.mock-maker=
 
 ## Architecture
 
-**Java 21, Spring Boot 3.5, Undertow** (Tomcat excluded), virtual threads enabled, Lombok throughout, PostgreSQL in production (port 5490), H2 for unit tests, Postgres `beyou_e2e` for E2E.
+**Java 21, Spring Boot 3.5, Undertow** (Tomcat excluded), virtual threads enabled, Lombok throughout, PostgreSQL in production (port 5490), Testcontainers Postgres 15 for integration tests, Postgres `beyou_e2e` for E2E.
 
 ### Package Structure
 
@@ -78,7 +78,7 @@ Config is in `application.yaml` (not `.properties`). Environment variables are r
 The `docs.import.*` properties configure which GitHub repository to pull documentation from.
 
 Profile overlays:
-- `application-test.yml` — H2 in-memory for unit/integration tests
+- `application-test.yml` — Testcontainers Postgres 15 for integration tests (NOT H2; the datasource comes from `AbstractIntegrationTest`)
 - `application-e2e.yml` — Postgres `beyou_e2e`, Flyway migrate + `validate` (was `create-drop` pre-cutover), auto-verify emails, rate limit off
 - `application-prod.yml` — `ddl-auto: validate`, CORS wildcard rejected, Swagger off, actuator localhost-only
 
