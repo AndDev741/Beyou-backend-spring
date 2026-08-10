@@ -2,7 +2,9 @@ package beyou.beyouapp.backend.unit.task;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
@@ -23,8 +25,13 @@ import org.junit.jupiter.api.BeforeEach;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
+import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskMapper;
 import beyou.beyouapp.backend.domain.task.TaskRepository;
@@ -56,6 +63,9 @@ public class TaskServiceUnitTest {
     @Mock
     UserCacheEvictService userCacheEvictService;
 
+    @Mock
+    EntityCheckDayRepository entityCheckDayRepository;
+
     TaskMapper taskMapper = new TaskMapper();
 
     TaskService taskService;
@@ -68,7 +78,7 @@ public class TaskServiceUnitTest {
 
     @BeforeEach
     void setup() {
-        taskService = new TaskService(taskRepository, userRepository, categoryService, diaryRoutineRepository, taskMapper, userCacheEvictService);
+        taskService = new TaskService(taskRepository, userRepository, categoryService, diaryRoutineRepository, taskMapper, userCacheEvictService, entityCheckDayRepository);
     }
 
     @Test
@@ -202,6 +212,83 @@ public class TaskServiceUnitTest {
         verify(taskRepository).deleteAll(captor.capture());
         assertEquals(List.of(markedYesterday), captor.getValue(),
                 "Only the task whose owner-local day already passed may be deleted");
+    }
+
+    /**
+     * R8/KTD24 — the task's day history goes with the task, exactly as a habit's does.
+     */
+    @Test
+    public void shouldDeleteTheTasksCheckDayHistoryWhenDeletingTheTask(){
+        user.setId(userId);
+        Task taskToDelete = new Task();
+        taskToDelete.setId(taskId);
+        taskToDelete.setUser(user);
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(taskToDelete));
+
+        taskService.deleteTask(taskId, userId);
+
+        verify(entityCheckDayRepository).deleteAllByOwner(CheckDayOwnerType.TASK, taskId);
+    }
+
+    /**
+     * A task still held by a routine is refused, so nothing of its history is touched.
+     */
+    @Test
+    public void shouldNotTouchTheHistoryWhenTheTaskDeleteIsRefused(){
+        user.setId(userId);
+        Task taskToDelete = new Task();
+        taskToDelete.setId(taskId);
+        taskToDelete.setUser(user);
+
+        DiaryRoutine routine = new DiaryRoutine();
+        RoutineSection section = new RoutineSection();
+        TaskGroup group = new TaskGroup();
+        group.setTask(taskToDelete);
+        section.setTaskGroups(new ArrayList<>(List.of(group)));
+        routine.setRoutineSections(new ArrayList<>(List.of(section)));
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(taskToDelete));
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(routine));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> taskService.deleteTask(taskId, userId));
+
+        assertEquals(ErrorKey.TASK_IN_ROUTINE, exception.getErrorKey());
+        verifyNoInteractions(entityCheckDayRepository);
+    }
+
+    /**
+     * The cleanup path clears history for every task it actually removes, and only those.
+     * Today every such task is a one-time task with no rows to clear, so this asserts the
+     * call is wired rather than that rows disappear — the point is that the delete site does
+     * not carry its own copy of the "one-time tasks are exempt" rule.
+     */
+    @Test
+    public void shouldDeleteTheCheckDayHistoryOfEveryTaskTheCleanupActuallyRemoves() {
+        ZoneId ownerZone = zoneWhoseTodayDiffersFromServer();
+        user.setId(userId);
+        user.setTimezone(ownerZone.getId());
+        LocalDate ownerToday = LocalDate.now(ownerZone);
+
+        Task markedToday = new Task();
+        markedToday.setId(UUID.randomUUID());
+        markedToday.setUser(user);
+        markedToday.setMarkedToDelete(ownerToday);
+
+        Task markedYesterday = new Task();
+        markedYesterday.setId(UUID.randomUUID());
+        markedYesterday.setUser(user);
+        markedYesterday.setMarkedToDelete(ownerToday.minusDays(1));
+
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of());
+
+        taskService.deleteAllMarked(new ArrayList<>(List.of(markedToday, markedYesterday)), userId);
+
+        verify(entityCheckDayRepository)
+                .deleteAllByOwner(CheckDayOwnerType.TASK, markedYesterday.getId());
+        verify(entityCheckDayRepository, never())
+                .deleteAllByOwner(CheckDayOwnerType.TASK, markedToday.getId());
     }
 
     /**

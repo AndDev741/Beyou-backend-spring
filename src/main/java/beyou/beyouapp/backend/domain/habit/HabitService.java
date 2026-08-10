@@ -15,6 +15,8 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
@@ -54,6 +56,8 @@ public class HabitService {
     private final DiaryRoutineRepository diaryRoutineRepository;
 
     private final UserCacheEvictService userCacheEvictService;
+
+    private final EntityCheckDayRepository entityCheckDayRepository;
 
     public Habit getHabit(UUID habitId){
         return habitRepository.findById(habitId)
@@ -122,6 +126,21 @@ public class HabitService {
         }
     }
 
+    /**
+     * R8/KTD24 — deleting the habit deletes its day history with it.
+     *
+     * <p>The asymmetry is deliberate. Deleting a ROUTINE, or editing one to drop this habit,
+     * leaves every row standing: {@code entity_check_day.owner_id} carries no foreign key
+     * precisely so the database never makes that call, and {@code DiaryRoutineService} never
+     * touches this table. Deleting the habit itself is different — it is a deliberate act on
+     * an entity this method already refuses to remove while a routine still holds it, so
+     * there is nobody left the history could belong to.
+     *
+     * <p>{@code @Transactional} is load-bearing rather than decorative here:
+     * {@code deleteAllByOwner} is a bulk {@code @Modifying} query with no transaction of its
+     * own and throws {@code TransactionRequiredException} without one. It also makes the pair
+     * atomic — a delete that fails at flush rolls the history back with it.
+     */
     @Transactional
     public ResponseEntity<Map<String, String>> deleteHabit(UUID habitId, UUID userId){
         Habit habitToDelete = getHabit(habitId);
@@ -132,6 +151,8 @@ public class HabitService {
             throw new BusinessException(ErrorKey.HABIT_IN_ROUTINE, "This habit is used in some routine, please remove it first");
         }
         try{
+            int removedDays = entityCheckDayRepository.deleteAllByOwner(CheckDayOwnerType.HABIT, habitId);
+            log.info("Removed {} check-day rows for habit {}", removedDays, habitId);
             habitRepository.delete(habitToDelete);
             userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok().body(Map.of("success", "habit deleted successfully"));

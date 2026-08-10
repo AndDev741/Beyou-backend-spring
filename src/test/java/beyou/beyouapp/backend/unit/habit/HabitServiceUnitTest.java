@@ -2,6 +2,8 @@ package beyou.beyouapp.backend.unit.habit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
@@ -29,8 +31,15 @@ import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.common.ExperienceLevel;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
+import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
@@ -55,6 +64,9 @@ public class HabitServiceUnitTest {
     @Mock
     private UserCacheEvictService userCacheEvictService;
 
+    @Mock
+    private EntityCheckDayRepository entityCheckDayRepository;
+
     private HabitMapper habitMapper = new HabitMapper();
 
     private HabitService habitService;
@@ -75,7 +87,7 @@ public class HabitServiceUnitTest {
         habit.setImportance(0);
         habit.setDificulty(1);
 
-        habitService = new HabitService(habitRepository, userRepository, xpByLevelRepository, categoryService, habitMapper, diaryRoutineRepository, userCacheEvictService);
+        habitService = new HabitService(habitRepository, userRepository, xpByLevelRepository, categoryService, habitMapper, diaryRoutineRepository, userCacheEvictService, entityCheckDayRepository);
     }
 
     @Test
@@ -146,6 +158,43 @@ public class HabitServiceUnitTest {
 
         assertEquals(response.getBody(), assertResponse.getBody());
         assertEquals(response.getStatusCode(), assertResponse.getStatusCode());
+    }
+
+    /**
+     * R8/KTD24 — the habit's day history goes with the habit. Asserted on the deletion path
+     * itself rather than only end to end, because the call is easy to drop in a refactor and
+     * nothing else in this class would notice.
+     */
+    @Test
+    public void shouldDeleteTheHabitsCheckDayHistoryWhenDeletingTheHabit(){
+        when(habitRepository.findById(habitId)).thenReturn(Optional.of(habit));
+
+        habitService.deleteHabit(habitId, userId);
+
+        verify(entityCheckDayRepository).deleteAllByOwner(CheckDayOwnerType.HABIT, habitId);
+    }
+
+    /**
+     * The other half of the asymmetry, from the only angle a unit test can see it: a habit
+     * still held by a routine is refused, so its history is never touched on the way out.
+     */
+    @Test
+    public void shouldNotTouchTheHistoryWhenTheDeleteIsRefused(){
+        DiaryRoutine routine = new DiaryRoutine();
+        RoutineSection section = new RoutineSection();
+        HabitGroup group = new HabitGroup();
+        group.setHabit(habit);
+        section.setHabitGroups(new ArrayList<>(List.of(group)));
+        routine.setRoutineSections(new ArrayList<>(List.of(section)));
+
+        when(habitRepository.findById(habitId)).thenReturn(Optional.of(habit));
+        when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(routine));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> habitService.deleteHabit(habitId, userId));
+
+        assertEquals(ErrorKey.HABIT_IN_ROUTINE, exception.getErrorKey());
+        verifyNoInteractions(entityCheckDayRepository);
     }
 
     //Exception

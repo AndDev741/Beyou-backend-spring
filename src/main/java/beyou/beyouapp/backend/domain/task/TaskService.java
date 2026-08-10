@@ -15,6 +15,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
@@ -42,6 +44,7 @@ public class TaskService {
     private final DiaryRoutineRepository diaryRoutineRepository;
     private final TaskMapper taskMapper;
     private final UserCacheEvictService userCacheEvictService;
+    private final EntityCheckDayRepository entityCheckDayRepository;
 
     public Task getTask(UUID taskId){
         return taskRepository.findById(taskId).orElseThrow(() -> new TaskNotFound("Task not found"));
@@ -60,7 +63,21 @@ public class TaskService {
      * Authoritative cleanup filter: a marked task dies only once the day it was marked has
      * passed in ITS OWNER's timezone. The scheduler's query is only a coarse pre-filter, so
      * this re-check is what actually decides — never widen it back to a server-zone date.
+     *
+     * <p>R8 — the same history delete {@link #deleteTask} does. Every task this method can
+     * reach is a one-time task ({@code markedToDelete} is only ever set by
+     * {@code CheckItemService} behind an {@code isOneTimeTask()} guard), and one-time tasks
+     * never accumulate rows — all three writers skip them (R4/KTD14). So the delete finds
+     * nothing today, and it is here anyway: the exemption then lives in exactly one place,
+     * the writers, instead of being re-derived at every delete site. The alternative is a
+     * second copy of the rule that goes quietly wrong the day the writers stop applying it.
+     *
+     * <p>Transactional for the same reason {@code deleteTask} is — the bulk delete has no
+     * transaction of its own. The only production caller, {@code TaskCleanupScheduler}, is
+     * already transactional and this simply joins it; the annotation is what keeps that true
+     * if a second caller ever appears.
      */
+    @Transactional
     public void deleteAllMarked(List<Task> tasks, UUID userId) {
         List<Task> tasksToDelete = tasks.stream()
             .filter(task -> task.getMarkedToDelete() != null
@@ -98,6 +115,9 @@ public class TaskService {
                 diaryRoutineRepository.save(diaryRoutine);
             }
         }
+
+        deletedTaskIds.forEach(taskId ->
+            entityCheckDayRepository.deleteAllByOwner(CheckDayOwnerType.TASK, taskId));
 
         //Then delete from the respotisory
         taskRepository.deleteAll(tasksToDelete);
@@ -167,6 +187,12 @@ public class TaskService {
         }
     }
 
+    /**
+     * R8/KTD24 — deleting the task deletes its day history with it, the same asymmetry
+     * {@code HabitService.deleteHabit} documents: the routine that held it has no say, this
+     * does. {@code @Transactional} is required, not cosmetic — {@code deleteAllByOwner} is a
+     * bulk {@code @Modifying} query and throws without a transaction to run in.
+     */
     @Transactional
     public ResponseEntity<Map<String, String>> deleteTask(UUID taskId, UUID userId){
         Task taskToDelete = getTask(taskId);
@@ -180,6 +206,8 @@ public class TaskService {
         }
 
         try{
+            int removedDays = entityCheckDayRepository.deleteAllByOwner(CheckDayOwnerType.TASK, taskId);
+            log.info("Removed {} check-day rows for task {}", removedDays, taskId);
             taskRepository.delete(taskToDelete);
             userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok(Map.of("success", "Task deleted Successfully!"));

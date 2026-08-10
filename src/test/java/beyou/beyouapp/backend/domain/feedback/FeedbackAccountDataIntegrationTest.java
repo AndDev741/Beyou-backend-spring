@@ -3,6 +3,11 @@ package beyou.beyouapp.backend.domain.feedback;
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.aiAgent.chat.Chat;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatRepository;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOutcome;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
+import beyou.beyouapp.backend.domain.checkday.CheckHistoryService;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenRepository;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
@@ -31,6 +36,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -88,6 +95,9 @@ class FeedbackAccountDataIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     ChatRepository chatRepository;
 
+    @Autowired
+    EntityCheckDayRepository entityCheckDayRepository;
+
     @Value("${app.upload-dir}")
     String uploadDir;
 
@@ -135,6 +145,97 @@ class FeedbackAccountDataIntegrationTest extends AbstractIntegrationTest {
         assertThat(result.getResponse().getContentAsString())
                 .as("another user's submission must never appear in this export")
                 .doesNotContain(STRANGER_BODY);
+    }
+
+    /**
+     * R10 — the day history joins the export, grouped by the owner it describes, and
+     * carrying every owner type rather than only habits.
+     */
+    @Test
+    @DisplayName("the export carries the check-day history for every owner type — and nobody else's")
+    void exportCarriesTheCheckDayHistoryForEveryOwnerTypeAndNobodyElses() throws Exception {
+        User owner = userRepository.findByEmail(OWNER_EMAIL).orElseThrow();
+        User stranger = userRepository.findByEmail(STRANGER_EMAIL).orElseThrow();
+        LocalDate today = LocalDate.now(ZoneId.of("UTC"));
+
+        UUID habitOwner = UUID.randomUUID();
+        UUID taskOwner = UUID.randomUUID();
+        UUID routineOwner = UUID.randomUUID();
+        UUID strangerOwner = UUID.randomUUID();
+
+        checkDay(owner, CheckDayOwnerType.HABIT, habitOwner, today.minusDays(1), CheckDayOutcome.DONE);
+        checkDay(owner, CheckDayOwnerType.HABIT, habitOwner, today, CheckDayOutcome.MISSED);
+        checkDay(owner, CheckDayOwnerType.TASK, taskOwner, today, CheckDayOutcome.SKIPPED);
+        checkDay(owner, CheckDayOwnerType.ROUTINE, routineOwner, today, CheckDayOutcome.NOT_SCHEDULED);
+        checkDay(owner, CheckDayOwnerType.USER, owner.getId(), today, CheckDayOutcome.DONE);
+        checkDay(stranger, CheckDayOwnerType.HABIT, strangerOwner, today, CheckDayOutcome.DONE);
+
+        MvcResult result = mockMvc.perform(get("/user/export")
+                        .header("authorization", "Bearer " + login(OWNER_EMAIL)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checkHistory.owners.length()").value(4))
+                .andExpect(jsonPath("$.checkHistory.owners[?(@.ownerId == '" + habitOwner + "')].ownerType")
+                        .value("HABIT"))
+                .andExpect(jsonPath("$.checkHistory.owners[?(@.ownerId == '" + habitOwner + "')].days.length()")
+                        .value(2))
+                .andExpect(jsonPath("$.checkHistory.owners[?(@.ownerId == '" + taskOwner + "')].ownerType")
+                        .value("TASK"))
+                .andExpect(jsonPath("$.checkHistory.owners[?(@.ownerId == '" + routineOwner + "')].ownerType")
+                        .value("ROUTINE"))
+                .andExpect(jsonPath("$.checkHistory.owners[?(@.ownerId == '" + owner.getId() + "')].ownerType")
+                        .value("USER"))
+                .andReturn();
+
+        String body = result.getResponse().getContentAsString();
+        // Oldest first within an owner, matching the order the rows are stored in.
+        assertThat(JsonPath.<List<String>>read(body,
+                "$.checkHistory.owners[?(@.ownerId == '" + habitOwner + "')].days[*].day"))
+                .containsExactly(today.minusDays(1).toString(), today.toString());
+        assertThat(JsonPath.<List<String>>read(body,
+                "$.checkHistory.owners[?(@.ownerId == '" + habitOwner + "')].days[*].outcome"))
+                .containsExactly("DONE", "MISSED");
+        assertThat(body)
+                .as("another account's history must never appear in this export")
+                .doesNotContain(strangerOwner.toString());
+    }
+
+    /**
+     * R10 — the section is bounded, because it is the one part of the export that grows
+     * without limit and the whole payload is built in memory. A truncation the reader cannot
+     * see would be worse than the truncation itself, so the covered range is in the payload.
+     */
+    @Test
+    @DisplayName("the export bounds the check-day history to the cap and says what it covered")
+    void exportBoundsTheCheckDayHistoryAndSaysSo() throws Exception {
+        User owner = userRepository.findByEmail(OWNER_EMAIL).orElseThrow();
+        LocalDate today = LocalDate.now(ZoneId.of("UTC"));
+        LocalDate oldestCovered = today.minusDays(CheckHistoryService.MAX_RANGE_DAYS - 1L);
+
+        UUID recent = UUID.randomUUID();
+        UUID onTheEdge = UUID.randomUUID();
+        UUID ancient = UUID.randomUUID();
+
+        checkDay(owner, CheckDayOwnerType.HABIT, recent, today.minusDays(10), CheckDayOutcome.DONE);
+        checkDay(owner, CheckDayOwnerType.HABIT, onTheEdge, oldestCovered, CheckDayOutcome.DONE);
+        checkDay(owner, CheckDayOwnerType.HABIT, ancient, oldestCovered.minusDays(1), CheckDayOutcome.DONE);
+
+        MvcResult result = mockMvc.perform(get("/user/export")
+                        .header("authorization", "Bearer " + login(OWNER_EMAIL)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checkHistory.from").value(oldestCovered.toString()))
+                .andExpect(jsonPath("$.checkHistory.to").value(today.toString()))
+                .andExpect(jsonPath("$.checkHistory.maxRangeDays")
+                        .value(CheckHistoryService.MAX_RANGE_DAYS))
+                .andExpect(jsonPath("$.checkHistory.note").isNotEmpty())
+                .andExpect(jsonPath("$.checkHistory.owners.length()").value(2))
+                .andReturn();
+
+        String body = result.getResponse().getContentAsString();
+        assertThat(body).as("a day inside the window is exported").contains(recent.toString());
+        assertThat(body).as("the oldest covered day is inclusive").contains(onTheEdge.toString());
+        assertThat(body)
+                .as("a day older than the cap is left out — visibly, via the stated range")
+                .doesNotContain(ancient.toString());
     }
 
     @Test
@@ -258,6 +359,12 @@ class FeedbackAccountDataIntegrationTest extends AbstractIntegrationTest {
     }
 
     // -- helpers --
+
+    private void checkDay(User user, CheckDayOwnerType ownerType, UUID ownerId,
+                          LocalDate day, CheckDayOutcome outcome) {
+        entityCheckDayRepository.saveAndFlush(
+                new EntityCheckDay(user, ownerType, ownerId, day, outcome));
+    }
 
     private UUID submitFeedback(String token, String body) throws Exception {
         MvcResult result = mockMvc.perform(post("/feedback")
