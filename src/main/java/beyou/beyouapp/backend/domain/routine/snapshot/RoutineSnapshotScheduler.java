@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.routine.snapshot;
 
+import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
@@ -18,9 +19,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 
 import java.time.*;
-import java.time.format.TextStyle;
 import java.util.List;
-import java.util.Locale;
 
 @Component
 @RequiredArgsConstructor
@@ -167,15 +166,12 @@ public class RoutineSnapshotScheduler {
             return;
         }
 
-        // Convert date's day of week to WeekDay enum
-        String dayName = date.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
-        WeekDay weekDay = WeekDay.valueOf(dayName);
+        WeekDay weekDay = ScheduledOnDayResolver.weekDayOf(date);
 
         for (DiaryRoutine routine : routines) {
-            // Check if routine is scheduled for this day
-            if (routine.getSchedule() == null
-                    || routine.getSchedule().getDays() == null
-                    || !routine.getSchedule().getDays().contains(weekDay)) {
+            // Same predicate the day-close pass uses, so the two can never disagree
+            // about whether a routine ran on a given day.
+            if (!ScheduledOnDayResolver.coversDay(routine, date)) {
                 log.debug("Routine {} not scheduled for {}", routine.getId(), weekDay);
                 continue;
             }
