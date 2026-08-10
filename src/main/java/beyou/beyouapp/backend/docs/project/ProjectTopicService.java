@@ -6,6 +6,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import beyou.beyouapp.backend.docs.DocsLocale;
 import beyou.beyouapp.backend.docs.project.dto.ProjectTopicDetailDTO;
 import beyou.beyouapp.backend.docs.project.dto.ProjectTopicListItemDTO;
 import beyou.beyouapp.backend.docs.project.entity.ProjectTopic;
@@ -17,14 +18,12 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ProjectTopicService {
-    private static final String DEFAULT_LOCALE = "en";
-
     private final ProjectTopicRepository topicRepository;
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "projectsTopics", key = "#locale")
+    @Cacheable(cacheNames = "projectsTopics", key = "T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
     public List<ProjectTopicListItemDTO> getTopics(String locale) {
-        String normalizedLocale = normalizeLocale(locale);
+        String normalizedLocale = DocsLocale.normalize(locale);
 
         return topicRepository.findAllByStatusOrderByOrderIndex(ProjectTopicStatus.ACTIVE)
             .stream()
@@ -33,9 +32,9 @@ public class ProjectTopicService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "projectsTopic", key = "#key + '_' + #locale")
+    @Cacheable(cacheNames = "projectsTopic", key = "#key + '_' + T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
     public ProjectTopicDetailDTO getTopic(String key, String locale) {
-        String normalizedLocale = normalizeLocale(locale);
+        String normalizedLocale = DocsLocale.normalize(locale);
 
         ProjectTopic topic = topicRepository.findByKey(key)
             .orElseThrow(() -> new DocsTopicNotFound("Project topic not found"));
@@ -71,15 +70,8 @@ public class ProjectTopicService {
 
     private ProjectTopicContent resolveContent(ProjectTopic topic, String locale) {
         return topic.findContentByLocale(locale)
-            .or(() -> topic.findContentByLocale(DEFAULT_LOCALE))
+            .or(() -> topic.findContentByLocale(DocsLocale.DEFAULT_LOCALE))
             .orElseThrow(() -> new DocsTopicNotFound("Project topic content not found"));
     }
 
-    private String normalizeLocale(String locale) {
-        if (locale == null || locale.isBlank()) {
-            return DEFAULT_LOCALE;
-        }
-
-        return locale.trim().toLowerCase();
-    }
 }

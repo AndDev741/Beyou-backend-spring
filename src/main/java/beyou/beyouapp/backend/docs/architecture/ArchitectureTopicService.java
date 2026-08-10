@@ -6,6 +6,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import beyou.beyouapp.backend.docs.DocsLocale;
 import beyou.beyouapp.backend.docs.architecture.dto.ArchitectureTopicDetailDTO;
 import beyou.beyouapp.backend.docs.architecture.dto.ArchitectureTopicListItemDTO;
 import beyou.beyouapp.backend.docs.architecture.entity.ArchitectureTopic;
@@ -17,14 +18,12 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ArchitectureTopicService {
-    private static final String DEFAULT_LOCALE = "en";
-
     private final ArchitectureTopicRepository topicRepository;
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "architectureTopics", key = "#locale")
+    @Cacheable(cacheNames = "architectureTopics", key = "T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
     public List<ArchitectureTopicListItemDTO> getTopics(String locale) {
-        String normalizedLocale = normalizeLocale(locale);
+        String normalizedLocale = DocsLocale.normalize(locale);
 
         return topicRepository.findAllByStatusOrderByOrderIndex(ArchitectureTopicStatus.ACTIVE)
             .stream()
@@ -33,9 +32,9 @@ public class ArchitectureTopicService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "architectureTopic", key = "#key + '_' + #locale")
+    @Cacheable(cacheNames = "architectureTopic", key = "#key + '_' + T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
     public ArchitectureTopicDetailDTO getTopic(String key, String locale) {
-        String normalizedLocale = normalizeLocale(locale);
+        String normalizedLocale = DocsLocale.normalize(locale);
 
         ArchitectureTopic topic = topicRepository.findByKey(key)
             .orElseThrow(() -> new DocsTopicNotFound("Architecture topic not found"));
@@ -71,15 +70,7 @@ public class ArchitectureTopicService {
 
     private ArchitectureTopicContent resolveContent(ArchitectureTopic topic, String locale) {
         return topic.findContentByLocale(locale)
-            .or(() -> topic.findContentByLocale(DEFAULT_LOCALE))
+            .or(() -> topic.findContentByLocale(DocsLocale.DEFAULT_LOCALE))
             .orElseThrow(() -> new DocsTopicNotFound("Architecture topic content not found"));
-    }
-
-    private String normalizeLocale(String locale) {
-        if (locale == null || locale.isBlank()) {
-            return DEFAULT_LOCALE;
-        }
-
-        return locale.trim().toLowerCase();
     }
 }

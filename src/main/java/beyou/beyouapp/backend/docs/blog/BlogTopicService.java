@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import beyou.beyouapp.backend.docs.DocsLocale;
 import beyou.beyouapp.backend.docs.blog.dto.BlogTopicDetailDTO;
 import beyou.beyouapp.backend.docs.blog.dto.BlogTopicListItemDTO;
 import beyou.beyouapp.backend.docs.blog.entity.BlogTopic;
@@ -21,15 +22,13 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class BlogTopicService {
-    private static final String DEFAULT_LOCALE = "en";
-
     private final BlogTopicRepository topicRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "blogTopics", key = "#locale + '_' + #category + '_' + #tag")
+    @Cacheable(cacheNames = "blogTopics", key = "T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale) + '_' + #category + '_' + #tag")
     public List<BlogTopicListItemDTO> getTopics(String locale, String category, String tag) {
-        String normalizedLocale = normalizeLocale(locale);
+        String normalizedLocale = DocsLocale.normalize(locale);
         BlogTopicCategory parsedCategory = parseCategory(category);
 
         return topicRepository.findAllByStatusOrderByPublishedDesc(BlogTopicStatus.ACTIVE)
@@ -41,9 +40,9 @@ public class BlogTopicService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "blogTopic", key = "#key + '_' + #locale")
+    @Cacheable(cacheNames = "blogTopic", key = "#key + '_' + T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
     public BlogTopicDetailDTO getTopic(String key, String locale) {
-        String normalizedLocale = normalizeLocale(locale);
+        String normalizedLocale = DocsLocale.normalize(locale);
 
         BlogTopic topic = topicRepository.findByKey(key)
             .orElseThrow(() -> new DocsBlogNotFound("Blog topic not found"));
@@ -85,7 +84,7 @@ public class BlogTopicService {
 
     private BlogTopicContent resolveContent(BlogTopic topic, String locale) {
         return topic.findContentByLocale(locale)
-            .or(() -> topic.findContentByLocale(DEFAULT_LOCALE))
+            .or(() -> topic.findContentByLocale(DocsLocale.DEFAULT_LOCALE))
             .orElseThrow(() -> new DocsBlogNotFound("Blog topic content not found"));
     }
 
@@ -109,12 +108,5 @@ public class BlogTopicService {
         } catch (IllegalArgumentException e) {
             return null;
         }
-    }
-
-    private String normalizeLocale(String locale) {
-        if (locale == null || locale.isBlank()) {
-            return DEFAULT_LOCALE;
-        }
-        return locale.trim().toLowerCase();
     }
 }
