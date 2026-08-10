@@ -2,6 +2,9 @@ package beyou.beyouapp.backend.domain.task;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.dto.CategoryMiniDTO;
+import beyou.beyouapp.backend.domain.checkday.CheckProgressCalculator;
+import beyou.beyouapp.backend.domain.common.CheckProgress;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
@@ -55,6 +58,15 @@ public class TaskMapper {
         LocalDate createdAt = task.getCreatedAt() != null ? task.getCreatedAt().toLocalDate() : null;
         LocalDate updatedAt = task.getUpdatedAt() != null ? task.getUpdatedAt().toLocalDate() : null;
 
+        // R2 — same shape and the same null guard as HabitMapper: Hibernate hands back a
+        // null embeddable for a task row written before V13, when every check_ column of
+        // it was null.
+        CheckProgress checkProgress = task.getCheckProgress();
+        // R15 — dormancy needs a today, and the only correct today is the owner's.
+        // task.getUser() is an eager @ManyToOne, already loaded, so this costs no statement.
+        boolean streakDormant = CheckProgressCalculator.isDormant(
+                checkProgress, UserDateResolver.today(task.getUser()));
+
         return new TaskResponseDTO(
                 task.getId(),
                 task.getName(),
@@ -64,6 +76,11 @@ public class TaskMapper {
                 task.getDificulty(),
                 categories,
                 task.isOneTimeTask(),
+                checkProgress != null ? checkProgress.getCurrentStreak() : 0,
+                checkProgress != null ? checkProgress.getBestStreak() : 0,
+                checkProgress != null ? checkProgress.getTotalCheckIns() : 0,
+                checkProgress != null ? checkProgress.getFirstCheckInDate() : null,
+                streakDormant,
                 task.getMarkedToDelete(),
                 createdAt,
                 updatedAt

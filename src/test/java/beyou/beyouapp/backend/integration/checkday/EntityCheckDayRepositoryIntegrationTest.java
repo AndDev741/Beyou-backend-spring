@@ -167,6 +167,61 @@ class EntityCheckDayRepositoryIntegrationTest extends AbstractIntegrationTest {
                 .containsExactly(DAY, DAY.plusDays(2));
     }
 
+    /**
+     * The read behind {@code GET /check-history}. The account is inside the predicate, not
+     * a branch the service takes afterwards — so somebody else's owner id matches nothing
+     * and the endpoint answers an all-unknown range instead of confirming the id exists.
+     *
+     * <p>Worth an integration test rather than a mock: whether the {@code user_id} clause is
+     * actually in the SQL is precisely what a mocked repository cannot tell you, and it is
+     * the only thing standing between one account and another's history.
+     */
+    @Test
+    void theAccountScopedOwnerRangeReadNeverCrossesAccounts() {
+        User other = new User();
+        other.setName("Other");
+        other.setEmail("check-day-scoped-" + UUID.randomUUID() + "@test.com");
+        other.setPassword("password123");
+        other = userRepository.saveAndFlush(other);
+
+        UUID sharedOwnerId = UUID.randomUUID();
+        entityCheckDayRepository.saveAndFlush(new EntityCheckDay(
+                other, CheckDayOwnerType.HABIT, sharedOwnerId, DAY, CheckDayOutcome.DONE));
+
+        // The caller asks for an owner id that exists — for somebody else.
+        List<EntityCheckDay> found = entityCheckDayRepository
+                .findByUserIdAndOwnerTypeAndOwnerIdAndDayBetweenOrderByDayAsc(
+                        user.getId(), CheckDayOwnerType.HABIT, sharedOwnerId, DAY, DAY);
+
+        assertThat(found).as("no row, and therefore no answer about the other account").isEmpty();
+
+        // The filter is the account, not the whole query: the caller's own rows in the same
+        // window still come back.
+        row(CheckDayOwnerType.HABIT, ownerId, DAY, CheckDayOutcome.SKIPPED);
+        assertThat(entityCheckDayRepository
+                .findByUserIdAndOwnerTypeAndOwnerIdAndDayBetweenOrderByDayAsc(
+                        user.getId(), CheckDayOwnerType.HABIT, ownerId, DAY, DAY))
+                .singleElement()
+                .extracting(EntityCheckDay::getOutcome)
+                .isEqualTo(CheckDayOutcome.SKIPPED);
+    }
+
+    @Test
+    void theAccountScopedOwnerRangeReadIsOrderedAndBoundedTheSameWay() {
+        row(CheckDayOwnerType.HABIT, ownerId, DAY.plusDays(2), CheckDayOutcome.SKIPPED);
+        row(CheckDayOwnerType.HABIT, ownerId, DAY, CheckDayOutcome.DONE);
+        row(CheckDayOwnerType.HABIT, ownerId, DAY.plusDays(5), CheckDayOutcome.DONE);
+        row(CheckDayOwnerType.TASK, ownerId, DAY.plusDays(1), CheckDayOutcome.DONE);
+
+        List<EntityCheckDay> found = entityCheckDayRepository
+                .findByUserIdAndOwnerTypeAndOwnerIdAndDayBetweenOrderByDayAsc(
+                        user.getId(), CheckDayOwnerType.HABIT, ownerId, DAY, DAY.plusDays(2));
+
+        assertThat(found).extracting(EntityCheckDay::getDay)
+                .as("both bounds inclusive, oldest first, other owner types left out")
+                .containsExactly(DAY, DAY.plusDays(2));
+    }
+
     @Test
     void theOwnerRangeReadIgnoresTheSameIdUnderADifferentOwnerType() {
         row(CheckDayOwnerType.HABIT, ownerId, DAY, CheckDayOutcome.DONE);

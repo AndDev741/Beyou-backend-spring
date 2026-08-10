@@ -70,6 +70,48 @@ public final class CheckProgressCalculator {
     }
 
     /**
+     * R20/KTD25 — whether an entity's live run has gone quiet, decided here rather than
+     * shipped to clients as a raw date for each of them to threshold their own way.
+     *
+     * <p>Derived from the scalars alone, with no extra read. That is the point: the habit
+     * list is {@code @Cacheable} and maps every habit the user owns, so a flag that needed
+     * its own history query would be an N+1 on the hottest list in the app. The scalars
+     * already carry enough — a scheduled day the entity was left unchecked closes as
+     * {@code MISSED}, which zeroes the streak, so a run that is still standing after
+     * {@value UserStreakService#DORMANT_AFTER_DAYS} days with no check-in can only have
+     * been sitting on neutral days.
+     *
+     * <p>Gated on a live run, matching {@code UserStreakService.walk}: an entity at zero is
+     * not dormant, it is simply at zero, and a habit created today would otherwise be
+     * flagged before it had a chance to do anything.
+     *
+     * <p>Says exactly what it measures and no more: no check-in in the window while the run
+     * still stands. An entity skipped every day for a fortnight reads dormant even though
+     * it was scheduled throughout, because {@code SKIPPED} is neutral (R12) and moves
+     * neither the count nor the date. That is the intended reading — a fortnight of skips is
+     * a paused run by any account of it — but it is a hair wider than "nothing was
+     * scheduled", and separating the two would cost the query this method exists to avoid.
+     *
+     * @param progress the entity's scalars; a null embeddable (a row written before V13)
+     *                 reads as not dormant rather than throwing
+     * @param today    the owner's today, resolved in the owner's zone by
+     *                 {@code UserDateResolver} (R15) — never the server's
+     */
+    public static boolean isDormant(CheckProgress progress, LocalDate today) {
+        if (progress == null || today == null || progress.getCurrentStreak() <= 0) {
+            return false;
+        }
+        LocalDate lastCheckIn = progress.getLastCheckInDate();
+        if (lastCheckIn == null) {
+            return false;
+        }
+        // The window is inclusive of today and runs DORMANT_AFTER_DAYS days back, the same
+        // span UserStreakService.activeRecently walks.
+        LocalDate windowStart = today.minusDays(UserStreakService.DORMANT_AFTER_DAYS - 1L);
+        return lastCheckIn.isBefore(windowStart);
+    }
+
+    /**
      * The streak running back from {@code referenceDay}, in days actually checked off.
      *
      * <p>The walk classifies each day three ways rather than two:

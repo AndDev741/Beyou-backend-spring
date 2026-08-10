@@ -27,6 +27,24 @@ public interface EntityCheckDayRepository extends JpaRepository<EntityCheckDay, 
             CheckDayOwnerType ownerType, UUID ownerId, LocalDate from, LocalDate to);
 
     /**
+     * The same window, narrowed to one account — the read behind
+     * {@code GET /check-history}.
+     *
+     * <p>The user filter is part of the predicate rather than a check the caller runs
+     * afterwards. An owner id belonging to somebody else simply matches nothing and the
+     * endpoint reports the range as unknown, which leaks neither the row nor the fact that
+     * the id exists. It also stays right when the habit is long deleted and only its
+     * history survives (R8) — there is no entity left to ask "who owns this?", but the rows
+     * still know which account they belong to.
+     *
+     * <p>Rides {@code uk_entity_check_day_owner_day} the same way the unscoped version
+     * does; {@code user_id} is a filter on the handful of rows that come back, not a
+     * leading column, so no new index is needed for it.
+     */
+    List<EntityCheckDay> findByUserIdAndOwnerTypeAndOwnerIdAndDayBetweenOrderByDayAsc(
+            UUID userId, CheckDayOwnerType ownerType, UUID ownerId, LocalDate from, LocalDate to);
+
+    /**
      * One entity's entire history, oldest first — the read a recompute needs.
      *
      * <p>Deliberately unbounded. Every scalar the calculator derives is a function of the

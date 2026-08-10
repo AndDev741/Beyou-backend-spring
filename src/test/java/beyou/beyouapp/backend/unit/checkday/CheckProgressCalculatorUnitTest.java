@@ -15,6 +15,7 @@ import beyou.beyouapp.backend.domain.checkday.CheckDayOutcome;
 import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
 import beyou.beyouapp.backend.domain.checkday.CheckProgressCalculator;
 import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
+import beyou.beyouapp.backend.domain.checkday.UserStreakService;
 import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.user.User;
 
@@ -287,6 +288,72 @@ class CheckProgressCalculatorUnitTest {
 
         assertThat(progress.getTotalCheckIns()).isEqualTo(1);
         assertThat(progress.getCurrentStreak()).isEqualTo(1);
+    }
+
+    /**
+     * R20/KTD25 — the dormancy read the habit and task responses ship as a flag. Derived
+     * from the scalars alone so the {@code @Cacheable} habit list gains no query per habit;
+     * the query-count test holds the other end of that.
+     */
+    @Nested
+    class Dormancy {
+
+        @Test
+        void aLiveRunWithNoCheckInForTheWholeWindowIsDormant() {
+            CheckProgress progress = progress(3, TODAY.minusDays(20));
+
+            assertThat(CheckProgressCalculator.isDormant(progress, TODAY)).isTrue();
+        }
+
+        @Test
+        void aCheckInOnTheOldestDayStillInsideTheWindowIsNotDormant() {
+            // The window is inclusive of today and DORMANT_AFTER_DAYS days wide, matching
+            // UserStreakService.activeRecently — the boundary day counts as activity.
+            CheckProgress progress = progress(3,
+                    TODAY.minusDays(UserStreakService.DORMANT_AFTER_DAYS - 1L));
+
+            assertThat(CheckProgressCalculator.isDormant(progress, TODAY)).isFalse();
+        }
+
+        @Test
+        void oneDayPastTheWindowTipsItOver() {
+            CheckProgress progress = progress(3,
+                    TODAY.minusDays(UserStreakService.DORMANT_AFTER_DAYS));
+
+            assertThat(CheckProgressCalculator.isDormant(progress, TODAY)).isTrue();
+        }
+
+        @Test
+        void aRunAtZeroIsNotDormantItIsSimplyAtZero() {
+            // Otherwise every habit anyone ever abandoned would read as "paused", and the
+            // flag would stop meaning anything.
+            CheckProgress progress = progress(0, TODAY.minusDays(90));
+
+            assertThat(CheckProgressCalculator.isDormant(progress, TODAY)).isFalse();
+        }
+
+        @Test
+        void anEntityThatHasNeverBeenCheckedIsNotDormant() {
+            CheckProgress progress = progress(0, null);
+
+            assertThat(CheckProgressCalculator.isDormant(progress, TODAY)).isFalse();
+        }
+
+        @Test
+        void aNullEmbeddableReadsAsNotDormantRatherThanThrowing() {
+            // A row written before V13 comes back with no CheckProgress at all — the same
+            // trap HabitMapper guards for xpProgress.
+            assertThat(CheckProgressCalculator.isDormant(null, TODAY)).isFalse();
+            assertThat(CheckProgressCalculator.isDormant(progress(3, TODAY.minusDays(90)), null))
+                    .isFalse();
+        }
+
+        private CheckProgress progress(int currentStreak, LocalDate lastCheckIn) {
+            CheckProgress progress = new CheckProgress();
+            progress.setCurrentStreak(currentStreak);
+            progress.setLastCheckInDate(lastCheckIn);
+            return progress;
+        }
     }
 
     private static List<EntityCheckDay> rows(EntityCheckDay... rows) {

@@ -90,6 +90,53 @@ class HabitFindAllByUserIdQueryCountTest extends AbstractIntegrationTest {
         System.out.println("[N+1 fix] HabitService.getHabits with " + HABIT_COUNT + " habits → " + stats);
     }
 
+    /**
+     * R2/R9 — the check scalars ride the list response, and reading them costs nothing.
+     *
+     * <p>The temptation this locks out is the obvious one: {@code streakDormant} is a
+     * question about recent activity, and answering it per habit from
+     * {@code entity_check_day} would be one query per habit on the app's hottest list.
+     * {@code CheckProgressCalculator.isDormant} answers it from the scalars already on the
+     * row instead, and the owner's timezone comes off the eagerly-mapped {@code user}
+     * association the list query has already loaded.
+     *
+     * <p>Asserted against the same bound as the categories test above rather than a
+     * separate one, so there is one number to move if the list endpoint ever legitimately
+     * needs another statement.
+     */
+    @Test
+    @DisplayName("the check scalars on the list response add no queries as habits multiply")
+    void getHabits_checkScalarsAddNoQueriesPerHabit() {
+        User user = seedUser();
+        List<Category> categories = seedCategories(user, 3);
+        for (int i = 0; i < HABIT_COUNT; i++) {
+            seedHabitWithCategories(user, "habit-" + i, categories);
+        }
+        em.flush();
+        em.clear();
+
+        var stats = new HibernateStatistics(emf);
+
+        var result = habitService.getHabits(user.getId());
+
+        assertThat(result).hasSize(HABIT_COUNT);
+        // The scalars are present on every row, so nothing was skipped to keep the count down.
+        assertThat(result).allSatisfy(habit -> {
+            assertThat(habit.currentStreak()).isZero();
+            assertThat(habit.bestStreak()).isZero();
+            assertThat(habit.totalCheckIns()).isZero();
+            assertThat(habit.streakDormant()).isFalse();
+        });
+
+        assertThat(stats.statementCount())
+                .as("A per-habit history read would mean ~%d statements. Stats: %s",
+                        HABIT_COUNT + 1, stats)
+                .isLessThanOrEqualTo(5);
+
+        System.out.println("[check scalars] HabitService.getHabits with " + HABIT_COUNT
+                + " habits → " + stats);
+    }
+
     // --- seed helpers ---
 
     private User seedUser() {
