@@ -9,9 +9,11 @@ import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.user.User;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -51,6 +53,14 @@ public class Task {
     Integer dificulty;
 
     private boolean oneTimeTask = false;
+
+    /**
+     * R1 — this task's own streak counters. R4: a one-time task is checked once
+     * and has no recurrence to build a streak from, so nothing ever writes here
+     * for one; it simply stays zeroed.
+     */
+    @Embedded
+    private CheckProgress checkProgress = new CheckProgress();
 
     private LocalDate markedToDelete;
 

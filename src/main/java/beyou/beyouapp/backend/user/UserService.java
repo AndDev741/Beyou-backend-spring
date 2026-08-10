@@ -234,6 +234,13 @@ public class UserService {
      * them — but with this ordering they block it before anything is destroyed,
      * which is the property that matters.
      *
+     * <p>{@code entity_check_day.user_id} (V13) is deliberately NOT one of them:
+     * it is {@code ON DELETE CASCADE}, like {@code feedback.user_id}, so the
+     * per-day check history goes with the account instead of standing in its
+     * way. That table's other id column, {@code owner_id}, carries no foreign
+     * key at all — see {@code EntityCheckDay} for why — so it cannot block
+     * anything either.
+     *
      * <p><b>Operator procedure.</b> With no route and no CLI, deleting one
      * account is a manual job. Run it in the same order this method uses, in one
      * transaction, and only touch the disk once the transaction has committed:

@@ -12,6 +12,7 @@ import org.hibernate.annotations.UuidGenerator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
@@ -84,6 +85,10 @@ public class Habit {
 
     @Embedded
     private XpProgress xpProgress = new XpProgress();
+
+    /** R1 — this habit's own streak counters, independent of the user's. */
+    @Embedded
+    private CheckProgress checkProgress = new CheckProgress();
 
     @Column(nullable = true)
     private int constance;

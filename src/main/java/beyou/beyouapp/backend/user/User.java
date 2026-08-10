@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.habit.Habit;
@@ -93,6 +94,14 @@ public class User implements UserDetails {
 
     @Embedded
     private XpProgress xpProgress = new XpProgress();
+
+    /**
+     * R1 — the account-wide streak counters. Scalars only: the per-day history
+     * is a side table, because this object is loaded in full by
+     * {@code SecurityFilter} on every authenticated request (KTD2).
+     */
+    @Embedded
+    private CheckProgress checkProgress = new CheckProgress();
 
     @Enumerated(EnumType.STRING)
     private UserRole userRole;
