@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.domain.checkday.UserStreakService;
 import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
@@ -54,6 +55,8 @@ public class UserService {
     private final ApplicationEventPublisher eventPublisher;
     /** Only used by {@link #deleteUser(User)} — attachment bytes do not cascade. */
     private final FeedbackAttachmentService feedbackAttachmentService;
+    /** R14 — the schedule-aware walk behind {@link #markDayCompleted}. */
+    private final UserStreakService userStreakService;
 
     /**
      * When true, newly registered users are immediately marked as verified and
@@ -381,12 +384,31 @@ public class UserService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    /**
+     * Records that {@code date} was completed and raises the record if the run that day
+     * beats it.
+     *
+     * <p>What makes a day complete is decided upstream by {@code CheckItemService} /
+     * {@code SnapshotCheckService} against the user's {@code ConstanceConfiguration}
+     * ({@code ANY} vs {@code COMPLETE}); this method only records the verdict. R14 changed
+     * how completed days are counted into a streak, not how a day becomes complete.
+     *
+     * <p>The streak is read back through {@link UserStreakService} rather than computed on
+     * the entity, so the record it raises is a count of scheduled days. The set is mutated
+     * before the read on purpose: the walk reads {@code completedDays} straight off this
+     * in-memory instance, so today is already in it, and the account's frozen rows it also
+     * reads are written by the nightly close — never inside this transaction. A flush is
+     * not needed for either half, and the derived query would force one anyway.
+     *
+     * <p>R13 — raise-only. A record is a record; unmarking a day later (see
+     * {@link #unmarkDayComplete}) lowers the current streak and leaves this alone.
+     */
     @Transactional
     public void markDayCompleted(User user, LocalDate date) {
         log.info("[SERVICE] marking date {} as complete for user {}", date, user.getName());
         user.getCompletedDays().add(date);
 
-        int currentStreak = user.getCurrentConstance(date);
+        int currentStreak = userStreakService.streakOf(user, date).currentStreak();
 
         if(currentStreak > user.getMaxConstance()){
             log.info("[SERVICE] Current constance streak {} is greater than the old streak, saving", currentStreak);
@@ -396,6 +418,13 @@ public class UserService {
         userRepository.save(user);
     }
 
+    /**
+     * Takes a day back out of the completed set — the last check of the day was undone, or
+     * a back-dated snapshot edit dropped below the completion threshold.
+     *
+     * <p>R13 — {@code maxConstance} is deliberately not touched. The current streak falls
+     * out of the next walk on its own; the record stands.
+     */
     @Transactional
     public void unmarkDayComplete(User user, LocalDate date){
         user.getCompletedDays().remove(date);

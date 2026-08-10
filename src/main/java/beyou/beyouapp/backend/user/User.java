@@ -25,7 +25,6 @@ import beyou.beyouapp.backend.user.enums.UserRole;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.HashSet;
 import java.sql.Date;
@@ -174,33 +173,13 @@ public class User implements UserDetails {
         setEmailVerified(true);
     }
 
-    public int getCurrentConstance(LocalDate referenceDate) {
-        LocalDate dateToUse = referenceDate != null ? referenceDate : LocalDate.now();
-        if (completedDays == null || completedDays.isEmpty()) {
-            return 0;
-        }
-
-        LocalDate lastCompletedDay = completedDays.stream()
-                .max(LocalDate::compareTo)
-                .get();
-
-        long daysGap = ChronoUnit.DAYS.between(lastCompletedDay, dateToUse);
-
-        if (daysGap > 1) {
-            return 0;
-        }
-
-        int streak = 0;
-        LocalDate cursor = lastCompletedDay;
-
-        while (completedDays.contains(cursor)) {
-            streak++;
-            cursor = cursor.minusDays(1);
-        }
-
-        return streak;
-    }
-
+    // R14/KTD11 — the streak walk used to live here as getCurrentConstance(LocalDate),
+    // counting calendar-consecutive completed days and returning zero outright whenever the
+    // reference day sat more than one day past the last completed one. Both halves of that
+    // are wrong for a user who is only scheduled some days of the week, and the fix needs
+    // the account's frozen EntityCheckDay rows to tell a skipped day from an unscheduled
+    // one — a repository this entity cannot reach. The walk now lives in
+    // beyou.beyouapp.backend.domain.checkday.UserStreakService.
 
     //UserDetails methods
     @Override

@@ -48,7 +48,11 @@ public class UserControllerTest extends AbstractIntegrationTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final UserMapper userMapper = new UserMapper();
+    // R14 — the mapper now needs UserStreakService to answer the streak, so it comes from
+    // the context rather than being new'd here. The user built below has no completed days,
+    // so the walk short-circuits and never touches the database.
+    @Autowired
+    private UserMapper userMapper;
 
     private User user;
     private UserResponseDTO userResponseDTO;

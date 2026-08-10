@@ -36,6 +36,8 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.checkday.CheckDayOutcome;
 import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
 import beyou.beyouapp.backend.domain.checkday.CheckDayRecorder;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
+import beyou.beyouapp.backend.domain.checkday.UserStreakService;
 import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.CheckXpCalculator;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
@@ -80,6 +82,15 @@ class CheckItemServiceUnitTest {
 
     @Mock
     CheckDayRecorder checkDayRecorder;
+
+    /**
+     * R14 — RefreshUiDtoBuilder now counts the user's streak in scheduled days, which
+     * needs the account's stored rows. Only used where the real builder is constructed
+     * below; with no rows the walk short-circuits, and the habit scalars these tests
+     * assert on never go through it.
+     */
+    @Mock
+    EntityCheckDayRepository entityCheckDayRepository;
 
     @InjectMocks
     private CheckItemService checkItemService;
@@ -453,7 +464,8 @@ class CheckItemServiceUnitTest {
             // real RefreshUiDtoBuilder runs here; only the recompute is faked, standing in
             // for what CheckDayRecorder writes onto the habit.
             when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
-                    .thenAnswer(invocation -> new RefreshUiDtoBuilder().buildRefreshUiDto(
+                    .thenAnswer(invocation -> new RefreshUiDtoBuilder(
+                            new UserStreakService(entityCheckDayRepository)).buildRefreshUiDto(
                             invocation.getArgument(0), invocation.getArgument(1),
                             invocation.getArgument(2), invocation.getArgument(3),
                             invocation.getArgument(4)));

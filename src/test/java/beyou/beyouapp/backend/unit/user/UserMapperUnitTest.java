@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -15,6 +17,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import beyou.beyouapp.backend.domain.checkday.CheckDayOutcome;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
+import beyou.beyouapp.backend.domain.checkday.UserStreakService;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserMapper;
@@ -27,11 +34,16 @@ import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 class UserMapperUnitTest {
 
     private UserMapper userMapper;
+    private EntityCheckDayRepository entityCheckDayRepository;
     private User user;
 
     @BeforeEach
     void setup() {
-        userMapper = new UserMapper();
+        // The real walk over a stubbed row store: these tests are about which DAY the
+        // scalars are read against, so the scheduling half stays empty and every gap day
+        // reads as neutral.
+        entityCheckDayRepository = mock(EntityCheckDayRepository.class);
+        userMapper = new UserMapper(new UserStreakService(entityCheckDayRepository));
         user = new User();
         user.setId(UUID.randomUUID());
         user.setName("Owner");
@@ -52,7 +64,27 @@ class UserMapperUnitTest {
 
         assertTrue(response.constanceIncreaseToday(),
                 "The owner completed their local today, so the flag must be true");
-        assertEquals(user.getCurrentConstance(ownerToday), response.constance());
+        assertEquals(1, response.constance(),
+                "One completed day, counted against the owner's local today");
+        assertFalse(response.constanceDormant(),
+                "R20 — nothing has been unscheduled for fourteen days; the run is live");
+    }
+
+    @Test
+    void shouldReportADormantStreakWhenNothingHasBeenScheduledForFourteenDays() {
+        // R20/KTD25 — the number survives; only the flag says the run has gone quiet.
+        user.setTimezone(ZoneId.systemDefault().getId());
+        LocalDate today = LocalDate.now();
+        user.setCompletedDays(new HashSet<>(Set.of(today.minusDays(20))));
+        when(entityCheckDayRepository.findByOwnerTypeAndOwnerIdOrderByDayAsc(
+                CheckDayOwnerType.USER, user.getId()))
+                .thenReturn(List.of(new EntityCheckDay(user, CheckDayOwnerType.USER, user.getId(),
+                        today.minusDays(19), CheckDayOutcome.NOT_IN_ROUTINE)));
+
+        UserResponseDTO response = userMapper.toResponseDTO(user);
+
+        assertEquals(1, response.constance(), "The run is not zeroed, only flagged");
+        assertTrue(response.constanceDormant());
     }
 
     @Test
