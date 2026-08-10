@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.domain.common.CheckProgress;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver.Standing;
 import beyou.beyouapp.backend.user.User;
 import lombok.RequiredArgsConstructor;
@@ -85,7 +86,12 @@ public class CheckDayRecorder {
         entityCheckDayRepository.save(row);
 
         int storedBestStreak = progress != null ? progress.getBestStreak() : 0;
-        CheckProgress recomputed = CheckProgressCalculator.recompute(history, day, storedBestStreak);
+        // Anchored on the owner's today, never on the day just written. These scalars mean
+        // "as of now": recomputing against a back-dated edit would walk back from that day
+        // and report the streak as it stood then, understating a user whose run reaches
+        // today, and it would stay understated until the next live check on that owner.
+        CheckProgress recomputed = CheckProgressCalculator.recompute(
+                history, UserDateResolver.today(owner), storedBestStreak);
         if (progress != null) {
             copyInto(recomputed, progress);
         }
@@ -149,7 +155,12 @@ public class CheckDayRecorder {
                 .toList();
 
         int storedBestStreak = progress != null ? progress.getBestStreak() : 0;
-        CheckProgress recomputed = CheckProgressCalculator.recompute(history, day, storedBestStreak);
+        // Anchored on the owner's today, never on the day just written. These scalars mean
+        // "as of now": recomputing against a back-dated edit would walk back from that day
+        // and report the streak as it stood then, understating a user whose run reaches
+        // today, and it would stay understated until the next live check on that owner.
+        CheckProgress recomputed = CheckProgressCalculator.recompute(
+                history, UserDateResolver.today(owner), storedBestStreak);
         if (progress != null) {
             copyInto(recomputed, progress);
         }

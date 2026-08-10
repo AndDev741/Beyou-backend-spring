@@ -10,12 +10,19 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import beyou.beyouapp.backend.domain.checkday.CheckDayOutcome;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
+import beyou.beyouapp.backend.domain.checkday.CheckDayRecorder;
+import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.CheckXpCalculator;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
+import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver.Standing;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.task.Task;
@@ -45,6 +52,20 @@ public class SnapshotCheckService {
     private final XpDecayCalculator xpDecayCalculator;
     private final RefreshUiDtoBuilder refreshUiDtoBuilder;
     private final AuthenticatedUser authenticatedUser;
+    private final CheckDayRecorder checkDayRecorder;
+    private final UserCacheEvictService userCacheEvictService;
+
+    /**
+     * How a snapshot item stood on its own snapshot date.
+     *
+     * <p>A snapshot exists for a date only because the routine covered it, and this check row
+     * exists only because the item sat in that routine at the time — so the snapshot is its
+     * own schedule evidence, and an unchecked past day means {@code MISSED}. Asking the
+     * <em>current</em> schedule instead would derive a past outcome from a later schedule
+     * state, which R7 forbids: a routine edited last week would silently rewrite what
+     * happened the month before.
+     */
+    private static final Standing SCHEDULED_THAT_DAY = new Standing(true, true);
 
     @Transactional
     public RefreshUiDTO checkOrUncheckSnapshotItem(UUID snapshotId, UUID snapshotCheckId) {
@@ -82,6 +103,11 @@ public class SnapshotCheckService {
         snapshotRepository.save(snapshot);
         userRepository.save(user);
 
+        // R16 — this path moves habit XP, habit levels and now habit streak scalars, all of
+        // which the 30-minute `habits` cache serves. Without this the user edits a past day
+        // and watches the old numbers for half an hour.
+        userCacheEvictService.evictAllUserCaches(user.getId());
+
         return refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user);
     }
 
@@ -115,9 +141,16 @@ public class SnapshotCheckService {
         // Toggle skipped flag
         check.setSkipped(!check.isSkipped());
 
+        // R12 — a deliberate skip keeps the day out of the MISSED column, so the streak walks
+        // straight through it. Un-skipping hands the day back to its absence outcome.
+        recordSnapshotDay(user, snapshot, check,
+                check.isSkipped() ? CheckDayOutcome.SKIPPED : absenceOutcome(user, snapshot));
+
         recalculateCompleted(snapshot, user);
         snapshotCheckRepository.save(check);
         snapshotRepository.save(snapshot);
+
+        userCacheEvictService.evictAllUserCaches(user.getId());
 
         return refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user);
     }
@@ -137,6 +170,7 @@ public class SnapshotCheckService {
         check.setXpGenerated(decayedXp);
 
         applyXp(user, routine, check, decayedXp, true);
+        recordSnapshotDay(user, snapshot, check, CheckDayOutcome.DONE);
     }
 
     private void uncheckSnapshotItem(User user, DiaryRoutine routine, RoutineSnapshot snapshot, SnapshotCheck check) {
@@ -149,6 +183,71 @@ public class SnapshotCheckService {
         if (storedXp > 0.0) {
             applyXp(user, routine, check, storedXp, false);
         }
+        recordSnapshotDay(user, snapshot, check, absenceOutcome(user, snapshot));
+    }
+
+    /**
+     * Stamps the snapshot's own day on the item behind the check and re-derives its scalars.
+     *
+     * <p>KTD8 — a user editing a past day through this endpoint is correcting the record on
+     * purpose, so overwriting that day's row is sanctioned. What is forbidden is a background
+     * process re-deriving an old outcome from a newer schedule, which is why the outcome here
+     * comes from the edit itself and from {@link #SCHEDULED_THAT_DAY}, never from a fresh read
+     * of the routine's current schedule.
+     *
+     * <p>Nothing is written when the original habit or task is gone: the row would be history
+     * for an owner that no longer exists, unreadable by every endpoint and unreachable by the
+     * delete cascade that is supposed to clean it up. The XP fallback in {@link #applyXp}
+     * already covers that case for the numbers the user can see.
+     */
+    private void recordSnapshotDay(User user, RoutineSnapshot snapshot, SnapshotCheck check,
+                                   CheckDayOutcome outcome) {
+        UUID originalItemId = check.getOriginalItemId();
+        if (originalItemId == null || check.getItemType() == null) {
+            return;
+        }
+        LocalDate day = snapshot.getSnapshotDate();
+
+        if (check.getItemType() == SnapshotItemType.HABIT) {
+            habitRepository.findById(originalItemId).ifPresent(habit ->
+                    writeDay(user, CheckDayOwnerType.HABIT, habit.getId(),
+                            habit.getCheckProgress(), day, outcome));
+            return;
+        }
+
+        taskRepository.findById(originalItemId).ifPresent(task -> {
+            // R4/KTD14, same as the live path: a one-time task is checked once and deleted the
+            // day after, so a streak over it could never be extended by anything.
+            if (task.isOneTimeTask()) {
+                return;
+            }
+            writeDay(user, CheckDayOwnerType.TASK, task.getId(),
+                    task.getCheckProgress(), day, outcome);
+        });
+    }
+
+    private void writeDay(User user, CheckDayOwnerType ownerType, UUID ownerId,
+                          CheckProgress progress, LocalDate day, CheckDayOutcome outcome) {
+        if (outcome == null) {
+            checkDayRecorder.clearDay(user, ownerType, ownerId, progress, day);
+            return;
+        }
+        checkDayRecorder.record(user, ownerType, ownerId, progress, day, outcome);
+    }
+
+    /**
+     * What a snapshot day means once its check is taken away.
+     *
+     * <p>Snapshots are only ever written for a day that has already ended, so this resolves to
+     * {@code MISSED} for everything this endpoint can reach. The day is still tested rather
+     * than assumed because the rule it protects is not obvious: on a day still running,
+     * "scheduled and left unchecked" is not yet true, so the day is returned to unknown
+     * instead of being stamped — which is exactly what the live check path avoids doing at
+     * 09:00. See {@code CheckDayRecorder.absenceOutcome}.
+     */
+    private CheckDayOutcome absenceOutcome(User user, RoutineSnapshot snapshot) {
+        boolean dayClosed = snapshot.getSnapshotDate().isBefore(UserDateResolver.today(user));
+        return CheckDayRecorder.absenceOutcome(SCHEDULED_THAT_DAY, dayClosed);
     }
 
     private void applyXp(User user, DiaryRoutine routine, SnapshotCheck check, double xp, boolean add) {
