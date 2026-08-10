@@ -83,7 +83,6 @@ class SnapshotIntegrationTest extends AbstractIntegrationTest {
         habit.setDescription("Daily workout");
         habit.setMotivationalPhrase("Stay strong");
         habit.setCategories(new ArrayList<>());
-        habit.setConstance(0);
         habit.setXpProgress(new XpProgress(0D, 0, 0D, 50D));
         habit.setUser(user);
         habit = habitRepository.saveAndFlush(habit);

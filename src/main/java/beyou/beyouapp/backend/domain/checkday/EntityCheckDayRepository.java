@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Reads and deletes over the per-day outcome history.
@@ -24,6 +25,35 @@ public interface EntityCheckDayRepository extends JpaRepository<EntityCheckDay, 
      */
     List<EntityCheckDay> findByOwnerTypeAndOwnerIdAndDayBetweenOrderByDayAsc(
             CheckDayOwnerType ownerType, UUID ownerId, LocalDate from, LocalDate to);
+
+    /**
+     * One entity's entire history, oldest first — the read a recompute needs.
+     *
+     * <p>Deliberately unbounded. Every scalar the calculator derives is a function of the
+     * whole history: the lifetime count, the first and last check-in dates, and a streak
+     * walk whose stop condition is the earliest stored row. A windowed read would make the
+     * count wrong the day the window slid past a check-in. Rides
+     * {@code uk_entity_check_day_owner_day} as a prefix scan, so the cost is one row per day
+     * the entity has existed — a few hundred for a habit held for a year.
+     */
+    List<EntityCheckDay> findByOwnerTypeAndOwnerIdOrderByDayAsc(
+            CheckDayOwnerType ownerType, UUID ownerId);
+
+    /**
+     * Takes a transaction-scoped advisory lock on one owner (KTD26).
+     *
+     * <p>Not a row lock: the recompute reads a whole history and writes a scalar onto a
+     * different table's row, so there is no single row to lock and {@code SELECT FOR UPDATE}
+     * would not serialise the pair. {@code pg_advisory_xact_lock} blocks until it wins and
+     * is released by the transaction ending, commit or rollback — nothing here can leak a
+     * lock by forgetting to unlock.
+     *
+     * <p>Callers take the user's key first and the entity's second; see
+     * {@code CheckDayRecorder.lockUserThenOwner} for why that order and not the other.
+     */
+    @Query(value = "SELECT pg_advisory_xact_lock(CAST(:classId AS integer), CAST(:objectId AS integer))",
+            nativeQuery = true)
+    void lockCheckOwner(@Param("classId") int classId, @Param("objectId") int objectId);
 
     /**
      * Everything already recorded for one user on one day.
@@ -55,4 +85,17 @@ public interface EntityCheckDayRepository extends JpaRepository<EntityCheckDay, 
     @Modifying
     @Query("DELETE FROM EntityCheckDay e WHERE e.ownerType = :ownerType AND e.ownerId = :ownerId")
     int deleteAllByOwner(CheckDayOwnerType ownerType, UUID ownerId);
+
+    /**
+     * Drops one day's row for one entity, returning the day to unknown (R18).
+     *
+     * <p>Used when a check is taken away while its day is still open. "Scheduled and left
+     * unchecked" is only true once the day ends, so an open day carries no row at all
+     * rather than a premature {@code MISSED}; the insert-only day-close pass stamps the
+     * real outcome at close. Callers must be transactional.
+     */
+    @Modifying
+    @Query("DELETE FROM EntityCheckDay e WHERE e.ownerType = :ownerType "
+            + "AND e.ownerId = :ownerId AND e.day = :day")
+    int deleteOwnerDay(CheckDayOwnerType ownerType, UUID ownerId, LocalDate day);
 }

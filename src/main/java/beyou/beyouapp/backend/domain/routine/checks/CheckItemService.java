@@ -10,6 +10,10 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import beyou.beyouapp.backend.domain.checkday.CheckDayOutcome;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
+import beyou.beyouapp.backend.domain.checkday.CheckDayRecorder;
+import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.CheckXpCalculator;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
@@ -21,6 +25,7 @@ import beyou.beyouapp.backend.domain.routine.Routine;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroupService;
+import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
@@ -42,6 +47,7 @@ public class CheckItemService {
     private final XpCalculatorService xpCalculatorService;
     private final UserService userService;
     private final RefreshUiDtoBuilder refreshUiDtoBuilder;
+    private final CheckDayRecorder checkDayRecorder;
 
     @Transactional
     public RefreshUiDTO checkOrUncheckItemGroup(CheckGroupRequestDTO checkGroupDTO) {
@@ -94,6 +100,84 @@ public class CheckItemService {
      */
     private LocalDate ownerToday(Routine routine) {
         return UserDateResolver.today(routine.getUser());
+    }
+
+    /**
+     * Stamps the day's outcome on the habit and re-derives its scalars from the rows.
+     *
+     * <p>Called on every branch — check, uncheck, skip and unskip — because the scalars are
+     * a function of the history and nothing else (KTD16). No branch adds or subtracts.
+     */
+    private void recordHabitDay(Habit habit, Routine routine, LocalDate date, CheckDayOutcome outcome) {
+        if (outcome == null) {
+            checkDayRecorder.clearDay(
+                    routine.getUser(), CheckDayOwnerType.HABIT, habit.getId(),
+                    habit.getCheckProgress(), date);
+            return;
+        }
+        checkDayRecorder.record(
+                routine.getUser(),
+                CheckDayOwnerType.HABIT,
+                habit.getId(),
+                habit.getCheckProgress(),
+                date,
+                outcome);
+    }
+
+    /**
+     * The same for a task, except one-time tasks are left alone entirely.
+     *
+     * <p>R4/KTD14 — a one-time task is checked once and deleted the day after, so a streak
+     * over it would be a streak of one that nothing can ever extend. Writing rows for it
+     * would leave orphan history behind a deleted entity for no reader.
+     */
+    private void recordTaskDay(Task task, Routine routine, LocalDate date, CheckDayOutcome outcome) {
+        if (task.isOneTimeTask()) {
+            return;
+        }
+        if (outcome == null) {
+            checkDayRecorder.clearDay(
+                    routine.getUser(), CheckDayOwnerType.TASK, task.getId(),
+                    task.getCheckProgress(), date);
+            return;
+        }
+        checkDayRecorder.record(
+                routine.getUser(),
+                CheckDayOwnerType.TASK,
+                task.getId(),
+                task.getCheckProgress(),
+                date,
+                outcome);
+    }
+
+    /**
+     * What the day means once its check is taken away.
+     *
+     * <p>Judged against the routine the check came through rather than every routine the
+     * user owns: the item is provably in this routine (it was just checked through it), and
+     * loading the rest would cost a query on the uncheck path to change the answer only for
+     * an item sitting in two routines at once.
+     */
+    private CheckDayOutcome absenceOutcome(CheckDayOwnerType ownerType, UUID ownerId,
+                                           DiaryRoutine routine, LocalDate date) {
+        // A day still running has nothing to say about having been missed, so it gets no
+        // row at all and the day-close pass decides at close. See absenceOutcome's contract.
+        boolean dayClosed = date.isBefore(ownerToday(routine));
+        return CheckDayRecorder.absenceOutcome(
+                ScheduledOnDayResolver.standingOf(ownerType, ownerId, List.of(routine), date),
+                dayClosed);
+    }
+
+    /**
+     * The streak the owner carries into this check, read before today's row is written.
+     *
+     * <p>R3/KTD6 — this is the number the XP bonus multiplies by, and it is now a real
+     * streak rather than the lifetime tally {@code Habit.constance} used to hand over. No
+     * floor: a habit that has never been checked, or one whose streak just broke, pays the
+     * unmultiplied base.
+     */
+    private static int streakEntering(CheckProgress progress) {
+        return progress != null ? progress.getCurrentStreak() : 0;
     }
 
     private RefreshUiDTO checkOrUncheckHabitGroup(HabitGroup habitGroup, LocalDate date) {
@@ -152,6 +236,10 @@ public class CheckItemService {
     private RefreshUiDTO skipHabitGroup(HabitGroup habitGroup, LocalDate date) {
         DiaryRoutine routine = (DiaryRoutine) habitGroup.getRoutineSection().getRoutine();
         HabitGroupCheck check = upsertHabitGroupCheck(habitGroup, date, false, true, 0);
+        // R12 — a deliberate skip is not a failure. The row keeps the day out of the
+        // MISSED column, so the streak walks straight through it, and it is not DONE, so
+        // the lifetime total does not move.
+        recordHabitDay(habitGroup.getHabit(), routine, date, CheckDayOutcome.SKIPPED);
         updateHabitGroupInRoutine(routine, habitGroup);
         increaseUserConstanceIfNeeded(routine, date);
 
@@ -167,6 +255,8 @@ public class CheckItemService {
     private RefreshUiDTO unskipHabitGroup(HabitGroup habitGroup, LocalDate date) {
         DiaryRoutine routine = (DiaryRoutine) habitGroup.getRoutineSection().getRoutine();
         HabitGroupCheck check = upsertHabitGroupCheck(habitGroup, date, false, false, 0);
+        recordHabitDay(habitGroup.getHabit(), routine,
+                date, absenceOutcome(CheckDayOwnerType.HABIT, habitGroup.getHabit().getId(), routine, date));
         updateHabitGroupInRoutine(routine, habitGroup);
         decreaseUserConstanceIfNeeded(routine, date);
 
@@ -182,6 +272,8 @@ public class CheckItemService {
     private RefreshUiDTO skipTaskGroup(TaskGroup taskGroup, LocalDate date) {
         DiaryRoutine routine = (DiaryRoutine) taskGroup.getRoutineSection().getRoutine();
         TaskGroupCheck check = upsertTaskGroupCheck(taskGroup, date, false, true, 0);
+        // R12, same as the habit side.
+        recordTaskDay(taskGroup.getTask(), routine, date, CheckDayOutcome.SKIPPED);
         updateTaskGroupInRoutine(routine, taskGroup);
         increaseUserConstanceIfNeeded(routine, date);
 
@@ -197,6 +289,8 @@ public class CheckItemService {
     private RefreshUiDTO unskipTaskGroup(TaskGroup taskGroup, LocalDate date) {
         DiaryRoutine routine = (DiaryRoutine) taskGroup.getRoutineSection().getRoutine();
         TaskGroupCheck check = upsertTaskGroupCheck(taskGroup, date, false, false, 0);
+        recordTaskDay(taskGroup.getTask(), routine,
+                date, absenceOutcome(CheckDayOwnerType.TASK, taskGroup.getTask().getId(), routine, date));
         updateTaskGroupInRoutine(routine, taskGroup);
         decreaseUserConstanceIfNeeded(routine, date);
 
@@ -289,7 +383,7 @@ public class CheckItemService {
         Habit habitToCheck = habitGroupToUncheck.getHabit();
         log.info("[LOG] Starting Uncheck for HabitGroupCheck => {}", existingCheck);
 
-        // Remove xp, decrease level if needed and remove constance
+        // Remove xp and decrease level if needed
         habitGroupToUncheck.getHabitGroupChecks().remove(existingCheck);
         xpCalculatorService.removeXpOfUserRoutineHabitAndCategoriesAndPersist(
             routine.getUser(),
@@ -298,7 +392,12 @@ public class CheckItemService {
             habitToCheck,
             habitToCheck.getCategories()
         );
-        habitToCheck.setConstance(habitToCheck.getConstance() - 1);
+        // The day's row is rewritten to its absence outcome, never deleted — a deleted row
+        // reads as unknown (R18), and "the user undid this" is knowledge. The total falls
+        // back out of the recompute rather than being decremented, so it cannot go negative
+        // the way the old constance counter could.
+        recordHabitDay(habitToCheck, routine,
+                date, absenceOutcome(CheckDayOwnerType.HABIT, habitToCheck.getId(), routine, date));
 
         existingCheck.setCheckDate(date);
         existingCheck.setCheckTime(LocalTime.now());
@@ -340,7 +439,11 @@ public class CheckItemService {
 
         //Update categories
         if(taskChecked.getCategories() != null && taskChecked.getCategories().size() > 0){
-            double newXp = CheckXpCalculator.calculate(dificulty, importance, 0); // tasks have no streak
+            // R3 — a recurring task carries its own streak now, so it earns the same bonus a
+            // habit does. A one-time task never builds one, so its progress stays at zero and
+            // it pays the unmultiplied base.
+            double newXp = CheckXpCalculator.calculate(dificulty, importance,
+                    taskChecked.isOneTimeTask() ? 0 : streakEntering(taskChecked.getCheckProgress()));
             check.setXpGenerated(newXp);
             xpCalculatorService.addXpToUserRoutineAndCategoriesAndPersist(
                 routine.getUser(),
@@ -349,7 +452,9 @@ public class CheckItemService {
                 taskChecked.getCategories()
             );
         }
-        
+
+        recordTaskDay(taskChecked, routine, date, CheckDayOutcome.DONE);
+
         //Mark to delete if one time task — dated in the owner's zone, same as the check row,
         //so cleanup ("delete once that day has passed") agrees with what the user saw.
         if(taskChecked.isOneTimeTask()){
@@ -383,9 +488,11 @@ public class CheckItemService {
 
         check = checkIfHabitGroupIsAlreadyCheckedAndOverride(habitGroupToCheckOrUncheck, date);
 
-        // Streak bonus uses constance BEFORE this check's increment (the streak entering today).
+        // R3 — the bonus multiplies the streak entering today, read before today's row is
+        // written. Recording first would fold today's own check into its own multiplier.
         double newXp = CheckXpCalculator.calculate(
-                habitChecked.getDificulty(), habitChecked.getImportance(), habitChecked.getConstance());
+                habitChecked.getDificulty(), habitChecked.getImportance(),
+                streakEntering(habitChecked.getCheckProgress()));
         xpCalculatorService.addXpToUserRoutineHabitAndCategoriesAndPersist(
             routine.getUser(),
             newXp,
@@ -393,7 +500,7 @@ public class CheckItemService {
             habitChecked,
             habitChecked.getCategories()
         );
-        habitChecked.setConstance(habitChecked.getConstance() + 1);
+        recordHabitDay(habitChecked, routine, date, CheckDayOutcome.DONE);
 
         // Set check object
         check.setCheckDate(date);
@@ -441,6 +548,9 @@ public class CheckItemService {
                 taskChecked.getCategories()
             );
         }
+
+        recordTaskDay(taskChecked, routine,
+                date, absenceOutcome(CheckDayOwnerType.TASK, taskChecked.getId(), routine, date));
 
         //Remove marked to delete if has
         if(taskChecked.isOneTimeTask()){

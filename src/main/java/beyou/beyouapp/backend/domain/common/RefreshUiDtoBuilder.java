@@ -28,12 +28,20 @@ public class RefreshUiDtoBuilder {
             User user) {
         RefreshObjectDTO habitToRefreshDto = null;
         if (habitToRefresh != null) {
+            // R21 — the checked habit's recomputed streak, record and total ride back with
+            // the XP, so the card the user just tapped repaints from this one response.
+            // Null-guarded the same way HabitMapper guards xpProgress: a habit row written
+            // before V13 can still materialise a null embeddable.
+            CheckProgress checkProgress = habitToRefresh.getCheckProgress();
             habitToRefreshDto = new RefreshObjectDTO(
                     habitToRefresh.getId(),
                     habitToRefresh.getXpProgress().getXp(),
                     habitToRefresh.getXpProgress().getLevel(),
                     habitToRefresh.getXpProgress().getActualLevelXp(),
-                    habitToRefresh.getXpProgress().getNextLevelXp());
+                    habitToRefresh.getXpProgress().getNextLevelXp(),
+                    checkProgress != null ? checkProgress.getCurrentStreak() : 0,
+                    checkProgress != null ? checkProgress.getBestStreak() : 0,
+                    checkProgress != null ? checkProgress.getTotalCheckIns() : 0);
         }
 
         List<RefreshObjectDTO> categoriesToRefreshDto = new ArrayList<RefreshObjectDTO>();

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import beyou.beyouapp.backend.domain.checkday.CheckDayRecorder;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
@@ -56,6 +57,9 @@ class CheckItemServiceSkipUnitTest {
     @Mock
     private RefreshUiDtoBuilder refreshUiDtoBuilder;
 
+    @Mock
+    private CheckDayRecorder checkDayRecorder;
+
     private CheckItemService checkItemService;
 
     @BeforeEach
@@ -64,7 +68,8 @@ class CheckItemServiceSkipUnitTest {
                 itemGroupService,
                 xpCalculatorService,
                 userService,
-                refreshUiDtoBuilder
+                refreshUiDtoBuilder,
+                checkDayRecorder
         );
         when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
                 .thenReturn(new RefreshUiDTO(null, null, null, null));

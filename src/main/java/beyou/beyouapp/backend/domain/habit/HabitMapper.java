@@ -4,6 +4,7 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
+import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.domain.routine.Routine;
@@ -42,6 +43,12 @@ public class HabitMapper {
 
     public HabitResponseDTO toResponseDTO(Habit habit) {
         XpProgress xpProgress = habit.getXpProgress();
+        // The wire field is still called `constance` and still means "days checked in
+        // total" — the only thing that changed is where the number comes from. It used to
+        // be a hand-incremented column on habits, dropped in V14; it is now derived from
+        // entity_check_day. Null-guarded the same way xpProgress is: a habit row written
+        // before V13 can materialise a null embeddable.
+        CheckProgress checkProgress = habit.getCheckProgress();
 
         Map<UUID, String> routines = Optional.ofNullable(habit.getHabitGroups())
             .orElse(List.of())
@@ -69,7 +76,7 @@ public class HabitMapper {
                 xpProgress != null ? xpProgress.getActualLevelXp() : 0,
                 xpProgress != null ? xpProgress.getNextLevelXp() : 0,
                 xpProgress != null ? xpProgress.getLevel() : 0,
-                habit.getConstance(),
+                checkProgress != null ? checkProgress.getTotalCheckIns() : 0,
                 habit.getCreatedAt() != null ? habit.getCreatedAt().toLocalDate() : null,
                 habit.getUpdatedAt() != null ? habit.getUpdatedAt().toLocalDate() : null,
                 routines

@@ -59,6 +59,38 @@ class EntityCheckDayRepositoryIntegrationTest extends AbstractIntegrationTest {
         return entityCheckDayRepository.saveAndFlush(new EntityCheckDay(user, type, owner, day, outcome));
     }
 
+    // --- KTD26: the recompute's advisory lock -------------------------------
+
+    @Test
+    void theAdvisoryLockQueryRunsAndTakesBothKeysInOneTransaction() {
+        // pg_advisory_xact_lock is Postgres-only and returns void, which is exactly the
+        // shape of native query that compiles fine and then explodes the first time it runs.
+        // Taking the user key and the entity key in the same transaction is also the real
+        // call pattern — CheckDayRecorder does it on every write.
+        assertThatCode(() -> transactionTemplate.executeWithoutResult(status -> {
+            entityCheckDayRepository.lockCheckOwner(
+                    CheckDayOwnerType.USER.name().hashCode(), user.getId().hashCode());
+            entityCheckDayRepository.lockCheckOwner(
+                    CheckDayOwnerType.HABIT.name().hashCode(), ownerId.hashCode());
+        })).doesNotThrowAnyException();
+    }
+
+    @Test
+    void oneEntitysWholeHistoryComesBackOldestFirst() {
+        // The read a recompute does: no window, because the lifetime total and the first
+        // check-in date are both functions of every row that ever existed.
+        row(CheckDayOwnerType.HABIT, ownerId, DAY.plusDays(2), CheckDayOutcome.DONE);
+        row(CheckDayOwnerType.HABIT, ownerId, DAY, CheckDayOutcome.DONE);
+        row(CheckDayOwnerType.HABIT, ownerId, DAY.plusDays(1), CheckDayOutcome.MISSED);
+        row(CheckDayOwnerType.TASK, ownerId, DAY, CheckDayOutcome.DONE);
+
+        List<EntityCheckDay> history = entityCheckDayRepository
+                .findByOwnerTypeAndOwnerIdOrderByDayAsc(CheckDayOwnerType.HABIT, ownerId);
+
+        assertThat(history).extracting(EntityCheckDay::getDay)
+                .containsExactly(DAY, DAY.plusDays(1), DAY.plusDays(2));
+    }
+
     // --- R5: one row per entity per day -------------------------------------
 
     @Test
@@ -294,10 +326,10 @@ class EntityCheckDayRepositoryIntegrationTest extends AbstractIntegrationTest {
         UUID legacyHabitId = UUID.randomUUID();
         transactionTemplate.executeWithoutResult(status -> entityManager.createNativeQuery("""
                         INSERT INTO habits
-                            (id, user_id, name, icon_id, importance, dificulty, constance,
+                            (id, user_id, name, icon_id, importance, dificulty,
                              xp, level, actual_level_xp, next_level_xp, created_at, updated_at)
                         VALUES
-                            (:id, :userId, 'Legacy habit', 'ic', 3, 3, 0,
+                            (:id, :userId, 'Legacy habit', 'ic', 3, 3,
                              0, 0, 0, 0, CURRENT_DATE, CURRENT_DATE)
                         """)
                 .setParameter("id", legacyHabitId)
