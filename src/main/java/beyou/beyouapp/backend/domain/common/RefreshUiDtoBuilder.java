@@ -29,8 +29,8 @@ public class RefreshUiDtoBuilder {
      * <p>The number is computed here rather than read off a stored scalar on purpose. The
      * response has to report the streak the check just produced, with no scheduler run in
      * between, and {@code DayCloseService} overwrites {@code User.checkProgress} from the
-     * account's rows alone — which carry no {@code DONE} — so a cached scalar there would
-     * read zero every morning.
+     * account's stored rows — which reach only as far back as the last grace hour, never to
+     * today — so a cached scalar there would always be a day stale.
      */
     private final UserStreakService userStreakService;
 

@@ -2,14 +2,17 @@ package beyou.beyouapp.backend.unit.routine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -38,6 +41,8 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.H
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
 import beyou.beyouapp.backend.domain.task.Task;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
@@ -71,7 +76,8 @@ class CheckItemServiceSkipUnitTest {
                 refreshUiDtoBuilder,
                 checkDayRecorder
         );
-        when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
+        // Lenient: the date-bound tests throw before anything is built.
+        lenient().when(refreshUiDtoBuilder.buildRefreshUiDto(any(), any(), any(), any(), any()))
                 .thenReturn(new RefreshUiDTO(null, null, null, null));
     }
 
@@ -165,6 +171,94 @@ class CheckItemServiceSkipUnitTest {
         assertTrue(check.isChecked());
         assertFalse(Boolean.TRUE.equals(check.getSkipped()));
         verify(userService, never()).markDayCompleted(user, date);
+    }
+
+    // ---------------------------------------------------------------
+    // The date bound — the skip endpoint writes permanent history at it
+    // ---------------------------------------------------------------
+
+    @Test
+    void aHabitSkipDatedAfterTheOwnersTodayIsRejectedAndWritesNothing() {
+        // A SKIPPED row on a day that has not happened blocks the MISSED the day-close pass
+        // would otherwise land, because that pass is insert-only. Repeat over a range and
+        // the streak can never break — the unbounded-streak exploit the constance retirement
+        // was meant to end, now paying a capped +50% XP bonus forever.
+        UUID routineId = UUID.randomUUID();
+        UUID habitGroupId = UUID.randomUUID();
+
+        HabitGroup habitGroup = buildHabitGroup(routineId, habitGroupId);
+        when(itemGroupService.findHabitGroupByDTO(routineId, habitGroupId)).thenReturn(habitGroup);
+
+        User user = buildUser(ConstanceConfiguration.COMPLETE);
+        user.setTimezone("UTC");
+        habitGroup.getRoutineSection().getRoutine().setUser(user);
+
+        LocalDate tomorrow = LocalDate.now(ZoneId.of("UTC")).plusDays(1);
+        SkipGroupRequestDTO dto = new SkipGroupRequestDTO(
+                routineId, null, new HabitGroupRequestDTO(habitGroupId, null), tomorrow, true);
+
+        BusinessException thrown = assertThrows(BusinessException.class,
+                () -> checkItemService.skipOrUnskipItemGroup(dto));
+
+        assertEquals(ErrorKey.INVALID_REQUEST, thrown.getErrorKey());
+        assertTrue(habitGroup.getHabitGroupChecks().isEmpty());
+        verify(checkDayRecorder, never()).record(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void aTaskSkipDatedAfterTheOwnersTodayIsRejectedAndWritesNothing() {
+        // Tools.skipRoutineItem reaches the same method, so the bound has to live here and
+        // not in a controller.
+        UUID routineId = UUID.randomUUID();
+        UUID taskGroupId = UUID.randomUUID();
+
+        TaskGroup taskGroup = buildTaskGroup(routineId, taskGroupId);
+        when(itemGroupService.findTaskGroupByDTO(routineId, taskGroupId)).thenReturn(taskGroup);
+
+        User user = buildUser(ConstanceConfiguration.COMPLETE);
+        user.setTimezone("UTC");
+        taskGroup.getRoutineSection().getRoutine().setUser(user);
+
+        LocalDate nextYear = LocalDate.now(ZoneId.of("UTC")).plusYears(1);
+        SkipGroupRequestDTO dto = new SkipGroupRequestDTO(
+                routineId, new TaskGroupRequestDTO(taskGroupId, null), null, nextYear, true);
+
+        BusinessException thrown = assertThrows(BusinessException.class,
+                () -> checkItemService.skipOrUnskipItemGroup(dto));
+
+        assertEquals(ErrorKey.INVALID_REQUEST, thrown.getErrorKey());
+        assertTrue(taskGroup.getTaskGroupChecks().isEmpty());
+        verify(checkDayRecorder, never()).record(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void theOwnersOwnTodayIsTheBoundAndNotTheServersDay() {
+        // The owner sits a day ahead of the server. Their today is a legitimate skip date
+        // even though it is tomorrow where the JVM is running.
+        UUID routineId = UUID.randomUUID();
+        UUID habitGroupId = UUID.randomUUID();
+
+        HabitGroup habitGroup = buildHabitGroup(routineId, habitGroupId);
+        when(itemGroupService.findHabitGroupByDTO(routineId, habitGroupId)).thenReturn(habitGroup);
+
+        ZoneId aheadOfServer = zoneWhoseTodayIsAtLeastTheServers();
+        User user = buildUser(ConstanceConfiguration.COMPLETE);
+        user.setTimezone(aheadOfServer.getId());
+        habitGroup.getRoutineSection().getRoutine().setUser(user);
+
+        SkipGroupRequestDTO dto = new SkipGroupRequestDTO(
+                routineId, null, new HabitGroupRequestDTO(habitGroupId, null),
+                LocalDate.now(aheadOfServer), true);
+
+        checkItemService.skipOrUnskipItemGroup(dto);
+
+        assertEquals(1, habitGroup.getHabitGroupChecks().size());
+        assertTrue(Boolean.TRUE.equals(habitGroup.getHabitGroupChecks().get(0).getSkipped()));
+    }
+
+    /** Kiritimati is UTC+14 — never behind any server zone, so its today is the upper edge. */
+    private ZoneId zoneWhoseTodayIsAtLeastTheServers() {
+        return ZoneId.of("Pacific/Kiritimati");
     }
 
     private HabitGroup buildHabitGroup(UUID routineId, UUID habitGroupId) {

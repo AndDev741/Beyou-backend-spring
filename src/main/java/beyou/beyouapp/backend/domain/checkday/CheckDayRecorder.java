@@ -30,12 +30,11 @@ import lombok.extern.slf4j.Slf4j;
  * {@code SecurityContext} at all, and the day-close scheduler has no request behind it.
  *
  * <p>KTD26 — the recompute runs under a transaction-scoped Postgres advisory lock, taken
- * on the user first and the entity second. That is the order {@code XpCalculatorService}
- * already writes those rows in; two writers taking the same pair in the same order cannot
- * deadlock against each other. The lock is released by the transaction, never by this code,
- * which is why {@link Propagation#MANDATORY} is not decoration: without an enclosing
- * transaction the lock would be taken and dropped inside the same statement and guard
- * nothing. Same contract as {@code XpCalculatorService}.
+ * on the user first and the entity second through {@link CheckOwnerLock}, which
+ * {@link DayCloseService} takes the same way. The lock is released by the transaction,
+ * never by this code, which is why {@link Propagation#MANDATORY} is not decoration:
+ * without an enclosing transaction the lock would be taken and dropped inside the same
+ * statement and guard nothing. Same contract as {@code XpCalculatorService}.
  */
 @Component
 @Slf4j
@@ -172,35 +171,12 @@ public class CheckDayRecorder {
     }
 
     /**
-     * User first, then the entity — the order {@code XpCalculatorService} already writes
-     * those two rows in. A user-owned row locks once; taking the same key twice would still
-     * be safe (advisory locks are re-entrant per session) but it buys nothing.
+     * User first, then the entity. The keys and the order both come from
+     * {@link CheckOwnerLock}, which {@code DayCloseService} shares: two writers deriving
+     * their own keys for one owner would hold a lock that protects nothing.
      */
     private void lockUserThenOwner(UUID userId, CheckDayOwnerType ownerType, UUID ownerId) {
-        entityCheckDayRepository.lockCheckOwner(lockClass(CheckDayOwnerType.USER), lockObject(userId));
-        if (ownerType != CheckDayOwnerType.USER || !userId.equals(ownerId)) {
-            entityCheckDayRepository.lockCheckOwner(lockClass(ownerType), lockObject(ownerId));
-        }
-    }
-
-    /**
-     * The lock's first key. {@code String.hashCode} rather than {@code ordinal()} on
-     * purpose: the value has to stay the same across two application versions running side
-     * by side during a rolling deploy, and reordering an enum constant is a much easier
-     * mistake to make than renaming one.
-     */
-    private static int lockClass(CheckDayOwnerType ownerType) {
-        return ownerType.name().hashCode();
-    }
-
-    /**
-     * The lock's second key, folded from 128 bits to 32. Collisions are possible and
-     * harmless: two unrelated owners sharing a key serialise against each other for the
-     * length of one recompute, which is correctness-neutral.
-     */
-    private static int lockObject(UUID id) {
-        long folded = id.getMostSignificantBits() ^ id.getLeastSignificantBits();
-        return (int) (folded >> 32) ^ (int) folded;
+        CheckOwnerLock.takeUserThenOwner(entityCheckDayRepository, userId, ownerType, ownerId);
     }
 
     private static void copyInto(CheckProgress source, CheckProgress target) {

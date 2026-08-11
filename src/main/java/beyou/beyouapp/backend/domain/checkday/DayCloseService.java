@@ -41,10 +41,33 @@ import lombok.extern.slf4j.Slf4j;
  * below already tells us which owners are missing, but a unique violation raised inside this
  * transaction would abort the <em>whole</em> transaction in Postgres, and the blast radius
  * is one user's entire day across every owner. Letting the database absorb the collision
- * costs nothing and removes that cliff. No advisory lock is taken (unlike
- * {@link CheckDayRecorder}): the conflict clause is the serialisation point, and an owner
- * whose insert loses the race is skipped entirely, scalars included — the writer that won
- * recomputed them already.
+ * costs nothing and removes that cliff. An owner whose insert loses the race is skipped
+ * entirely, scalars included — the writer that won recomputed them already.
+ *
+ * <p>The conflict clause is <strong>not</strong> a substitute for the advisory lock
+ * {@link CheckDayRecorder} takes, and this pass takes the same one through
+ * {@link CheckOwnerLock}. The clause only serialises two writers colliding on one day. This
+ * pass writes <em>yesterday</em> while the request path writes <em>today</em>: different
+ * unique keys, so the clause never fires between them and nothing would order the two
+ * recomputes of the same owner's scalars. The lost update is concrete — the pass reads a
+ * habit's history at 02:00:00, a check lands at 02:00:00.1 and commits streak 4, and the
+ * pass then commits streak 0 from its stale read. No {@code @Version} exists anywhere in
+ * the model to catch it, and the next check would pay its XP bonus against the wrong
+ * streak. The cost is that one user's check-ins queue behind that user's own close, which
+ * runs once a night and touches one account.
+ *
+ * <p><strong>Known caveat, not yet closed.</strong> The two paths reach the advisory lock
+ * with opposite row-lock orders. {@code lockCheckOwner} is a native query, so Hibernate
+ * auto-flushes before it; on the request path the XP update has already dirtied
+ * {@code users}, so that transaction holds the {@code users} row lock <em>before</em> it
+ * asks for the advisory lock. This pass has nothing dirty when it takes the advisory lock
+ * and only writes {@code users} at commit. A check landing in that window can therefore
+ * deadlock against the pass. Postgres detects it and aborts one side, so nothing is
+ * corrupted: the check surfaces one error, or the pass loses that user's day and the
+ * per-user try/catch in {@code RoutineSnapshotScheduler} logs it, leaving the day with no
+ * rows — unknown, which R18 already reads as neutral. Closing this properly means making
+ * one of the two paths change its acquisition order, which is a wider change than the lock
+ * itself.
  *
  * <p>R11/KTD19 — an owner that was not scheduled, or belongs to no routine at all, gets a
  * neutral row rather than a {@code MISSED}, so a day the user was never asked to act on
@@ -125,7 +148,7 @@ public class DayCloseService {
 
         LocalDate today = UserDateResolver.today(user);
         int written = 0;
-        for (Owner owner : ownersOf(user, routines)) {
+        for (Owner owner : ownersOf(user)) {
             if (alreadyRecorded.contains(new OwnerKey(owner.type(), owner.id()))) {
                 continue;
             }
@@ -146,12 +169,12 @@ public class DayCloseService {
             userCacheEvictService.evictUserScopedCaches(user.getId());
         }
 
-        log.info("Closed day {} for user {} — {} absence rows written", day, user.getId(), written);
+        log.info("Closed day {} for user {} — {} rows written", day, user.getId(), written);
         return written;
     }
 
     /**
-     * Stamps one owner's absence and re-derives its scalars.
+     * Stamps one owner's outcome for the day and re-derives its scalars.
      *
      * <p>The history is read before the insert and the new row appended in memory, so the
      * recompute needs one query per owner written rather than a second read-back. The read
@@ -163,11 +186,21 @@ public class DayCloseService {
      */
     private boolean closeOwnerDay(User user, Owner owner, LocalDate day,
                                   List<DiaryRoutine> routines, LocalDate today) {
-        // dayClosed is true by construction — the caller only ever passes a day that has
-        // ended in this user's timezone, which is the whole reason MISSED can be stamped
-        // here and not on the uncheck path.
-        CheckDayOutcome outcome = CheckDayRecorder.absenceOutcome(
-                ScheduledOnDayResolver.standingOf(owner.type(), owner.id(), routines, day), true);
+        // Before the history read, not after: the read is the first half of a read-modify-
+        // write over this owner's scalars, and a check committing between the two is exactly
+        // the lost update this lock exists to stop. Same keys, same order as the request
+        // path — see CheckOwnerLock.
+        CheckOwnerLock.takeUserThenOwner(entityCheckDayRepository, user.getId(),
+                owner.type(), owner.id());
+
+        CheckDayOutcome outcome = presenceOutcome(user, owner, day);
+        if (outcome == null) {
+            // dayClosed is true by construction — the caller only ever passes a day that has
+            // ended in this user's timezone, which is the whole reason MISSED can be stamped
+            // here and not on the uncheck path.
+            outcome = CheckDayRecorder.absenceOutcome(
+                    ScheduledOnDayResolver.standingOf(owner.type(), owner.id(), routines, day), true);
+        }
 
         List<EntityCheckDay> history = new ArrayList<>(entityCheckDayRepository
                 .findByOwnerTypeAndOwnerIdOrderByDayAsc(owner.type(), owner.id()));
@@ -194,6 +227,31 @@ public class DayCloseService {
         return true;
     }
 
+    /**
+     * The presence outcome for an owner that finished the day having actually done
+     * something, or {@code null} when the caller should fall through to an absence.
+     *
+     * <p>Only the account has one. {@code User.completedDays} is the completion record the
+     * app already keeps — {@code UserService.markDayCompleted} / {@code unmarkDayComplete}
+     * maintain it under whichever {@code ConstanceConfiguration} the user chose, and
+     * {@link UserStreakService} reads it to answer this same question. Without this branch
+     * every account row is an absence: a user who finished their whole Wednesday gets
+     * {@code USER/MISSED} stamped on it at the grace hour, {@code GET /check-history} reads
+     * back a wall of {@code MISSED}, and {@code users.check_*} is rewritten to zero nightly
+     * because {@link CheckProgressCalculator} only counts {@code DONE}.
+     *
+     * <p>Habits and tasks need no equivalent: the request path already wrote their
+     * {@code DONE} rows, and the diff in {@link #closeDay} skips any owner that has one.
+     * The snapshot tables are deliberately not consulted (R19).
+     */
+    private static CheckDayOutcome presenceOutcome(User user, Owner owner, LocalDate day) {
+        if (owner.type() != CheckDayOwnerType.USER) {
+            return null;
+        }
+        Set<LocalDate> completedDays = user.getCompletedDays();
+        return completedDays != null && completedDays.contains(day) ? CheckDayOutcome.DONE : null;
+    }
+
     private int insertIfAbsent(User user, Owner owner, LocalDate day, CheckDayOutcome outcome) {
         return entityManager.createNativeQuery(INSERT_IF_ABSENT)
                 .setParameter("id", UUID.randomUUID().toString())
@@ -206,27 +264,31 @@ public class DayCloseService {
     }
 
     /**
-     * Everything of this user's that carries a streak: every habit, every recurring task,
-     * every routine, and the account itself.
+     * Everything of this user's that this pass can say something true about: every habit,
+     * every recurring task, and the account itself.
      *
      * <p>One-time tasks are left out (R4): they are checked once and deleted the day after,
      * so a streak over one is a streak of one that nothing can extend, and closing days for
      * them would leave orphan history behind a deleted row.
      *
+     * <p><strong>Routines are left out too, and that is the point of this note.</strong>
+     * Habits and tasks get their {@code DONE} rows from the request path and the account
+     * gets one from {@link #presenceOutcome}; a routine has no presence writer anywhere, and
+     * there is no cheap way to derive one that does not read the snapshot tables (R19
+     * forbids it). Everything this pass could write for a routine is therefore an absence,
+     * including on days the routine was completed in full — a permanent row asserting a
+     * failure that did not happen. An absent row reads as unknown (R18), which is the honest
+     * answer while nothing can tell the difference. {@code CheckDayOwnerType.ROUTINE} stays
+     * in the enum and {@code GET /check-history?ownerType=ROUTINE} still accepts it; it
+     * answers all-unknown by design. Routine rows come back here when something actually
+     * needs them <em>and</em> a presence writer exists — both, not either.
+     *
      * <p>{@code existsFrom} is the floor a row may not be written below. {@code Habit} and
-     * {@code Task} carry their own {@code createdAt}; {@code Routine} has no such column, so
-     * a routine is floored at the account's creation date instead — the only existence
-     * evidence available. That leaves one residual case: a routine created between midnight
-     * and the grace hour receives a row for the day before it existed. It is accepted rather
-     * than engineered around, because the pass only ever closes the day that just ended, and
-     * such a row lands at the very start of that routine's history where
-     * {@link CheckProgressCalculator}'s streak walk terminates regardless. Widening the
-     * closing window would make this wrong and would need a real {@code created_at} on
-     * {@code routines} first.
+     * {@code Task} carry their own {@code createdAt}; the account is floored at its own
+     * creation date.
      */
-    private List<Owner> ownersOf(User user, List<DiaryRoutine> routines) {
+    private List<Owner> ownersOf(User user) {
         List<Owner> owners = new ArrayList<>();
-        LocalDate accountCreated = toLocalDate(user.getCreatedAt());
 
         for (Habit habit : habitRepository.findAllByUserId(user.getId())) {
             owners.add(new Owner(CheckDayOwnerType.HABIT, habit.getId(),
@@ -239,12 +301,8 @@ public class DayCloseService {
             owners.add(new Owner(CheckDayOwnerType.TASK, task.getId(),
                     toLocalDate(task.getCreatedAt()), task.getCheckProgress()));
         }
-        for (DiaryRoutine routine : routines) {
-            owners.add(new Owner(CheckDayOwnerType.ROUTINE, routine.getId(),
-                    accountCreated, routine.getCheckProgress()));
-        }
         owners.add(new Owner(CheckDayOwnerType.USER, user.getId(),
-                accountCreated, user.getCheckProgress()));
+                toLocalDate(user.getCreatedAt()), user.getCheckProgress()));
         return owners;
     }
 

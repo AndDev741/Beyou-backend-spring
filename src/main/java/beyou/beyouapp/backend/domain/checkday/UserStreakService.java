@@ -36,11 +36,11 @@ import lombok.RequiredArgsConstructor;
  *
  * <p>KTD16 names this class as the one documented exception to "every scalar is a pure
  * function of the stored rows". {@link CheckProgressCalculator} derives a habit's streak
- * entirely from that habit's rows, because a habit's rows carry {@code DONE}. The user's
- * rows never do — {@code DayCloseService} stamps {@code MISSED} / {@code NOT_SCHEDULED} /
- * {@code NOT_IN_ROUTINE} on the account and nothing writes {@code DONE} there — so
- * completion has to come from {@code completedDays}. Deriving the whole scalar from rows
- * instead would have read zero for every existing user on the day this shipped.
+ * entirely from that habit's rows. The account's rows do carry {@code DONE} —
+ * {@code DayCloseService} stamps it on a day {@code completedDays} contains — but only from
+ * the grace hour onward, so today and any day the pass has not reached yet has no row to
+ * read. Completion therefore still comes from {@code completedDays}, which is current the
+ * instant a check commits; the rows answer the other half of the question below.
  *
  * <p>Lives in {@code domain/checkday} rather than {@code user}: it reads the
  * {@code entity_check_day} table, sits beside the two other readers of it
@@ -188,10 +188,10 @@ public class UserStreakService {
      * The days the account's own frozen rows say something was scheduled on.
      *
      * <p>Read as the complement of the two absence outcomes rather than as an equality
-     * against {@code MISSED}, which is the only one {@code DayCloseService} can currently
-     * produce for a {@code USER} owner. If a later writer ever stamps a presence outcome on
-     * the account, "a day something was scheduled" stays the right answer instead of
-     * silently becoming "a day nothing was scheduled".
+     * against {@code MISSED}. That is what keeps it right now that {@code DayCloseService}
+     * also stamps {@code DONE} on the account: a completed day was a day something was
+     * asked of the user, and an equality check would have started reading it as a day
+     * nothing was scheduled.
      */
     private static Set<LocalDate> scheduledDays(List<EntityCheckDay> userRows) {
         Set<LocalDate> scheduled = new HashSet<>();

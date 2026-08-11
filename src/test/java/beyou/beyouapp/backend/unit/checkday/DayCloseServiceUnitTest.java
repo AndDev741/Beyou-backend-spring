@@ -3,10 +3,13 @@ package beyou.beyouapp.backend.unit.checkday;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +17,7 @@ import java.sql.Date;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,15 +28,19 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import beyou.beyouapp.backend.domain.checkday.CheckDayOutcome;
 import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
+import beyou.beyouapp.backend.domain.checkday.CheckDayRecorder;
 import beyou.beyouapp.backend.domain.checkday.DayCloseService;
 import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
 import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
+import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
@@ -299,7 +307,7 @@ class DayCloseServiceUnitTest {
     }
 
     @Test
-    void aRoutineIsFlooredAtTheAccountCreationDateBecauseItHasNoCreatedAtOfItsOwn() {
+    void anAccountCreatedAfterTheClosingDayClosesNothing() {
         User youngAccount = new User();
         youngAccount.setId(userId);
         youngAccount.setTimezone("UTC");
@@ -311,13 +319,67 @@ class DayCloseServiceUnitTest {
         int written = dayCloseService.closeDay(user, CLOSING_DAY);
 
         assertThat(written)
-                .as("an account created after the closing day has nothing to close, routines included")
+                .as("an account cannot have missed a day it did not exist for")
                 .isZero();
+    }
+
+    @Test
+    void routinesGetNoRowOfTheirOwn() {
+        Habit habit = habit("Read", ACCOUNT_CREATED);
+        givenHabits(habit);
+        givenRoutines(routineCovering(habit, WeekDay.Thursday));
+        givenInsertsSucceed();
+
+        dayCloseService.closeDay(user, CLOSING_DAY);
+
+        assertThat(insertedOwnerIds(CheckDayOwnerType.ROUTINE))
+                .as("nothing writes a routine a presence outcome, so the only rows it could "
+                        + "ever collect are absences — a wrong row is worse than no row")
+                .isEmpty();
     }
 
     // ---------------------------------------------------------------
     // The account-level row
     // ---------------------------------------------------------------
+
+    @Test
+    void theAccountRowIsDoneOnADayTheUserCompleted() {
+        user.setCompletedDays(new HashSet<>(Set.of(CLOSING_DAY)));
+        givenRoutines(routineCovering(null, WeekDay.Thursday));
+        givenInsertsSucceed();
+
+        dayCloseService.closeDay(user, CLOSING_DAY);
+
+        assertThat(insertedOutcomes())
+                .as("the user finished that Thursday — GET /check-history?ownerType=USER must "
+                        + "not report it as an absence")
+                .containsEntry(userId, CheckDayOutcome.DONE);
+    }
+
+    @Test
+    void theAccountsOwnScalarsCountTheDaysItCompleted() {
+        user.setCompletedDays(new HashSet<>(Set.of(CLOSING_DAY)));
+        givenRoutines(routineCovering(null, WeekDay.Thursday));
+        givenInsertsSucceed();
+
+        dayCloseService.closeDay(user, CLOSING_DAY);
+
+        assertThat(user.getCheckProgress().getTotalCheckIns())
+                .as("users.check_total_check_ins is rewritten nightly from rows that never "
+                        + "said DONE, so it sat permanently at zero")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void theAccountRowIsStillAnAbsenceOnADayTheUserDidNotComplete() {
+        user.setCompletedDays(new HashSet<>(Set.of(CLOSING_DAY.minusDays(1))));
+        givenRoutines(routineCovering(null, WeekDay.Thursday));
+        givenInsertsSucceed();
+
+        dayCloseService.closeDay(user, CLOSING_DAY);
+
+        assertThat(insertedOutcomes()).containsEntry(userId, CheckDayOutcome.MISSED);
+    }
 
     @Test
     void theUserRowCarriesWhetherAnyRoutineWasScheduled() {
@@ -350,6 +412,68 @@ class DayCloseServiceUnitTest {
         assertThat(written).isEqualTo(1);
         assertThat(insertedOutcomes()).containsExactly(
                 java.util.Map.entry(userId, CheckDayOutcome.NOT_IN_ROUTINE));
+    }
+
+    // ---------------------------------------------------------------
+    // Locking — KTD26
+    // ---------------------------------------------------------------
+
+    @Test
+    void thePassTakesTheOwnerLockBeforeItReadsTheHistoryItRecomputesFrom() {
+        // The pass writes yesterday while the request path writes today. Different unique
+        // keys, so ON CONFLICT never fires between them and nothing serialises the two
+        // recomputes of the same habit's scalars — the pass commits its stale streak last.
+        Habit habit = habit("Read", ACCOUNT_CREATED);
+        givenHabits(habit);
+        givenRoutines(routineCovering(habit, WeekDay.Thursday));
+        givenInsertsSucceed();
+
+        dayCloseService.closeDay(user, CLOSING_DAY);
+
+        InOrder order = inOrder(entityCheckDayRepository);
+        order.verify(entityCheckDayRepository, times(2)).lockCheckOwner(anyInt(), anyInt());
+        order.verify(entityCheckDayRepository)
+                .findByOwnerTypeAndOwnerIdOrderByDayAsc(CheckDayOwnerType.HABIT, habit.getId());
+    }
+
+    @Test
+    void thePassAndTheRecorderDeriveTheSameLockKeysInTheSameOrder() {
+        // Two writers taking different keys for the same owner is a lock that protects
+        // nothing, so the derivation has to be one piece of code, not two copies.
+        Habit habit = habit("Read", ACCOUNT_CREATED);
+        givenHabits(habit);
+        givenRoutines(routineCovering(habit, WeekDay.Thursday));
+        givenInsertsSucceed();
+
+        dayCloseService.closeDay(user, CLOSING_DAY);
+        List<LockKey> takenByThePass = capturedLockKeys();
+
+        clearInvocations(entityCheckDayRepository);
+        when(entityCheckDayRepository.save(any(EntityCheckDay.class))).thenAnswer(i -> i.getArgument(0));
+        new CheckDayRecorder(entityCheckDayRepository).record(
+                user, CheckDayOwnerType.HABIT, habit.getId(), new CheckProgress(),
+                CLOSING_DAY, CheckDayOutcome.DONE);
+        List<LockKey> takenByTheRecorder = capturedLockKeys();
+
+        assertThat(takenByTheRecorder).hasSize(2);
+        assertThat(takenByThePass)
+                .as("the pass visits the habit first, and must take exactly the pair the "
+                        + "request path takes for it")
+                .startsWith(takenByTheRecorder.toArray(new LockKey[0]));
+    }
+
+    private record LockKey(int classId, int objectId) {}
+
+    private List<LockKey> capturedLockKeys() {
+        ArgumentCaptor<Integer> classIds = ArgumentCaptor.forClass(Integer.class);
+        ArgumentCaptor<Integer> objectIds = ArgumentCaptor.forClass(Integer.class);
+        verify(entityCheckDayRepository, org.mockito.Mockito.atLeastOnce())
+                .lockCheckOwner(classIds.capture(), objectIds.capture());
+        List<LockKey> keys = new ArrayList<>();
+        for (int i = 0; i < classIds.getAllValues().size(); i++) {
+            keys.add(new LockKey(classIds.getAllValues().get(i), objectIds.getAllValues().get(i)));
+        }
+        return keys;
     }
 
     // ---------------------------------------------------------------

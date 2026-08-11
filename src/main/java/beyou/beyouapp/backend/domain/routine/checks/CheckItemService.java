@@ -68,9 +68,8 @@ public class CheckItemService {
     public RefreshUiDTO skipOrUnskipItemGroup(SkipGroupRequestDTO skipGroupDTO) {
         if(skipGroupDTO.habitGroupDTO() != null){
             HabitGroup habitGroup = itemGroupService.findHabitGroupByDTO(skipGroupDTO.routineId(), skipGroupDTO.habitGroupDTO().habitGroupId());
-            LocalDate date = skipGroupDTO.date() != null
-                ? skipGroupDTO.date()
-                : ownerToday(habitGroup.getRoutineSection().getRoutine());
+            LocalDate date = requireNotInTheFuture(
+                skipGroupDTO.date(), habitGroup.getRoutineSection().getRoutine());
             if (isHabitGroupChecked(habitGroup, date)) {
                 return buildNoOpRefresh(habitGroup.getId(), getHabitGroupChecked(habitGroup, date), date, habitGroup.getRoutineSection().getRoutine());
             }
@@ -79,9 +78,8 @@ public class CheckItemService {
                 : unskipHabitGroup(habitGroup, date);
         }else if(skipGroupDTO.taskGroupDTO() != null){
             TaskGroup taskGroup = itemGroupService.findTaskGroupByDTO(skipGroupDTO.routineId(), skipGroupDTO.taskGroupDTO().taskGroupId());
-            LocalDate date = skipGroupDTO.date() != null
-                ? skipGroupDTO.date()
-                : ownerToday(taskGroup.getRoutineSection().getRoutine());
+            LocalDate date = requireNotInTheFuture(
+                skipGroupDTO.date(), taskGroup.getRoutineSection().getRoutine());
             if (isTaskGroupChecked(taskGroup, date)) {
                 return buildNoOpRefresh(taskGroup.getId(), getTaskGroupChecked(taskGroup, date), date, taskGroup.getRoutineSection().getRoutine());
             }
@@ -100,6 +98,46 @@ public class CheckItemService {
      */
     private LocalDate ownerToday(Routine routine) {
         return UserDateResolver.today(routine.getUser());
+    }
+
+    /**
+     * The date a skip will be written at: the one the request asked for, or the owner's
+     * today when it asked for none — and never a day that has not happened yet.
+     *
+     * <p>The skip path is the only one that honours a client-supplied date, and what it
+     * writes is permanent: a {@code SKIPPED} row in {@code entity_check_day}. The day-close
+     * pass is insert-only, so a row planted on a future day survives that day arriving —
+     * the real {@code MISSED} never lands, and a habit skipped forward over a range has a
+     * streak that can never break. That is the unbounded streak the {@code constance}
+     * retirement was meant to end, except it now buys a capped +50% XP bonus on every
+     * check. The agent tool {@code Tools.skipRoutineItem} reaches this same method, which is
+     * why the bound is here and not in {@code RoutineController}.
+     *
+     * <p>The bound is the <em>owner's</em> today, resolved in the owner's zone (R15), not
+     * the server's — a user fourteen hours ahead is entitled to their own date.
+     *
+     * <p>No lower bound, deliberately. A back-dated skip is how a user corrects a day they
+     * really did skip, {@code SKIPPED} is streak-neutral (R12) and awards no XP, and no
+     * floor is available at this call site that would not be arbitrary — {@code Routine}
+     * carries no {@code created_at}. One thing that bound would have caught and this one
+     * does not: {@code CheckDayRecorder.record} overwrites the day's existing row, so
+     * skipping a past day that closed as {@code MISSED} rewrites it to {@code SKIPPED} and
+     * a streak broken weeks ago walks straight through it again. Deciding how far back a
+     * user may edit their own history is a product question, not a bound to invent here.
+     *
+     * @throws BusinessException {@code INVALID_REQUEST} when the date is after the owner's
+     *                           today
+     */
+    private LocalDate requireNotInTheFuture(LocalDate requested, Routine routine) {
+        LocalDate today = ownerToday(routine);
+        if (requested == null) {
+            return today;
+        }
+        if (requested.isAfter(today)) {
+            throw new BusinessException(ErrorKey.INVALID_REQUEST,
+                    "A routine item cannot be skipped on a day that has not happened yet");
+        }
+        return requested;
     }
 
     /**
