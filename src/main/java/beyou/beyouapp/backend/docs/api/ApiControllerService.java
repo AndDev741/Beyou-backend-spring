@@ -6,6 +6,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import beyou.beyouapp.backend.docs.DocsLocale;
 import beyou.beyouapp.backend.docs.api.dto.ApiControllerDetailDTO;
 import beyou.beyouapp.backend.docs.api.dto.ApiControllerListItemDTO;
 import beyou.beyouapp.backend.docs.api.entity.ApiControllerTopic;
@@ -17,14 +18,12 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ApiControllerService {
-    private static final String DEFAULT_LOCALE = "en";
-
     private final ApiControllerTopicRepository topicRepository;
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "apiTopics", key = "#locale")
+    @Cacheable(cacheNames = "apiTopics", key = "T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
     public List<ApiControllerListItemDTO> getTopics(String locale) {
-        String normalizedLocale = normalizeLocale(locale);
+        String normalizedLocale = DocsLocale.normalize(locale);
 
         return topicRepository.findAllByStatusOrderByOrderIndex(ApiControllerStatus.ACTIVE)
             .stream()
@@ -33,9 +32,9 @@ public class ApiControllerService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "apiTopic", key = "#key + '_' + #locale")
+    @Cacheable(cacheNames = "apiTopic", key = "#key + '_' + T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
     public ApiControllerDetailDTO getTopic(String key, String locale) {
-        String normalizedLocale = normalizeLocale(locale);
+        String normalizedLocale = DocsLocale.normalize(locale);
 
         ApiControllerTopic topic = topicRepository.findByKey(key)
             .orElseThrow(() -> new DocsTopicNotFound("API controller topic not found"));
@@ -65,15 +64,8 @@ public class ApiControllerService {
 
     private ApiControllerContent resolveContent(ApiControllerTopic topic, String locale) {
         return topic.findContentByLocale(locale)
-            .or(() -> topic.findContentByLocale(DEFAULT_LOCALE))
+            .or(() -> topic.findContentByLocale(DocsLocale.DEFAULT_LOCALE))
             .orElseThrow(() -> new DocsTopicNotFound("API controller topic content not found"));
     }
 
-    private String normalizeLocale(String locale) {
-        if (locale == null || locale.isBlank()) {
-            return DEFAULT_LOCALE;
-        }
-
-        return locale.trim().toLowerCase();
-    }
 }
