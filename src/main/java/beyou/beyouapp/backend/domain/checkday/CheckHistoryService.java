@@ -87,9 +87,10 @@ public class CheckHistoryService {
 
         UUID resolvedOwnerId = resolveOwnerId(user, ownerType, ownerId);
 
-        LocalDate effectiveTo = to != null ? to : UserDateResolver.today(user);
+        LocalDate ownerToday = UserDateResolver.today(user);
+        LocalDate effectiveTo = to != null ? requireSaneEnd(to, ownerToday) : ownerToday;
         LocalDate effectiveFrom = from != null
-                ? from
+                ? floorStart(from, ownerToday)
                 : effectiveTo.minusDays(DEFAULT_RANGE_DAYS - 1L);
 
         // An inverted range names no days at all, so there is nothing to clamp it toward
@@ -111,6 +112,59 @@ public class CheckHistoryService {
         }
 
         return new CheckDayResponseDTO(ownerType, resolvedOwnerId, effectiveFrom, effectiveTo, days);
+    }
+
+    /**
+     * How far either end of the range may sit from the owner's today, in years. Anything
+     * outside is not a range anybody has history in — the app has never been deployed, so
+     * two centuries is already generous by a factor of a hundred.
+     */
+    private static final int MAX_YEARS_FROM_TODAY = 200;
+
+    /**
+     * Bounds {@code to} before anything is derived from it.
+     *
+     * <p>Order matters, and it is the whole point of this method. Both the default
+     * {@code from} ({@code to} minus 27 days) and the day-by-day walk that builds the
+     * response do date arithmetic on this value, and {@code LocalDate} throws
+     * {@code DateTimeException} rather than saturating when that arithmetic leaves the
+     * representable range. {@code to=-999999999-01-01} underflowed the backstep;
+     * {@code to=+999999999-12-31} overflowed the walk's {@code plusDays(1)}. Neither is an
+     * {@code IllegalArgumentException}, so {@code GlobalExceptionHandler} had no mapping and
+     * both answered 500 with two full stack traces logged at ERROR — on an endpoint in the
+     * sixty-a-minute tier.
+     *
+     * <p>Refused rather than clamped, matching the inverted-range guard below: a range
+     * merely wider than the cap is a real request for too much data and gets clamped, but a
+     * year outside {@code [today - 200y, today + 1d]} is a typo or a probe, and answering it
+     * with a silently different range would be a wrong answer rather than a refused one.
+     *
+     * <p>The upper bound is tomorrow, not today. A client a few hours ahead of the zone this
+     * resolves in is entitled to name its own date (R15).
+     */
+    private static LocalDate requireSaneEnd(LocalDate to, LocalDate ownerToday) {
+        if (to.isBefore(ownerToday.minusYears(MAX_YEARS_FROM_TODAY))
+                || to.isAfter(ownerToday.plusDays(1))) {
+            throw new BusinessException(ErrorKey.INVALID_REQUEST,
+                    "'to' must fall within " + MAX_YEARS_FROM_TODAY + " years of today");
+        }
+        return to;
+    }
+
+    /**
+     * Floors {@code from} at the same distance, rather than refusing it.
+     *
+     * <p>The older end is the lenient one throughout this class, and it earns that here:
+     * {@link #clampToCap} already moves any {@code from} older than the cap up to
+     * {@code to} minus a year, so flooring changes no answer a caller can currently get —
+     * it only keeps an absurd value out of the arithmetic. There is no upper guard to
+     * match {@link #requireSaneEnd} because a {@code from} past the upper bound is
+     * necessarily after a bounded {@code to}, which the inverted-range check already
+     * refuses.
+     */
+    private static LocalDate floorStart(LocalDate from, LocalDate ownerToday) {
+        LocalDate floor = ownerToday.minusYears(MAX_YEARS_FROM_TODAY);
+        return from.isBefore(floor) ? floor : from;
     }
 
     /**

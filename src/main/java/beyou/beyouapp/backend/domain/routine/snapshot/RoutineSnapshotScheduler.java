@@ -31,11 +31,14 @@ public class RoutineSnapshotScheduler {
     private static final int MAX_BACKFILL_DAYS = 7;
 
     /**
-     * The local hour at which the previous day is closed out (KTD18). Deliberately not
+     * The first local hour at which the previous day is closed out (KTD18). Deliberately not
      * midnight: a check committing at 23:59:59.9 has to be allowed to land before anything
      * declares the day over, and the snapshot cycle is already doing its own work at hour 0.
      * The grace also means the two branches never run in the same pass for the same
      * timezone, so a snapshot failure cannot take the day-close down with it.
+     *
+     * <p>The close branch fires across this hour <em>and the next</em> — see the window at
+     * the call site, and why an equality test loses the spring-forward day outright.
      */
     private static final int DAY_CLOSE_GRACE_HOUR = 2;
 
@@ -55,6 +58,18 @@ public class RoutineSnapshotScheduler {
     @Lazy
     @Autowired
     private RoutineSnapshotScheduler self;
+
+    /**
+     * The clock {@link #processSnapshots()} reads to decide what hour it is in each
+     * timezone. Deliberately not a constructor parameter — it has no bean to inject and the
+     * constructor is the injection point for eight real collaborators. Tests replace it the
+     * same way they replace {@link #self}.
+     *
+     * <p>Only the hour-gating below goes through it. {@link #backfillMissedSnapshots()} does
+     * not: it runs once at boot with no hour condition, so there is nothing there a fixed
+     * clock would pin.
+     */
+    private Clock clock = Clock.systemDefaultZone();
 
     /**
      * Runs once on startup — detects missed snapshots and backfills up to 7 days.
@@ -130,7 +145,7 @@ public class RoutineSnapshotScheduler {
         for (String timezone : timezones) {
             try {
                 ZoneId zoneId = ZoneId.of(timezone);
-                ZonedDateTime nowInZone = ZonedDateTime.now(zoneId);
+                ZonedDateTime nowInZone = ZonedDateTime.now(clock.withZone(zoneId));
 
                 if (nowInZone.getHour() == 0) {
                     // It's midnight in this timezone — snapshot yesterday's data
@@ -149,7 +164,16 @@ public class RoutineSnapshotScheduler {
                     }
                 }
 
-                if (nowInZone.getHour() == DAY_CLOSE_GRACE_HOUR) {
+                // A window, not an equality. On a spring-forward day the local clock jumps
+                // straight from 01:59 to 03:00, so an hour inside the jump is never
+                // observed — America/New_York, CET and most other DST zones skip 02:xx
+                // entirely on their changeover date, and an `== DAY_CLOSE_GRACE_HOUR`
+                // trigger left that day permanently unclosed for every user in the zone.
+                // Widening by an hour costs one extra sweep on ordinary days, which is a
+                // no-op: closeDay diffs against the rows already recorded and its insert is
+                // ON CONFLICT DO NOTHING.
+                if (nowInZone.getHour() >= DAY_CLOSE_GRACE_HOUR
+                        && nowInZone.getHour() <= DAY_CLOSE_GRACE_HOUR + 1) {
                     closeYesterdayForTimezone(timezone, nowInZone.toLocalDate().minusDays(1));
                 }
             } catch (Exception e) {

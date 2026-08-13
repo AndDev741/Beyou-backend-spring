@@ -18,10 +18,18 @@
 -- e2e rows just take the zero defaults.
 
 -- Bound the blast radius if this ever runs against a busy database: give up
--- rather than queue behind (or ahead of) live traffic. Both are session-level
--- and Flyway runs each migration in its own transaction, so they do not leak.
-SET lock_timeout = '5s';
-SET statement_timeout = '60s';
+-- rather than queue behind (or ahead of) live traffic.
+--
+-- SET LOCAL, not SET. Plain SET is session-scoped, and Flyway is not given a
+-- datasource of its own — it borrows a connection from the pool that serves live
+-- requests and hands it straight back. A session-scoped statement_timeout would
+-- ride that connection back into the pool and start cancelling ordinary queries
+-- at 60s, on whichever connection happened to run the migration and no other:
+-- an intermittent failure that follows a single pooled connection around.
+-- LOCAL scopes both to the transaction, and Flyway wraps each migration in one,
+-- so the DDL below is still covered and nothing survives the commit.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
 
 -- The three counters are NOT NULL DEFAULT 0 on purpose, and the @Embeddable's
 -- field initialisers match. Hibernate materialises a NULL embeddable reference

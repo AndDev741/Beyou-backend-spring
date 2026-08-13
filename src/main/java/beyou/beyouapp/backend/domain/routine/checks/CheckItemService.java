@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import beyou.beyouapp.backend.domain.checkday.CheckDayOutcome;
 import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
 import beyou.beyouapp.backend.domain.checkday.CheckDayRecorder;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
 import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.CheckXpCalculator;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
@@ -49,6 +51,17 @@ public class CheckItemService {
     private final RefreshUiDtoBuilder refreshUiDtoBuilder;
     private final CheckDayRecorder checkDayRecorder;
 
+    /**
+     * Read directly, and only to answer one question: does a closed past day already hold a
+     * {@code DONE} the caller is about to destroy?
+     *
+     * <p>The live {@code HabitGroupCheck} / {@code TaskGroupCheck} rows cannot answer it.
+     * {@code SnapshotCheckMigrator} bulk-deletes them for a date the moment the midnight
+     * snapshot copies that date, so for every day older than the last snapshot the live rows
+     * are gone and {@code entity_check_day} is the only surviving record of what happened.
+     */
+    private final EntityCheckDayRepository entityCheckDayRepository;
+
     @Transactional
     public RefreshUiDTO checkOrUncheckItemGroup(CheckGroupRequestDTO checkGroupDTO) {
         // The day is resolved only once the group (and with it its owner) is in hand: a check
@@ -73,6 +86,12 @@ public class CheckItemService {
             if (isHabitGroupChecked(habitGroup, date)) {
                 return buildNoOpRefresh(habitGroup.getId(), getHabitGroupChecked(habitGroup, date), date, habitGroup.getRoutineSection().getRoutine());
             }
+            if (storedDayIsDone(
+                    CheckDayOwnerType.HABIT, habitGroup.getHabit().getId(),
+                    date, habitGroup.getRoutineSection().getRoutine())) {
+                return buildNoOpRefresh(habitGroup.getId(), null, date,
+                        habitGroup.getRoutineSection().getRoutine());
+            }
             return skipGroupDTO.skip()
                 ? skipHabitGroup(habitGroup, date)
                 : unskipHabitGroup(habitGroup, date);
@@ -82,6 +101,12 @@ public class CheckItemService {
                 skipGroupDTO.date(), taskGroup.getRoutineSection().getRoutine());
             if (isTaskGroupChecked(taskGroup, date)) {
                 return buildNoOpRefresh(taskGroup.getId(), getTaskGroupChecked(taskGroup, date), date, taskGroup.getRoutineSection().getRoutine());
+            }
+            if (storedDayIsDone(
+                    CheckDayOwnerType.TASK, taskGroup.getTask().getId(),
+                    date, taskGroup.getRoutineSection().getRoutine())) {
+                return buildNoOpRefresh(taskGroup.getId(), null, date,
+                        taskGroup.getRoutineSection().getRoutine());
             }
             return skipGroupDTO.skip()
                 ? skipTaskGroup(taskGroup, date)
@@ -255,6 +280,39 @@ public class CheckItemService {
     private boolean isTaskGroupChecked(TaskGroup taskGroup, LocalDate date) {
         return taskGroup.getTaskGroupChecks().stream()
                 .anyMatch(check -> check.getCheckDate().equals(date) && check.isChecked());
+    }
+
+    /**
+     * Whether a day that is already over holds a stored {@code DONE} for this owner.
+     *
+     * <p>The backstop behind {@link #isHabitGroupChecked}/{@link #isTaskGroupChecked} on the
+     * unskip path. Those read the live {@code HabitGroupCheck}/{@code TaskGroupCheck} rows,
+     * which {@code SnapshotCheckMigrator} bulk-deletes for a date as soon as the midnight
+     * snapshot copies it — so they answer "not checked" for exactly the closed days that
+     * hold a real check-in, and the unskip then rewrote the day to its absence outcome:
+     * {@code DONE} became {@code MISSED}, the lifetime total fell, the streak broke and
+     * {@code decreaseUserConstanceIfNeeded} pulled the day back out of
+     * {@code completed_days}. Undoing a past check-in is what
+     * {@code SnapshotCheckService} is for, where the whole snapshot is in hand.
+     *
+     * <p>Guards both directions. Unskipping a closed day rewrote the row to its absence
+     * outcome, and skipping one rewrote it to {@code SKIPPED}; both drop {@code totalCheckIns},
+     * break the streak walk on that day, and pull the day out of {@code completed_days}. The
+     * two are the same destruction through different verbs, so one condition covers them.
+     *
+     * <p>Only consulted for a day earlier than the owner's today. Today's own row is either
+     * absent (an open day carries none — see {@code CheckDayRecorder.absenceOutcome}) or
+     * still backed by a live check row the guard above already caught, so querying for it
+     * would cost the check path a round trip to learn nothing.
+     */
+    private boolean storedDayIsDone(CheckDayOwnerType ownerType, UUID ownerId,
+                                    LocalDate date, Routine routine) {
+        if (ownerId == null || !date.isBefore(ownerToday(routine))) {
+            return false;
+        }
+        List<EntityCheckDay> stored = entityCheckDayRepository
+                .findByOwnerTypeAndOwnerIdAndDayBetweenOrderByDayAsc(ownerType, ownerId, date, date);
+        return stored.stream().anyMatch(row -> row.getOutcome() == CheckDayOutcome.DONE);
     }
 
     private HabitGroupCheck getHabitGroupChecked(HabitGroup habitGroup, LocalDate date) {

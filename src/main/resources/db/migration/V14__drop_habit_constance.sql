@@ -18,10 +18,14 @@
 -- from zero and earns its streak forward.
 
 -- Bound the blast radius if this ever runs against a busy database: give up
--- rather than queue behind (or ahead of) live traffic. Both are session-level and
--- Flyway runs each migration in its own transaction, so they do not leak.
-SET lock_timeout = '5s';
-SET statement_timeout = '60s';
+-- rather than queue behind (or ahead of) live traffic.
+--
+-- SET LOCAL, not SET — see the note in V13. Plain SET is session-scoped, and
+-- Flyway has no datasource of its own, so the connection carries the timeouts
+-- back into the pool that serves live requests. LOCAL scopes them to the
+-- transaction Flyway wraps this migration in, which still covers the DDL below.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
 
 -- Squawk ignore: ban-drop-column. Dropping a column breaks any deployed reader
 -- still selecting it, which is what the rule guards. There is no such reader

@@ -23,11 +23,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.*;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -394,6 +398,95 @@ class RoutineSnapshotSchedulerTest {
 
         verify(dayCloseService).closeDay(healthy, closingDay);
         verify(heartbeat).signalCycleCompleted();
+    }
+
+    // ---------------------------------------------------------------
+    // The spring-forward day, where local hour 2 does not happen
+    // ---------------------------------------------------------------
+
+    @Test
+    void processSnapshots_closesTheDayInAZoneThatSkipsTheGraceHourEntirely() {
+        // 2026-03-08 is the US spring-forward day: at 02:00 EST the clock jumps to 03:00
+        // EDT, so no instant that day has a local hour of 2 in America/New_York. An
+        // equality trigger on the grace hour therefore never fires, and 2026-03-07 stays
+        // unclosed forever — for every user in the zone, not one of them. CET and most of
+        // Europe skip an hour the same way on their own changeover date.
+        ZoneId newYork = ZoneId.of("America/New_York");
+        // 07:00Z is 03:00 EDT — the first hour that exists after the jump.
+        Clock justAfterTheJump = Clock.fixed(Instant.parse("2026-03-08T07:00:00Z"), ZoneOffset.UTC);
+        ReflectionTestUtils.setField(scheduler, "clock", justAfterTheJump);
+
+        assertThat(ZonedDateTime.now(justAfterTheJump.withZone(newYork)).getHour())
+                .as("the hour the cycle actually observes")
+                .isEqualTo(DAY_CLOSE_GRACE_HOUR + 1);
+
+        LocalDate closingDay = LocalDate.of(2026, 3, 7);
+        when(userRepository.findDistinctTimezones()).thenReturn(List.of(newYork.getId()));
+        when(userRepository.findAllByTimezone(newYork.getId())).thenReturn(List.of(user));
+        when(dayCloseService.closeDay(user, closingDay)).thenReturn(2);
+
+        scheduler.processSnapshots();
+
+        verify(dayCloseService).closeDay(user, closingDay);
+    }
+
+    @Test
+    void theSpringForwardDayReallyHasNoLocalHourTwo() {
+        // The premise of the test above, asserted rather than trusted: if the tzdata this
+        // JVM ships ever moved the changeover, the test above would start passing for the
+        // wrong reason and this one would say so.
+        ZoneId newYork = ZoneId.of("America/New_York");
+        Instant midnightUtc = Instant.parse("2026-03-08T00:00:00Z");
+
+        Set<Integer> localHoursSeen = new HashSet<>();
+        for (int hour = 0; hour < 24; hour++) {
+            ZonedDateTime moment = midnightUtc.plusSeconds(hour * 3600L).atZone(newYork);
+            if (moment.toLocalDate().equals(LocalDate.of(2026, 3, 8))) {
+                localHoursSeen.add(moment.getHour());
+            }
+        }
+
+        assertThat(localHoursSeen)
+                .as("2026-03-08 in America/New_York never reads 02:xx locally")
+                .doesNotContain(DAY_CLOSE_GRACE_HOUR)
+                .contains(DAY_CLOSE_GRACE_HOUR + 1);
+    }
+
+    @Test
+    void processSnapshots_doesNotCloseTheDayTwiceOverOnAnOrdinaryDay() {
+        // The widened window means an ordinary day reaches the close branch at both hour 2
+        // and hour 3. That is safe because the pass is idempotent (DayCloseService diffs
+        // against what is already recorded and the insert is ON CONFLICT DO NOTHING), but
+        // each pass must still be for the same day — an off-by-one there would close
+        // yesterday twice and today never.
+        ZoneId utc = ZoneId.of("UTC");
+        LocalDate closingDay = LocalDate.of(2026, 5, 19);
+
+        when(userRepository.findDistinctTimezones()).thenReturn(List.of("UTC"));
+        when(userRepository.findAllByTimezone("UTC")).thenReturn(List.of(user));
+        when(dayCloseService.closeDay(user, closingDay)).thenReturn(1);
+
+        for (String instant : List.of("2026-05-20T02:30:00Z", "2026-05-20T03:30:00Z")) {
+            ReflectionTestUtils.setField(scheduler, "clock",
+                    Clock.fixed(Instant.parse(instant), utc));
+            scheduler.processSnapshots();
+        }
+
+        verify(dayCloseService, times(2)).closeDay(user, closingDay);
+        verify(dayCloseService, never()).closeDay(eq(user), eq(closingDay.plusDays(1)));
+    }
+
+    @Test
+    void processSnapshots_stillIgnoresHoursOutsideTheWidenedWindow() {
+        // The window is two hours wide, not open-ended.
+        ReflectionTestUtils.setField(scheduler, "clock",
+                Clock.fixed(Instant.parse("2026-05-20T04:30:00Z"), ZoneOffset.UTC));
+        when(userRepository.findDistinctTimezones()).thenReturn(List.of("UTC"));
+
+        scheduler.processSnapshots();
+
+        verifyNoInteractions(dayCloseService);
+        verify(userRepository, never()).findAllByTimezone(anyString());
     }
 
     @Test

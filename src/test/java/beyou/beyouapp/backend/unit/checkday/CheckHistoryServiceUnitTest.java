@@ -151,6 +151,57 @@ class CheckHistoryServiceUnitTest {
         }
 
         @Test
+        void anExtremeToIsRefusedBeforeTheDefaultBackstepCanUnderflow() {
+            // GET /check-history?ownerType=USER&to=-999999999-01-01. With `from` omitted the
+            // service derives it as `to` minus 27 days, which walks off the bottom of the
+            // LocalDate range and throws DateTimeException — not an IllegalArgumentException,
+            // so GlobalExceptionHandler has no mapping for it and the caller gets a 500 while
+            // both AOP aspects write a full stack trace at ERROR. Two stack traces per
+            // request, on an endpoint anyone can call sixty times a minute.
+            assertThatThrownBy(() -> history(null, LocalDate.MIN))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorKey())
+                    .isEqualTo(ErrorKey.INVALID_REQUEST);
+
+            verify(entityCheckDayRepository, never())
+                    .findByUserIdAndOwnerTypeAndOwnerIdAndDayBetweenOrderByDayAsc(
+                            any(), any(), any(), any(), any());
+        }
+
+        @Test
+        void anExtremeToInTheOtherDirectionIsRefusedToo() {
+            assertThatThrownBy(() -> history(null, LocalDate.MAX))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorKey())
+                    .isEqualTo(ErrorKey.INVALID_REQUEST);
+        }
+
+        @Test
+        void tomorrowIsStillAnAcceptableEndForAUserAheadOfTheServer() {
+            // The upper bound is today plus one day, not today. A client resolving its own
+            // date a few hours ahead of the zone the service reads must not be refused.
+            stubRows();
+
+            CheckDayResponseDTO response = history(TODAY, TODAY.plusDays(1));
+
+            assertThat(response.to()).isEqualTo(TODAY.plusDays(1));
+            assertThat(response.days()).hasSize(2);
+        }
+
+        @Test
+        void anExtremeFromIsFlooredRatherThanRefused() {
+            // The older end is the lenient one: a caller asking for more than there is gets
+            // what there is. Only `to` drives the arithmetic that can underflow.
+            stubRows();
+
+            CheckDayResponseDTO response = history(LocalDate.MIN, TODAY);
+
+            assertThat(response.from())
+                    .isEqualTo(TODAY.minusDays(CheckHistoryService.MAX_RANGE_DAYS - 1L));
+            assertThat(response.days()).hasSize(CheckHistoryService.MAX_RANGE_DAYS);
+        }
+
+        @Test
         void anInvertedRangeIsRefusedRatherThanAnsweredEmpty() {
             // Reachable only from a hand-edited query string. An empty answer would read as
             // "this owner has no history", which is a wrong answer rather than a refused one.

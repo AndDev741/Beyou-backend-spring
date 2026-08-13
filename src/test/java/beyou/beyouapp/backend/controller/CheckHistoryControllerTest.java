@@ -171,6 +171,45 @@ class CheckHistoryControllerTest extends AbstractIntegrationTest {
         verify(checkHistoryService, never()).history(any(), any(), any(), any(), any());
     }
 
+    /**
+     * The message this builds is the same string {@code ControllerLogging}'s
+     * {@code @AfterThrowing} writes at WARN, unescaped and uncapped. A newline in it opens a
+     * fresh log line the operator reads as a real record.
+     */
+    @Test
+    void controlCharactersInTheOwnerTypeCannotForgeALogLine() throws Exception {
+        String forged = "HABIT\r\n2026-08-13 10:00:00 WARN  [CLIENT_ERROR] BusinessException "
+                + "in deleteUser: account purged on request";
+
+        mockMvc.perform(get("/check-history").param("ownerType", forged))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                // Nothing that ends a log line survives into the message.
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("\n"))))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("\r"))))
+                // And the forged record's text does not ride along on one line either.
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("account purged on request"))))
+                // The half that actually helps the caller is untouched.
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString(
+                        "HABIT, TASK, ROUTINE, USER")));
+    }
+
+    @Test
+    void anOverlongOwnerTypeIsTruncatedInTheMessage() throws Exception {
+        String flood = "X".repeat(4000);
+
+        mockMvc.perform(get("/check-history").param("ownerType", flood))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString(
+                        "X".repeat(32) + "...")))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("X".repeat(33)))));
+    }
+
     @Test
     void aMissingOwnerTypeIsRefusedInsideTheErrorEnvelope() throws Exception {
         mockMvc.perform(get("/check-history").param("ownerId", habitId.toString()))
