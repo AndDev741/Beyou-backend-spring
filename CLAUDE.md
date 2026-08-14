@@ -109,7 +109,7 @@ See full report: `../relatories/backend-deployment-readiness-report.md`
 - ~~Docs search `limit` no `@Max`~~ ✅ `@Max(100)`
 
 ### Still open
-- **`CreateGoalRequestDTO` accepts user-controlled `currentValue` / `status`** — low impact: an attacker can POST a "fake-completed" goal, but no XP is awarded because XP only flows through `PUT /goal/complete`. Cosmetic data integrity issue; consider dropping these fields from the create DTO and defaulting them server-side.
+- **`CreateGoalRequestDTO` accepts user-controlled `currentValue`** — a posted `status` of COMPLETED is now downgraded to IN_PROGRESS in the `Goal` constructor, so the "fake-completed" goal is gone. `currentValue` is still client-supplied; no XP path reads it, so the remaining impact is cosmetic.
 - **BCrypt cost factor 10** — OWASP recommends 12. Low priority.
 - **`DOCS_IMPORT_SECRET=something`** — replace with a 32+ char random secret.
 - **No HTTPS/TLS in production docker-compose** — terminate at a reverse proxy in prod.
@@ -130,7 +130,8 @@ See full report: `../relatories/backend-deployment-readiness-report.md`
 - `@CachePut`/`@CacheEvict` only work on public methods called through the Spring proxy (external calls); internal `this.method()` calls bypass the cache
 - Tests bypass security filters (`addFilters = false` in MockMvc) and mock the service layer — they test HTTP binding, not business logic integration
 - `application.yaml` hardcodes `ddl-auto: validate`; Flyway owns the schema and `SchemaOwnershipGuard` refuses boot if a mutating `ddl-auto` is set while Flyway is enabled
-- `GoalController PUT /goal/increase|decrease|complete` accepts a raw UUID as request body. Jackson deserializes from a JSON-encoded string (`"<uuid>"`), NOT a bare UUID. External clients (E2E `apiClient`) must `JSON.stringify(uuid)` or send the quoted form; the bare UUID returns 403.
+- `GoalController PUT /goal/complete` accepts a raw UUID as request body. Jackson deserializes from a JSON-encoded string (`"<uuid>"`), NOT a bare UUID. External clients (E2E `apiClient`) must `JSON.stringify(uuid)` or send the quoted form; the bare UUID returns 403. `PUT /goal/increase|decrease` moved to `UpdateGoalValueDTO` (`{goalId, value}`), where `value` is optional and defaults to 1.
+- Goal `status` is derived and `complete` is the completion truth. `increaseCurrentValue` promotes `NOT_STARTED` → `IN_PROGRESS`; decrement leaves the status alone; `Goal(CreateGoalRequestDTO)` refuses to start a goal COMPLETED and `GoalMapper.updateEntity` carries completion forward, ignoring `dto.complete()`. Only `checkGoal` (PUT /goal/complete) flips completion, because that is the path that adds and removes XP. `V15__reconcile_goal_completion.sql` fixed the rows written before the invariant existed.
 - `RoutineSnapshotScheduler` runs per-timezone — bottleneck at scale with many distinct user timezones
 - HikariCP pool at default 10 connections; configure explicitly for production load
 - `e2e` profile boots via Flyway migrate + Hibernate `validate` (was `create-drop` pre-cutover) — `E2eSafetyCheck` still enforces that the JDBC URL contains `e2e` or `test`, so a misconfigured override can't point e2e at the dev `beyou` database. Local e2e data now persists across runs until manually reset

@@ -20,6 +20,7 @@ import beyou.beyouapp.backend.domain.goal.GoalService;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
+import beyou.beyouapp.backend.domain.goal.dto.UpdateGoalValueDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 
@@ -70,22 +71,22 @@ public class GoalController {
     }
 
     @PutMapping("/increase")
-    public GoalResponseDTO increaseCurrentValue(@RequestBody UUID goalId) {
+    public GoalResponseDTO increaseCurrentValue(@RequestBody @Valid UpdateGoalValueDTO dto) {
         User user = authenticatedUser.getAuthenticatedUser();
         
         try {
-            return goalService.increaseCurrentValue(goalId, user.getId());
+            return goalService.increaseCurrentValue(dto.goalId(), dto.value(), user.getId());
         } catch (Exception e) {
             throw new RuntimeException(e);
         } 
     }
 
     @PutMapping("/decrease")
-    public GoalResponseDTO decreaseCurrentValue(@RequestBody UUID goalId) {
+    public GoalResponseDTO decreaseCurrentValue(@RequestBody @Valid UpdateGoalValueDTO dto) {
         User user = authenticatedUser.getAuthenticatedUser();
         
         try {
-            return goalService.decreaseCurrentValue(goalId, user.getId());
+            return goalService.decreaseCurrentValue(dto.goalId(), dto.value(), user.getId());
         } catch (Exception e) {
             throw new RuntimeException(e);
         } 

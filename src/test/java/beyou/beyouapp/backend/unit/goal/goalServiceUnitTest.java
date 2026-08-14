@@ -336,6 +336,20 @@ public class goalServiceUnitTest {
     }
 
     @Test
+    void shouldIncrementTheCurrentValueByCustomAmountSuccessfully() {
+
+        goal.setCurrentValue(100.0);
+
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        GoalResponseDTO response = goalService.increaseCurrentValue(goalId, 5000.0, userId);
+
+        assertEquals(5100.0, response.currentValue());
+
+    }
+
+    @Test
     void shouldDecrementTheCurrentValueSuccessfully() {
 
         goal.setCurrentValue(15.0);
@@ -350,6 +364,20 @@ public class goalServiceUnitTest {
     }
 
     @Test
+    void shouldDecrementTheCurrentValueByCustomAmountSuccessfully() {
+
+        goal.setCurrentValue(5000.0);
+
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        GoalResponseDTO response = goalService.decreaseCurrentValue(goalId, 3000.0, userId);
+
+        assertEquals(2000.0, response.currentValue());
+
+    }
+
+    @Test
     void shouldNotDecrementBelowZero() {
         goal.setCurrentValue(0.0);
 
@@ -359,6 +387,48 @@ public class goalServiceUnitTest {
         GoalResponseDTO response = goalService.decreaseCurrentValue(goalId, userId);
 
         assertEquals(0.0, response.currentValue());
+    }
+
+    @Test
+    void shouldStartAGoalOnItsFirstIncrement() {
+        goal.setStatus(GoalStatus.NOT_STARTED);
+        goal.setCurrentValue(0.0);
+
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        GoalResponseDTO response = goalService.increaseCurrentValue(goalId, userId);
+
+        assertEquals(GoalStatus.IN_PROGRESS, response.status());
+    }
+
+    @Test
+    void shouldLeaveACompletedGoalCompletedWhenIncremented() {
+        goal.setStatus(GoalStatus.COMPLETED);
+        goal.setComplete(true);
+        goal.setCurrentValue(10.0);
+
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        GoalResponseDTO response = goalService.increaseCurrentValue(goalId, 5.0, userId);
+
+        assertEquals(15.0, response.currentValue());
+        assertEquals(GoalStatus.COMPLETED, response.status());
+    }
+
+    @Test
+    void shouldKeepAGoalInProgressWhenItsProgressGoesBackToZero() {
+        goal.setStatus(GoalStatus.IN_PROGRESS);
+        goal.setCurrentValue(3.0);
+
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        GoalResponseDTO response = goalService.decreaseCurrentValue(goalId, 3.0, userId);
+
+        assertEquals(0.0, response.currentValue());
+        assertEquals(GoalStatus.IN_PROGRESS, response.status());
     }
 
 }

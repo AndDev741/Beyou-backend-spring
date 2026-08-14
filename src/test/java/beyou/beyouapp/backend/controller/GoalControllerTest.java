@@ -9,6 +9,7 @@ import beyou.beyouapp.backend.domain.category.dto.CategoryMiniDTO;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUserDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
+import beyou.beyouapp.backend.domain.goal.dto.UpdateGoalValueDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -171,14 +172,16 @@ private final ObjectMapper objectMapper = new ObjectMapper()
     @Test
     void shouldIncreaseTheCurrentValueSuccessfully() throws Exception {
         UUID goalId = UUID.randomUUID();
+        Double value = 5000.0;
+        UpdateGoalValueDTO dto = new UpdateGoalValueDTO(goalId, value);
         GoalResponseDTO responseDTO = new GoalResponseDTO(
                 goalId,
                 "name",
                 "icon",
                 "desc",
-                1.0,
+                10000.0,
                 "u",
-                1.0,
+                5000.0,
                 false,
                 Map.<UUID, CategoryMiniDTO>of(),
                 "mot",
@@ -189,27 +192,29 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 GoalTerm.SHORT_TERM,
                 null
         );
-        when(goalService.increaseCurrentValue(goalId, userId)).thenReturn(responseDTO);
+        when(goalService.increaseCurrentValue(goalId, value, userId)).thenReturn(responseDTO);
 
         mockMvc.perform(put("/goal/increase")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(goalId))
+                .content(objectMapper.writeValueAsString(dto))
                 )
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.currentValue").value(1.0));
+                .andExpect(jsonPath("$.currentValue").value(5000.0));
     }
 
     @Test
     void shouldDecreaseTheCurrentValueSuccessfully() throws Exception {
         UUID goalId = UUID.randomUUID();
+        Double value = 500.0;
+        UpdateGoalValueDTO dto = new UpdateGoalValueDTO(goalId, value);
         GoalResponseDTO responseDTO = new GoalResponseDTO(
                 goalId,
                 "name",
                 "icon",
                 "desc",
-                1.0,
+                1000.0,
                 "u",
-                -1.0,
+                500.0,
                 false,
                 Map.<UUID, CategoryMiniDTO>of(),
                 "mot",
@@ -220,13 +225,13 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 GoalTerm.SHORT_TERM,
                 null
         );
-        when(goalService.decreaseCurrentValue(goalId, userId)).thenReturn(responseDTO);
+        when(goalService.decreaseCurrentValue(goalId, value, userId)).thenReturn(responseDTO);
 
         mockMvc.perform(put("/goal/decrease")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(goalId))
+                .content(objectMapper.writeValueAsString(dto))
                 )
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.currentValue").value(-1.0));
+                .andExpect(jsonPath("$.currentValue").value(500.0));
     }
 }

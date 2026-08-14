@@ -30,13 +30,28 @@ public class GoalMapper {
         goal.setTargetValue(dto.targetValue());
         goal.setUnit(dto.unit());
         goal.setCurrentValue(dto.currentValue());
-        goal.setComplete(dto.complete());
         goal.setCategories(new ArrayList<>(categories != null ? categories : Collections.emptyList()));
         goal.setMotivation(dto.motivation());
         goal.setStartDate(dto.startDate());
         goal.setEndDate(dto.endDate());
-        goal.setStatus(dto.status());
+        goal.setStatus(editableStatus(goal, dto.status()));
         goal.setTerm(dto.term());
+    }
+
+    /**
+     * The status an edit is allowed to land on.
+     *
+     * Completion is not editable: it belongs to PUT /goal/complete, the only path
+     * that moves XP, so `dto.complete()` is read no further than validation and a
+     * completed goal keeps its COMPLETED status. Going the other way, a form asking
+     * for COMPLETED gets IN_PROGRESS — otherwise `complete` and `status` disagree
+     * and the card shows an Undo button that completes the goal instead.
+     */
+    private GoalStatus editableStatus(Goal goal, GoalStatus requested) {
+        if (Boolean.TRUE.equals(goal.getComplete())) {
+            return GoalStatus.COMPLETED;
+        }
+        return requested == GoalStatus.COMPLETED ? GoalStatus.IN_PROGRESS : requested;
     }
 
     public GoalResponseDTO toResponseDTO(Goal goal) {

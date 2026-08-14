@@ -200,13 +200,13 @@ public class Tools {
                 .toList();
     }
 
-    @Tool(description = "Create a new user goal")
+    @Tool(description = "Create a new user goal. A goal cannot be created already completed: a COMPLETED status starts as IN_PROGRESS")
     Map<String, String> createUserGoal(CreateGoalRequestDTO goal, ToolContext toolContext) {
         log.info("AI agent is creating a goal for user: {}", userId(toolContext));
         return goalService.createGoal(valid(goal), userId(toolContext)).getBody();
     }
 
-    @Tool(description = "Edit an existing user goal. All fields are required, send the current values for fields that should not change")
+    @Tool(description = "Edit an existing user goal. All fields are required, send the current values for fields that should not change. Completion is not editable here: 'complete' is ignored and a COMPLETED status is refused — use the goal completion tool, which is what moves the XP")
     Map<String, String> editUserGoal(EditGoalRequestDTO goal, ToolContext toolContext) {
         log.info("AI agent is editing goal {} for user: {}", goal.goalId(), userId(toolContext));
         return goalService.editGoal(valid(goal), userId(toolContext)).getBody();
@@ -224,16 +224,22 @@ public class Tools {
         return goalService.checkGoal(goalId, userId(toolContext));
     }
 
-    @Tool(description = "Increase a goal's current value by 1")
-    GoalResponseDTO increaseUserGoalValue(UUID goalId, ToolContext toolContext) {
+    @Tool(description = "Increase a goal's current value by a given amount (defaults to 1 if not specified)")
+    GoalResponseDTO increaseUserGoalValue(
+            UUID goalId,
+            @ToolParam(description = "Amount to increase by, optional (defaults to 1)") Double value,
+            ToolContext toolContext) {
         log.info("AI agent is increasing goal {} for user: {}", goalId, userId(toolContext));
-        return goalService.increaseCurrentValue(goalId, userId(toolContext));
+        return goalService.increaseCurrentValue(goalId, value, userId(toolContext));
     }
 
-    @Tool(description = "Decrease a goal's current value by 1 (never below 0)")
-    GoalResponseDTO decreaseUserGoalValue(UUID goalId, ToolContext toolContext) {
+    @Tool(description = "Decrease a goal's current value by a given amount (defaults to 1 if not specified, never below 0)")
+    GoalResponseDTO decreaseUserGoalValue(
+            UUID goalId,
+            @ToolParam(description = "Amount to decrease by, optional (defaults to 1)") Double value,
+            ToolContext toolContext) {
         log.info("AI agent is decreasing goal {} for user: {}", goalId, userId(toolContext));
-        return goalService.decreaseCurrentValue(goalId, userId(toolContext));
+        return goalService.decreaseCurrentValue(goalId, value, userId(toolContext));
     }
 
     // Context memory

@@ -138,11 +138,33 @@ jobs:
         with:
           path: backend
 
-      - name: Checkout e2e tests
+      # Cross-repo features: when a sibling repo has a branch with the SAME
+      # name as this branch, test against it instead of main — otherwise a
+      # backend change that needs updated specs (or a matching frontend) can
+      # never go green before the sibling merges. Falls back to main when
+      # absent. Mirrors the same step in Beyou-Frontend's ci.yml.
+      - name: Resolve sibling refs
+        id: refs
+        run: |
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          resolve() {
+            if [ "$BRANCH" != "main" ] && git ls-remote --exit-code --heads "https://github.com/$1" "$BRANCH" > /dev/null 2>&1; then
+              echo "$BRANCH"
+            else
+              echo "main"
+            fi
+          }
+          E2E_REF=$(resolve AndDev741/Beyou-e2e-tests)
+          FRONTEND_REF=$(resolve AndDev741/Beyou-Frontend)
+          echo "e2e=$E2E_REF" >> "$GITHUB_OUTPUT"
+          echo "frontend=$FRONTEND_REF" >> "$GITHUB_OUTPUT"
+          echo "Using e2e=$E2E_REF frontend=$FRONTEND_REF (branch: $BRANCH)"
+
+      - name: Checkout e2e tests (matched branch or main)
         uses: actions/checkout@v7
         with:
           repository: AndDev741/Beyou-e2e-tests
-          ref: main
+          ref: ${{ steps.refs.outputs.e2e }}
           path: e2e
 
       - name: Checkout dev-env
@@ -152,17 +174,17 @@ jobs:
           ref: main
           path: dev-env
 
-      - name: Checkout frontend (main, counterpart)
+      - name: Checkout frontend (matched branch or main)
         uses: actions/checkout@v7
         with:
           repository: AndDev741/Beyou-Frontend
-          ref: main
+          ref: ${{ steps.refs.outputs.frontend }}
           path: frontend
 
       - name: Build backend image (under test)
         run: docker build --target runtime -t beyou-backend:e2e ./backend
 
-      - name: Build web image (counterpart from main)
+      - name: Build web image (counterpart)
         run: |
           docker build --target nginx \
             --build-arg VITE_API_URL=http://localhost:8099/api/v1 \
