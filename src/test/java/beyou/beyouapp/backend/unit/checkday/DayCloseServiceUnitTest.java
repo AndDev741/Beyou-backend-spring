@@ -382,6 +382,38 @@ class DayCloseServiceUnitTest {
     }
 
     @Test
+    void theAccountRowIsSkippedWhenTheUserSkippedInsteadOfIgnoringTheDay() {
+        // Under ConstanceConfiguration.ANY a skip does not complete the day, so the account
+        // used to close as MISSED and break a run the user was present for. A skip is an
+        // interaction: they opened the day and said "not this one".
+        Habit habit = habit("Read", ACCOUNT_CREATED);
+        givenHabits(habit);
+        givenRoutines(routineCovering(habit, WeekDay.Thursday));
+        givenAlreadyRecorded(List.of(
+                row(CheckDayOwnerType.HABIT, habit.getId(), CLOSING_DAY, CheckDayOutcome.SKIPPED)));
+        givenInsertsSucceed();
+
+        dayCloseService.closeDay(user, CLOSING_DAY);
+
+        assertThat(insertedOutcomes())
+                .as("present but nothing done — neither a check-in nor a broken streak")
+                .containsEntry(userId, CheckDayOutcome.SKIPPED);
+    }
+
+    @Test
+    void theAccountRowIsStillMissedWhenTheOnlySkipBelongsToTheAccountItself() {
+        // The account's own row is the one being decided; reading it as evidence of a skip
+        // would make the outcome depend on the order owners are closed in.
+        givenRoutines(routineCovering(null, WeekDay.Thursday));
+        givenAlreadyRecorded(List.of());
+        givenInsertsSucceed();
+
+        dayCloseService.closeDay(user, CLOSING_DAY);
+
+        assertThat(insertedOutcomes()).containsEntry(userId, CheckDayOutcome.MISSED);
+    }
+
+    @Test
     void theUserRowCarriesWhetherAnyRoutineWasScheduled() {
         givenRoutines(routineCovering(null, WeekDay.Thursday));
         givenInsertsSucceed();

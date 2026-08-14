@@ -115,17 +115,24 @@ public class UserStreakService {
      * three things:
      * <ul>
      *   <li><b>completed</b> — counts, and the walk continues;</li>
-     *   <li><b>not completed, and its stored row says the day was scheduled</b> — the walk
-     *       ends. This is the only thing that breaks a streak;</li>
-     *   <li><b>anything else</b> — not completed and the row says {@code NOT_SCHEDULED} or
-     *       {@code NOT_IN_ROUTINE}, or there is no row at all — neutral. The walk steps
-     *       over it without counting.</li>
+     *   <li><b>{@code MISSED}</b> — scheduled, and the user did not interact with it at all.
+     *       The walk ends. This is the only thing that breaks a streak;</li>
+     *   <li><b>anything else</b> — {@code SKIPPED}, {@code NOT_SCHEDULED},
+     *       {@code NOT_IN_ROUTINE}, or no row at all — neutral. The walk steps over it
+     *       without counting.</li>
      * </ul>
      *
      * <p>The neutral case is what makes the streak schedule-aware: a Monday/Wednesday/Friday
      * user is not asked to act on a Tuesday, so a Tuesday cannot cost them anything. The
      * old rule broke on every gap day and, worse, returned zero outright whenever the
      * reference day was more than one day past the last completed day.
+     *
+     * <p>{@code SKIPPED} is neutral because a skip is an interaction: the user opened the
+     * day and said "not this one". {@code DayCloseService} only stamps it on the account
+     * when they skipped something and completed nothing, so the day it describes is one they
+     * were present for. Breaking a run on it would punish the person who showed up and told
+     * us, and reward the one who closed the app. A run only breaks on a day the user left
+     * untouched.
      *
      * <p>The missing-row case matters just as much: a night the day-close pass never ran
      * leaves no row, and an unknown day must read as neutral rather than as a failure.
@@ -142,13 +149,14 @@ public class UserStreakService {
         }
 
         Set<LocalDate> scheduledDays = scheduledDays(userRows);
+        Set<LocalDate> missedDays = missedDays(userRows);
         LocalDate earliestCompleted = Collections.min(completedDays);
 
         int streak = 0;
         for (LocalDate day = referenceDay; !day.isBefore(earliestCompleted); day = day.minusDays(1)) {
             if (completedDays.contains(day)) {
                 streak++;
-            } else if (scheduledDays.contains(day)) {
+            } else if (missedDays.contains(day)) {
                 break;
             }
         }
@@ -185,13 +193,16 @@ public class UserStreakService {
     }
 
     /**
-     * The days the account's own frozen rows say something was scheduled on.
+     * The days the account was asked to do something, whatever came of it.
      *
      * <p>Read as the complement of the two absence outcomes rather than as an equality
      * against {@code MISSED}. That is what keeps it right now that {@code DayCloseService}
-     * also stamps {@code DONE} on the account: a completed day was a day something was
-     * asked of the user, and an equality check would have started reading it as a day
-     * nothing was scheduled.
+     * also stamps {@code DONE} and {@code SKIPPED} on the account: both describe a day
+     * something was asked of the user, and an equality check would have started reading
+     * them as days nothing was scheduled.
+     *
+     * <p>Feeds dormancy only. The break rule reads {@link #missedDays} instead, because a
+     * day that was scheduled and skipped is a day the user turned up for — see the walk.
      */
     private static Set<LocalDate> scheduledDays(List<EntityCheckDay> userRows) {
         Set<LocalDate> scheduled = new HashSet<>();
@@ -209,5 +220,26 @@ public class UserStreakService {
             scheduled.add(row.getDay());
         }
         return scheduled;
+    }
+
+    /**
+     * The days the account was asked and did not answer — the only days that break a run.
+     *
+     * <p>An equality against {@code MISSED} on purpose, and the mirror of the note above:
+     * every other stored outcome describes either a day that counted ({@code DONE}), a day
+     * the user was present for ({@code SKIPPED}), or a day nothing was expected. Absent
+     * rows are unknown, which is not a failure either.
+     */
+    private static Set<LocalDate> missedDays(List<EntityCheckDay> userRows) {
+        Set<LocalDate> missed = new HashSet<>();
+        if (userRows == null) {
+            return missed;
+        }
+        for (EntityCheckDay row : userRows) {
+            if (row != null && row.getDay() != null && row.getOutcome() == CheckDayOutcome.MISSED) {
+                missed.add(row.getDay());
+            }
+        }
+        return missed;
     }
 }

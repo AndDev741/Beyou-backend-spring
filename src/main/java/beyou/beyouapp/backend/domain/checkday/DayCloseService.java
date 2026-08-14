@@ -141,10 +141,12 @@ public class DayCloseService {
 
         // One read for the whole user-day, then a diff in memory. Asking per owner would be
         // an N+1 over every entity of every user, every night.
+        List<EntityCheckDay> dayRows = entityCheckDayRepository.findByUserIdAndDay(user.getId(), day);
         Set<OwnerKey> alreadyRecorded = new HashSet<>();
-        for (EntityCheckDay row : entityCheckDayRepository.findByUserIdAndDay(user.getId(), day)) {
+        for (EntityCheckDay row : dayRows) {
             alreadyRecorded.add(new OwnerKey(row.getOwnerType(), row.getOwnerId()));
         }
+        boolean skippedSomething = skippedSomething(dayRows);
 
         LocalDate today = UserDateResolver.today(user);
         int written = 0;
@@ -157,7 +159,7 @@ public class DayCloseService {
                 // MISSED among it would be an invented failure.
                 continue;
             }
-            if (closeOwnerDay(user, owner, day, routines, today)) {
+            if (closeOwnerDay(user, owner, day, routines, today, skippedSomething)) {
                 written++;
             }
         }
@@ -185,7 +187,8 @@ public class DayCloseService {
      *         there first, in which case that writer owns the scalars too.
      */
     private boolean closeOwnerDay(User user, Owner owner, LocalDate day,
-                                  List<DiaryRoutine> routines, LocalDate today) {
+                                  List<DiaryRoutine> routines, LocalDate today,
+                                  boolean skippedSomething) {
         // Before the history read, not after: the read is the first half of a read-modify-
         // write over this owner's scalars, and a check committing between the two is exactly
         // the lost update this lock exists to stop. Same keys, same order as the request
@@ -193,7 +196,7 @@ public class DayCloseService {
         CheckOwnerLock.takeUserThenOwner(entityCheckDayRepository, user.getId(),
                 owner.type(), owner.id());
 
-        CheckDayOutcome outcome = presenceOutcome(user, owner, day);
+        CheckDayOutcome outcome = presenceOutcome(user, owner, day, skippedSomething);
         if (outcome == null) {
             // dayClosed is true by construction — the caller only ever passes a day that has
             // ended in this user's timezone, which is the whole reason MISSED can be stamped
@@ -244,12 +247,40 @@ public class DayCloseService {
      * {@code DONE} rows, and the diff in {@link #closeDay} skips any owner that has one.
      * The snapshot tables are deliberately not consulted (R19).
      */
-    private static CheckDayOutcome presenceOutcome(User user, Owner owner, LocalDate day) {
+    private static CheckDayOutcome presenceOutcome(User user, Owner owner, LocalDate day,
+                                                   boolean skippedSomething) {
         if (owner.type() != CheckDayOwnerType.USER) {
             return null;
         }
         Set<LocalDate> completedDays = user.getCompletedDays();
-        return completedDays != null && completedDays.contains(day) ? CheckDayOutcome.DONE : null;
+        if (completedDays != null && completedDays.contains(day)) {
+            return CheckDayOutcome.DONE;
+        }
+        // A day the user showed up for and deliberately skipped is not a day they ignored.
+        // Under ConstanceConfiguration.COMPLETE a fully skipped day is already complete
+        // (markDayCompleted counts checked-or-skipped), so this is the ANY case: skip
+        // everything and the day would otherwise close as MISSED and break a streak the
+        // user was present for. SKIPPED says what happened — present, nothing done — and it
+        // neither counts as a check-in nor breaks the run.
+        return skippedSomething ? CheckDayOutcome.SKIPPED : null;
+    }
+
+    /**
+     * Whether the user deliberately skipped anything that day.
+     *
+     * <p>Read off the rows the REQUEST path already wrote for the day's habits and tasks, in
+     * the same list the owner diff above uses — no extra query, and no dependence on the
+     * order owners are closed in, because a skip row exists from the moment the user skips.
+     *
+     * <p>The account's own row is excluded: it is the row being decided.
+     */
+    private static boolean skippedSomething(List<EntityCheckDay> dayRows) {
+        if (dayRows == null) {
+            return false;
+        }
+        return dayRows.stream().anyMatch(row -> row != null
+                && row.getOutcome() == CheckDayOutcome.SKIPPED
+                && row.getOwnerType() != CheckDayOwnerType.USER);
     }
 
     private int insertIfAbsent(User user, Owner owner, LocalDate day, CheckDayOutcome outcome) {

@@ -30,9 +30,9 @@ import beyou.beyouapp.backend.user.User;
 /**
  * R14/R13/R20 — the account streak walk, in isolation.
  *
- * <p>The rules under test are the three-way classification of a day (completed / scheduled
- * and not completed / neutral), the floor that stops the walk, and the dormancy flag. The
- * arithmetic is a pure static function, so most of this needs no mock at all.
+ * <p>The rules under test are the three-way classification of a day (completed / missed /
+ * neutral), the floor that stops the walk, and the dormancy flag. The arithmetic is a pure
+ * static function, so most of this needs no mock at all.
  */
 class UserStreakServiceUnitTest {
 
@@ -85,12 +85,45 @@ class UserStreakServiceUnitTest {
         }
 
         @Test
-        void endsOnlyOnADayThatWasScheduledAndNotCompleted() {
+        void endsOnlyOnADayTheUserLeftUntouched() {
             UserStreak streak = UserStreakService.walk(
                     completed(MON, FRI), monWedFriWeek(), FRI);
 
             assertThat(streak.currentStreak())
-                    .as("Wednesday was scheduled and left undone")
+                    .as("Wednesday was scheduled and left untouched")
+                    .isEqualTo(1);
+        }
+
+        @Test
+        void walksThroughADayTheUserSkippedInsteadOfBreakingOnIt() {
+            // A skip is an interaction: the user opened the day and said "not this one".
+            // DayCloseService only stamps SKIPPED on the account when they skipped something
+            // and completed nothing, so breaking here would punish the person who showed up
+            // and told us, and reward the one who closed the app.
+            List<EntityCheckDay> week = List.of(
+                    row(MON, CheckDayOutcome.MISSED),
+                    row(TUE, CheckDayOutcome.NOT_SCHEDULED),
+                    row(WED, CheckDayOutcome.SKIPPED),
+                    row(THU, CheckDayOutcome.NOT_SCHEDULED),
+                    row(FRI, CheckDayOutcome.MISSED));
+
+            UserStreak streak = UserStreakService.walk(completed(MON, FRI), week, FRI);
+
+            assertThat(streak.currentStreak())
+                    .as("Monday and Friday count; the skipped Wednesday is crossed, not fatal")
+                    .isEqualTo(2);
+        }
+
+        @Test
+        void aSkippedDayDoesNotCountAsACompletedOneEither() {
+            List<EntityCheckDay> week = List.of(
+                    row(THU, CheckDayOutcome.SKIPPED),
+                    row(FRI, CheckDayOutcome.SKIPPED));
+
+            UserStreak streak = UserStreakService.walk(completed(WED), week, FRI);
+
+            assertThat(streak.currentStreak())
+                    .as("neutral means neither broken nor earned")
                     .isEqualTo(1);
         }
 
@@ -195,6 +228,20 @@ class UserStreakServiceUnitTest {
 
     @Nested
     class Dormancy {
+
+        @Test
+        void doesNotFlagAnAccountThatKeptSkippingItsDays() {
+            // Skipping is activity, so a fortnight of skips is a run in use — not a paused
+            // one. This is the half of the rule that stays on `scheduledDays`.
+            List<EntityCheckDay> rows = new ArrayList<>();
+            for (int daysBack = 0; daysBack < 14; daysBack++) {
+                rows.add(row(FRI.minusDays(daysBack), CheckDayOutcome.SKIPPED));
+            }
+
+            UserStreak streak = UserStreakService.walk(completed(FRI.minusDays(20)), rows, FRI);
+
+            assertThat(streak.dormant()).isFalse();
+        }
 
         @Test
         void flagsAStreakWithNothingScheduledForFourteenDays() {
