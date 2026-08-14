@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -111,7 +112,7 @@ class FeedbackSubmissionIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"));
 
-        assertThat(feedbackRepository.findAll()).isEmpty();
+        assertThat(submissionsOfTheAuthor()).isEmpty();
     }
 
     @Test
@@ -126,7 +127,7 @@ class FeedbackSubmissionIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"));
 
-        assertThat(feedbackRepository.findAll()).isEmpty();
+        assertThat(submissionsOfTheAuthor()).isEmpty();
     }
 
     @Test
@@ -177,7 +178,7 @@ class FeedbackSubmissionIntegrationTest extends AbstractIntegrationTest {
                                 """))
                 .andExpect(status().isCreated());
 
-        assertThat(feedbackRepository.findAll()).hasSize(1);
+        assertThat(submissionsOfTheAuthor()).hasSize(1);
     }
 
     @Test
@@ -217,6 +218,20 @@ class FeedbackSubmissionIntegrationTest extends AbstractIntegrationTest {
     /** Minimal JSON body — every value used here is plain text needing no escaping. */
     private static String submission(String category, String body) {
         return "{\"category\": \"" + category + "\", \"body\": \"" + body + "\"}";
+    }
+
+    /**
+     * This author's submissions, never the whole table.
+     *
+     * These three cases are about what THIS request stored, and `findAll()` answered a
+     * wider question: whether anybody's row exists. The feedback package's other
+     * integration classes use their own users and leave their rows behind for the
+     * lifetime of the JVM, so "the table is empty" holds or fails on the order
+     * Surefire happens to pick — which is what turned green into red the moment a new
+     * class joined the package.
+     */
+    private List<Feedback> submissionsOfTheAuthor() {
+        return feedbackRepository.findAllByUserIdOrderByCreatedAtDesc(author.getId());
     }
 
     private static UUID idOf(MvcResult result) throws Exception {
