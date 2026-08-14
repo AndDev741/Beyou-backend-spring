@@ -78,10 +78,14 @@ jobs:
 
       # Postgres lock-risk linting (squawkhq.com). The baseline is generated
       # (not hand-written DDL) so it is excluded. require-concurrent-index-creation
-      # and require-timeout-settings are excluded deliberately while pre-production
-      # (empty/small tables — a plain CREATE INDEX is instant and takes no meaningful
-      # lock; documented in V2__add_supporting_indexes.sql) — remove both exclusions
-      # before the first migration that touches a large production table.
+      # is excluded deliberately while pre-production (empty/small tables — a plain
+      # CREATE INDEX is instant and takes no meaningful lock; documented in
+      # V2__add_supporting_indexes.sql) — remove it before the first migration that
+      # touches a large production table.
+      #
+      # require-timeout-settings is enforced as of V13: every new migration opens
+      # with explicit lock_timeout and statement_timeout, so a migration that would
+      # queue behind live traffic gives up instead of holding the table hostage.
       - name: Squawk lint on added migrations
         run: |
           base="origin/${{ github.base_ref }}"
@@ -91,7 +95,7 @@ jobs:
             exit 0
           fi
           # Pinned to a major so a squawk release can't silently change the gate.
-          npx --yes squawk-cli@2 --exclude=require-concurrent-index-creation,require-timeout-settings $added
+          npx --yes squawk-cli@2 --exclude=require-concurrent-index-creation $added
 
   build-and-test:
     name: Build & Test

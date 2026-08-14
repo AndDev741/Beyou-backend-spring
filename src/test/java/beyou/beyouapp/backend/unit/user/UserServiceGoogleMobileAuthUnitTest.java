@@ -52,7 +52,7 @@ class UserServiceGoogleMobileAuthUnitTest {
     // UserResponseDTO is a final record (can't be mocked with the subclass mock-maker),
     // so build a throwaway instance to stand in for the mapper output.
     private static UserResponseDTO dummyDto() {
-        return new UserResponseDTO("Alice", "alice@example.com", null, null, 0, null, true,
+        return new UserResponseDTO("Alice", "alice@example.com", null, null, 0, false, null, true,
                 List.of(), null, 0d, 0d, 0d, 0, null, false, 0, false, null, null, null);
     }
 

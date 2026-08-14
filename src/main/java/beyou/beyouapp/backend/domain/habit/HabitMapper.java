@@ -4,6 +4,9 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
+import beyou.beyouapp.backend.domain.checkday.CheckProgressCalculator;
+import beyou.beyouapp.backend.domain.common.CheckProgress;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.domain.routine.Routine;
@@ -42,6 +45,17 @@ public class HabitMapper {
 
     public HabitResponseDTO toResponseDTO(Habit habit) {
         XpProgress xpProgress = habit.getXpProgress();
+        // R2/R3 — the check scalars ship whole, and the lifetime counter finally travels
+        // under its own name. Null-guarded the same way xpProgress is: Hibernate
+        // materialises a null embeddable when every mapped column is null, so a habit row
+        // written before V13 comes back with no CheckProgress at all.
+        CheckProgress checkProgress = habit.getCheckProgress();
+        // R15 — dormancy is a question about "recently", so it needs a today, and the only
+        // correct today is the owner's. habit.getUser() is an eager @ManyToOne already
+        // loaded by the list query, so this costs no statement; see
+        // HabitFindAllByUserIdQueryCountTest.
+        boolean streakDormant = CheckProgressCalculator.isDormant(
+                checkProgress, UserDateResolver.today(habit.getUser()));
 
         Map<UUID, String> routines = Optional.ofNullable(habit.getHabitGroups())
             .orElse(List.of())
@@ -69,7 +83,11 @@ public class HabitMapper {
                 xpProgress != null ? xpProgress.getActualLevelXp() : 0,
                 xpProgress != null ? xpProgress.getNextLevelXp() : 0,
                 xpProgress != null ? xpProgress.getLevel() : 0,
-                habit.getConstance(),
+                checkProgress != null ? checkProgress.getCurrentStreak() : 0,
+                checkProgress != null ? checkProgress.getBestStreak() : 0,
+                checkProgress != null ? checkProgress.getTotalCheckIns() : 0,
+                checkProgress != null ? checkProgress.getFirstCheckInDate() : null,
+                streakDormant,
                 habit.getCreatedAt() != null ? habit.getCreatedAt().toLocalDate() : null,
                 habit.getUpdatedAt() != null ? habit.getUpdatedAt().toLocalDate() : null,
                 routines

@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.unit.user;
 
+import beyou.beyouapp.backend.domain.checkday.UserStreakService;
 import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentService;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
@@ -84,6 +85,10 @@ class UserDeletionOrderingUnitTest {
     @Mock
     FeedbackAttachmentService feedbackAttachmentService;
 
+    /** Constructor ballast only — deletion never reads a streak. */
+    @Mock
+    UserStreakService userStreakService;
+
     private UserService userService;
 
     private final UUID userId = UUID.randomUUID();
@@ -96,7 +101,8 @@ class UserDeletionOrderingUnitTest {
         user.setName("deletion order");
         user.setEmail("deletion-order@beyou.test");
         userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService,
-                new UserMapper(), photoStorageService, eventPublisher, feedbackAttachmentService);
+                new UserMapper(userStreakService), photoStorageService, eventPublisher,
+                feedbackAttachmentService, userStreakService);
     }
 
     @AfterEach

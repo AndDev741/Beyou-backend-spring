@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -67,12 +68,43 @@ public class HabitControllerTest extends AbstractIntegrationTest {
     @Test
     void shouldGetHabitsSuccessfully() throws Exception{
         HabitResponseDTO responseDTO = new HabitResponseDTO(
-            habitID, "name", "desc", "mot", "icon", 1, 1, List.of(), 0, 0, 0, 0, 0, null, null, null
+            habitID, "name", "desc", "mot", "icon", 1, 1, List.of(), 0, 0, 0, 0,
+            0, 0, 0, null, false, null, null, null
         );
         when(habitService.getHabits(userID)).thenReturn(List.of(responseDTO));
 
         mockMvc.perform(get("/habit"))
                 .andExpect(status().isOk());
+    }
+
+    /**
+     * R2/R3 — the check scalars ride the list response, so a client renders a
+     * streak without a second call, and the lifetime counter says what it holds.
+     * {@code constance} is gone outright rather than kept as an alias: there is
+     * no installed client to keep it for, and leaving both names alive is how a
+     * wire format ends up with two counters that disagree.
+     *
+     * <p>KTD25 — {@code streakDormant} is a decision, not a date. The last
+     * check-in date deliberately does NOT ship, so no client can invent its own
+     * cutoff for "has this gone quiet".
+     */
+    @Test
+    void habitListCarriesTheCheckScalarsAndNoLongerCarriesConstance() throws Exception {
+        HabitResponseDTO responseDTO = new HabitResponseDTO(
+            habitID, "name", "desc", "mot", "icon", 1, 1, List.of(), 0, 0, 0, 0,
+            4, 9, 30, LocalDate.of(2026, 1, 5), true, null, null, Map.of()
+        );
+        when(habitService.getHabits(userID)).thenReturn(List.of(responseDTO));
+
+        mockMvc.perform(get("/habit"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].currentStreak").value(4))
+                .andExpect(jsonPath("$[0].bestStreak").value(9))
+                .andExpect(jsonPath("$[0].totalCheckIns").value(30))
+                .andExpect(jsonPath("$[0].firstCheckInDate").value("2026-01-05"))
+                .andExpect(jsonPath("$[0].streakDormant").value(true))
+                .andExpect(jsonPath("$[0].constance").doesNotExist())
+                .andExpect(jsonPath("$[0].lastCheckInDate").doesNotExist());
     }
 
     @Test

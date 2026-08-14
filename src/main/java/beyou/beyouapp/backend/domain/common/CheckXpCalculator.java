@@ -6,7 +6,14 @@ package beyou.beyouapp.backend.domain.common;
  *
  * <p>Replaces the old inline {@code 10 * dificulty * importance} (range 10..250,
  * a 25x spread). The additive base gives a gentler 5x spread and a streak
- * multiplier finally rewards the {@code constance} already tracked per habit.
+ * multiplier rewards consecutive days.
+ *
+ * <p>The streak argument used to be {@code Habit.constance}, a lifetime tally of
+ * every day the habit was ever checked. A habit checked once a month for two
+ * years paid the capped +50% while a habit on its ninth consecutive day paid +9%.
+ * It now takes the real streak from {@code CheckProgress.currentStreak}, which is
+ * derived from {@code entity_check_day} and resets when a day is missed. The
+ * formula and both constants are unchanged — only what feeds them.
  *
  * <pre>
  *   xp = BASE_XP * (difficulty + importance) * (1 + min(streak * STREAK_STEP, STREAK_CAP))
@@ -25,8 +32,9 @@ public final class CheckXpCalculator {
     /**
      * @param difficulty 1..5 (clamped)
      * @param importance 1..5 (clamped)
-     * @param streakDays current consecutive-day streak entering this check
-     *                   (habit constance before increment; 0 for tasks / no streak)
+     * @param streakDays the owner's current streak entering this check, i.e.
+     *                   {@code checkProgress.currentStreak} before today's row is
+     *                   recorded. Zero for a one-time task, which never builds one.
      */
     public static double calculate(int difficulty, int importance, int streakDays) {
         int base = BASE_XP * (clamp(difficulty) + clamp(importance));

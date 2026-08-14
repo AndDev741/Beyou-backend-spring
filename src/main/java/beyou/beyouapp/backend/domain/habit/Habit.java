@@ -12,6 +12,7 @@ import org.hibernate.annotations.UuidGenerator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
@@ -85,8 +86,19 @@ public class Habit {
     @Embedded
     private XpProgress xpProgress = new XpProgress();
 
-    @Column(nullable = true)
-    private int constance;
+    /**
+     * R1 — this habit's own streak counters, independent of the user's.
+     *
+     * <p>Replaced the old {@code constance} column outright (dropped in
+     * {@code V14__drop_habit_constance.sql}). That field carried two jobs at once: a
+     * lifetime tally of check-ins, incremented and decremented by hand in three places, and
+     * the streak the XP bonus multiplied by. It was never floored at zero, so an uncheck
+     * without a matching check drove it negative. Both jobs now live here, derived from
+     * {@code entity_check_day} rather than accumulated: the tally is
+     * {@code totalCheckIns} and the XP bonus reads {@code currentStreak}.
+     */
+    @Embedded
+    private CheckProgress checkProgress = new CheckProgress();
 
     @Column(nullable = false)
     private Date createdAt;
@@ -122,7 +134,6 @@ public class Habit {
         xpProgress.setLevel(createHabitDTO.experience().getLevel());
         setImportance(createHabitDTO.importance());
         setDificulty(createHabitDTO.dificulty());
-        setConstance(0);
         xpProgress.setNextLevelXp(nextLevelXp);
         xpProgress.setActualLevelXp(actualBaseXp);
         setUser(user);

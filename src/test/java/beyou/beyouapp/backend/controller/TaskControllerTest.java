@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -82,6 +83,11 @@ public class TaskControllerTest extends AbstractIntegrationTest {
                 1,
                 Map.of(),
                 false,
+                0,
+                0,
+                0,
+                null,
+                false,
                 null,
                 null,
                 null
@@ -91,6 +97,29 @@ public class TaskControllerTest extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/task"))
                .andExpect(status().isOk());
+    }
+
+    /**
+     * R2 — the same scalars the habit response carries, on the task response, so a
+     * recurring task's run is readable without touching the snapshot tables.
+     */
+    @Test
+    void taskListCarriesTheCheckScalars() throws Exception {
+        UUID taskId = UUID.randomUUID();
+        TaskResponseDTO responseDTO = new TaskResponseDTO(
+                taskId, "name", "desc", "icon", 1, 1, Map.of(), false,
+                3, 11, 42, LocalDate.of(2026, 2, 1), false, null, null, null
+        );
+        when(taskService.getAllTasks(userId)).thenReturn(new ArrayList<>(List.of(responseDTO)));
+
+        mockMvc.perform(get("/task"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].currentStreak").value(3))
+                .andExpect(jsonPath("$[0].bestStreak").value(11))
+                .andExpect(jsonPath("$[0].totalCheckIns").value(42))
+                .andExpect(jsonPath("$[0].firstCheckInDate").value("2026-02-01"))
+                .andExpect(jsonPath("$[0].streakDormant").value(false))
+                .andExpect(jsonPath("$[0].lastCheckInDate").doesNotExist());
     }
 
     @Test

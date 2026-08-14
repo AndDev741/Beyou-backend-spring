@@ -1,7 +1,13 @@
 package beyou.beyouapp.backend.integration.routine.snapshot;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOutcome;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
+import beyou.beyouapp.backend.domain.checkday.CheckDayRecorder;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
 import beyou.beyouapp.backend.domain.common.RefreshUiDtoBuilder;
+import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.common.XpCalculatorService;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
@@ -30,7 +36,7 @@ import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -60,9 +66,21 @@ class SnapshotCheckServiceTest {
     @Mock private XpDecayCalculator xpDecayCalculator;
     @Mock private RefreshUiDtoBuilder refreshUiDtoBuilder;
     @Mock private AuthenticatedUser authenticatedUser;
+    @Mock private EntityCheckDayRepository entityCheckDayRepository;
+    @Mock private UserCacheEvictService userCacheEvictService;
 
-    @InjectMocks
+    /**
+     * Built by hand rather than with {@code @InjectMocks} so the recorder is the real one.
+     * The streak scenarios below are assertions about arithmetic over stored days, and a
+     * mocked recorder would only prove that the service called something.
+     */
     private SnapshotCheckService snapshotCheckService;
+
+    /** Every snapshot the scheduler writes is for a day already over. */
+    private static final LocalDate SNAPSHOT_DATE = LocalDate.of(2026, 3, 20);
+
+    /** Stand-in for the habit's stored history, mutated by the recorder under test. */
+    private final List<EntityCheckDay> habitHistory = new ArrayList<>();
 
     private User user;
     private User otherUser;
@@ -78,6 +96,13 @@ class SnapshotCheckServiceTest {
 
     @BeforeEach
     void setUp() {
+        snapshotCheckService = new SnapshotCheckService(
+                snapshotRepository, snapshotCheckRepository, diaryRoutineRepository,
+                habitRepository, taskRepository, userRepository, userService,
+                xpCalculatorService, xpDecayCalculator, refreshUiDtoBuilder, authenticatedUser,
+                new CheckDayRecorder(entityCheckDayRepository), userCacheEvictService);
+        habitHistory.clear();
+
         UUID userId = UUID.randomUUID();
         UUID otherUserId = UUID.randomUUID();
         routineId = UUID.randomUUID();
@@ -110,7 +135,7 @@ class SnapshotCheckServiceTest {
         snapshot.setId(snapshotId);
         snapshot.setRoutine(routine);
         snapshot.setUser(user);
-        snapshot.setSnapshotDate(LocalDate.of(2026, 3, 20));
+        snapshot.setSnapshotDate(SNAPSHOT_DATE);
         snapshot.setRoutineName("Morning Routine");
         snapshot.setCompleted(false);
 
@@ -568,8 +593,345 @@ class SnapshotCheckServiceTest {
     }
 
     // ---------------------------------------------------------------
+    // U4 — back-dated edits write history and recompute the scalars
+    // ---------------------------------------------------------------
+
+    @Test
+    void checkingAPastSnapshotDayFlipsThatDayFromMissedToDone() {
+        Habit habit = habitBehindTheCheck();
+        givenHabitHistory(habit, row(habit, SNAPSHOT_DATE, CheckDayOutcome.MISSED));
+        stubSnapshotLookups(habit);
+        stubDecay();
+
+        snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
+
+        assertEquals(CheckDayOutcome.DONE, outcomeOn(SNAPSHOT_DATE));
+        assertEquals(1, habit.getCheckProgress().getTotalCheckIns());
+        assertEquals(1, habit.getCheckProgress().getCurrentStreak());
+        assertEquals(SNAPSHOT_DATE, habit.getCheckProgress().getFirstCheckInDate());
+        assertEquals(SNAPSHOT_DATE, habit.getCheckProgress().getLastCheckInDate());
+    }
+
+    @Test
+    void repairingOneMissedDayBetweenTwoRunsOfFiveJoinsTheRunsAndRaisesTheRecord() {
+        Habit habit = habitBehindTheCheck();
+        habit.getCheckProgress().setBestStreak(5);
+        givenHabitHistory(habit, twoRunsOfFiveAroundAMissedDay(habit));
+        stubSnapshotLookups(habit);
+        stubDecay();
+
+        snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
+
+        // Eleven contiguous done days once the hole is filled: D-5 through D+5.
+        for (int offset = -5; offset <= 5; offset++) {
+            assertEquals(CheckDayOutcome.DONE, outcomeOn(SNAPSHOT_DATE.plusDays(offset)),
+                    "day offset " + offset + " should read DONE after the repair");
+        }
+        assertEquals(11, habit.getCheckProgress().getTotalCheckIns());
+
+        // The walk is anchored on the owner's today, not on the day just written, so the
+        // repair is visible end to end: the whole eleven-day run counts.
+        assertEquals(11, habit.getCheckProgress().getCurrentStreak());
+        // R13 — the record rises with it, from the five it entered with.
+        assertEquals(11, habit.getCheckProgress().getBestStreak());
+    }
+
+    @Test
+    void uncheckingTheRepairedDayReturnsItToMissedAndLeavesTheRecordStanding() {
+        Habit habit = habitBehindTheCheck();
+        habit.getCheckProgress().setBestStreak(5);
+        givenHabitHistory(habit, twoRunsOfFiveAroundAMissedDay(habit));
+        stubSnapshotLookups(habit);
+        stubDecay();
+
+        snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
+        assertEquals(11, habit.getCheckProgress().getBestStreak());
+
+        // Same item, same day, undone again.
+        snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
+
+        assertEquals(CheckDayOutcome.MISSED, outcomeOn(SNAPSHOT_DATE));
+        assertEquals(10, habit.getCheckProgress().getTotalCheckIns());
+        // Walking back from today, the newer run of five survives; the re-broken day stops it.
+        assertEquals(5, habit.getCheckProgress().getCurrentStreak());
+        // R13 — the record never falls back.
+        assertEquals(11, habit.getCheckProgress().getBestStreak());
+    }
+
+    @Test
+    void uncheckingAPastDayShortensTheStreakToWhatSurvivesTheMiss() {
+        Habit habit = habitBehindTheCheck();
+        habitCheck.setChecked(true);
+        habitCheck.setCheckTime(LocalTime.of(8, 0));
+        habitCheck.setXpGenerated(28.0);
+        givenHabitHistory(habit,
+                row(habit, SNAPSHOT_DATE.minusDays(1), CheckDayOutcome.DONE),
+                row(habit, SNAPSHOT_DATE, CheckDayOutcome.DONE));
+        stubSnapshotLookups(habit);
+
+        snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
+
+        assertEquals(CheckDayOutcome.MISSED, outcomeOn(SNAPSHOT_DATE));
+        assertEquals(1, habit.getCheckProgress().getTotalCheckIns());
+        assertEquals(0, habit.getCheckProgress().getCurrentStreak());
+    }
+
+    @Test
+    void skippingAPastSnapshotDayRecordsSkippedSoTheStreakWalksThroughIt() {
+        Habit habit = habitBehindTheCheck();
+        givenHabitHistory(habit,
+                row(habit, SNAPSHOT_DATE.minusDays(1), CheckDayOutcome.DONE),
+                row(habit, SNAPSHOT_DATE, CheckDayOutcome.MISSED));
+        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+        when(snapshotRepository.findById(snapshotId)).thenReturn(Optional.of(snapshot));
+        when(snapshotCheckRepository.findById(habitCheckId)).thenReturn(Optional.of(habitCheck));
+        when(habitRepository.findById(habit.getId())).thenReturn(Optional.of(habit));
+        when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
+
+        snapshotCheckService.skipOrUnskipSnapshotItem(snapshotId, habitCheckId);
+
+        assertEquals(CheckDayOutcome.SKIPPED, outcomeOn(SNAPSHOT_DATE));
+        // R12 — a skip is not a failure, so the walk carries on to the day before it.
+        assertEquals(1, habit.getCheckProgress().getCurrentStreak());
+    }
+
+    @Test
+    void unskippingAPastSnapshotDayPutsItBackToMissed() {
+        Habit habit = habitBehindTheCheck();
+        habitCheck.setSkipped(true);
+        givenHabitHistory(habit,
+                row(habit, SNAPSHOT_DATE.minusDays(1), CheckDayOutcome.DONE),
+                row(habit, SNAPSHOT_DATE, CheckDayOutcome.SKIPPED));
+        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+        when(snapshotRepository.findById(snapshotId)).thenReturn(Optional.of(snapshot));
+        when(snapshotCheckRepository.findById(habitCheckId)).thenReturn(Optional.of(habitCheck));
+        when(habitRepository.findById(habit.getId())).thenReturn(Optional.of(habit));
+        when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
+
+        snapshotCheckService.skipOrUnskipSnapshotItem(snapshotId, habitCheckId);
+
+        assertEquals(CheckDayOutcome.MISSED, outcomeOn(SNAPSHOT_DATE));
+        assertEquals(0, habit.getCheckProgress().getCurrentStreak());
+    }
+
+    @Test
+    void aCheckWhoseOriginalHabitWasDeletedWritesNoHistoryRow() {
+        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+        when(snapshotRepository.findById(snapshotId)).thenReturn(Optional.of(snapshot));
+        when(snapshotCheckRepository.findById(habitCheckId)).thenReturn(Optional.of(habitCheck));
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(routine));
+        when(habitRepository.findById(habitCheck.getOriginalItemId())).thenReturn(Optional.empty());
+        stubDecay();
+        when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
+
+        snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
+
+        // The XP fallback still runs; the history write has no owner to hang off, so it is
+        // skipped rather than writing a row nothing will ever read or delete.
+        verify(xpCalculatorService).addXpToUserAndRoutineOnly(user, 28.0, routine);
+        verify(entityCheckDayRepository, never()).save(any(EntityCheckDay.class));
+    }
+
+    @Test
+    void aOneTimeTaskGetsNoHistoryRow() {
+        Task task = new Task();
+        task.setId(taskCheck.getOriginalItemId());
+        task.setCategories(List.of(buildCategory()));
+        task.setOneTimeTask(true);
+
+        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+        when(snapshotRepository.findById(snapshotId)).thenReturn(Optional.of(snapshot));
+        when(snapshotCheckRepository.findById(taskCheckId)).thenReturn(Optional.of(taskCheck));
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(routine));
+        when(taskRepository.findById(taskCheck.getOriginalItemId())).thenReturn(Optional.of(task));
+        stubDecay();
+        when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
+
+        snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, taskCheckId);
+
+        // R4 — a one-time task never builds a streak, so it gets no row and no scalars.
+        verify(entityCheckDayRepository, never()).save(any(EntityCheckDay.class));
+        assertEquals(0, task.getCheckProgress().getTotalCheckIns());
+    }
+
+    @Test
+    void aRecurringTaskGetsItsOwnHistoryRow() {
+        Task task = new Task();
+        task.setId(taskCheck.getOriginalItemId());
+        task.setCategories(List.of(buildCategory()));
+
+        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+        when(snapshotRepository.findById(snapshotId)).thenReturn(Optional.of(snapshot));
+        when(snapshotCheckRepository.findById(taskCheckId)).thenReturn(Optional.of(taskCheck));
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(routine));
+        when(taskRepository.findById(taskCheck.getOriginalItemId())).thenReturn(Optional.of(task));
+        when(entityCheckDayRepository.findByOwnerTypeAndOwnerIdOrderByDayAsc(
+                CheckDayOwnerType.TASK, task.getId())).thenReturn(new ArrayList<>());
+        when(entityCheckDayRepository.save(any(EntityCheckDay.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        stubDecay();
+        when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
+
+        snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, taskCheckId);
+
+        ArgumentCaptor<EntityCheckDay> captor = ArgumentCaptor.forClass(EntityCheckDay.class);
+        verify(entityCheckDayRepository).save(captor.capture());
+        assertEquals(CheckDayOwnerType.TASK, captor.getValue().getOwnerType());
+        assertEquals(task.getId(), captor.getValue().getOwnerId());
+        assertEquals(SNAPSHOT_DATE, captor.getValue().getDay());
+        assertEquals(CheckDayOutcome.DONE, captor.getValue().getOutcome());
+        assertEquals(1, task.getCheckProgress().getTotalCheckIns());
+    }
+
+    @Test
+    void theHistoryRowCarriesTheSnapshotDayAndNotToday() {
+        Habit habit = habitBehindTheCheck();
+        givenHabitHistory(habit);
+        stubSnapshotLookups(habit);
+        stubDecay();
+
+        snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
+
+        ArgumentCaptor<EntityCheckDay> captor = ArgumentCaptor.forClass(EntityCheckDay.class);
+        verify(entityCheckDayRepository).save(captor.capture());
+        assertEquals(SNAPSHOT_DATE, captor.getValue().getDay());
+        assertNotEquals(LocalDate.now(), captor.getValue().getDay());
+        assertEquals(user, captor.getValue().getUser());
+    }
+
+    // ---------------------------------------------------------------
+    // U4 — R16 cache eviction and R19 snapshot tables untouched
+    // ---------------------------------------------------------------
+
+    @Test
+    void aSnapshotCheckEvictsTheActingUsersCaches() {
+        Habit habit = habitBehindTheCheck();
+        givenHabitHistory(habit);
+        stubSnapshotLookups(habit);
+        stubDecay();
+
+        snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
+
+        verify(userCacheEvictService).evictAllUserCaches(user.getId());
+    }
+
+    @Test
+    void aSnapshotSkipEvictsTheActingUsersCaches() {
+        Habit habit = habitBehindTheCheck();
+        givenHabitHistory(habit);
+        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+        when(snapshotRepository.findById(snapshotId)).thenReturn(Optional.of(snapshot));
+        when(snapshotCheckRepository.findById(habitCheckId)).thenReturn(Optional.of(habitCheck));
+        when(habitRepository.findById(habit.getId())).thenReturn(Optional.of(habit));
+        when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
+
+        snapshotCheckService.skipOrUnskipSnapshotItem(snapshotId, habitCheckId);
+
+        verify(userCacheEvictService).evictAllUserCaches(user.getId());
+    }
+
+    @Test
+    void theSnapshotRowKeepsItsShapeAfterAHistoryWrite() {
+        Habit habit = habitBehindTheCheck();
+        UUID originalItemId = habitCheck.getOriginalItemId();
+        UUID originalGroupId = habitCheck.getOriginalGroupId();
+        givenHabitHistory(habit, row(habit, SNAPSHOT_DATE, CheckDayOutcome.MISSED));
+        stubSnapshotLookups(habit);
+        stubDecay();
+
+        snapshotCheckService.checkOrUncheckSnapshotItem(snapshotId, habitCheckId);
+
+        // R19 — the calendar view reads these; the history write must not disturb them.
+        assertEquals(SNAPSHOT_DATE, snapshot.getSnapshotDate());
+        assertEquals("Morning Routine", snapshot.getRoutineName());
+        assertEquals(routine, snapshot.getRoutine());
+        assertEquals(2, snapshot.getChecks().size());
+        assertEquals(SnapshotItemType.HABIT, habitCheck.getItemType());
+        assertEquals("Meditate", habitCheck.getItemName());
+        assertEquals("Morning", habitCheck.getSectionName());
+        assertEquals(3, habitCheck.getDifficulty());
+        assertEquals(4, habitCheck.getImportance());
+        assertEquals(originalItemId, habitCheck.getOriginalItemId());
+        assertEquals(originalGroupId, habitCheck.getOriginalGroupId());
+        assertTrue(habitCheck.isChecked());
+        assertEquals(28.0, habitCheck.getXpGenerated(), 0.001);
+
+        verify(snapshotRepository).save(snapshot);
+        verify(snapshotCheckRepository).save(habitCheck);
+        verify(snapshotRepository, never()).delete(any());
+        verify(snapshotCheckRepository, never()).delete(any());
+        verify(snapshotCheckRepository, never()).deleteAll(any());
+    }
+
+    // ---------------------------------------------------------------
     // Helper methods
     // ---------------------------------------------------------------
+
+    private Habit habitBehindTheCheck() {
+        Habit habit = new Habit();
+        habit.setId(habitCheck.getOriginalItemId());
+        habit.setCategories(List.of(buildCategory()));
+        return habit;
+    }
+
+    /** D-5..D-1 done, D missed, D+1..D+5 done. */
+    private EntityCheckDay[] twoRunsOfFiveAroundAMissedDay(Habit habit) {
+        List<EntityCheckDay> rows = new ArrayList<>();
+        for (int back = 5; back >= 1; back--) {
+            rows.add(row(habit, SNAPSHOT_DATE.minusDays(back), CheckDayOutcome.DONE));
+        }
+        rows.add(row(habit, SNAPSHOT_DATE, CheckDayOutcome.MISSED));
+        for (int ahead = 1; ahead <= 5; ahead++) {
+            rows.add(row(habit, SNAPSHOT_DATE.plusDays(ahead), CheckDayOutcome.DONE));
+        }
+        return rows.toArray(new EntityCheckDay[0]);
+    }
+
+    /**
+     * Stands in for the habit's stored history. The recorder reads through
+     * {@code findByOwnerTypeAndOwnerId...} and writes through {@code save}, so keeping both
+     * over one list makes a second call see what the first one wrote — which is what a
+     * repair-then-undo sequence needs.
+     */
+    private void givenHabitHistory(Habit habit, EntityCheckDay... rows) {
+        habitHistory.clear();
+        habitHistory.addAll(List.of(rows));
+        when(entityCheckDayRepository.findByOwnerTypeAndOwnerIdOrderByDayAsc(
+                CheckDayOwnerType.HABIT, habit.getId())).thenReturn(habitHistory);
+        when(entityCheckDayRepository.save(any(EntityCheckDay.class))).thenAnswer(invocation -> {
+            EntityCheckDay saved = invocation.getArgument(0);
+            if (!habitHistory.contains(saved)) {
+                habitHistory.add(saved);
+            }
+            return saved;
+        });
+    }
+
+    private EntityCheckDay row(Habit habit, LocalDate day, CheckDayOutcome outcome) {
+        return new EntityCheckDay(user, CheckDayOwnerType.HABIT, habit.getId(), day, outcome);
+    }
+
+    private CheckDayOutcome outcomeOn(LocalDate day) {
+        return habitHistory.stream()
+                .filter(stored -> day.equals(stored.getDay()))
+                .map(EntityCheckDay::getOutcome)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void stubSnapshotLookups(Habit habit) {
+        when(authenticatedUser.getAuthenticatedUser()).thenReturn(user);
+        when(snapshotRepository.findById(snapshotId)).thenReturn(Optional.of(snapshot));
+        when(snapshotCheckRepository.findById(habitCheckId)).thenReturn(Optional.of(habitCheck));
+        when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(routine));
+        when(habitRepository.findById(habit.getId())).thenReturn(Optional.of(habit));
+        when(refreshUiDtoBuilder.buildSnapshotRefreshUiDto(user)).thenReturn(dummyRefreshUiDTO);
+    }
+
+    private void stubDecay() {
+        when(xpDecayCalculator.calculateDecayedXp(anyDouble(), any(), any(), any()))
+                .thenReturn(28.0);
+    }
 
     private SnapshotCheck buildSnapshotCheck(UUID id, SnapshotItemType type, String name,
                                               String sectionName, int difficulty, int importance) {

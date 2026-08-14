@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.routine.specializedRoutines;
 
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.habit.Habit;
@@ -296,9 +297,17 @@ public class DiaryRoutineService {
     @Transactional
     public DiaryRoutineResponseDTO getTodayRoutineScheduled(UUID userId) {
         List<DiaryRoutine> diaryRoutines = diaryRoutineRepository.findAllByUserId(userId);
+        if (diaryRoutines.isEmpty()) {
+            log.warn("NO ROUTINES SCHEDULED FOR TODAY");
+            return null;
+        }
 
         DiaryRoutine todaysRoutine = null;
-        String dayOfWeek = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+        // Which weekday "today" is depends on where the owner lives, not where the server runs.
+        // The owner rides along on the routines already loaded, so no extra lookup and no
+        // security context (agent tools call this off-request).
+        LocalDate ownerToday = UserDateResolver.today(diaryRoutines.get(0).getUser());
+        String dayOfWeek = ownerToday.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
         log.info("Day: {} ", dayOfWeek);
         for (DiaryRoutine diaryRoutine : diaryRoutines) {
             if (diaryRoutine.getSchedule() != null

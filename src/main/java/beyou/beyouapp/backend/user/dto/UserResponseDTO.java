@@ -11,6 +11,14 @@ public record UserResponseDTO(
         String phrase,
         String phrase_author,
         int constance,
+        /**
+         * R20/KTD25 — true when nothing has been scheduled for this account in the last
+         * {@code UserStreakService.DORMANT_AFTER_DAYS} days while {@code constance} is
+         * still standing. The number is reported unchanged beside it: a paused run is not
+         * a broken one, and deciding that from the raw last-check-in date is exactly the
+         * judgement KTD25 keeps on this side of the wire.
+         */
+        boolean constanceDormant,
         String photo,
         boolean isGoogleAccount,
         List<String> widgetsId,

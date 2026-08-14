@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.user.User;
@@ -44,6 +45,15 @@ public abstract class Routine {
 
     @Embedded
     private XpProgress xpProgress = new XpProgress();
+
+    /**
+     * R1 — this routine's own streak counters. The columns are NOT NULL in
+     * {@code V13}, which SINGLE_TABLE inheritance only tolerates because
+     * DiaryRoutine is the sole subclass; a second subclass that does not get
+     * checked would have to make them nullable again.
+     */
+    @Embedded
+    private CheckProgress checkProgress = new CheckProgress();
 
     @PrePersist
     protected void onUserCreate(){
