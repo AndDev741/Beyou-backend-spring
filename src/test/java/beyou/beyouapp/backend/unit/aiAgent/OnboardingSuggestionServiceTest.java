@@ -111,6 +111,60 @@ public class OnboardingSuggestionServiceTest {
         assertThat(result.routine().iconId()).isEqualTo(AiIconCatalog.DEFAULT_ICON);
     }
 
+    /**
+     * The production dead end: the wizard creates what it is given, so a habit ending
+     * before it starts came back from POST /routine as ITEM_END_BEFORE_START and the
+     * user could go no further.
+     */
+    @Test
+    public void routineItemTimesArePulledBackIntoTheirSection() {
+        when(chatModel.call(any(Prompt.class))).thenReturn(ok("""
+                {"name":"Dia","iconId":"bogus","scheduleDays":["Monday"],
+                 "sections":[{"name":"Foco Profissional","iconId":"bogus","startTime":"8:30","endTime":"12:15",
+                   "habits":[
+                     {"name":"Bloco 1","startTime":"09:00","endTime":"08:00"},
+                     {"name":"Bloco 2","startTime":"07:00","endTime":"13:30"},
+                     {"name":"Bloco 3","startTime":"quando der","endTime":"24:00"}],
+                   "tasks":[]}]}"""));
+
+        OnboardingSuggestions result = service.suggest(routineRequest(), user());
+        var section = result.routine().sections().get(0);
+
+        // The section's own times are normalized to HH:mm.
+        assertThat(section.startTime()).isEqualTo("08:30");
+        assertThat(section.endTime()).isEqualTo("12:15");
+        // An end before its start is pulled up to the start, never left inverted.
+        assertThat(section.habits().get(0).startTime()).isEqualTo("09:00");
+        assertThat(section.habits().get(0).endTime()).isEqualTo("09:00");
+        // Times outside the section are pulled to its edges.
+        assertThat(section.habits().get(1).startTime()).isEqualTo("08:30");
+        assertThat(section.habits().get(1).endTime()).isEqualTo("12:15");
+        // Unparseable becomes "no time given"; 24:00 lands on the last minute of the day
+        // and is then clamped into the section like any other time.
+        assertThat(section.habits().get(2).startTime()).isNull();
+        assertThat(section.habits().get(2).endTime()).isEqualTo("12:15");
+    }
+
+    /** An overnight section is legal, so its items are left where the model put them. */
+    @Test
+    public void overnightSectionKeepsItsItemTimes() {
+        when(chatModel.call(any(Prompt.class))).thenReturn(ok("""
+                {"name":"Noite","iconId":"bogus","scheduleDays":["Monday"],
+                 "sections":[{"name":"Noite","iconId":"bogus","startTime":"22:00","endTime":"06:00",
+                   "habits":[{"name":"Dormir","startTime":"23:00","endTime":"05:30"}],
+                   "tasks":[]}]}"""));
+
+        var section = service.suggest(routineRequest(), user()).routine().sections().get(0);
+
+        assertThat(section.habits().get(0).startTime()).isEqualTo("23:00");
+        assertThat(section.habits().get(0).endTime()).isEqualTo("05:30");
+    }
+
+    private static OnboardingSuggestionRequest routineRequest() {
+        return new OnboardingSuggestionRequest(OnboardingStep.ROUTINE, null,
+                new OnboardingSuggestionRequest.OnboardingContext(List.of("Health"), null, null, null, null), null);
+    }
+
     @Test
     public void retriesOnceOnParseFailureThenSucceeds() {
         when(chatModel.call(any(Prompt.class)))
