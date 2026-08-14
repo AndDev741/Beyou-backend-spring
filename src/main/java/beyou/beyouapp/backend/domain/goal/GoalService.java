@@ -153,11 +153,19 @@ public class GoalService {
         xpCalculatorService.removeXpOfUserGoalAndCategoriesAndPersist(goal.getUser(), xpReward, goal, goal.getCategories());
     }
 
-    public GoalResponseDTO increaseCurrentValue (UUID goalId, UUID userId) {
+    public GoalResponseDTO increaseCurrentValue(UUID goalId, Double value, UUID userId) {
         Goal goal = getGoal(goalId);
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
-        goal.setCurrentValue(goal.getCurrentValue() + 1);
+        double increment = (value != null && value > 0) ? value : 1.0;
+        goal.setCurrentValue(goal.getCurrentValue() + increment);
+        // Progress is what says the goal has started, so the first increment moves
+        // it out of NOT_STARTED without anyone having to edit the goal. A completed
+        // goal is left alone: only PUT /goal/complete flips that, because that is
+        // where the XP moves.
+        if (goal.getStatus() == GoalStatus.NOT_STARTED) {
+            goal.setStatus(GoalStatus.IN_PROGRESS);
+        }
         try {
             goalRepository.save(goal);
             userCacheEvictService.evictAllUserCaches(userId);
@@ -167,11 +175,20 @@ public class GoalService {
         }
     }
 
-    public GoalResponseDTO decreaseCurrentValue (UUID goalId, UUID userId) {
+    public GoalResponseDTO increaseCurrentValue(UUID goalId, UUID userId) {
+        return increaseCurrentValue(goalId, 1.0, userId);
+    }
+
+    public GoalResponseDTO decreaseCurrentValue(UUID goalId, Double value, UUID userId) {
         Goal goal = getGoal(goalId);
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
-        goal.setCurrentValue(Math.max(0, goal.getCurrentValue() - 1));
+        double decrement = (value != null && value > 0) ? value : 1.0;
+        goal.setCurrentValue(Math.max(0, goal.getCurrentValue() - decrement));
+        // Going back down does not un-start the goal. Someone who corrects a wrong
+        // increment has still started it; sliding back to NOT_STARTED on the way to
+        // zero would flicker the status on every correction. Editing the goal is how
+        // you say it never started.
         try {
             goalRepository.save(goal);
             userCacheEvictService.evictAllUserCaches(userId);
@@ -179,6 +196,10 @@ public class GoalService {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public GoalResponseDTO decreaseCurrentValue(UUID goalId, UUID userId) {
+        return decreaseCurrentValue(goalId, 1.0, userId);
     }
 
     public void checkIfGoalIsFromTheUserInContext(Goal goal, UUID userId) {

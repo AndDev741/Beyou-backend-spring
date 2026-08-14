@@ -110,7 +110,11 @@ public class Goal {
         this.endDate = dto.endDate();
         this.xpReward = 0;
         this.user = user;
-        this.status = dto.status();
+        // `complete` and a COMPLETED status have to mean the same thing, and a goal
+        // is only ever completed through PUT /goal/complete, which is what pays the
+        // XP. A create that asks for COMPLETED starts in progress instead: otherwise
+        // the card shows an Undo that removes XP the goal was never given.
+        this.status = dto.status() == GoalStatus.COMPLETED ? GoalStatus.IN_PROGRESS : dto.status();
         this.term = dto.term();
     }
 }
