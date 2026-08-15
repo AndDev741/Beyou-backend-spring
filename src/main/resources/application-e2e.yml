@@ -48,6 +48,17 @@ spring:
 # in the same flow without parsing an email link.
 e2e:
   auto-verify-email: true
+  # Hands the account-deletion code back in the response instead of only mailing
+  # it, so a test can finish the flow without an inbox. Same shape and same reason
+  # as auto-verify-email above: it defaults to false and is set in this profile
+  # ONLY. The route still requires a live session and still spends the code.
+  expose-deletion-code: true
+
+# The deletion code cooldown exists so a double-tap does not burn the first mail.
+# A test walks the flow in seconds and asks for a second code on purpose, so it
+# would only be a sleep here.
+account-deletion:
+  cooldown-seconds: 0
 
 # Rate limiter off — tests fire many requests quickly and we don't want to
 # exercise the limiter, only the application logic.

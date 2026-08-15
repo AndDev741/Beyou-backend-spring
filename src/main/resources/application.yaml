@@ -110,6 +110,15 @@ password-reset:
   token-ttl-minutes: ${PASSWORD_RESET_TTL_MINUTES:15}
   cooldown-minutes: ${PASSWORD_RESET_COOLDOWN_MINUTES:5}
 
+# The emailed code that has to come back before an account is deleted. The
+# cooldown is in seconds, not minutes like the reset above: this code is typed
+# into the app while the user waits on the screen, so "resend" has to be usable
+# within the same sitting. The generic per-user write bucket already caps the
+# request rate; this only stops a rapid double-tap from burning the first mail.
+account-deletion:
+  code-ttl-minutes: ${ACCOUNT_DELETION_CODE_TTL_MINUTES:15}
+  cooldown-seconds: ${ACCOUNT_DELETION_COOLDOWN_SECONDS:60}
+
 rate-limit:
   enabled: true
 

@@ -9,6 +9,8 @@ import beyou.beyouapp.backend.domain.checkday.CheckHistoryService;
 import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
 import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenRepository;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserService;
@@ -42,6 +44,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doThrow;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -79,6 +82,10 @@ class FeedbackAccountDataIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     UserService userService;
+
+    /** Spied so one test can fail the delete on a real step of it. */
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    beyou.beyouapp.backend.domain.aiAgent.chat.ChatService chatService;
 
     @Autowired
     RefreshTokenRepository refreshTokenRepository;
@@ -335,10 +342,13 @@ class FeedbackAccountDataIntegrationTest extends AbstractIntegrationTest {
         User owner = userRepository.findByEmail(OWNER_EMAIL).orElseThrow();
         UUID ownerId = owner.getId();
 
-        Chat blocker = new Chat();
-        blocker.setUser(owner);
-        blocker.setTitle("blocks the delete");
-        chatRepository.saveAndFlush(blocker);
+        // A chat used to block this delete on its own: chats.user_id is a plain
+        // foreign key. The account deletion route needed that cleared, so deleteUser
+        // clears it now and no production reference blocks a delete any more — which
+        // is what made the delete button shippable. The block is induced on a real
+        // step of the delete instead, failing the way that step is written to fail.
+        doThrow(new BusinessException(ErrorKey.CHAT_DELETE_FAILED, "the agent's chats could not be cleared"))
+                .when(chatService).deleteAllChats(ownerId);
 
         Path file = Path.of(uploadDir).resolve("feedback-attachments")
                 .resolve(feedbackId.toString()).resolve(attachmentId + ".jpg");
@@ -355,7 +365,6 @@ class FeedbackAccountDataIntegrationTest extends AbstractIntegrationTest {
                 .as("a blocked delete must not have already destroyed the bytes")
                 .exists();
 
-        chatRepository.delete(blocker);
     }
 
     // -- helpers --

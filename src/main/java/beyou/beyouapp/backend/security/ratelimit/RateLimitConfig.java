@@ -126,4 +126,26 @@ public class RateLimitConfig {
                         .build())
                 .build();
     }
+
+    /** Deletion-code confirms allowed per user per hour — see {@link #createAccountDeletionBucket()}. */
+    public static final int ACCOUNT_DELETION_ATTEMPTS_PER_HOUR = 10;
+
+    /**
+     * Asking for, and spending, an account deletion code.
+     *
+     * These endpoints used to share the generic 30-per-minute write bucket, which is
+     * sized for checking off habits: roughly 450 silent guesses inside one code's
+     * fifteen-minute life. The code itself caps wrong tries at five, so this is the
+     * second wall rather than the first, and it is what keeps the cost of walking a
+     * six-digit space in the thousands of years rather than the days. Ten an hour is
+     * more than anyone deleting an account once will ever need.
+     */
+    public static Bucket createAccountDeletionBucket() {
+        return Bucket.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(ACCOUNT_DELETION_ATTEMPTS_PER_HOUR)
+                        .refillGreedy(ACCOUNT_DELETION_ATTEMPTS_PER_HOUR, Duration.ofHours(1))
+                        .build())
+                .build();
+    }
 }

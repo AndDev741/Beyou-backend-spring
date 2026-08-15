@@ -32,6 +32,12 @@ MAIL_FROM=
 PASSWORD_RESET_TTL_MINUTES=30
 PASSWORD_RESET_COOLDOWN_MINUTES=5
 
+# The emailed code that has to come back before an account is deleted. The cooldown
+# is in seconds because it is typed while the user waits on the screen: "resend" has
+# to be usable in the same sitting.
+ACCOUNT_DELETION_CODE_TTL_MINUTES=15
+ACCOUNT_DELETION_COOLDOWN_SECONDS=60
+
 LLM_CHAIN_ORDER=mistral,gemini,openrouter,deepseek
 MISTRAL_API_KEY=
 GEMINI_API_KEY=

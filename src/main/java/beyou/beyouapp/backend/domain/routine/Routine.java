@@ -39,7 +39,23 @@ public abstract class Routine {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @OneToOne
+    /**
+     * The days this routine runs on, or null when it was built and never scheduled.
+     *
+     * <p>{@code CascadeType.REMOVE} because a schedule belongs to exactly one routine and
+     * has no other way home: the FK lives on this side, the schedules table is nothing but
+     * an id, and nothing references a user. Without the cascade, deleting a routine left
+     * the schedule row and its {@code schedule_days} behind with no owner and no way to
+     * ever find them again. Both delete paths leaked it — {@code deleteDiaryRoutine}, and
+     * account deletion by way of {@code User.routines}. {@code V18} clears the rows that
+     * were stranded before this line existed.
+     *
+     * <p>Not {@code orphanRemoval}: {@link
+     * beyou.beyouapp.backend.domain.routine.schedule.ScheduleService#delete} unschedules by
+     * setting this to null and then deleting the row itself, and orphan removal would make
+     * that the same delete twice.
+     */
+    @OneToOne(cascade = CascadeType.REMOVE)
     @JoinColumn(name = "schedule_id", nullable = true)
     private Schedule schedule;
 

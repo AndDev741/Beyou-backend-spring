@@ -1,12 +1,17 @@
 package beyou.beyouapp.backend.controller;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
@@ -27,7 +33,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.UserMapper;
+import beyou.beyouapp.backend.user.deletion.AccountDeletionService;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
@@ -45,6 +53,12 @@ public class UserControllerTest extends AbstractIntegrationTest {
 
     @MockitoBean
     private AuthenticatedUser authenticatedUser;
+
+    @MockitoBean
+    private AccountDeletionService accountDeletionService;
+
+    @MockitoBean
+    private RefreshTokenService refreshTokenService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -207,4 +221,41 @@ public class UserControllerTest extends AbstractIntegrationTest {
 
     //     verify(userService).editUser(eq(dto), eq(userId));
     // }
+
+    @Test
+    void shouldAskForADeletionCode() throws Exception {
+        mockMvc.perform(post("/user/deletion/code"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true));
+
+        verify(accountDeletionService).requestCode(user);
+    }
+
+    /** The code is what deletes the account, and the cookie goes with it. */
+    @Test
+    void shouldDeleteTheAccountWithAValidCode() throws Exception {
+        when(accountDeletionService.confirm(eq(user), eq("123456")))
+            .thenReturn(ResponseEntity.ok(Map.of("success", "User deleted successfully")));
+
+        mockMvc.perform(post("/user/deletion/confirm")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"123456\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value("User deleted successfully"));
+
+        verify(accountDeletionService).confirm(user, "123456");
+        verify(refreshTokenService).revokeRefreshToken(any(), any());
+    }
+
+    /** Six digits or nothing: a malformed body never reaches the service. */
+    @Test
+    void shouldRejectAMalformedCodeBeforeTheService() throws Exception {
+        mockMvc.perform(post("/user/deletion/confirm")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"12\"}"))
+            .andExpect(status().isBadRequest());
+
+        verify(accountDeletionService, never()).confirm(any(), any());
+        verify(refreshTokenService, never()).revokeRefreshToken(any(), any());
+    }
 }
