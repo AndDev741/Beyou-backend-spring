@@ -1,6 +1,8 @@
 package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.domain.checkday.UserStreakService;
+import beyou.beyouapp.backend.security.ratelimit.LoginAttemptService;
+import org.springframework.beans.factory.annotation.Autowired;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
@@ -65,6 +67,14 @@ public class UserService {
     private final ChatService chatService;
 
     /**
+     * Absent when rate limiting is switched off, which the e2e profile does — hence
+     * {@code required = false} and the null checks at the call sites. A test stack that
+     * has deliberately disabled throttling must not be locked out by it.
+     */
+    @Autowired(required = false)
+    private LoginAttemptService loginAttemptService;
+
+    /**
      * When true, newly registered users are immediately marked as verified and
      * the registration email event is skipped. ONLY enabled in the {@code e2e}
      * profile so Playwright tests don't need an SMTP server or a verification
@@ -96,6 +106,16 @@ public class UserService {
     }
 
     public ResponseEntity<Map<String, Object>> doLogin(HttpServletRequest request, HttpServletResponse response, UserLoginDTO userLoginDTO){
+        // Ahead of the password check, and keyed by the account rather than the caller's
+        // address: credential stuffing walks a list of emails from wherever it likes, and
+        // behind a tunnel every request shares one address anyway. The same refusal is
+        // returned as for a wrong password, so the lockout cannot be asked which emails
+        // exist.
+        if (loginAttemptService != null && loginAttemptService.isLocked(userLoginDTO.email())) {
+            return ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED)
+                    .body(Map.of("error", "Email or password incorrect"));
+        }
+
         Optional<User> loginUser = userRepository.findByEmail(userLoginDTO.email());
         if(loginUser.isPresent()){
             User user = loginUser.get();
@@ -103,6 +123,9 @@ public class UserService {
                 if (!user.isEmailVerified()) {
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
                             .body(Map.of("error", "EMAIL_NOT_VERIFIED"));
+                }
+                if (loginAttemptService != null) {
+                    loginAttemptService.recordSuccess(userLoginDTO.email());
                 }
                 boolean mobile = ClientType.isMobile(request);
                 String accessToken = tokenService.generateJwtToken(user);
@@ -113,6 +136,12 @@ public class UserService {
                 }
                 return ResponseEntity.ok().body(Map.of("success", userMapper.toResponseDTO(user)));
             }
+        }
+        // Counted whether or not the address exists. Skipping unknown ones would turn
+        // the lockout into an oracle: guess six times and see whether the answer becomes
+        // "locked", and you have learned which emails are real.
+        if (loginAttemptService != null) {
+            loginAttemptService.recordFailure(userLoginDTO.email());
         }
         return ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED).body(Map.of("error", "Email or password incorrect"));
     }
