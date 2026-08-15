@@ -122,7 +122,9 @@ class AccountDeletionServiceUnitTest {
         ResponseEntity<Map<String, String>> response = service.confirm(user, "123456");
 
         assertEquals(200, response.getStatusCode().value());
-        assertNotNull(code.getUsedAt(), "a spent code must not work twice");
+        // Spent means gone: a row marked used would linger in the session pointing at
+        // a user about to be deleted, which is what broke the route the first time.
+        verify(codeRepository).delete(code);
         verify(userService).deleteUser(user);
     }
 

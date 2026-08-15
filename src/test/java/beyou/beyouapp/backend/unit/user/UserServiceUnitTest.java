@@ -97,6 +97,7 @@ public class UserServiceUnitTest {
     @Mock
     private beyou.beyouapp.backend.domain.aiAgent.chat.ChatService chatService;
 
+
     @BeforeEach
     void setUp() {
         SecurityContextHolder.clearContext();

@@ -55,6 +55,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * a green run means "the delete button works for someone who has used BeYou",
  * which is the only version of it worth shipping.
  */
+@org.springframework.test.context.TestPropertySource(properties = "e2e.expose-deletion-code=true")
 class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
 
     private static final String EMAIL = "deletion-integration@beyou.test";
@@ -66,6 +67,7 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
     @Autowired TaskService taskService;
     @Autowired DiaryRoutineService diaryRoutineService;
     @Autowired ChatService chatService;
+    @Autowired beyou.beyouapp.backend.user.deletion.AccountDeletionService accountDeletionService;
     @Autowired PasswordResetTokenRepository passwordResetTokenRepository;
 
     /** Nothing here should try to reach an SMTP server. */
@@ -124,8 +126,15 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
         token.setExpiresAt(Timestamp.from(Instant.now().plusSeconds(900)));
         passwordResetTokenRepository.saveAndFlush(token);
 
-        assertThatCode(() -> userService.deleteUser(user))
-                .as("a used account must be deletable, not just an empty one")
+        // Through the real flow, not straight to deleteUser: asking for a code leaves
+        // a row of its own pointing at the account, and spending it leaves that row
+        // managed in the session. Calling deleteUser directly skips both, which is
+        // why the first version of this test passed while the route 500'd.
+        String code = accountDeletionService.requestCode(user);
+        assertThat(code).as("the property above must expose the code").isNotNull();
+
+        assertThatCode(() -> accountDeletionService.confirm(user, code))
+                .as("a used account must be deletable through the route people will use")
                 .doesNotThrowAnyException();
 
         assertThat(rowsFor("users", "id", userId)).isZero();
@@ -136,6 +145,7 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
         assertThat(rowsFor("categories", "user_id", userId)).isZero();
         assertThat(rowsFor("routines", "user_id", userId)).isZero();
         assertThat(rowsFor("refresh_tokens", "user_id", userId)).isZero();
+        assertThat(rowsFor("account_deletion_codes", "user_id", userId)).isZero();
     }
 
     /**

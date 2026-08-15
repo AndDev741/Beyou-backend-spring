@@ -19,4 +19,5 @@ public interface AccountDeletionCodeRepository extends JpaRepository<AccountDele
     int invalidateActiveCodes(@Param("userId") UUID userId,
             @Param("usedAt") Timestamp usedAt,
             @Param("now") Timestamp now);
+
 }

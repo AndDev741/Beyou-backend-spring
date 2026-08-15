@@ -90,9 +90,15 @@ public class AccountDeletionService {
     /**
      * Spends the code and deletes the account.
      *
-     * The code is marked used before the delete rather than after: both run in this
-     * transaction, so a failed delete rolls the "used" mark back with it, and a
-     * committed delete takes the row with the account anyway.
+     * Spending means deleting the row, not marking it used. A used row would stay
+     * MANAGED in this session while pointing at a user that is about to be deleted,
+     * and Hibernate checks that reference before the database's ON DELETE CASCADE
+     * ever gets a say: the route failed on TransientPropertyValueException the first
+     * time it ran for real. Deleting the entity takes it out of the session too, and
+     * a code that no longer exists is as single-use as one marked spent.
+     *
+     * Both halves are in this transaction, so a failed delete rolls the code back
+     * with it and the user can try again.
      */
     @Transactional
     public ResponseEntity<Map<String, String>> confirm(User user, String rawCode) {
@@ -118,8 +124,7 @@ public class AccountDeletionService {
             throw new BusinessException(ErrorKey.DELETION_CODE_INVALID, "Deletion code invalid");
         }
 
-        code.setUsedAt(Timestamp.from(Instant.now()));
-        codeRepository.save(code);
+        codeRepository.delete(code);
 
         log.info("Deleting account {} after a confirmed deletion code", user.getId());
         return userService.deleteUser(user);

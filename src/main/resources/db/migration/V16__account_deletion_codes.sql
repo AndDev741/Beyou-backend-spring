@@ -26,8 +26,9 @@ CREATE TABLE IF NOT EXISTS account_deletion_codes (
     user_id uuid NOT NULL,
     -- squawk-ignore prefer-text-field
     code_hash varchar(255) NOT NULL,
-    -- squawk-ignore prefer-bigint-over-int: this counts to five and then the code is
-    -- dead. A bigint here would be 8 bytes to hold a number that never reaches six.
+    -- This counts to five and then the code is dead, so a bigint would be eight
+    -- bytes holding a number that never reaches six.
+    -- squawk-ignore prefer-bigint-over-int
     attempts integer NOT NULL DEFAULT 0,
     -- squawk-ignore prefer-timestamp-tz
     created_at timestamp NOT NULL,
