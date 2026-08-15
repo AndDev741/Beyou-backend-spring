@@ -138,8 +138,13 @@ public class AccountDeletionService {
     /**
      * Mail goes out only once the code row is durable. The reverse order would let a
      * rollback leave a code in someone's inbox that the app has never heard of, and
-     * a failed send drops the row so the cooldown does not lock the user out of
-     * trying again.
+     * a failed send drops the row: nobody received that code, so keeping it alive
+     * would only hold the cooldown against a user who has nothing to type.
+     *
+     * Unless the code was handed back in the response. Under the e2e profile there
+     * is no SMTP at all, so every send fails and the cleanup was deleting the row
+     * for a code the caller already had in its hand — the flow could not be
+     * completed there at all. When the caller has it, a failed mail costs nothing.
      */
     private void sendAfterCommit(User user, UUID codeId, String rawCode) {
         Duration ttl = Duration.ofMinutes(codeTtlMinutes);
@@ -148,7 +153,9 @@ public class AccountDeletionService {
                 emailService.sendAccountDeletionCodeEmail(user.getEmail(), rawCode, ttl, user.getLanguageInUse());
             } catch (Exception e) {
                 log.error("Failed to send the account deletion code for user {}", user.getId(), e);
-                cleanupUnsentCode(codeId, user.getId());
+                if (!exposeCode) {
+                    cleanupUnsentCode(codeId, user.getId());
+                }
             }
         };
 

@@ -181,4 +181,35 @@ class AccountDeletionServiceUnitTest {
         assertEquals(ErrorKey.DELETION_CODE_INVALID, error.getErrorKey());
         verify(userService, never()).deleteUser(any());
     }
+
+    /**
+     * A code the caller already holds is not lost when the mail fails. Only the e2e
+     * profile hands it back, and there is no SMTP there, so cleaning up on a failed
+     * send deleted the row for a code the test had in its hand and made the flow
+     * impossible to finish.
+     */
+    @Test
+    void anExposedCodeSurvivesAFailedEmail() {
+        ReflectionTestUtils.setField(service, "exposeCode", true);
+        when(codeRepository.findTopByUserIdOrderByCreatedAtDesc(user.getId())).thenReturn(Optional.empty());
+        org.mockito.Mockito.doThrow(new RuntimeException("no SMTP here"))
+                .when(emailService).sendAccountDeletionCodeEmail(anyString(), anyString(), any(), anyString());
+
+        String returned = service.requestCode(user);
+
+        assertTrue(returned.matches("\\d{6}"), returned);
+        verify(codeRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void anUnsentCodeIsCleanedUpWhenNobodyGotIt() {
+        when(codeRepository.findTopByUserIdOrderByCreatedAtDesc(user.getId())).thenReturn(Optional.empty());
+        org.mockito.Mockito.doThrow(new RuntimeException("mail server down"))
+                .when(emailService).sendAccountDeletionCodeEmail(anyString(), anyString(), any(), anyString());
+
+        assertEquals(null, service.requestCode(user));
+
+        // Nobody received it, so holding the cooldown against the user would be cruel.
+        verify(codeRepository).deleteById(any());
+    }
 }
