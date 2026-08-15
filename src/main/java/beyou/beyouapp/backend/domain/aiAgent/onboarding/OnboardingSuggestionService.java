@@ -131,13 +131,22 @@ public class OnboardingSuggestionService {
     private String routineMessage(OnboardingContext context) {
         String feedback = context != null && context.feedback() != null ? context.feedback() : "";
         return contextBlock(context) + """
-                Draft ONE daily routine using ONLY the user's habits and tasks listed above (refer to them \
-                by their EXACT names — do not invent items). 3-5 sections covering the day, each with name, \
+                Draft ONE daily routine. Build it mostly out of the user's habits and tasks listed above, \
+                referring to each by its EXACT name. 3-5 sections covering the day, each with name, \
                 iconId, startTime and endTime in HH:mm. Place each item in a fitting section with startTime \
                 and endTime inside that section's window. Every item's endTime must be LATER than its own \
                 startTime, and both must fall between the section's startTime and endTime. Also pick \
                 scheduleDays: a subset of \
                 Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday that fits the routine.
+
+                If the day plainly needs something the user does not have yet, add it: put the full item in \
+                newHabits (recurring) or newTasks (one-off), and place it in a section by that same name. \
+                Fields per new habit: name, description, motivationalPhrase, iconId from the catalog, \
+                categoryName matching one of the user's categories verbatim, importance 1-5, difficulty 1-5. \
+                New tasks: the same minus motivationalPhrase. Keep it to at most 3 new items in total, and \
+                only where a section would otherwise be empty or the day would have an obvious hole. Never \
+                restate an item the user already has as a new one, and never place a name that is neither in \
+                the lists above nor in newHabits/newTasks.
                 """ + (feedback.isBlank() ? "" : "\nAdapt the draft to this user feedback: \"" + feedback + "\"");
     }
 
@@ -230,10 +239,28 @@ public class OnboardingSuggestionService {
                             sanitizeItems(s.habits(), sectionStart, sectionEnd),
                             sanitizeItems(s.tasks(), sectionStart, sectionEnd));
                 }).toList();
+        // Through the same sanitizers the HABITS_TASKS step uses, then capped: the
+        // prompt asks for at most three, and a model that ignores that would otherwise
+        // have the wizard create a pile of entities nobody asked for.
+        List<HabitSuggestion> newHabits = sanitizeHabits(routine.newHabits()).stream()
+                .limit(MAX_NEW_ROUTINE_ITEMS).toList();
+        List<TaskSuggestion> newTasks = sanitizeTasks(routine.newTasks()).stream()
+                .limit(Math.max(0, MAX_NEW_ROUTINE_ITEMS - newHabits.size())).toList();
+
         return new RoutineSuggestion(truncate(routine.name(), 256),
                 AiIconCatalog.orDefault(routine.iconId()),
-                normalizeDays(routine.scheduleDays()), sections);
+                normalizeDays(routine.scheduleDays()), sections, newHabits, newTasks);
     }
+
+    /**
+     * How many items the routine step may invent, habits and tasks together.
+     *
+     * The step exists to arrange a day, not to keep suggesting things: someone who has
+     * just accepted eight habits and four tasks does not want the next screen adding
+     * six more. Three is enough to close an obvious hole and small enough that the
+     * user can see at a glance what was added.
+     */
+    private static final int MAX_NEW_ROUTINE_ITEMS = 3;
 
     /**
      * Item placements POST /routine will actually accept.
