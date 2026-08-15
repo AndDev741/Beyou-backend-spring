@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +28,8 @@ import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.common.ExperienceLevel;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
+import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
+import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
@@ -70,6 +73,7 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
     @Autowired HabitService habitService;
     @Autowired TaskService taskService;
     @Autowired DiaryRoutineService diaryRoutineService;
+    @Autowired beyou.beyouapp.backend.domain.routine.schedule.ScheduleService scheduleService;
     @Autowired ChatService chatService;
     @Autowired beyou.beyouapp.backend.user.deletion.AccountDeletionService accountDeletionService;
     @Autowired PasswordResetTokenRepository passwordResetTokenRepository;
@@ -121,6 +125,11 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
                         List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null)),
                         false))), userId);
 
+        // Scheduled, because an unscheduled routine cannot leave a schedule behind.
+        UUID routineId = diaryRoutineService.getAllDiaryRoutines(userId).get(0).id();
+        scheduleService.create(new CreateScheduleDTO(
+                Set.of(WeekDay.Monday, WeekDay.Wednesday), routineId), userId);
+
         // The two plain foreign keys that used to block the delete outright.
         chatService.createChat("A conversation with the agent", userId);
         PasswordResetToken token = new PasswordResetToken();
@@ -150,6 +159,16 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
         assertThat(rowsFor("routines", "user_id", userId)).isZero();
         assertThat(rowsFor("refresh_tokens", "user_id", userId)).isZero();
         assertThat(rowsFor("account_deletion_codes", "user_id", userId)).isZero();
+
+        // The row nothing counts by user_id, because it has no user_id to count by.
+        // A schedule is reachable only through routines.schedule_id, so once the
+        // routine is gone an orphan is invisible to every check above — which is how
+        // this leaked unnoticed until a dev database was queried by hand after a real
+        // deletion. Asserted globally rather than for this user: an orphan by
+        // definition cannot be attributed to anyone.
+        assertThat(orphanedSchedules())
+                .as("a deleted account must not leave a schedule nobody can reach")
+                .isZero();
     }
 
 
@@ -244,6 +263,26 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
             }
         } catch (SQLException e) {
             throw new IllegalStateException("could not count rows in " + table, e);
+        }
+    }
+
+    /**
+     * Schedules with no routine pointing at them, counted on a connection of its own.
+     *
+     * A schedule row is an id and nothing more, so once its routine is gone there is no
+     * column left to identify it by — not a user, not a name. The only question that can
+     * still be asked is whether anything references it at all.
+     */
+    private int orphanedSchedules() {
+        String sql = "SELECT count(*) FROM schedules s "
+                + "WHERE NOT EXISTS (SELECT 1 FROM routines r WHERE r.schedule_id = s.id)";
+        try (Connection connection = DriverManager.getConnection(jdbcUrl, jdbcUsername, jdbcPassword);
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet rs = statement.executeQuery()) {
+            rs.next();
+            return rs.getInt(1);
+        } catch (SQLException e) {
+            throw new IllegalStateException("could not count orphaned schedules", e);
         }
     }
 }
