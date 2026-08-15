@@ -95,6 +95,13 @@ class UserDeletionOrderingUnitTest {
     private final User user = new User();
     private final List<UUID> submissionIds = List.of(UUID.randomUUID(), UUID.randomUUID());
 
+    /** Both only exist so deleteUser can clear the rows that block it. */
+    @Mock
+    private beyou.beyouapp.backend.security.passwordreset.PasswordResetTokenRepository passwordResetTokenRepository;
+
+    @Mock
+    private beyou.beyouapp.backend.domain.aiAgent.chat.ChatService chatService;
+
     @BeforeEach
     void setUp() {
         user.setId(userId);
@@ -102,7 +109,7 @@ class UserDeletionOrderingUnitTest {
         user.setEmail("deletion-order@beyou.test");
         userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService,
                 new UserMapper(userStreakService), photoStorageService, eventPublisher,
-                feedbackAttachmentService, userStreakService);
+                feedbackAttachmentService, userStreakService, passwordResetTokenRepository, chatService);
     }
 
     @AfterEach

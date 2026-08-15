@@ -1,11 +1,14 @@
 package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.AbstractIntegrationTest;
+import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentService;
 import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
 import beyou.beyouapp.backend.domain.feedback.FeedbackRepository;
 import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackRequestDTO;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.security.passwordreset.PasswordResetToken;
 import beyou.beyouapp.backend.security.passwordreset.PasswordResetTokenRepository;
 
@@ -44,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -85,10 +89,14 @@ class UserDeletionCommitBoundaryIntegrationTest extends AbstractIntegrationTest 
     FeedbackAttachmentService attachmentService;
 
     @Autowired
-    UserService userService;
+    UserRepository userRepository;
+
+    /** Spied so one test can fail the delete on a real step of it. */
+    @MockitoSpyBean
+    ChatService chatService;
 
     @Autowired
-    UserRepository userRepository;
+    UserService userService;
 
     @Autowired
     FeedbackService feedbackService;
@@ -175,13 +183,16 @@ class UserDeletionCommitBoundaryIntegrationTest extends AbstractIntegrationTest 
     }
 
     /**
-     * The mirror image, with a real proxy and a real foreign key: a delete that
-     * cannot succeed must cost no files.
+     * The mirror image, with a real proxy: a delete that cannot succeed must cost
+     * no files.
      *
-     * <p>{@code password_reset_tokens.user_id} is a plain non-cascading foreign
-     * key (V1__baseline.sql) that {@code User} maps no {@code @OneToMany} for and
-     * {@code deleteUser} does not clear, so a row there blocks the delete for
-     * real rather than through a mock.
+     * <p>This used to seed a {@code password_reset_tokens} row and let a real
+     * foreign key do the blocking, which was the honest version. It cannot any
+     * more, and for a good reason: the account deletion route needed those rows
+     * cleared, so {@code deleteUser} now clears them — along with chats, and with
+     * tasks carried off by a mapping {@code User} was missing. No plain foreign key
+     * to {@code users} is left to block a delete, which is exactly what makes the
+     * delete button shippable. So the failure is induced at the flush instead.
      *
      * <p>Also the honest counterpart to the assertion
      * {@code UserDeletionOrderingUnitTest} used to make. The flush failure marks
@@ -194,12 +205,13 @@ class UserDeletionCommitBoundaryIntegrationTest extends AbstractIntegrationTest 
     @Test
     @DisplayName("a delete blocked by a real foreign key rolls back past the method's 400 and purges nothing")
     void blockedDeleteLeavesTheFilesOnDisk() {
-        PasswordResetToken blocker = new PasswordResetToken();
-        blocker.setUser(user);
-        blocker.setTokenHash("blocks-the-delete");
-        blocker.setCreatedAt(Timestamp.from(Instant.now()));
-        blocker.setExpiresAt(Timestamp.from(Instant.now().plusSeconds(900)));
-        blockerTokenId = passwordResetTokenRepository.saveAndFlush(blocker).getId();
+        // A real step of the delete, failing the way it is written to fail. It runs
+        // before the account row is touched, and because it throws out of its own
+        // @Transactional method the transaction is marked rollback-only for real —
+        // which is what makes the proxy, not the method's catch block, decide what
+        // the caller sees.
+        doThrow(new BusinessException(ErrorKey.CHAT_DELETE_FAILED, "the agent's chats could not be cleared"))
+                .when(chatService).deleteAllChats(user.getId());
 
         assertThatThrownBy(() -> userService.deleteUser(user))
                 .as("the method returns a 400 body, but the transaction is already rollback-only, "

@@ -743,4 +743,152 @@ public class EmailService {
             : "Reset your BeYou password 🔐✨";
     }
 
+    /**
+     * The code that unlocks account deletion.
+     *
+     * No link and no button, unlike every other mail here: a deletion must not be
+     * one careless click away from an inbox. The code has to be carried back to the
+     * app by hand, which is what makes it a second, deliberate step.
+     */
+    public void sendAccountDeletionCodeEmail(String to, String code, Duration ttl, String language) {
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+
+            helper.setTo(to);
+            helper.setFrom(fromAddress);
+            helper.setSubject(resolveAccountDeletionSubject(language));
+            helper.setText(buildAccountDeletionHtmlBody(code, ttl, language), true);
+
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to send email", e);
+        }
+    }
+
+    private String resolveAccountDeletionSubject(String language) {
+        return normalizeLanguage(language).equals("pt")
+            ? "Seu código para apagar a conta BeYou"
+            : "Your code to delete your BeYou account";
+    }
+
+    private String buildAccountDeletionHtmlBody(String code, Duration ttl, String language) {
+        long minutes = ttl.toMinutes();
+        String template = normalizeLanguage(language).equals("pt")
+            ? """
+                <html>
+                <body style="margin:0;padding:0;background-color:#f5f7fa;font-family:Arial,Helvetica,sans-serif;">
+                    <table width="100%%" cellpadding="0" cellspacing="0" style="padding:40px 0;">
+                        <tr>
+                            <td align="center">
+                                <table width="600" cellpadding="0" cellspacing="0"
+                                       style="background:#ffffff;border-radius:16px;padding:40px;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
+                                    <tr>
+                                        <td>
+                                            <h1 style="color:#111827;font-size:22px;margin:0 0 16px;">
+                                                Você pediu para apagar sua conta
+                                            </h1>
+
+                                            <p style="color:#374151;line-height:1.6;">
+                                                Digite este código no app para continuar:
+                                            </p>
+
+                                            <div style="text-align:center;margin:30px 0;">
+                                                <span style="display:inline-block;
+                                                             background:#f3f4f6;
+                                                             color:#111827;
+                                                             font-size:32px;
+                                                             letter-spacing:10px;
+                                                             font-weight:bold;
+                                                             padding:16px 28px;
+                                                             border-radius:12px;">%s</span>
+                                            </div>
+
+                                            <p style="color:#6b7280;font-size:14px;">
+                                                ⏳ O código expira em <strong>%d minutos</strong>.
+                                            </p>
+
+                                            <p style="color:#374151;line-height:1.6;">
+                                                Apagar a conta remove tudo: hábitos, rotinas, metas, histórico e XP.
+                                                Não dá para desfazer.
+                                            </p>
+
+                                            <p style="color:#6b7280;font-size:14px;">
+                                                Não foi você? Então não faça nada. Sem este código ninguém apaga sua
+                                                conta, e vale trocar sua senha por segurança.
+                                            </p>
+                                        </td>
+                                    </tr>
+                                </table>
+
+                                <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
+                                    © %d BeYou. Continue evoluindo.
+                                </p>
+
+                            </td>
+                        </tr>
+                    </table>
+                </body>
+                </html>
+                """
+            : """
+                <html>
+                <body style="margin:0;padding:0;background-color:#f5f7fa;font-family:Arial,Helvetica,sans-serif;">
+                    <table width="100%%" cellpadding="0" cellspacing="0" style="padding:40px 0;">
+                        <tr>
+                            <td align="center">
+                                <table width="600" cellpadding="0" cellspacing="0"
+                                       style="background:#ffffff;border-radius:16px;padding:40px;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
+                                    <tr>
+                                        <td>
+                                            <h1 style="color:#111827;font-size:22px;margin:0 0 16px;">
+                                                You asked to delete your account
+                                            </h1>
+
+                                            <p style="color:#374151;line-height:1.6;">
+                                                Type this code into the app to continue:
+                                            </p>
+
+                                            <div style="text-align:center;margin:30px 0;">
+                                                <span style="display:inline-block;
+                                                             background:#f3f4f6;
+                                                             color:#111827;
+                                                             font-size:32px;
+                                                             letter-spacing:10px;
+                                                             font-weight:bold;
+                                                             padding:16px 28px;
+                                                             border-radius:12px;">%s</span>
+                                            </div>
+
+                                            <p style="color:#6b7280;font-size:14px;">
+                                                ⏳ The code expires in <strong>%d minutes</strong>.
+                                            </p>
+
+                                            <p style="color:#374151;line-height:1.6;">
+                                                Deleting your account removes everything: habits, routines, goals,
+                                                history and XP. It cannot be undone.
+                                            </p>
+
+                                            <p style="color:#6b7280;font-size:14px;">
+                                                Wasn't you? Then do nothing. Nobody can delete your account without
+                                                this code, and it is worth changing your password.
+                                            </p>
+                                        </td>
+                                    </tr>
+                                </table>
+
+                                <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
+                                    © %d BeYou. Keep growing.
+                                </p>
+
+                            </td>
+                        </tr>
+                    </table>
+                </body>
+                </html>
+                """;
+
+        return template.formatted(escape(code), minutes, Year.now().getValue());
+    }
+
 }

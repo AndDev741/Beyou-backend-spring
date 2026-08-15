@@ -90,6 +90,13 @@ public class UserServiceUnitTest {
     User user = new User();
     UUID userId = UUID.randomUUID();
 
+    /** Both only exist so deleteUser can clear the rows that block it. */
+    @Mock
+    private beyou.beyouapp.backend.security.passwordreset.PasswordResetTokenRepository passwordResetTokenRepository;
+
+    @Mock
+    private beyou.beyouapp.backend.domain.aiAgent.chat.ChatService chatService;
+
     @BeforeEach
     void setUp() {
         SecurityContextHolder.clearContext();
@@ -108,7 +115,7 @@ public class UserServiceUnitTest {
         user.setPerfilPhraseAuthor("lg?");
         user.setWidgetsIdInUse(List.of("widget4, widget5"));
 
-        userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService, userMapper, photoStorageService, eventPublisher, feedbackAttachmentService, userStreakService);
+        userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService, userMapper, photoStorageService, eventPublisher, feedbackAttachmentService, userStreakService, passwordResetTokenRepository, chatService);
     }
 
     /** One of the account's frozen day rows. */

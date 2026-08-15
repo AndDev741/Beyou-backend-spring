@@ -15,4 +15,13 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     @Modifying
     @Query("update PasswordResetToken t set t.usedAt = :usedAt where t.user.id = :userId and t.usedAt is null and t.expiresAt > :now")
     int invalidateActiveTokens(@Param("userId") UUID userId, @Param("usedAt") Timestamp usedAt, @Param("now") Timestamp now);
+
+    /**
+     * Clears the rows out of the way of an account delete: `password_reset_tokens.user_id`
+     * is a plain foreign key, so a user who has ever asked for a reset cannot be
+     * deleted while its tokens stand.
+     */
+    @Modifying
+    @Query("delete from PasswordResetToken t where t.user.id = :userId")
+    int deleteAllForUser(@Param("userId") UUID userId);
 }

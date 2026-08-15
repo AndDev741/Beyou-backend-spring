@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.domain.checkday.UserStreakService;
+import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
@@ -8,6 +9,7 @@ import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.security.ClientType;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
+import beyou.beyouapp.backend.security.passwordreset.PasswordResetTokenRepository;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
@@ -57,6 +59,10 @@ public class UserService {
     private final FeedbackAttachmentService feedbackAttachmentService;
     /** R14 — the schedule-aware walk behind {@link #markDayCompleted}. */
     private final UserStreakService userStreakService;
+
+    /** Both only exist for {@link #deleteUser(User)}: their rows block the delete. */
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final ChatService chatService;
 
     /**
      * When true, newly registered users are immediately marked as verified and
@@ -158,12 +164,12 @@ public class UserService {
     /**
      * R21 — deleting an account takes the account's content with it.
      *
-     * <p><b>Nothing in the application calls this.</b> Account self-deletion is
-     * not shipping in this release and no controller exposes it, so the only
-     * caller today is an operator working by hand — see <i>Operator
-     * procedure</i> at the bottom. The method exists ahead of the route so that
-     * whoever adds the route inherits the ordering below instead of
-     * rediscovering it.
+     * <p><b>Called by {@link beyou.beyouapp.backend.user.deletion.AccountDeletionService},
+     * once the user has typed back a code mailed to their address.</b> The method
+     * was written before that route existed so whoever added it would inherit the
+     * ordering below instead of rediscovering it; the <i>Operator procedure</i> at
+     * the bottom stays as the manual fallback and as the description of what this
+     * method does, in the language of the database.
      *
      * <p>Every owned domain (categories, habits, goals, tasks, routines,
      * feedback) is carried off by the database's ON DELETE CASCADE inside this
@@ -231,11 +237,19 @@ public class UserService {
      * that leave the transaction committable. Either way nothing is purged,
      * which is the property that matters.
      *
-     * <p>Not every non-cascading reference is cleared here: {@code chats.user_id}
-     * (V5__chat.sql) and {@code password_reset_tokens.user_id} are plain
-     * foreign keys too. They will block the delete for the accounts that hold
-     * them — but with this ordering they block it before anything is destroyed,
-     * which is the property that matters.
+     * <p>{@code chats.user_id} (V5__chat.sql) and {@code password_reset_tokens.user_id}
+     * are plain foreign keys as well, and they used to block this delete outright
+     * for any account that had ever opened the agent or asked for a reset — which,
+     * once a route existed, meant nearly every real account. Both are cleared here
+     * now, in the order the operator procedure uses. Chats go through
+     * {@code ChatService.deleteAllChats} rather than their repository because the
+     * rows are only half of it: the model's memory of each conversation lives in
+     * {@code SPRING_AI_CHAT_MEMORY}, keyed by chat id with no foreign key to
+     * follow, so deleting the rows alone would leave the agent remembering someone
+     * who no longer exists.
+     *
+     * <p>{@code account_deletion_codes.user_id} (V16) is not in that list: it
+     * CASCADEs on purpose, since a code has no meaning once the account is gone.
      *
      * <p>{@code entity_check_day.user_id} (V13) is deliberately NOT one of them:
      * it is {@code ON DELETE CASCADE}, like {@code feedback.user_id}, so the
@@ -288,6 +302,15 @@ public class UserService {
             List<UUID> submissionIds = feedbackAttachmentService.findSubmissionIdsForUser(user.getId());
 
             refreshTokenService.deleteAllForUser(user.getId());
+            // The two plain foreign keys that used to block this delete outright, in
+            // the order the operator procedure below uses. Chats go through their own
+            // service because the rows are only half the story: the model's memory of
+            // each conversation lives in SPRING_AI_CHAT_MEMORY, keyed by chat id with
+            // no foreign key to follow, so deleting the rows alone would leave the
+            // agent remembering a user who no longer exists.
+            passwordResetTokenRepository.deleteAllForUser(user.getId());
+            chatService.deleteAllChats(user.getId());
+
             userRepository.delete(user);
             userRepository.flush();
 

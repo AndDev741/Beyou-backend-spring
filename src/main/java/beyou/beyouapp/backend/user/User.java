@@ -5,6 +5,7 @@ import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.habit.Habit;
+import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.routine.Routine;
 import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
@@ -73,7 +74,15 @@ public class User implements UserDetails {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Category> categories;
 
-    private List<String> tasks;
+    /**
+     * Tasks were the one owned domain the user never mapped: this field used to be
+     * a {@code List<String>} that nothing read and no table backed, so Hibernate
+     * had no way to carry tasks off with their owner. Deleting an account that had
+     * ever created a task failed with a transient-reference error, which is every
+     * real account. Same shape as the four collections around it.
+     */
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Task> tasks;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Habit> habits;
