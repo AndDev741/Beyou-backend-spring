@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.unit.category;
 
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.xpday.XpDayRecorder;
 import beyou.beyouapp.backend.domain.category.CategoryMapper;
 import beyou.beyouapp.backend.domain.category.CategoryRepository;
 import beyou.beyouapp.backend.domain.category.CategoryService;
@@ -36,6 +37,10 @@ import static org.mockito.Mockito.when;
 public class CategoryServiceUnitTest {
     @Mock
     private CategoryRepository categoryRepository;
+
+    /** The XP history is a chart; nothing in these tests asserts on it. */
+    @Mock
+    private XpDayRecorder xpDayRecorder;
 
     @Mock
     private XpByLevelRepository xpByLevelRepository;
@@ -75,7 +80,7 @@ public class CategoryServiceUnitTest {
         category.getXpProgress().setNextLevelXp(xpByLevel2.getXp());
         category.getXpProgress().setActualLevelXp(xpByLevel.getXp());
 
-        categoryService = new CategoryService(categoryRepository, xpByLevelRepository, userRepository, categoryMapper, userCacheEvictService);
+        categoryService = new CategoryService(categoryRepository, xpDayRecorder, xpByLevelRepository, userRepository, categoryMapper, userCacheEvictService);
     }
 
     @Test

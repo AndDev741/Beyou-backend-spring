@@ -1,6 +1,8 @@
 package beyou.beyouapp.backend.domain.routine.specializedRoutines;
 
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
+import beyou.beyouapp.backend.domain.xpday.XpDayOwnerType;
+import beyou.beyouapp.backend.domain.xpday.XpDayRecorder;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
@@ -52,6 +54,7 @@ public class DiaryRoutineService {
     private static final int ITEM_TIME_TOLERANCE_MINUTES = 5;
 
     private final DiaryRoutineRepository diaryRoutineRepository;
+    private final XpDayRecorder xpDayRecorder;
     private final DiaryRoutineMapper mapper;
     private final CheckItemService checkItemService;
     private final UserCacheEvictService userCacheEvictService;
@@ -289,6 +292,8 @@ public class DiaryRoutineService {
             routineSnapshotRepository.flush();
         }
 
+        // owner_id carries no foreign key, so nothing in the database clears this.
+        xpDayRecorder.forget(XpDayOwnerType.ROUTINE, id);
         diaryRoutineRepository.deleteById(id);
         userCacheEvictService.evictAllUserCaches(userId);
     }
