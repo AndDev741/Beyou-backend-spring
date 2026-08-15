@@ -403,8 +403,11 @@ class DiaryRoutineServiceUnitTest {
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(updatedSection)));
 
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
-        when(taskService.getTask(any(UUID.class))).thenReturn(mockedTask);
-        when(habitService.getHabit(any(UUID.class))).thenReturn(mockedHabit);
+        // getOwnedTask now, not getTask: the mapper resolves client-supplied ids through
+        // the owner-checked lookup after the 2026-07 audit found the create path letting
+        // one account embed another's task in its routine.
+        when(taskService.getOwnedTask(any(UUID.class), any(UUID.class))).thenReturn(mockedTask);
+        when(habitService.getOwnedHabit(any(UUID.class), any(UUID.class))).thenReturn(mockedHabit);
 
         DiaryRoutineResponseDTO response = diaryRoutineService.updateDiaryRoutine(routineId, updatedDTO, userId);
 

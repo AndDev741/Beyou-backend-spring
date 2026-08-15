@@ -50,6 +50,19 @@ public class TaskService {
         return taskRepository.findById(taskId).orElseThrow(() -> new TaskNotFound("Task not found"));
     }
 
+    /**
+     * The same lookup, refusing tasks that belong to somebody else. See
+     * {@code HabitService.getOwnedHabit} for why the check lives with the entity.
+     */
+    public Task getOwnedTask(UUID taskId, UUID userId){
+        Task task = getTask(taskId);
+        if (task.getUser() == null || !task.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.TASK_NOT_OWNED,
+                    "The task isn't of the user on context");
+        }
+        return task;
+    }
+
     // Transactional so the mapper can walk lazy category relations: OSIV covers
     // this on the request thread, but agent tools run on a boundedElastic thread.
     @Transactional(readOnly = true)

@@ -123,7 +123,7 @@ public class DiaryRoutineService {
     @Transactional
     public DiaryRoutineResponseDTO createDiaryRoutine(DiaryRoutineRequestDTO dto, User user) {
         validateRequestDTO(dto);
-        DiaryRoutine diaryRoutine = mapper.toEntity(dto);
+        DiaryRoutine diaryRoutine = mapper.toEntity(dto, user.getId());
         diaryRoutine.setUser(user);
         DiaryRoutine saved = diaryRoutineRepository.save(diaryRoutine);
         userCacheEvictService.evictAllUserCaches(user.getId());
@@ -183,7 +183,7 @@ public class DiaryRoutineService {
                 mergeTaskGroups(existing, sectionDTO.taskGroup(), userId);
             } else {
                 // Create new section
-                RoutineSection newSection = mapper.mapToRoutineSection(sectionDTO, routine);
+                RoutineSection newSection = mapper.mapToRoutineSection(sectionDTO, routine, userId);
                 newSection.setId(null);
                 newSection.setOrderIndex(index);
                 routine.getRoutineSections().add(newSection);

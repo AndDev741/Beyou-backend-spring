@@ -67,6 +67,25 @@ public class HabitService {
         .orElseThrow(() -> new HabitNotFound("Habit not found"));
     }
 
+    /**
+     * The same lookup, refusing habits that belong to somebody else.
+     *
+     * <p>Lives here rather than in each caller because the check is a property of
+     * reading a habit by a client-supplied id, not of the feature doing the reading.
+     * The routine mapper did the unchecked lookup and let one account embed another's
+     * habit in its own routine — after which checking that routine incremented the
+     * victim's streak and moved their category XP, and handed their habit back in the
+     * response. Same shape as {@code CategoryService.getCategory(id, userId)}.
+     */
+    public Habit getOwnedHabit(UUID habitId, UUID userId){
+        Habit habit = getHabit(habitId);
+        if (habit.getUser() == null || !habit.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorKey.HABIT_NOT_OWNED,
+                    "The habit is not from the user in context");
+        }
+        return habit;
+    }
+
     // Transactional so the mapper can walk lazy habitGroups: OSIV covers this
     // on the request thread, but agent tools run on a boundedElastic thread.
     @Transactional(readOnly = true)

@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalTime;
+import java.util.UUID;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,19 +35,19 @@ public class DiaryRoutineMapper {
     private final TaskService taskService;
     private final HabitService habitService;
 
-    public DiaryRoutine toEntity(DiaryRoutineRequestDTO dto) {
+    public DiaryRoutine toEntity(DiaryRoutineRequestDTO dto, UUID userId) {
         DiaryRoutine diaryRoutine = new DiaryRoutine();
         diaryRoutine.setName(dto.name());
         diaryRoutine.setIconId(dto.iconId());
-        diaryRoutine.setRoutineSections(mapToRoutineSections(dto.routineSections(), diaryRoutine));
+        diaryRoutine.setRoutineSections(mapToRoutineSections(dto.routineSections(), diaryRoutine, userId));
         return diaryRoutine;
     }
 
-    public void updateEntity(DiaryRoutine target, DiaryRoutineRequestDTO dto) {
+    public void updateEntity(DiaryRoutine target, DiaryRoutineRequestDTO dto, UUID userId) {
         target.setName(dto.name());
         target.setIconId(dto.iconId());
         target.getRoutineSections().clear();
-        target.getRoutineSections().addAll(mapToRoutineSections(dto.routineSections(), target));
+        target.getRoutineSections().addAll(mapToRoutineSections(dto.routineSections(), target, userId));
     }
 
     public DiaryRoutineResponseDTO toResponse(DiaryRoutine entity) {
@@ -74,7 +75,7 @@ public class DiaryRoutineMapper {
         return new DiaryRoutineResponseDTO.ScheduleResponseDTO(schedule.getId(), Set.copyOf(schedule.getDays()));
     }
 
-    public List<RoutineSection> mapToRoutineSections(List<RoutineSectionRequestDTO> dtos, DiaryRoutine diaryRoutine) {
+    public List<RoutineSection> mapToRoutineSections(List<RoutineSectionRequestDTO> dtos, DiaryRoutine diaryRoutine, UUID userId) {
         if (dtos == null) {
             return new ArrayList<>();
         }
@@ -93,13 +94,13 @@ public class DiaryRoutineMapper {
             section.setFavorite(dto.favorite());
             section.setRoutine(diaryRoutine);
 
-            section.setTaskGroups(mapTaskGroups(dto.taskGroup(), section));
-            section.setHabitGroups(mapHabitGroups(dto.habitGroup(), section));
+            section.setTaskGroups(mapTaskGroups(dto.taskGroup(), section, userId));
+            section.setHabitGroups(mapHabitGroups(dto.habitGroup(), section, userId));
             return section;
         }).collect(Collectors.toList());
     }
 
-    public RoutineSection mapToRoutineSection(RoutineSectionRequestDTO dto, DiaryRoutine diaryRoutine) {
+    public RoutineSection mapToRoutineSection(RoutineSectionRequestDTO dto, DiaryRoutine diaryRoutine, UUID userId) {
         if (dto == null) {
             return new RoutineSection();
         }
@@ -115,19 +116,22 @@ public class DiaryRoutineMapper {
         section.setFavorite(dto.favorite());
         section.setRoutine(diaryRoutine);
 
-        section.setTaskGroups(mapTaskGroups(dto.taskGroup(), section));
-        section.setHabitGroups(mapHabitGroups(dto.habitGroup(), section));
+        section.setTaskGroups(mapTaskGroups(dto.taskGroup(), section, userId));
+        section.setHabitGroups(mapHabitGroups(dto.habitGroup(), section, userId));
         return section;
     }
 
-    private List<TaskGroup> mapTaskGroups(List<TaskGroupDTO> taskGroupDTOs, RoutineSection section) {
+    private List<TaskGroup> mapTaskGroups(List<TaskGroupDTO> taskGroupDTOs, RoutineSection section, UUID userId) {
         if (taskGroupDTOs == null) {
             return new ArrayList<>();
         }
 
         return taskGroupDTOs.stream().map(taskDto -> {
             TaskGroup taskGroup = new TaskGroup();
-            Task task = taskService.getTask(taskDto.taskId());
+            // Owner-checked: an unchecked lookup here let one account embed another's
+            // task in its own routine, after which checking that routine mutated the
+            // victim's data and handed it back in the response.
+            Task task = taskService.getOwnedTask(taskDto.taskId(), userId);
 
             if (taskDto.id() != null) {
                 taskGroup.setId(taskDto.id());
@@ -147,14 +151,15 @@ public class DiaryRoutineMapper {
         }).collect(Collectors.toList());
     }
 
-    private List<HabitGroup> mapHabitGroups(List<HabitGroupDTO> habitGroupDTOs, RoutineSection section) {
+    private List<HabitGroup> mapHabitGroups(List<HabitGroupDTO> habitGroupDTOs, RoutineSection section, UUID userId) {
         if (habitGroupDTOs == null) {
             return new ArrayList<>();
         }
 
         return habitGroupDTOs.stream().map(habitDto -> {
             HabitGroup habitGroup = new HabitGroup();
-            Habit habit = habitService.getHabit(habitDto.habitId());
+            // Owner-checked, same reason as the task above.
+            Habit habit = habitService.getOwnedHabit(habitDto.habitId(), userId);
 
             if (habitDto.id() != null) {
                 habitGroup.setId(habitDto.id());

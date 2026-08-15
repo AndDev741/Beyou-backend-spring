@@ -8,6 +8,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,16 @@ import java.util.Set;
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private final Cache<String, Bucket> rateLimitCache;
+
+    /**
+     * The header the proxy in front sets to the caller's real address, or blank when
+     * nothing is in front. Only a header a client cannot forge belongs here.
+     */
+    // Initialised as well as annotated: @Value only fills this when Spring builds the
+    // filter, and the unit tests construct it directly. Without the default here that
+    // is a null on the first request they push through.
+    @Value("${rate-limit.trusted-client-ip-header:CF-Connecting-IP}")
+    private String trustedClientIpHeader = "CF-Connecting-IP";
 
     private static final Set<String> AUTH_PATHS = Set.of(
             "/auth/login", "/auth/register", "/auth/forgot-password", "/auth/google", "/auth/google/mobile"
@@ -157,10 +168,34 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
     }
 
+    /**
+     * Who this request is from, for the buckets keyed by address.
+     *
+     * <p>Not {@code X-Forwarded-For}. That header is a list any client can prepend to,
+     * and Cloudflare APPENDS the real address rather than replacing the header — so its
+     * leftmost entry, which this used to read, is whatever the caller typed. A remote
+     * attacker sending a different value per request minted a fresh bucket every time
+     * and never met the 5-per-15-minutes cap on login at all. It was the only automated
+     * abuse control on that endpoint.
+     *
+     * <p>{@code CF-Connecting-IP} instead: the edge sets it and overwrites any inbound
+     * copy, so a client cannot choose it. The name is configurable because the header
+     * belongs to whatever proxy is actually in front — an install behind something else
+     * points this at that proxy's equivalent, and one with no proxy at all leaves it
+     * blank and gets the socket address.
+     *
+     * <p>The fallback is the socket address, and it is deliberately NOT a rightmost-hop
+     * parse of the forwarded chain. Behind a tunnel every request shares one socket
+     * address, so this bucket collapses into a single global one — which is why the
+     * per-account lockout exists beside it. An IP bucket that cannot tell clients apart
+     * must never be the only thing standing between an attacker and an account.
+     */
     private String getClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isEmpty()) {
-            return xff.split(",")[0].trim();
+        if (trustedClientIpHeader != null && !trustedClientIpHeader.isBlank()) {
+            String forwarded = request.getHeader(trustedClientIpHeader);
+            if (forwarded != null && !forwarded.isBlank()) {
+                return forwarded.trim();
+            }
         }
         return request.getRemoteAddr();
     }
