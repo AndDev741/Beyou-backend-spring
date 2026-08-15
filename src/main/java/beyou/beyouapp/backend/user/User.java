@@ -75,11 +75,14 @@ public class User implements UserDetails {
     private List<Category> categories;
 
     /**
-     * Tasks were the one owned domain the user never mapped: this field used to be
-     * a {@code List<String>} that nothing read and no table backed, so Hibernate
-     * had no way to carry tasks off with their owner. Deleting an account that had
-     * ever created a task failed with a transient-reference error, which is every
-     * real account. Same shape as the four collections around it.
+     * Tasks were the one owned domain the user never mapped: this field used to be a
+     * {@code List<String>}, which Hibernate mapped to a {@code varchar(255)[]} column
+     * on this table that no code path ever read or wrote. So the real tasks, which live
+     * in their own table and reach back through {@code Task.user}, had nothing carrying
+     * them off with their owner. Deleting an account that had ever created a task failed
+     * with a transient-reference error, which is every real account. Same shape as the
+     * four collections around it now, and {@code V17} drops the column that was left
+     * behind.
      */
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Task> tasks;

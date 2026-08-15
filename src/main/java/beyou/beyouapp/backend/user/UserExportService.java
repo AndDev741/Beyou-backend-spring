@@ -122,6 +122,10 @@ public class UserExportService {
             map.put("description", t.getDescription());
             map.put("importance", t.getImportance());
             map.put("difficulty", t.getDificulty());
+            // Tasks carry CheckProgress exactly as habits do, and it was leaving in
+            // silence — the kind of omission that made the export dishonest in the
+            // first place.
+            map.put("streak", streak(t.getCheckProgress()));
             return map;
         }).toList());
 

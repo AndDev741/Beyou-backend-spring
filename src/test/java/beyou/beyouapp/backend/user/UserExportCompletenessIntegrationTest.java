@@ -161,6 +161,9 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         assertThat((Map<String, Object>) habits.get(0).get("progress")).containsKeys("xp", "level");
         assertThat((Map<String, Object>) habits.get(0).get("streak")).containsKey("bestStreak");
 
+        List<Map<String, Object>> tasks = (List<Map<String, Object>>) export.get("tasks");
+        assertThat((Map<String, Object>) tasks.get(0).get("streak")).containsKey("bestStreak");
+
         List<Map<String, Object>> categories = (List<Map<String, Object>>) export.get("categories");
         assertThat((Map<String, Object>) categories.get(0).get("progress")).containsKeys("xp", "level");
 

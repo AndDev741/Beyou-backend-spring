@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -128,8 +129,25 @@ public class AccountDeletionService {
         // Flushed here, not at commit: the DELETE takes the row's lock now, so a second
         // confirm racing this one blocks and then finds nothing to spend instead of
         // both passing validation and both deleting the account.
-        codeRepository.delete(code);
-        codeRepository.flush();
+        //
+        // The loser of that race is the case below. Both requests read the row before
+        // either deleted it, so both reach here holding a code that validates; the one
+        // that flushes second deletes zero rows, and Hibernate reports a zero-row DELETE
+        // as a stale state, which Spring translates to this exception. There is no
+        // @Version anywhere near this entity — the name is about how the failure is
+        // classified, not about optimistic locking being configured.
+        //
+        // Keyed as invalid rather than allowed to escape: the code really is gone, which
+        // is exactly what DELETION_CODE_INVALID says. Letting it through would be an
+        // unkeyed 500 on a request whose only sin was arriving second, and the account
+        // is being deleted by the other one regardless.
+        try {
+            codeRepository.delete(code);
+            codeRepository.flush();
+        } catch (OptimisticLockingFailureException raced) {
+            log.info("A concurrent confirm already spent the deletion code for {}", user.getId());
+            throw new BusinessException(ErrorKey.DELETION_CODE_INVALID, "Deletion code already used");
+        }
 
         log.info("Deleting account {} after a confirmed deletion code", user.getId());
         return userService.deleteUser(user);

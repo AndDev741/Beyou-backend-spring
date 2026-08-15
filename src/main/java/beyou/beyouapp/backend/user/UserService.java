@@ -284,42 +284,23 @@ public class UserService {
      * SELECT id FROM feedback WHERE user_id = :userId;
      *
      * BEGIN;
-     * -- 2. the plain foreign keys that block the delete outright
-     * DELETE FROM refresh_tokens        WHERE user_id = :userId;
-     * DELETE FROM password_reset_tokens WHERE user_id = :userId;
-     * DELETE FROM chats                 WHERE user_id = :userId;  -- agent_message cascades
-     *
-     * -- 3. what Hibernate would have cascaded, innermost first. Routine structure
-     * --    before routines, and habits/tasks only once no routine points at them.
-     * DELETE FROM habit_group_checks WHERE habit_group_id IN (
-     *   SELECT hg.id FROM habit_groups hg
-     *     JOIN routine_sections_habit_groups rshg ON rshg.habit_groups_id = hg.id
-     *     JOIN routine_sections rs ON rs.id = rshg.routine_section_id
-     *     JOIN routines r ON r.id = rs.routine_id WHERE r.user_id = :userId);
-     * DELETE FROM task_group_checks WHERE task_group_id IN (
-     *   SELECT tg.id FROM task_groups tg
-     *     JOIN routine_sections_task_groups rstg ON rstg.task_groups_id = tg.id
-     *     JOIN routine_sections rs ON rs.id = rstg.routine_section_id
-     *     JOIN routines r ON r.id = rs.routine_id WHERE r.user_id = :userId);
-     * DELETE FROM routine_snapshot WHERE user_id = :userId;
-     * DELETE FROM routines         WHERE user_id = :userId;  -- sections/groups follow
-     * DELETE FROM habits           WHERE user_id = :userId;
-     * DELETE FROM tasks            WHERE user_id = :userId;
-     * DELETE FROM goals            WHERE user_id = :userId;
-     * DELETE FROM categories       WHERE user_id = :userId;
-     *
-     * -- 4. the account. feedback, entity_check_day and account_deletion_codes
-     * --    are the only three that really do cascade.
-     * DELETE FROM users WHERE id = :userId;
-     * COMMIT;   -- if this fails, STOP: keep the directories
-     *
-     * -- 5. only now, and only for the ids from step 1
-     * rm -rf "$UPLOAD_DIR/feedback-attachments/<feedbackId>"
+     * -- see src/test/resources/runbooks/manual-account-delete.sql
+     * COMMIT;
      * }</pre>
      *
-     * <p>The join tables ({@code habit_category}, {@code task_category},
-     * {@code goal_category}, {@code routine_sections_*}) follow their owning row.
-     * Running this by hand is a last resort: the route above is the tested path.
+     * <p>The statements themselves live in
+     * {@code src/test/resources/runbooks/manual-account-delete.sql} rather than in this
+     * comment, because {@code ManualAccountDeleteRunbookTest} executes that file
+     * verbatim against a real schema on an account seeded through this application's
+     * own services. The version that lived here was wrong: it said routine sections and
+     * groups followed their routine and that the category join tables followed their
+     * owning row, when only seven foreign keys in this schema cascade in the database
+     * and none of those are among them. Everything else is Hibernate's doing, and a
+     * psql session has no Hibernate — so following it literally would have stopped on a
+     * foreign-key violation partway through. Prose drifts from a schema; an executed
+     * file cannot.
+     *
+     * <p>Running it by hand is a last resort: the route above is the tested path.
      *
      * <p>Where an operator-only statement should LIVE is a gap this shares with
      * the plan's OQ5 — the one-off admin-granting UPDATE, which KD10 keeps out

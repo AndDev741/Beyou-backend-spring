@@ -103,6 +103,10 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("an account that has actually been used can still be deleted")
     void deletesAnAccountThatCarriesEveryKindOfRow() {
         UUID userId = user.getId();
+        // A delta, not an absolute. Orphans have no user to scope them by, so an
+        // absolute zero would make this file fail for whatever another test in the
+        // shared database left behind.
+        int orphansBefore = orphanedSchedules();
 
         categoryService.createCategory(new CategoryRequestDTO(
                 "Health", "lucide:heart", "seeded", ExperienceLevel.BEGINNER), userId);
@@ -164,11 +168,10 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
         // A schedule is reachable only through routines.schedule_id, so once the
         // routine is gone an orphan is invisible to every check above — which is how
         // this leaked unnoticed until a dev database was queried by hand after a real
-        // deletion. Asserted globally rather than for this user: an orphan by
-        // definition cannot be attributed to anyone.
+        // deletion. ScheduleLifecycleIntegrationTest pins the other two ways in.
         assertThat(orphanedSchedules())
                 .as("a deleted account must not leave a schedule nobody can reach")
-                .isZero();
+                .isEqualTo(orphansBefore);
     }
 
 

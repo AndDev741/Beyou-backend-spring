@@ -41,12 +41,26 @@ public class ScheduleService {
         return scheduleRepository.findById(id);
     }
 
+    /**
+     * Schedules a routine, replacing whatever it was scheduled with.
+     *
+     * <p>The route is POST and the entity is new every time, but the operation is really
+     * an upsert: nothing stops a client calling this on a routine that already has a
+     * schedule, and the mobile sheet does exactly that every time someone changes the
+     * days. The old row then has nothing pointing at it — {@code routines.schedule_id} is
+     * a schedule's only inbound reference — and it is unreachable from that moment on,
+     * along with its {@code schedule_days}. {@code V18} swept the ones that accumulated
+     * before anyone noticed; this is what stops the next batch, since a cascade on the
+     * routine's own removal does nothing for a row that was replaced rather than deleted.
+     */
     @Transactional
     public Schedule create(CreateScheduleDTO scheduleDTO, UUID userId) {
         DiaryRoutine routine = diaryRoutineService.getDiaryRoutineModelById(scheduleDTO.routineId(), userId);
         Schedule schedule = new Schedule();
 
         checkAndReplaceScheduledRoutines(scheduleDTO.days(), userId);
+
+        Schedule replaced = routine.getSchedule();
 
         log.info("SAVINg DAYS => {}", scheduleDTO.days());
         schedule.setDays(scheduleDTO.days());
@@ -56,6 +70,15 @@ public class ScheduleService {
         routine.setSchedule(scheduleSaved);
 
         diaryRoutineService.saveRoutine(routine);
+
+        // After the routine points at the new one, never before: the delete has to come
+        // second or it trips the foreign key that is still referencing the old row.
+        if (replaced != null) {
+            // flush() is the EntityManager's, not this repository's alone, so the
+            // routine's new schedule_id is written first and the old row is free.
+            scheduleRepository.flush();
+            scheduleRepository.delete(replaced);
+        }
 
         userCacheEvictService.evictAllUserCaches(userId);
         return schedule;
