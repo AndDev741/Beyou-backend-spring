@@ -88,6 +88,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
             bucketKey = "onboarding:" + userId;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAgentChatBucket());
+        } else if ("POST".equals(method) && path.startsWith("/user/deletion/")) {
+            // Ahead of the generic write branch: a deletion code is six digits, and the
+            // write bucket's 30/min is sized for habit check-ins, not for how fast
+            // someone may guess at the only gate on an irreversible action.
+            String userId = getUserIdFromRequest(request);
+            if (userId == null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            bucketKey = "account-deletion:" + userId;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAccountDeletionBucket());
         } else if ("POST".equals(method) && path.equals("/feedback")) {
             // Feedback submission gets its own per-user budget, ahead of the generic
             // write branch: a burst of submissions must not eat the user's habit/routine

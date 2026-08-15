@@ -16,17 +16,23 @@ public class SecurityConfigValidator {
     private final String corsAllowedPattern;
     private final String tokenSecret;
     private final boolean cookieSecure;
+    private final boolean exposeDeletionCode;
+    private final boolean autoVerifyEmail;
 
     public SecurityConfigValidator(
             Environment env,
             @Value("${cors.allowed-pattern}") String corsAllowedPattern,
             @Value("${api.security.token.secret}") String tokenSecret,
-            @Value("${cookie.secure}") boolean cookieSecure
+            @Value("${cookie.secure}") boolean cookieSecure,
+            @Value("${e2e.expose-deletion-code:false}") boolean exposeDeletionCode,
+            @Value("${e2e.auto-verify-email:false}") boolean autoVerifyEmail
     ) {
         this.env = env;
         this.corsAllowedPattern = corsAllowedPattern;
         this.tokenSecret = tokenSecret;
         this.cookieSecure = cookieSecure;
+        this.exposeDeletionCode = exposeDeletionCode;
+        this.autoVerifyEmail = autoVerifyEmail;
     }
 
     @PostConstruct
@@ -56,6 +62,27 @@ public class SecurityConfigValidator {
             throw new IllegalStateException(
                     "COOKIE_SECURE must be true in production. " +
                     "Set the COOKIE_SECURE environment variable to true."
+            );
+        }
+
+        // Both are set in application-e2e.yml and nowhere else, so profile composition
+        // cannot reach them. A bare environment variable can: relaxed binding resolves
+        // E2E_EXPOSE_DELETION_CODE=true under any profile, silently. The first hands
+        // the plaintext deletion code back in the response, which disarms the only gate
+        // on an irreversible action for every existing account at once; the second
+        // marks new accounts verified without an email.
+        if (exposeDeletionCode) {
+            throw new IllegalStateException(
+                    "E2E_EXPOSE_DELETION_CODE must not be true in production. " +
+                    "It returns the account deletion code in the response body, which is the " +
+                    "only thing standing between a stolen session and a deleted account."
+            );
+        }
+
+        if (autoVerifyEmail) {
+            throw new IllegalStateException(
+                    "E2E_AUTO_VERIFY_EMAIL must not be true in production. " +
+                    "It marks new accounts as verified without anyone reading the email."
             );
         }
 

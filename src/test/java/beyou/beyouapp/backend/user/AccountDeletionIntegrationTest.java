@@ -34,12 +34,16 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.HabitGroupD
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.notification.EmailService;
 import beyou.beyouapp.backend.security.passwordreset.PasswordResetToken;
 import beyou.beyouapp.backend.security.passwordreset.PasswordResetTokenRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static beyou.beyouapp.backend.user.deletion.AccountDeletionService.MAX_ATTEMPTS;
 
 /**
  * The account a real person would be deleting.
@@ -146,6 +150,83 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
         assertThat(rowsFor("routines", "user_id", userId)).isZero();
         assertThat(rowsFor("refresh_tokens", "user_id", userId)).isZero();
         assertThat(rowsFor("account_deletion_codes", "user_id", userId)).isZero();
+    }
+
+
+    /**
+     * The cap on guessing, against a real transaction boundary.
+     *
+     * A wrong code is refused by throwing, and the throw rolls its transaction back —
+     * so an increment written inside it never survived. That left `attempts` at zero
+     * forever and made MAX_ATTEMPTS dead code, with nothing but the generic write
+     * bucket between a six-digit space and a walk through it. The unit test could not
+     * see it (a mock repository has no transaction to roll back) and the first version
+     * of this test never sent a wrong code at all.
+     */
+    @Test
+    @DisplayName("a wrong code is counted across requests, and the sixth one closes the code")
+    void wrongCodesAreCountedAndEventuallyCloseTheCode() {
+        String code = accountDeletionService.requestCode(user);
+        UUID codeId = codeIdFor(user.getId());
+
+        assertThatThrownBy(() -> accountDeletionService.confirm(user, "000000"))
+                .isInstanceOf(BusinessException.class);
+
+        assertThat(attemptsOnAnIndependentConnection(codeId))
+                .as("the count has to outlive the transaction the refusal rolls back")
+                .isEqualTo(1);
+
+        for (int guess = 2; guess <= MAX_ATTEMPTS; guess++) {
+            assertThatThrownBy(() -> accountDeletionService.confirm(user, "000000"))
+                    .isInstanceOf(BusinessException.class);
+        }
+        assertThat(attemptsOnAnIndependentConnection(codeId)).isEqualTo(MAX_ATTEMPTS);
+
+        // The sixth try is refused for a different reason, and from here even the real
+        // code is worthless: the way back is a new code, which the account's inbox has
+        // by then been told about five times.
+        assertThatThrownBy(() -> accountDeletionService.confirm(user, "000000"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorKey())
+                        .isEqualTo(ErrorKey.DELETION_CODE_TOO_MANY_ATTEMPTS));
+
+        assertThatThrownBy(() -> accountDeletionService.confirm(user, code))
+                .as("a code that has been walked at is spent, right digits or not")
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorKey())
+                        .isEqualTo(ErrorKey.DELETION_CODE_TOO_MANY_ATTEMPTS));
+
+        assertThat(rowsFor("users", "id", user.getId()))
+                .as("and none of that deleted anything")
+                .isEqualTo(1);
+    }
+
+    private UUID codeIdFor(UUID userId) {
+        try (Connection connection = DriverManager.getConnection(jdbcUrl, jdbcUsername, jdbcPassword);
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT id FROM account_deletion_codes WHERE user_id = ? ORDER BY created_at DESC LIMIT 1")) {
+            statement.setObject(1, userId);
+            try (ResultSet rs = statement.executeQuery()) {
+                rs.next();
+                return rs.getObject(1, UUID.class);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("could not read the deletion code row", e);
+        }
+    }
+
+    private int attemptsOnAnIndependentConnection(UUID codeId) {
+        try (Connection connection = DriverManager.getConnection(jdbcUrl, jdbcUsername, jdbcPassword);
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT attempts FROM account_deletion_codes WHERE id = ?")) {
+            statement.setObject(1, codeId);
+            try (ResultSet rs = statement.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("could not read the attempt count", e);
+        }
     }
 
     /**

@@ -171,12 +171,25 @@ public class UserService {
      * the bottom stays as the manual fallback and as the description of what this
      * method does, in the language of the database.
      *
-     * <p>Every owned domain (categories, habits, goals, tasks, routines,
-     * feedback) is carried off by the database's ON DELETE CASCADE inside this
-     * transaction. Feedback ATTACHMENTS are the exception: their rows cascade,
-     * but their bytes sit on disk where no foreign key reaches, so they are
-     * purged explicitly — otherwise a deleted account's screenshots live
-     * forever.
+     * <p>Every owned domain is carried off inside this transaction, but not all by
+     * the same mechanism, and the difference matters to anyone reading the SQL:
+     * <ul>
+     *   <li><b>Hibernate</b> takes categories, habits, goals, tasks and routine
+     *       snapshots, through {@code @OneToMany(cascade = ALL, orphanRemoval = true)}
+     *       on {@link User}. Their foreign keys in {@code V1__baseline.sql} are plain
+     *       {@code REFERENCES users(id)} with no cascade at all, so the database would
+     *       refuse this delete on its own. Tasks were missing from that list until this
+     *       feature shipped, which is exactly how that gap gets found.</li>
+     *   <li><b>The database</b> takes feedback (V9), entity_check_day (V13) and
+     *       account_deletion_codes (V16) — the three that really are ON DELETE
+     *       CASCADE.</li>
+     *   <li><b>This method</b> takes refresh tokens, password reset tokens and chats,
+     *       which have neither.</li>
+     * </ul>
+     *
+     * <p>Feedback ATTACHMENTS are a case of their own: their rows cascade, but their
+     * bytes sit on disk where no foreign key reaches, so they are purged explicitly —
+     * otherwise a deleted account's screenshots live forever.
      *
      * <p>The order below is the whole point of this method.
      *
@@ -262,22 +275,51 @@ public class UserService {
      * account is a manual job. Run it in the same order this method uses, in one
      * transaction, and only touch the disk once the transaction has committed:
      *
+     * <p>It is longer than this method, because a human has no Hibernate to lean on:
+     * the five domains listed above as "Hibernate takes" have no database cascade and
+     * must be deleted by hand, innermost first.
+     *
      * <pre>{@code
      * -- 1. the attachment directories, noted BEFORE the rows go
      * SELECT id FROM feedback WHERE user_id = :userId;
      *
      * BEGIN;
-     * -- 2. the plain foreign keys that block the delete
+     * -- 2. the plain foreign keys that block the delete outright
      * DELETE FROM refresh_tokens        WHERE user_id = :userId;
      * DELETE FROM password_reset_tokens WHERE user_id = :userId;
-     * DELETE FROM chats                 WHERE user_id = :userId;
-     * -- 3. the account; everything owned cascades with it
+     * DELETE FROM chats                 WHERE user_id = :userId;  -- agent_message cascades
+     *
+     * -- 3. what Hibernate would have cascaded, innermost first. Routine structure
+     * --    before routines, and habits/tasks only once no routine points at them.
+     * DELETE FROM habit_group_checks WHERE habit_group_id IN (
+     *   SELECT hg.id FROM habit_groups hg
+     *     JOIN routine_sections_habit_groups rshg ON rshg.habit_groups_id = hg.id
+     *     JOIN routine_sections rs ON rs.id = rshg.routine_section_id
+     *     JOIN routines r ON r.id = rs.routine_id WHERE r.user_id = :userId);
+     * DELETE FROM task_group_checks WHERE task_group_id IN (
+     *   SELECT tg.id FROM task_groups tg
+     *     JOIN routine_sections_task_groups rstg ON rstg.task_groups_id = tg.id
+     *     JOIN routine_sections rs ON rs.id = rstg.routine_section_id
+     *     JOIN routines r ON r.id = rs.routine_id WHERE r.user_id = :userId);
+     * DELETE FROM routine_snapshot WHERE user_id = :userId;
+     * DELETE FROM routines         WHERE user_id = :userId;  -- sections/groups follow
+     * DELETE FROM habits           WHERE user_id = :userId;
+     * DELETE FROM tasks            WHERE user_id = :userId;
+     * DELETE FROM goals            WHERE user_id = :userId;
+     * DELETE FROM categories       WHERE user_id = :userId;
+     *
+     * -- 4. the account. feedback, entity_check_day and account_deletion_codes
+     * --    are the only three that really do cascade.
      * DELETE FROM users WHERE id = :userId;
      * COMMIT;   -- if this fails, STOP: keep the directories
      *
-     * -- 4. only now, and only for the ids from step 1
+     * -- 5. only now, and only for the ids from step 1
      * rm -rf "$UPLOAD_DIR/feedback-attachments/<feedbackId>"
      * }</pre>
+     *
+     * <p>The join tables ({@code habit_category}, {@code task_category},
+     * {@code goal_category}, {@code routine_sections_*}) follow their owning row.
+     * Running this by hand is a last resort: the route above is the tested path.
      *
      * <p>Where an operator-only statement should LIVE is a gap this shares with
      * the plan's OQ5 — the one-off admin-granting UPDATE, which KD10 keeps out
@@ -317,8 +359,13 @@ public class UserService {
             purgeAttachmentsAfterCommit(user.getId(), submissionIds);
             return ResponseEntity.ok(Map.of("success", "User deleted successfully"));
         }catch(Exception e){
+            // Rethrown, not returned. A 400 body here reads as "handled" to the caller,
+            // and UserController would then revoke the session and leave the account
+            // standing with its deletion code already spent. It also leaked the raw
+            // exception message where every other domain error in this backend travels
+            // as a keyed ApiErrorResponse.
             log.error("Could not delete user {} — nothing was purged from disk", user.getId(), e);
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            throw new BusinessException(ErrorKey.ACCOUNT_DELETE_FAILED, "Could not delete the account");
         }
     }
 

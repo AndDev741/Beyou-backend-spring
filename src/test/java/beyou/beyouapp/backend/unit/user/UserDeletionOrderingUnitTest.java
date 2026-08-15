@@ -1,6 +1,8 @@
 package beyou.beyouapp.backend.unit.user;
 
 import beyou.beyouapp.backend.domain.checkday.UserStreakService;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentService;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
@@ -164,14 +166,16 @@ class UserDeletionOrderingUnitTest {
 
         TransactionSynchronizationManager.initSynchronization();
 
-        userService.deleteUser(user);
+        // Rethrown, not swallowed: a delete that could not happen has to reach the
+        // caller as something the clients can read. Which HTTP shape that becomes
+        // depends on a proxy this harness does not have, so the status is pinned in
+        // UserDeletionCommitBoundaryIntegrationTest#blockedDeleteLeavesTheFilesOnDisk
+        // rather than claimed here.
+        assertThatThrownBy(() -> userService.deleteUser(user))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(thrown -> assertThat(((BusinessException) thrown).getErrorKey())
+                        .isEqualTo(ErrorKey.ACCOUNT_DELETE_FAILED));
 
-        // NO assertion on the returned status. The method builds a 400, but a
-        // failed flush has already marked the real transaction rollback-only, so
-        // the proxy raises UnexpectedRollbackException on the way out and the
-        // client sees a 500 — a shape this proxy-less harness cannot produce and
-        // therefore must not claim. Pinned for real in
-        // UserDeletionCommitBoundaryIntegrationTest#blockedDeleteLeavesTheFilesOnDisk.
         assertThat(TransactionSynchronizationManager.getSynchronizations())
                 .as("nothing may be scheduled against a transaction that cannot commit")
                 .isEmpty();
@@ -189,13 +193,11 @@ class UserDeletionOrderingUnitTest {
 
         TransactionSynchronizationManager.initSynchronization();
 
-        var response = userService.deleteUser(user);
+        assertThatThrownBy(() -> userService.deleteUser(user))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(thrown -> assertThat(((BusinessException) thrown).getErrorKey())
+                        .isEqualTo(ErrorKey.ACCOUNT_DELETE_FAILED));
 
-        // The 400 IS reachable here, unlike the flush case above: a plain runtime
-        // exception from the repository leaves the transaction committable, so
-        // the proxy commits an empty transaction and passes this response
-        // through untouched.
-        assertThat(response.getStatusCode().value()).isEqualTo(400);
         assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
 
         TransactionSynchronizationUtils.triggerAfterCommit();

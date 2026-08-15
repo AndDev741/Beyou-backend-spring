@@ -41,11 +41,12 @@ import lombok.extern.slf4j.Slf4j;
 public class AccountDeletionService {
 
     /** Wrong tries a single code survives before it has to be requested again. */
-    static final int MAX_ATTEMPTS = 5;
+    public static final int MAX_ATTEMPTS = 5;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final AccountDeletionCodeRepository codeRepository;
+    private final AccountDeletionCodeWrites codeWrites;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final UserService userService;
@@ -117,14 +118,18 @@ public class AccountDeletionService {
                     "Too many wrong codes, request a new one");
         }
         if (!passwordEncoder.matches(rawCode == null ? "" : rawCode.trim(), code.getCodeHash())) {
-            // Counted before the throw, and saved even though this transaction is not
-            // rolling back — a wrong code is a normal outcome here, not a failure.
-            code.setAttempts(code.getAttempts() + 1);
-            codeRepository.save(code);
+            // In a transaction of its own, because the throw on the next line rolls
+            // this one back. Counting inside it left attempts at zero forever and made
+            // the cap above unreachable.
+            codeWrites.record(code.getId());
             throw new BusinessException(ErrorKey.DELETION_CODE_INVALID, "Deletion code invalid");
         }
 
+        // Flushed here, not at commit: the DELETE takes the row's lock now, so a second
+        // confirm racing this one blocks and then finds nothing to spend instead of
+        // both passing validation and both deleting the account.
         codeRepository.delete(code);
+        codeRepository.flush();
 
         log.info("Deleting account {} after a confirmed deletion code", user.getId());
         return userService.deleteUser(user);
@@ -178,7 +183,10 @@ public class AccountDeletionService {
 
     private void cleanupUnsentCode(UUID codeId, UUID userId) {
         try {
-            codeRepository.deleteById(codeId);
+            // Through the recorder because this runs after the commit: a plain
+            // repository call there joins a transaction that will never commit again,
+            // so the delete never lands.
+            codeWrites.discard(codeId);
         } catch (Exception e) {
             log.error("Failed to clean up the unsent deletion code {} for user {}", codeId, userId, e);
         }

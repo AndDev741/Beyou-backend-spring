@@ -4,10 +4,18 @@ import beyou.beyouapp.backend.domain.category.CategoryRepository;
 import beyou.beyouapp.backend.domain.checkday.CheckHistoryService;
 import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
 import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
+import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
+import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.goal.GoalRepository;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
+import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
+import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
+import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.task.TaskRepository;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
@@ -18,8 +26,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -33,6 +43,7 @@ public class UserExportService {
     private final TaskRepository taskRepository;
     private final FeedbackService feedbackService;
     private final EntityCheckDayRepository entityCheckDayRepository;
+    private final DiaryRoutineRepository diaryRoutineRepository;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -49,6 +60,15 @@ public class UserExportService {
         profile.put("photo", user.getPerfilPhoto());
         profile.put("createdAt", user.getCreatedAt());
         profile.put("isGoogleAccount", user.isGoogleAccount());
+        profile.put("phrase", user.getPerfilPhrase());
+        profile.put("phraseAuthor", user.getPerfilPhraseAuthor());
+        profile.put("timezone", user.getTimezone());
+        profile.put("language", user.getLanguageInUse());
+        profile.put("theme", user.getThemeInUse());
+        profile.put("widgetsInUse", user.getWidgetsIdInUse() == null
+                ? List.of() : List.copyOf(user.getWidgetsIdInUse()));
+        profile.put("progress", xp(user.getXpProgress()));
+        profile.put("streak", streak(user.getCheckProgress()));
         export.put("profile", profile);
 
         // Categories
@@ -59,6 +79,7 @@ public class UserExportService {
             map.put("name", c.getName());
             map.put("iconId", c.getIconId());
             map.put("description", c.getDescription());
+            map.put("progress", xp(c.getXpProgress()));
             return map;
         }).toList());
 
@@ -71,6 +92,9 @@ public class UserExportService {
             map.put("description", h.getDescription());
             map.put("importance", h.getImportance());
             map.put("difficulty", h.getDificulty());
+            map.put("motivationalPhrase", h.getMotivationalPhrase());
+            map.put("progress", xp(h.getXpProgress()));
+            map.put("streak", streak(h.getCheckProgress()));
             return map;
         }).toList());
 
@@ -101,6 +125,9 @@ public class UserExportService {
             return map;
         }).toList());
 
+        // Routines, with the structure that makes them mean anything (R8)
+        export.put("routines", routines(userId));
+
         // Feedback (R21) — submissions, the replies they got back, and
         // references to any attached images. Assembled by the feedback domain
         // itself; the shape of a submission is not this class's business.
@@ -109,7 +136,126 @@ public class UserExportService {
         // Check-in history (R10)
         export.put("checkHistory", checkHistory(user));
 
+        // Say out loud what a reader will not find here, so the file can be trusted
+        // as a whole rather than spot-checked. Deletion takes these too.
+        Map<String, Object> omitted = new LinkedHashMap<>();
+        omitted.put("routineSnapshots", "The per-day frozen copy of each routine, one row per "
+                + "routine per day, each carrying a full copy of that day's structure. The "
+                + "outcomes they record are in checkHistory, in bounded form; the copies "
+                + "themselves would grow this file without limit.");
+        omitted.put("agentChat", "Conversations with the assistant, along with the memory it "
+                + "keeps of them.");
+        omitted.put("credentials", "Password hash, refresh tokens and any pending "
+                + "verification or reset tokens. Nothing here is useful to you and all of it "
+                + "is dangerous in a file.");
+        export.put("notIncluded", omitted);
+
         return export;
+    }
+
+    /**
+     * R8 — routines with their sections, the groups inside them and the days they run.
+     *
+     * <p>A routine stripped to its name and XP is not a routine: what a person built is the
+     * shape — the sections, their times, the order, which habit or task sits in each group.
+     * That shape is also the part deletion destroys most completely, since habits and tasks
+     * survive in their own sections of this file while the arrangement of them does not.
+     *
+     * <p>Groups are exported as references ({@code habitId}, {@code taskId}) rather than
+     * copies, so a reader joins them against the {@code habits} and {@code tasks} sections
+     * instead of reading the same habit spelled out once per routine that uses it. Checks are
+     * left out on purpose — those are outcomes, and outcomes are {@code checkHistory}'s job.
+     *
+     * <p>Read inside the enclosing read-only transaction: sections arrive with the routine
+     * through an entity graph, and the groups below them are lazy with {@code @BatchSize(50)},
+     * so this walk costs a bounded handful of queries rather than one per section.
+     */
+    private List<Map<String, Object>> routines(UUID userId) {
+        List<DiaryRoutine> routines = diaryRoutineRepository.findAllByUserId(userId);
+
+        return routines.stream().map(r -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", r.getId());
+            map.put("name", r.getName());
+            map.put("iconId", r.getIconId());
+            map.put("type", "DiaryRoutine");
+            map.put("schedule", schedule(r.getSchedule()));
+            map.put("progress", xp(r.getXpProgress()));
+            map.put("streak", streak(r.getCheckProgress()));
+            map.put("sections", r.getRoutineSections().stream().map(this::section).toList());
+            return map;
+        }).toList();
+    }
+
+    private Map<String, Object> section(RoutineSection s) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", s.getId());
+        map.put("name", s.getName());
+        map.put("iconId", s.getIconId());
+        map.put("startTime", s.getStartTime());
+        map.put("endTime", s.getEndTime());
+        map.put("orderIndex", s.getOrderIndex());
+        map.put("favorite", s.getFavorite());
+        map.put("habits", s.getHabitGroups().stream().map(this::habitGroup).toList());
+        map.put("tasks", s.getTaskGroups().stream().map(this::taskGroup).toList());
+        return map;
+    }
+
+    private Map<String, Object> habitGroup(HabitGroup group) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", group.getId());
+        map.put("habitId", group.getHabit() == null ? null : group.getHabit().getId());
+        map.put("startTime", group.getStartTime());
+        map.put("endTime", group.getEndTime());
+        return map;
+    }
+
+    private Map<String, Object> taskGroup(TaskGroup group) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", group.getId());
+        map.put("taskId", group.getTask() == null ? null : group.getTask().getId());
+        map.put("startTime", group.getStartTime());
+        map.put("endTime", group.getEndTime());
+        return map;
+    }
+
+    /**
+     * The days a routine runs on. Null when the routine was never scheduled — a real state
+     * in this domain, since a routine can be built and left unscheduled.
+     */
+    private Map<String, Object> schedule(Schedule schedule) {
+        if (schedule == null) {
+            return null;
+        }
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", schedule.getId());
+        // Copied, not handed over. days is an @ElementCollection, so what the getter
+        // returns is a lazy proxy that dies the moment this read-only transaction
+        // closes — and it closes before Jackson writes a single byte. Same failure
+        // DiaryRoutineMapper hit with habitGroupChecks, same fix.
+        map.put("days", schedule.getDays() == null ? Set.of() : new LinkedHashSet<>(schedule.getDays()));
+        return map;
+    }
+
+    /** Level and XP, in the same shape everywhere it appears. */
+    private Map<String, Object> xp(XpProgress progress) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("xp", progress.getXp());
+        map.put("level", progress.getLevel());
+        map.put("actualLevelXp", progress.getActualLevelXp());
+        map.put("nextLevelXp", progress.getNextLevelXp());
+        return map;
+    }
+
+    /** Streak counters, likewise. The number a user is proudest of usually lives here. */
+    private Map<String, Object> streak(CheckProgress progress) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("currentStreak", progress.getCurrentStreak());
+        map.put("bestStreak", progress.getBestStreak());
+        map.put("totalCheckIns", progress.getTotalCheckIns());
+        map.put("firstCheckInDate", progress.getFirstCheckInDate());
+        map.put("lastCheckInDate", progress.getLastCheckInDate());
+        return map;
     }
 
     /**

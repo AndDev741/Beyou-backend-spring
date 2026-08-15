@@ -20,4 +20,13 @@ public interface AccountDeletionCodeRepository extends JpaRepository<AccountDele
             @Param("usedAt") Timestamp usedAt,
             @Param("now") Timestamp now);
 
+    /**
+     * Counts one wrong guess, in SQL rather than read-modify-write so two guesses
+     * racing each other still count as two. Called only through
+     * {@link AccountDeletionCodeWrites}, which owns the transaction it needs.
+     */
+    @Modifying
+    @Query("update AccountDeletionCode c set c.attempts = c.attempts + 1 where c.id = :id")
+    int recordFailedAttempt(@Param("id") UUID id);
+
 }

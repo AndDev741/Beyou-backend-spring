@@ -48,6 +48,7 @@ import beyou.beyouapp.backend.user.deletion.AccountDeletionService;
 class AccountDeletionServiceUnitTest {
 
     @Mock AccountDeletionCodeRepository codeRepository;
+    @Mock beyou.beyouapp.backend.user.deletion.AccountDeletionCodeWrites codeWrites;
     @Mock EmailService emailService;
     @Mock UserService userService;
 
@@ -128,6 +129,12 @@ class AccountDeletionServiceUnitTest {
         verify(userService).deleteUser(user);
     }
 
+    /**
+     * Counting happens through the collaborator that owns its own transaction, and
+     * NOT on this entity: the refusal below is a throw, and the throw rolls back
+     * whatever the surrounding transaction wrote. That the count then survives is a
+     * claim only a real database can settle — AccountDeletionIntegrationTest does.
+     */
     @Test
     void aWrongCodeCostsAnAttemptAndDeletesNothing() {
         AccountDeletionCode code = storedCode("123456", Instant.now().plusSeconds(900), 0, null);
@@ -136,7 +143,8 @@ class AccountDeletionServiceUnitTest {
         BusinessException error = assertThrows(BusinessException.class, () -> service.confirm(user, "000000"));
 
         assertEquals(ErrorKey.DELETION_CODE_INVALID, error.getErrorKey());
-        assertEquals(1, code.getAttempts());
+        verify(codeWrites).record(code.getId());
+        verify(codeRepository, never()).save(any());
         verify(userService, never()).deleteUser(any());
     }
 
@@ -200,7 +208,7 @@ class AccountDeletionServiceUnitTest {
         String returned = service.requestCode(user);
 
         assertTrue(returned.matches("\\d{6}"), returned);
-        verify(codeRepository, never()).deleteById(any());
+        verify(codeWrites, never()).discard(any());
     }
 
     @Test
@@ -212,6 +220,8 @@ class AccountDeletionServiceUnitTest {
         assertEquals(null, service.requestCode(user));
 
         // Nobody received it, so holding the cooldown against the user would be cruel.
-        verify(codeRepository).deleteById(any());
+        // Through the collaborator: this runs in an afterCommit callback, where a plain
+        // repository delete joins a transaction that will never commit again.
+        verify(codeWrites).discard(any());
     }
 }

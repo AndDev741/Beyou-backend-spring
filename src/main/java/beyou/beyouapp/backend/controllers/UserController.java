@@ -10,6 +10,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.transaction.UnexpectedRollbackException;
+
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.User;
@@ -24,6 +28,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/user")
+@lombok.extern.slf4j.Slf4j
 public class UserController {
     private UserService userService;
     private AuthenticatedUser authenticatedUser;
@@ -86,7 +91,22 @@ public class UserController {
             HttpServletRequest request,
             HttpServletResponse response){
         User user = authenticatedUser.getAuthenticatedUser();
-        ResponseEntity<Map<String, String>> result = accountDeletionService.confirm(user, confirmation.code());
+        ResponseEntity<Map<String, String>> result;
+        try {
+            result = accountDeletionService.confirm(user, confirmation.code());
+        } catch (UnexpectedRollbackException rolledBack) {
+            // The net under the net. deleteUser rethrows its own keyed exception, and an
+            // exception leaving a @Transactional method propagates as itself — so the
+            // ordinary failure arrives as ACCOUNT_DELETE_FAILED and never lands here.
+            // This catch is for the other way a transaction dies: something marks it
+            // rollback-only while deleteUser still returns normally, and the proxy raises
+            // this on the way out with nothing keyed inside it. GlobalExceptionHandler has
+            // no handler for it, so without this the client would get a bare 500.
+            log.error("Account deletion for {} rolled back", user.getId(), rolledBack);
+            throw new BusinessException(ErrorKey.ACCOUNT_DELETE_FAILED, "Could not delete the account");
+        }
+        // Only after a delete that actually happened: a refused code must leave the
+        // session exactly as it was.
         refreshTokenService.revokeRefreshToken(request, response);
         return result;
     }

@@ -20,7 +20,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.springframework.transaction.UnexpectedRollbackException;
 
 import javax.imageio.ImageIO;
 
@@ -194,13 +193,13 @@ class UserDeletionCommitBoundaryIntegrationTest extends AbstractIntegrationTest 
      * to {@code users} is left to block a delete, which is exactly what makes the
      * delete button shippable. So the failure is induced at the flush instead.
      *
-     * <p>Also the honest counterpart to the assertion
-     * {@code UserDeletionOrderingUnitTest} used to make. The flush failure marks
-     * the transaction rollback-only, so the caller never receives the 400 the
-     * method's own catch block builds: the proxy raises
-     * {@code UnexpectedRollbackException} on the way out, and
-     * {@code GlobalExceptionHandler} has no handler for it, so a client sees a
-     * 500. A mock harness has no proxy and therefore cannot produce that.
+     * <p>What the caller sees is the second half of this test, and it has a history.
+     * The method used to catch the failure and return a 400 body, which never reached
+     * anyone: the transaction was already rollback-only, so the proxy raised
+     * {@code UnexpectedRollbackException} on the way out and the client got an
+     * unreadable 500. The catch now rethrows {@link ErrorKey#ACCOUNT_DELETE_FAILED},
+     * which propagates through the proxy as itself — the rollback still happens, and
+     * the client gets a key it can translate instead of a stack trace.
      */
     @Test
     @DisplayName("a delete blocked by a real foreign key rolls back past the method's 400 and purges nothing")
@@ -214,9 +213,11 @@ class UserDeletionCommitBoundaryIntegrationTest extends AbstractIntegrationTest 
                 .when(chatService).deleteAllChats(user.getId());
 
         assertThatThrownBy(() -> userService.deleteUser(user))
-                .as("the method returns a 400 body, but the transaction is already rollback-only, "
-                        + "so the proxy — not the method — decides what the caller sees")
-                .isInstanceOf(UnexpectedRollbackException.class);
+                .as("a delete that could not happen has to say so in a key the clients read, "
+                        + "not return a 400 body the proxy then replaces with a 500")
+                .isInstanceOf(BusinessException.class)
+                .satisfies(thrown -> assertThat(((BusinessException) thrown).getErrorKey())
+                        .isEqualTo(ErrorKey.ACCOUNT_DELETE_FAILED));
 
         verify(attachmentService, never()).purgeStoredFiles(anyCollection());
         assertThat(Files.exists(attachmentDir))
