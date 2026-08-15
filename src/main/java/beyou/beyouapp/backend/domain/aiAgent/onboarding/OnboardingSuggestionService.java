@@ -1,9 +1,13 @@
 package beyou.beyouapp.backend.domain.aiAgent.onboarding;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
@@ -26,6 +30,10 @@ import lombok.extern.slf4j.Slf4j;
 public class OnboardingSuggestionService {
 
     private static final int MAX_ITEMS = 20;
+
+    /** Leading HH:mm of whatever the model wrote, with or without a leading zero. */
+    private static final Pattern TIME_PATTERN = Pattern.compile("^(\\d{1,2}):(\\d{2})");
+    private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
 
     private final ChatClient chatClient;
     private final Resource systemTemplate;
@@ -126,7 +134,9 @@ public class OnboardingSuggestionService {
                 Draft ONE daily routine using ONLY the user's habits and tasks listed above (refer to them \
                 by their EXACT names — do not invent items). 3-5 sections covering the day, each with name, \
                 iconId, startTime and endTime in HH:mm. Place each item in a fitting section with startTime \
-                and endTime inside that section's window. Also pick scheduleDays: a subset of \
+                and endTime inside that section's window. Every item's endTime must be LATER than its own \
+                startTime, and both must fall between the section's startTime and endTime. Also pick \
+                scheduleDays: a subset of \
                 Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday that fits the routine.
                 """ + (feedback.isBlank() ? "" : "\nAdapt the draft to this user feedback: \"" + feedback + "\"");
     }
@@ -211,20 +221,89 @@ public class OnboardingSuggestionService {
 
     private RoutineSuggestion sanitizeRoutine(RoutineSuggestion routine) {
         List<SectionSuggestion> sections = routine.sections() == null ? List.of()
-                : routine.sections().stream().limit(8).map(s -> new SectionSuggestion(
-                        truncate(s.name(), 256), AiIconCatalog.orDefault(s.iconId()),
-                        s.startTime(), s.endTime(),
-                        sanitizeItems(s.habits()),
-                        sanitizeItems(s.tasks()))).toList();
+                : routine.sections().stream().limit(8).map(s -> {
+                    LocalTime sectionStart = parseTime(s.startTime());
+                    LocalTime sectionEnd = parseTime(s.endTime());
+                    return new SectionSuggestion(
+                            truncate(s.name(), 256), AiIconCatalog.orDefault(s.iconId()),
+                            formatTime(sectionStart), formatTime(sectionEnd),
+                            sanitizeItems(s.habits(), sectionStart, sectionEnd),
+                            sanitizeItems(s.tasks(), sectionStart, sectionEnd));
+                }).toList();
         return new RoutineSuggestion(truncate(routine.name(), 256),
                 AiIconCatalog.orDefault(routine.iconId()),
                 normalizeDays(routine.scheduleDays()), sections);
     }
 
-    private List<ItemPlacement> sanitizeItems(List<ItemPlacement> items) {
+    /**
+     * Item placements POST /routine will actually accept.
+     *
+     * The model writes HH:mm by hand, and the free tiers get it wrong in the exact
+     * ways the routine endpoint refuses: an item ending before it starts, or an item
+     * sitting outside the section it was placed in. That refusal reached production
+     * as a dead end in the onboarding wizard, where the user has no way to edit a
+     * suggestion before it is created ("End time must be after start time for habit
+     * in routine section: Foco Profissional"). A time nudged into its section is a
+     * smaller lie than a wizard that cannot finish.
+     *
+     * Overnight sections (end before start, say 22:00 to 06:00) are left alone. The
+     * endpoint accepts them, and clamping across midnight would throw items to the
+     * wrong side of it.
+     */
+    private List<ItemPlacement> sanitizeItems(List<ItemPlacement> items, LocalTime sectionStart, LocalTime sectionEnd) {
         if (items == null) return List.of();
-        return items.stream().limit(MAX_ITEMS).map(i -> new ItemPlacement(
-                truncate(i.name(), 256), i.startTime(), i.endTime())).toList();
+        boolean bothBounds = sectionStart != null && sectionEnd != null;
+        boolean overnight = bothBounds && sectionEnd.isBefore(sectionStart);
+        boolean bounded = bothBounds && sectionEnd.isAfter(sectionStart);
+        return items.stream().limit(MAX_ITEMS).map(i -> {
+            LocalTime start = parseTime(i.startTime());
+            LocalTime end = parseTime(i.endTime());
+            if (bounded) {
+                if (start != null) {
+                    start = clamp(start, sectionStart, sectionEnd);
+                }
+                if (end != null) {
+                    end = clamp(end, start != null ? start : sectionStart, sectionEnd);
+                }
+            } else if (!overnight && start != null && end != null && end.isBefore(start)) {
+                // No usable section window, so the only rule left is the endpoint's own:
+                // an item may not end before it starts.
+                end = start;
+            }
+            return new ItemPlacement(truncate(i.name(), 256), formatTime(start), formatTime(end));
+        }).toList();
+    }
+
+    private LocalTime clamp(LocalTime time, LocalTime min, LocalTime max) {
+        if (time.isBefore(min)) return min;
+        if (time.isAfter(max)) return max;
+        return time;
+    }
+
+    /**
+     * HH:mm, forgiving a missing leading zero and trailing seconds, and reading the
+     * 24:00 that models write for midnight as the last minute of the day. Anything
+     * else becomes null, which the routine endpoint treats as "no time given".
+     */
+    private LocalTime parseTime(String raw) {
+        if (raw == null) return null;
+        Matcher matcher = TIME_PATTERN.matcher(raw.trim());
+        if (!matcher.find()) {
+            return null;
+        }
+        int hour = Integer.parseInt(matcher.group(1));
+        int minute = Integer.parseInt(matcher.group(2));
+        if (hour == 24 && minute == 0) {
+            return LocalTime.of(23, 59);
+        }
+        if (hour > 23 || minute > 59) {
+            return null;
+        }
+        return LocalTime.of(hour, minute);
+    }
+
+    private String formatTime(LocalTime time) {
+        return time == null ? null : time.format(HH_MM);
     }
 
     /** Case-insensitive match against the canonical day names; unknown values dropped. */

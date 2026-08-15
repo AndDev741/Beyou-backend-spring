@@ -3,6 +3,7 @@ package beyou.beyouapp.backend.unit.routine.itemGroup;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
@@ -117,6 +118,67 @@ class ItemGroupServiceUnitTest {
 
         assertThrows(DiaryRoutineNotFoundException.class,
                 () -> itemGroupService.findTaskGroupByDTO(routineId, UUID.randomUUID()));
+    }
+
+    /**
+     * The AI agent kept sending the habit's own id where the entry's id belongs, and
+     * "Habit group not found in routine" gave it nothing to correct with. When the id
+     * it sent is a habit that IS in the routine, the message hands back the entry id.
+     */
+    @Test
+    void findHabitGroupByDTO_shouldPointAtTheEntryWhenGivenTheHabitsOwnId() {
+        Habit habit = new Habit();
+        habit.setId(UUID.randomUUID());
+        HabitGroup entry = new HabitGroup();
+        entry.setId(UUID.randomUUID());
+        entry.setHabit(habit);
+
+        DiaryRoutine routine = routineWithGroups(entry, null);
+        when(diaryRoutineRepository.findById(routine.getId())).thenReturn(Optional.of(routine));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> itemGroupService.findHabitGroupByDTO(routine.getId(), habit.getId()));
+
+        assertEquals(ErrorKey.ITEM_GROUP_REQUIRED, exception.getErrorKey());
+        assertTrue(exception.getMessage().contains(entry.getId().toString()), exception.getMessage());
+        assertTrue(exception.getMessage().contains("habit's own id"), exception.getMessage());
+    }
+
+    @Test
+    void findTaskGroupByDTO_shouldPointAtTheEntryWhenGivenTheTasksOwnId() {
+        Task task = new Task();
+        task.setId(UUID.randomUUID());
+        TaskGroup entry = new TaskGroup();
+        entry.setId(UUID.randomUUID());
+        entry.setTask(task);
+
+        DiaryRoutine routine = routineWithGroups(null, entry);
+        when(diaryRoutineRepository.findById(routine.getId())).thenReturn(Optional.of(routine));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> itemGroupService.findTaskGroupByDTO(routine.getId(), task.getId()));
+
+        assertEquals(ErrorKey.ITEM_GROUP_REQUIRED, exception.getErrorKey());
+        assertTrue(exception.getMessage().contains(entry.getId().toString()), exception.getMessage());
+        assertTrue(exception.getMessage().contains("task's own id"), exception.getMessage());
+    }
+
+    /** An id belonging to nothing in the routine keeps the plain message. */
+    @Test
+    void findHabitGroupByDTO_shouldKeepThePlainMessageForAnUnrelatedId() {
+        HabitGroup entry = new HabitGroup();
+        entry.setId(UUID.randomUUID());
+        Habit habit = new Habit();
+        habit.setId(UUID.randomUUID());
+        entry.setHabit(habit);
+
+        DiaryRoutine routine = routineWithGroups(entry, null);
+        when(diaryRoutineRepository.findById(routine.getId())).thenReturn(Optional.of(routine));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> itemGroupService.findHabitGroupByDTO(routine.getId(), UUID.randomUUID()));
+
+        assertEquals("Habit group not found in routine", exception.getMessage());
     }
 
     private DiaryRoutine routineWithGroups(HabitGroup habitGroup, TaskGroup taskGroup) {

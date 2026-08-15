@@ -38,6 +38,7 @@ import beyou.beyouapp.backend.domain.routine.schedule.dto.ScheduleResponseDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
@@ -283,7 +284,7 @@ public class Tools {
             + "inside the section time window")
     DiaryRoutineResponseDTO createUserRoutine(DiaryRoutineRequestDTO routine, ToolContext toolContext) {
         log.info("AI agent is creating a routine for user: {}", userId(toolContext));
-        return diaryRoutineService.createDiaryRoutine(valid(routine), userId(toolContext));
+        return diaryRoutineService.createDiaryRoutine(valid(withIcons(routine)), userId(toolContext));
     }
 
     @Tool(description = "FULL RESTRUCTURE of a routine: the structure REPLACES the current one — any "
@@ -292,7 +293,31 @@ public class Tools {
             + "addHabitToRoutineSection / removeRoutineItem")
     DiaryRoutineResponseDTO editUserRoutine(UUID routineId, DiaryRoutineRequestDTO routine, ToolContext toolContext) {
         log.info("AI agent is editing routine {} for user: {}", routineId, userId(toolContext));
-        return diaryRoutineService.updateDiaryRoutine(routineId, valid(routine), userId(toolContext));
+        return diaryRoutineService.updateDiaryRoutine(routineId, valid(withIcons(routine)), userId(toolContext));
+    }
+
+    /**
+     * Every routine and section leaves here with an icon.
+     *
+     * The model is asked for one and usually gives one, but it drops the field often
+     * enough that icon-less sections reached real routines, and a section with no
+     * icon reads as a hole in a list where everything else has one. Every other
+     * creation path already defaults it (the onboarding wizard runs the same
+     * catalog), so this is the agent catching up rather than a new rule. An id the
+     * catalog does not know degrades to the default too.
+     */
+    private DiaryRoutineRequestDTO withIcons(DiaryRoutineRequestDTO routine) {
+        if (routine == null) {
+            return null;
+        }
+        List<RoutineSectionRequestDTO> sections = routine.routineSections() == null ? null
+                : routine.routineSections().stream()
+                        .map(section -> new RoutineSectionRequestDTO(
+                                section.id(), section.name(), AiIconCatalog.orDefault(section.iconId()),
+                                section.startTime(), section.endTime(),
+                                section.taskGroup(), section.habitGroup(), section.favorite()))
+                        .toList();
+        return new DiaryRoutineRequestDTO(routine.name(), AiIconCatalog.orDefault(routine.iconId()), sections);
     }
 
     @Tool(description = "Add ONE existing task to a routine section. Times are HH:mm inside the "

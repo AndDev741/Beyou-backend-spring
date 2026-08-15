@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,6 +32,9 @@ import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
 import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackRequestDTO;
 import beyou.beyouapp.backend.domain.habit.HabitService;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.task.TaskService;
@@ -54,6 +58,9 @@ public class ToolsUnitTest {
 
     @Mock
     private FeedbackService feedbackService;
+
+    @Mock
+    private DiaryRoutineService diaryRoutineService;
 
     @InjectMocks
     private Tools tools;
@@ -162,6 +169,47 @@ public class ToolsUnitTest {
                  "categoriesId":["%s"]}""".formatted(UUID.randomUUID(), categoryId),
                 EditHabitDTO.class);
         assertEquals(5, edited.dificulty());
+    }
+
+    /**
+     * The model drops `iconId` often enough that icon-less sections reached real
+     * routines, and a section with no icon reads as a hole in a list where every
+     * other row has one.
+     */
+    @Test
+    void routineAndSectionsAlwaysReachTheServiceWithAnIcon() {
+        DiaryRoutineRequestDTO routine = new DiaryRoutineRequestDTO("Dia produtivo", null, List.of(
+                new RoutineSectionRequestDTO(null, "Manhã", null, LocalTime.of(8, 0), LocalTime.of(12, 0),
+                        List.of(), List.of(), false),
+                new RoutineSectionRequestDTO(null, "Tarde", "lucide:not-in-the-catalog",
+                        LocalTime.of(13, 0), LocalTime.of(18, 0), List.of(), List.of(), false)));
+
+        tools.createUserRoutine(routine, toolContext);
+
+        ArgumentCaptor<DiaryRoutineRequestDTO> sent = ArgumentCaptor.forClass(DiaryRoutineRequestDTO.class);
+        verify(diaryRoutineService).createDiaryRoutine(sent.capture(), eq(userId));
+        assertEquals(AiIconCatalog.DEFAULT_ICON, sent.getValue().iconId());
+        assertEquals(AiIconCatalog.DEFAULT_ICON, sent.getValue().routineSections().get(0).iconId());
+        // An id the catalog does not know degrades the same way.
+        assertEquals(AiIconCatalog.DEFAULT_ICON, sent.getValue().routineSections().get(1).iconId());
+        // Everything else rides through untouched.
+        assertEquals("Manhã", sent.getValue().routineSections().get(0).name());
+        assertEquals(LocalTime.of(8, 0), sent.getValue().routineSections().get(0).startTime());
+    }
+
+    @Test
+    void routineKeepsAnIconTheCatalogKnows() {
+        String known = AiIconCatalog.ICONS.get(0).id();
+        DiaryRoutineRequestDTO routine = new DiaryRoutineRequestDTO("Dia", known, List.of(
+                new RoutineSectionRequestDTO(null, "Manhã", known, LocalTime.of(8, 0), LocalTime.of(12, 0),
+                        List.of(), List.of(), false)));
+
+        tools.createUserRoutine(routine, toolContext);
+
+        ArgumentCaptor<DiaryRoutineRequestDTO> sent = ArgumentCaptor.forClass(DiaryRoutineRequestDTO.class);
+        verify(diaryRoutineService).createDiaryRoutine(sent.capture(), eq(userId));
+        assertEquals(known, sent.getValue().iconId());
+        assertEquals(known, sent.getValue().routineSections().get(0).iconId());
     }
 
     @Test
