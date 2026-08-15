@@ -160,6 +160,80 @@ public class OnboardingSuggestionServiceTest {
         assertThat(section.habits().get(0).endTime()).isEqualTo("05:30");
     }
 
+    /**
+     * The routine step used to be the one place the assistant could see a hole in
+     * someone's day and not fill it: the prompt forbade inventing items, placements
+     * carry only a name, and the client dropped every name it could not resolve — in
+     * silence. A model that ignored the instruction produced a routine quietly missing
+     * a step, which is worse than either answer.
+     */
+    @Test
+    public void routineCanBringItemsTheUserDoesNotHaveYet() {
+        when(chatModel.call(any(Prompt.class))).thenReturn(ok("""
+                {"name":"Dia","iconId":"bogus","scheduleDays":["Monday"],
+                 "sections":[{"name":"Manha","iconId":"bogus","startTime":"07:00","endTime":"09:00",
+                   "habits":[{"name":"Alongar","startTime":"07:00","endTime":"07:15"}],
+                   "tasks":[]}],
+                 "newHabits":[{"name":"Alongar","description":"Cinco minutos","motivationalPhrase":"Vai",
+                   "iconId":"bogus","categoryName":"Health","importance":9,"difficulty":null}],
+                 "newTasks":[{"name":"Comprar tapete","description":"Antes de comecar",
+                   "iconId":"bogus","categoryName":"Health","importance":2,"difficulty":2}]}"""));
+
+        OnboardingSuggestions result = service.suggest(routineRequest(), user());
+
+        // Placed by the same name it is described under, which is what lets the client
+        // create it first and then resolve the placement against it.
+        assertThat(result.routine().sections().get(0).habits().get(0).name()).isEqualTo("Alongar");
+        assertThat(result.routine().newHabits()).hasSize(1);
+        assertThat(result.routine().newHabits().get(0).name()).isEqualTo("Alongar");
+        // Through the same sanitizers the habits step uses: 9 is not a valid importance.
+        assertThat(result.routine().newHabits().get(0).importance()).isEqualTo(5);
+        assertThat(result.routine().newHabits().get(0).iconId()).isEqualTo(AiIconCatalog.DEFAULT_ICON);
+        assertThat(result.routine().newTasks()).hasSize(1);
+        assertThat(result.routine().newTasks().get(0).name()).isEqualTo("Comprar tapete");
+    }
+
+    /** A routine that needs nothing new says so with empty lists, never with null. */
+    @Test
+    public void routineWithoutNewItemsReturnsEmptyListsRatherThanNull() {
+        when(chatModel.call(any(Prompt.class))).thenReturn(ok("""
+                {"name":"Dia","iconId":"bogus","scheduleDays":["Monday"],
+                 "sections":[{"name":"Manha","iconId":"bogus","startTime":"07:00","endTime":"09:00",
+                   "habits":[],"tasks":[]}]}"""));
+
+        OnboardingSuggestions result = service.suggest(routineRequest(), user());
+
+        assertThat(result.routine().newHabits()).isEmpty();
+        assertThat(result.routine().newTasks()).isEmpty();
+    }
+
+    /**
+     * The step is there to arrange a day, not to keep suggesting things. Someone who
+     * has just accepted eight habits does not want the next screen adding six more, so
+     * the cap is enforced here rather than trusted to the prompt.
+     */
+    @Test
+    public void routineCapsHowManyItemsItMayInvent() {
+        String habits = java.util.stream.IntStream.range(0, 5)
+                .mapToObj(i -> """
+                        {"name":"H%d","description":"d","motivationalPhrase":"m","iconId":"bogus",
+                         "categoryName":"Health","importance":3,"difficulty":3}""".formatted(i))
+                .collect(java.util.stream.Collectors.joining(","));
+        when(chatModel.call(any(Prompt.class))).thenReturn(ok("""
+                {"name":"Dia","iconId":"bogus","scheduleDays":["Monday"],
+                 "sections":[{"name":"Manha","iconId":"bogus","startTime":"07:00","endTime":"09:00",
+                   "habits":[],"tasks":[]}],
+                 "newHabits":[%s],
+                 "newTasks":[{"name":"T","description":"d","iconId":"bogus","categoryName":"Health",
+                   "importance":3,"difficulty":3}]}""".formatted(habits)));
+
+        OnboardingSuggestions result = service.suggest(routineRequest(), user());
+
+        // Three between them, habits first, so the tasks list is what gives way.
+        assertThat(result.routine().newHabits()).hasSize(3);
+        assertThat(result.routine().newTasks()).isEmpty();
+    }
+
     private static OnboardingSuggestionRequest routineRequest() {
         return new OnboardingSuggestionRequest(OnboardingStep.ROUTINE, null,
                 new OnboardingSuggestionRequest.OnboardingContext(List.of("Health"), null, null, null, null), null);
