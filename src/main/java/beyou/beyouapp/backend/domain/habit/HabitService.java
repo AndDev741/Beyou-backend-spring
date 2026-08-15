@@ -1,6 +1,8 @@
 package beyou.beyouapp.backend.domain.habit;
 
 import java.util.ArrayList;
+import beyou.beyouapp.backend.domain.xpday.XpDayOwnerType;
+import beyou.beyouapp.backend.domain.xpday.XpDayRecorder;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -39,6 +41,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 public class HabitService {
     @Autowired
     private final HabitRepository habitRepository;
+    private final XpDayRecorder xpDayRecorder;
 
     @Autowired
     private final UserRepository userRepository;
@@ -152,6 +155,7 @@ public class HabitService {
         }
         try{
             int removedDays = entityCheckDayRepository.deleteAllByOwner(CheckDayOwnerType.HABIT, habitId);
+            xpDayRecorder.forget(XpDayOwnerType.HABIT, habitId);
             log.info("Removed {} check-day rows for habit {}", removedDays, habitId);
             habitRepository.delete(habitToDelete);
             userCacheEvictService.evictAllUserCaches(userId);

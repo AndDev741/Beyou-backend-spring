@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.unit.routine;
 
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
+import beyou.beyouapp.backend.domain.xpday.XpDayRecorder;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
@@ -55,6 +56,10 @@ class DiaryRoutineServiceUnitTest {
 
     @Mock
     private DiaryRoutineRepository diaryRoutineRepository;
+
+    /** The XP history is a chart; nothing in these tests asserts on it. */
+    @Mock
+    private XpDayRecorder xpDayRecorder;
 
     @Mock
     private TaskService taskService;
@@ -164,7 +169,7 @@ class DiaryRoutineServiceUnitTest {
         section.setRoutine(diaryRoutine);
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(section)));
 
-        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, mapper, checkItemService, userCacheEvictService, habitService, taskService, routineSnapshotRepository, userRepository);
+        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, xpDayRecorder, mapper, checkItemService, userCacheEvictService, habitService, taskService, routineSnapshotRepository, userRepository);
     }
 
     @Test

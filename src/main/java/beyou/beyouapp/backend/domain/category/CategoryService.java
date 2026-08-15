@@ -1,6 +1,8 @@
 package beyou.beyouapp.backend.domain.category;
 
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
+import beyou.beyouapp.backend.domain.xpday.XpDayOwnerType;
+import beyou.beyouapp.backend.domain.xpday.XpDayRecorder;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
@@ -33,6 +35,7 @@ import java.util.UUID;
 public class CategoryService {
     @Autowired
     private final CategoryRepository categoryRepository;
+    private final XpDayRecorder xpDayRecorder;
 
     @Autowired
     private final XpByLevelRepository xpByLevelRepository;
@@ -112,6 +115,8 @@ public class CategoryService {
                 throw new BusinessException(ErrorKey.CATEGORY_NOT_OWNED, "This category are not from the user in context");
             }
 
+            // owner_id carries no foreign key, so nothing in the database clears this.
+            xpDayRecorder.forget(XpDayOwnerType.CATEGORY, category.getId());
             categoryRepository.delete(category);
             userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok().body(Map.of("success", "Category deleted successfully"));

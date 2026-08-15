@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.unit.habit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import beyou.beyouapp.backend.domain.xpday.XpDayRecorder;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -49,6 +50,10 @@ public class HabitServiceUnitTest {
     @Mock
     private HabitRepository habitRepository;
 
+    /** The XP history is a chart; nothing in these tests asserts on it. */
+    @Mock
+    private XpDayRecorder xpDayRecorder;
+
     @Mock
     private UserRepository userRepository;
 
@@ -87,7 +92,7 @@ public class HabitServiceUnitTest {
         habit.setImportance(0);
         habit.setDificulty(1);
 
-        habitService = new HabitService(habitRepository, userRepository, xpByLevelRepository, categoryService, habitMapper, diaryRoutineRepository, userCacheEvictService, entityCheckDayRepository);
+        habitService = new HabitService(habitRepository, xpDayRecorder, userRepository, xpByLevelRepository, categoryService, habitMapper, diaryRoutineRepository, userCacheEvictService, entityCheckDayRepository);
     }
 
     @Test

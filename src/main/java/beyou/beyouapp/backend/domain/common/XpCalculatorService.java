@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryRepository;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
+import beyou.beyouapp.backend.domain.xpday.XpDayOwnerType;
+import beyou.beyouapp.backend.domain.xpday.XpDayRecorder;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.goal.GoalRepository;
 import beyou.beyouapp.backend.domain.habit.Habit;
@@ -31,6 +33,7 @@ public class XpCalculatorService {
     private final DiaryRoutineRepository diaryRoutineRepository;
     private final HabitRepository habitRepository;
     private final CategoryRepository categoryRepository;
+    private final XpDayRecorder xpDayRecorder;
     private final GoalRepository goalRepository;
 
     // XP always flows through the User-explicit methods below: identity travels
@@ -41,54 +44,54 @@ public class XpCalculatorService {
             List<Category> categories) {
         addUserXpAndPersist(user, newXp);
         addGoalXpAndPersist(newXp, goal);
-        addCategoriesXpAndPersist(newXp, categories);
+        addCategoriesXpAndPersist(user, newXp, categories);
     }
 
     public void removeXpOfUserGoalAndCategoriesAndPersist(User user, Double newXp, Goal goal,
             List<Category> categories) {
         removeUserXpAndPersist(user, newXp);
         removeGoalXpAndPersist(goal);
-        removeCategoriesXpAndPersist(newXp, categories);
+        removeCategoriesXpAndPersist(user, newXp, categories);
     }
 
     public void addXpToUserRoutineHabitAndCategoriesAndPersist(User user, Double newXp, DiaryRoutine routine,
             Habit habit, List<Category> categories) {
         addUserXpAndPersist(user, newXp);
-        addRoutineXpAndPersist(newXp, routine);
-        addHabitXpAndPersist(newXp, habit);
-        addCategoriesXpAndPersist(newXp, categories);
+        addRoutineXpAndPersist(user, newXp, routine);
+        addHabitXpAndPersist(user, newXp, habit);
+        addCategoriesXpAndPersist(user, newXp, categories);
     }
 
     public void removeXpOfUserRoutineHabitAndCategoriesAndPersist(User user, Double xpToRemove, DiaryRoutine routine,
             Habit habit, List<Category> categories) {
         removeUserXpAndPersist(user, xpToRemove);
-        removeRoutineXpAndPersist(xpToRemove, routine);
-        removeHabitXpAndPersist(xpToRemove, habit);
-        removeCategoriesXpAndPersist(xpToRemove, categories);
+        removeRoutineXpAndPersist(user, xpToRemove, routine);
+        removeHabitXpAndPersist(user, xpToRemove, habit);
+        removeCategoriesXpAndPersist(user, xpToRemove, categories);
     }
 
     public void addXpToUserRoutineAndCategoriesAndPersist(User user, Double newXp, DiaryRoutine routine,
             List<Category> categories) {
         addUserXpAndPersist(user, newXp);
-        addRoutineXpAndPersist(newXp, routine);
-        addCategoriesXpAndPersist(newXp, categories);
+        addRoutineXpAndPersist(user, newXp, routine);
+        addCategoriesXpAndPersist(user, newXp, categories);
     }
 
     public void removeXpOfUserRoutineAndCategoriesAndPersist(User user, Double xpToRemove, DiaryRoutine routine,
             List<Category> categories) {
         removeUserXpAndPersist(user, xpToRemove);
-        removeRoutineXpAndPersist(xpToRemove, routine);
-        removeCategoriesXpAndPersist(xpToRemove, categories);
+        removeRoutineXpAndPersist(user, xpToRemove, routine);
+        removeCategoriesXpAndPersist(user, xpToRemove, categories);
     }
 
     public void addXpToUserAndRoutineOnly(User user, Double newXp, DiaryRoutine routine) {
         addUserXpAndPersist(user, newXp);
-        addRoutineXpAndPersist(newXp, routine);
+        addRoutineXpAndPersist(user, newXp, routine);
     }
 
     public void removeXpFromUserAndRoutineOnly(User user, Double xpToRemove, DiaryRoutine routine) {
         removeUserXpAndPersist(user, xpToRemove);
-        removeRoutineXpAndPersist(xpToRemove, routine);
+        removeRoutineXpAndPersist(user, xpToRemove, routine);
     }
 
     public void addXpToUserOnly(User user, Double newXp) {
@@ -101,6 +104,7 @@ public class XpCalculatorService {
 
     private void addUserXpAndPersist(User user, Double newXp) {
         user.getXpProgress().addXp(newXp, level -> xpByLevelRepository.findByLevel(level));
+        xpDayRecorder.record(user, XpDayOwnerType.USER, user.getId(), newXp);
         try {
             userRepository.save(user);
         } catch (Exception e) {
@@ -109,10 +113,12 @@ public class XpCalculatorService {
         }
     }
 
-    private void addRoutineXpAndPersist(Double newXp, DiaryRoutine routine) {
+    private void addRoutineXpAndPersist(User user, Double newXp, DiaryRoutine routine) {
         routine.getXpProgress().addXp(
                 newXp,
                 level -> xpByLevelRepository.findByLevel(level));
+
+        xpDayRecorder.record(user, XpDayOwnerType.ROUTINE, routine.getId(), newXp);
 
         try {
             diaryRoutineRepository.save(routine);
@@ -122,10 +128,12 @@ public class XpCalculatorService {
         }
     }
 
-    private void addHabitXpAndPersist(Double newXp, Habit habit) {
+    private void addHabitXpAndPersist(User user, Double newXp, Habit habit) {
         habit.getXpProgress().addXp(
                 newXp,
                 level -> xpByLevelRepository.findByLevel(level));
+
+        xpDayRecorder.record(user, XpDayOwnerType.HABIT, habit.getId(), newXp);
 
         try {
             habitRepository.save(habit);
@@ -135,7 +143,7 @@ public class XpCalculatorService {
         }
     }
 
-    private void addCategoriesXpAndPersist(Double newXp, List<Category> categories) {
+    private void addCategoriesXpAndPersist(User user, Double newXp, List<Category> categories) {
         if (categories == null || categories.isEmpty()) {
             return;
         }
@@ -143,6 +151,9 @@ public class XpCalculatorService {
         categories.forEach(c -> c.getXpProgress().addXp(
                 newXp,
                 level -> xpByLevelRepository.findByLevel(level)));
+
+        xpDayRecorder.recordAll(user, XpDayOwnerType.CATEGORY,
+                categories.stream().map(Category::getId).toList(), newXp);
 
         try {
             categoryRepository.saveAll(categories);
@@ -175,6 +186,7 @@ public class XpCalculatorService {
     }
 
     private void removeUserXpAndPersist(User user, Double xpToRemove) {
+        xpDayRecorder.record(user, XpDayOwnerType.USER, user.getId(), -xpToRemove);
         user.getXpProgress().removeXp(xpToRemove, level -> xpByLevelRepository.findByLevel(level));
         try {
             userRepository.save(user);
@@ -184,7 +196,8 @@ public class XpCalculatorService {
         }
     }
 
-    private void removeRoutineXpAndPersist(Double xpToRemove, DiaryRoutine routine) {
+    private void removeRoutineXpAndPersist(User user, Double xpToRemove, DiaryRoutine routine) {
+        xpDayRecorder.record(user, XpDayOwnerType.ROUTINE, routine.getId(), -xpToRemove);
         routine.getXpProgress().removeXp(
                 xpToRemove,
                 level -> xpByLevelRepository.findByLevel(level));
@@ -197,7 +210,8 @@ public class XpCalculatorService {
         }
     }
 
-    private void removeHabitXpAndPersist(Double xpToRemove, Habit habit) {
+    private void removeHabitXpAndPersist(User user, Double xpToRemove, Habit habit) {
+        xpDayRecorder.record(user, XpDayOwnerType.HABIT, habit.getId(), -xpToRemove);
         habit.getXpProgress().removeXp(
                 xpToRemove,
                 level -> xpByLevelRepository.findByLevel(level));
@@ -210,7 +224,7 @@ public class XpCalculatorService {
         }
     }
 
-    private void removeCategoriesXpAndPersist(Double xpToRemove, List<Category> categories) {
+    private void removeCategoriesXpAndPersist(User user, Double xpToRemove, List<Category> categories) {
         if (categories == null || categories.isEmpty()) {
             return;
         }
@@ -218,6 +232,10 @@ public class XpCalculatorService {
         categories.forEach(c -> c.getXpProgress().removeXp(
                 xpToRemove,
                 level -> xpByLevelRepository.findByLevel(level)));
+
+        // Negative: the day gives the XP back rather than remembering a high-water mark.
+        xpDayRecorder.recordAll(user, XpDayOwnerType.CATEGORY,
+                categories.stream().map(Category::getId).toList(), -xpToRemove);
 
         try {
             categoryRepository.saveAll(categories);

@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.unit.common;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import beyou.beyouapp.backend.domain.xpday.XpDayRecorder;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -33,6 +34,10 @@ class XpCalculatorServiceTest {
 
     @Mock
     private XpByLevelRepository xpByLevelRepository;
+
+    /** The XP history rides along with every total; nothing here asserts on it. */
+    @Mock
+    private XpDayRecorder xpDayRecorder;
 
     @Mock
     private UserRepository userRepository;
