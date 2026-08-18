@@ -27,6 +27,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.aiAgent.AiAgentService;
@@ -100,34 +101,29 @@ public class AiAgentControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.title").value("My chat"));
     }
 
+    // Streaming is the only way into the model — these two used to exercise a
+    // non-streaming sibling endpoint that no client ever called.
     @Test
-    void shouldSendMessageAndReturnReply() throws Exception {
-        when(agentService.processMessage(chatId, "Hello", userId, null)).thenReturn("Hi! How can I help?");
+    void shouldForwardCurrentPageToTheStream() throws Exception {
+        SseEmitter emitter = new SseEmitter();
+        emitter.complete();
+        when(agentService.streamMessage(chatId, "create one", userId, "/habits")).thenReturn(emitter);
 
-        mockMvc.perform(post("/ai/agent/chats/" + chatId)
+        mockMvc.perform(post("/ai/agent/chats/" + chatId + "/stream")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"userInput\": \"Hello\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.reply").value("Hi! How can I help?"));
-    }
+                .content("{\"userInput\": \"create one\", \"currentPage\": \"/habits\"}"));
 
-    @Test
-    void shouldForwardCurrentPageWhenProvided() throws Exception {
-        when(agentService.processMessage(chatId, "create one", userId, "/habits")).thenReturn("Done!");
-
-        mockMvc.perform(post("/ai/agent/chats/" + chatId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"userInput\": \"create one\", \"currentPage\": \"/habits\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.reply").value("Done!"));
+        verify(agentService).streamMessage(chatId, "create one", userId, "/habits");
     }
 
     @Test
     void shouldRejectBlankMessage() throws Exception {
-        mockMvc.perform(post("/ai/agent/chats/" + chatId)
+        mockMvc.perform(post("/ai/agent/chats/" + chatId + "/stream")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"userInput\": \"   \"}"))
                 .andExpect(status().isBadRequest());
+
+        verify(agentService, never()).streamMessage(any(), any(), any(), any());
     }
 
     @Test

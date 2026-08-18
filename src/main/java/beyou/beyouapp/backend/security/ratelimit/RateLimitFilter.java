@@ -41,10 +41,30 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "DELETE", "PATCH");
 
-    /** AI agent chat streams get their own bucket, NOT the generic write bucket:
-     *  each stream is an expensive long-lived LLM call. */
-    private static boolean isAgentStreamPath(String path) {
-        return path.startsWith("/ai/agent/chats/") && path.endsWith("/stream");
+    /**
+     * A POST under an individual chat is a call into the LLM, and those get the hourly
+     * agent bucket instead of the generic per-minute write bucket.
+     *
+     * <p>This matches the whole {@code /ai/agent/chats/{id}/**} subtree rather than the
+     * {@code /stream} suffix it used to test. That suffix was chosen around the
+     * transport — the thinking being that a long-lived SSE connection is the expensive
+     * thing — but what needs bounding is tokens spent per user, not sockets held open.
+     * A sibling non-streaming endpoint on the same chat consequently fell through to
+     * {@code write:} and got 30/minute rather than 30/hour: the same model and the same
+     * bill, on 60x the intended budget. Matching the subtree means the next endpoint
+     * added here cannot reopen that gap merely by not being called {@code /stream}.
+     *
+     * <p>The caller gates this on POST. {@code PUT} renames a chat and {@code DELETE}
+     * removes one; neither reaches the model, so neither should spend the LLM budget.
+     * Matching broadly does mean a future non-LLM POST in this subtree would consume
+     * agent quota it does not need — the safe direction to err, because the opposite
+     * leaves LLM calls effectively unthrottled.
+     *
+     * <p>{@code POST /ai/agent/chats} (chat creation) is excluded: the prefix requires
+     * the trailing slash, and creating a chat does not call the model.
+     */
+    private static boolean isAgentLlmPath(String path) {
+        return path.startsWith("/ai/agent/chats/");
     }
 
     /** {@code POST /feedback/{feedbackId}/attachments} — see {@link RateLimitConfig#createFeedbackAttachmentBucket()}. */
@@ -72,13 +92,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
             String ip = getClientIp(request);
             bucketKey = "auth:" + ip;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAuthBucket());
-        } else if (isAgentStreamPath(path)) {
+        } else if ("POST".equals(method) && isAgentLlmPath(path)) {
             String userId = getUserIdFromRequest(request);
             if (userId == null) {
                 filterChain.doFilter(request, response);
                 return;
             }
-            bucketKey = "agent-stream:" + userId;
+            // One key for every LLM entry point on a chat, so alternating between
+            // endpoints cannot hand the caller a second budget of the same size.
+            bucketKey = "agent:" + userId;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAgentChatBucket());
         } else if (path.startsWith("/docs") && !path.startsWith("/docs/admin")) {
             String ip = getClientIp(request);
