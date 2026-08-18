@@ -104,7 +104,7 @@ public class OnboardingSuggestionService {
         return """
                 Create one category object for EVERY name in this list, keeping each name EXACTLY \
                 as given (verbatim, same language): %s
-                For each: a short motivating description (max 300 chars) and the best iconId from the catalog.
+                For each: a short motivating description (max 200 chars) and the best iconId from the catalog.
                 """.formatted(names);
     }
 
@@ -122,7 +122,7 @@ public class OnboardingSuggestionService {
                 Suggest at least 8 habits and at least 4 tasks personalized to the user's categories.
                 Habits are RECURRING actions that build streaks. Tasks are ONE-OFF or occasional to-dos. \
                 Make the difference obvious through your choices.
-                Fields per habit: name (max 100), description (max 300), motivationalPhrase (short), \
+                Fields per habit: name (max 100), description (max 200), motivationalPhrase (short), \
                 iconId from the catalog, categoryName (MUST match one of the user's categories verbatim), \
                 importance 1-5, difficulty 1-5. Tasks: same fields minus motivationalPhrase.
                 """;
@@ -189,6 +189,8 @@ public class OnboardingSuggestionService {
     }
 
     // ---- sanitization: never trust free-tier LLM output ----
+    // Text limits mirror the DB columns the wizard's create calls insert into:
+    // habits/categories are varchar(256); tasks, goals, routines and sections varchar(255).
 
     /** Guarantees exactly one suggestion per requested name, name kept verbatim. */
     private List<CategorySuggestion> verbatimCategories(List<String> names, CategoriesPayload payload) {
@@ -201,7 +203,7 @@ public class OnboardingSuggestionService {
                     // LLM renamed or dropped it — keep positional pairing as a best effort
                     .orElse(names.indexOf(name) < raw.size() ? raw.get(names.indexOf(name)) : null);
             result.add(new CategorySuggestion(name,
-                    match != null && match.description() != null ? truncate(match.description(), 1024) : "",
+                    match != null && match.description() != null ? truncate(match.description(), 256) : "",
                     AiIconCatalog.orDefault(match != null ? match.iconId() : null)));
         }
         return result;
@@ -210,15 +212,15 @@ public class OnboardingSuggestionService {
     private List<HabitSuggestion> sanitizeHabits(List<HabitSuggestion> habits) {
         if (habits == null) return List.of();
         return habits.stream().limit(MAX_ITEMS).map(h -> new HabitSuggestion(
-                truncate(h.name(), 256), truncate(h.description(), 1000),
-                truncate(h.motivationalPhrase(), 500), AiIconCatalog.orDefault(h.iconId()),
+                truncate(h.name(), 256), truncate(h.description(), 256),
+                truncate(h.motivationalPhrase(), 256), AiIconCatalog.orDefault(h.iconId()),
                 h.categoryName(), clamp(h.importance()), clamp(h.difficulty()))).toList();
     }
 
     private List<TaskSuggestion> sanitizeTasks(List<TaskSuggestion> tasks) {
         if (tasks == null) return List.of();
         return tasks.stream().limit(MAX_ITEMS).map(t -> new TaskSuggestion(
-                truncate(t.name(), 256), truncate(t.description(), 1000),
+                truncate(t.name(), 255), truncate(t.description(), 255),
                 AiIconCatalog.orDefault(t.iconId()), t.categoryName(),
                 clamp(t.importance()), clamp(t.difficulty()))).toList();
     }
@@ -234,7 +236,7 @@ public class OnboardingSuggestionService {
                     LocalTime sectionStart = parseTime(s.startTime());
                     LocalTime sectionEnd = parseTime(s.endTime());
                     return new SectionSuggestion(
-                            truncate(s.name(), 256), AiIconCatalog.orDefault(s.iconId()),
+                            truncate(s.name(), 255), AiIconCatalog.orDefault(s.iconId()),
                             formatTime(sectionStart), formatTime(sectionEnd),
                             sanitizeItems(s.habits(), sectionStart, sectionEnd),
                             sanitizeItems(s.tasks(), sectionStart, sectionEnd));
@@ -247,7 +249,7 @@ public class OnboardingSuggestionService {
         List<TaskSuggestion> newTasks = sanitizeTasks(routine.newTasks()).stream()
                 .limit(Math.max(0, MAX_NEW_ROUTINE_ITEMS - newHabits.size())).toList();
 
-        return new RoutineSuggestion(truncate(routine.name(), 256),
+        return new RoutineSuggestion(truncate(routine.name(), 255),
                 AiIconCatalog.orDefault(routine.iconId()),
                 normalizeDays(routine.scheduleDays()), sections, newHabits, newTasks);
     }
@@ -346,11 +348,11 @@ public class OnboardingSuggestionService {
     private List<GoalSuggestion> sanitizeGoals(List<GoalSuggestion> goals) {
         if (goals == null) return List.of();
         return goals.stream().limit(10).map(g -> new GoalSuggestion(
-                truncate(g.name(), 256), truncate(g.description(), 1000),
+                truncate(g.name(), 255), truncate(g.description(), 255),
                 AiIconCatalog.orDefault(g.iconId()), g.categoryName(),
                 g.targetValue() != null && g.targetValue() > 0 ? g.targetValue() : 1.0,
-                g.unit() != null && !g.unit().isBlank() ? g.unit() : "times",
-                truncate(g.motivation(), 256),
+                g.unit() != null && !g.unit().isBlank() ? truncate(g.unit(), 255) : "times",
+                truncate(g.motivation(), 255),
                 List.of("SHORT_TERM", "MEDIUM_TERM", "LONG_TERM").contains(g.term()) ? g.term() : "SHORT_TERM",
                 g.durationDays() != null && g.durationDays() > 0 ? g.durationDays() : 30)).toList();
     }

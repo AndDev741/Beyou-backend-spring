@@ -8,5 +8,5 @@ public record CategoryEditRequestDTO(
         @NotBlank String categoryId,
         @NotEmpty @Size(min = 2, max = 256) String name,
         @NotBlank String icon,
-        @Size(max = 1024) String description
+        @Size(max = 256) String description
 ) {}

@@ -6,6 +6,6 @@ import jakarta.validation.constraints.*;
 public record CategoryRequestDTO(
         @NotEmpty @Size(min = 2, max = 256) String name,
         @NotBlank String icon,
-        String description,
+        @Size(max = 256) String description,
         @NotNull ExperienceLevel experience) {
 }

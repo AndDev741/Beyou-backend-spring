@@ -15,13 +15,14 @@ import beyou.beyouapp.backend.domain.goal.GoalTerm;
 public record EditGoalRequestDTO(
     @NotNull
     UUID goalId,
-    @NotEmpty @Size(min = 2, max = 256)
+    @NotEmpty @Size(min = 2, max = 255)
     String name,
     String iconId,
+    @Size(max = 255)
     String description,
     @NotNull
     Double targetValue,
-    @NotBlank
+    @NotBlank @Size(max = 255)
     String unit,
     @NotNull
     Double currentValue,
@@ -29,7 +30,7 @@ public record EditGoalRequestDTO(
     Boolean complete,
     @NotNull
     List<UUID> categoriesId,
-    @Size(max = 256)
+    @Size(max = 255)
     String motivation,
     @NotNull
     LocalDate startDate,
