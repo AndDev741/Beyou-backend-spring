@@ -90,21 +90,6 @@ public class AiAgentService {
                 .build();
     }
 
-    public String processMessage(UUID chatId, String userInput, UUID userId, String currentPage) {
-        Chat chat = chatService.getChat(chatId, userId);
-
-        String reply = buildPrompt(chat, userInput, currentPage, toolContext(userId, chatId, currentPage))
-                .call()
-                .content();
-
-        // Non-streaming path (mobile): no ordered tool capture, so the transcript
-        // is text-only. Interleaved tool segments arrive once mobile streams too.
-        agentMessageService.recordTurn(chatId, userInput, List.of(AgentSegment.text(reply)));
-        // Reload-by-id: tools may have re-saved the chat during the call above.
-        chatService.touch(chatId, userId);
-        return reply;
-    }
-
     public SseEmitter streamMessage(UUID chatId, String userInput, UUID userId, String currentPage) {
         Chat chat = chatService.getChat(chatId, userId);
 

@@ -50,14 +50,6 @@ public class AiAgentController {
         return chatService.createChat(request == null ? null : request.title(), userId);
     }
 
-    @PostMapping("/chats/{chatId}")
-    public Map<String, String> processMessage(@PathVariable UUID chatId, @RequestBody @Valid AiAgentRequest request) {
-        UUID userId = authenticatedUser.getAuthenticatedUser().getId();
-        log.info("Receiving agent message on chat {} for user {}", chatId, userId);
-        return Map.of("reply",
-                agentService.processMessage(chatId, request.userInput(), userId, request.currentPage()));
-    }
-
     @PostMapping(value = "/chats/{chatId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamMessage(@PathVariable UUID chatId, @RequestBody @Valid AiAgentRequest request,
             HttpServletResponse response) {
