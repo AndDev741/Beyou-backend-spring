@@ -13,19 +13,20 @@ import beyou.beyouapp.backend.domain.goal.GoalStatus;
 import beyou.beyouapp.backend.domain.goal.GoalTerm;
 
 public record CreateGoalRequestDTO(
-    @NotEmpty @Size(min = 2, max = 256)
+    @NotEmpty @Size(min = 2, max = 255)
     String name,
+    @Size(max = 255)
     String description,
     String iconId,
     @NotNull
     Double targetValue,
-    @NotBlank
+    @NotBlank @Size(max = 255)
     String unit,
     @NotNull
     Double currentValue,
     @NotNull
     List<UUID> categoriesId,
-    @Size(max = 256)
+    @Size(max = 255)
     String motivation,
     @NotNull
     LocalDate startDate,
