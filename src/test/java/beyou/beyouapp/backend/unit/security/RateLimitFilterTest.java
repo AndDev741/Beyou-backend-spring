@@ -4,6 +4,8 @@ import beyou.beyouapp.backend.security.ratelimit.RateLimitFilter;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.bucket4j.Bucket;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +23,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -29,6 +33,7 @@ class RateLimitFilterTest {
     private RateLimitFilter filter;
     private Cache<String, Bucket> cache;
     private FilterChain filterChain;
+    private MeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
@@ -36,7 +41,8 @@ class RateLimitFilterTest {
                 .maximumSize(1000)
                 .expireAfterAccess(Duration.ofMinutes(5))
                 .build();
-        filter = new RateLimitFilter(cache);
+        meterRegistry = new SimpleMeterRegistry();
+        filter = new RateLimitFilter(cache, meterRegistry);
         filterChain = mock(FilterChain.class);
     }
 
@@ -156,6 +162,46 @@ class RateLimitFilterTest {
             MockHttpServletResponse allowed = callFilter("POST", "/ai/agent/chats/" + chatId + "/stream");
             assertEquals(200, allowed.getStatus(), "agent budget was consumed by a non-model request");
         }
+    }
+
+    // A rejection is not an exception, so nothing outside this filter can observe one.
+    // Without the counter the only report that a limit ever bit was a user complaining.
+    @Test
+    void shouldCountRejectionsUnderTheTierThatRejected() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            callFilter("POST", "/auth/login");
+        }
+
+        callFilter("POST", "/auth/login");
+
+        assertEquals(1.0, meterRegistry.counter(RateLimitFilter.REJECTED_METRIC, "tier", "auth").count());
+    }
+
+    // The tag is the tier and never the bucket key: the key holds a user id or an address,
+    // so tagging it would let a caller rotating addresses mint Prometheus series at will.
+    @Test
+    void shouldTagRejectionsByTierRatherThanIdentity() throws Exception {
+        authenticateUser();
+        UUID chatId = UUID.randomUUID();
+
+        for (int i = 0; i < 31; i++) {
+            callFilter("POST", "/ai/agent/chats/" + chatId + "/stream");
+        }
+
+        assertEquals(1.0, meterRegistry.counter(RateLimitFilter.REJECTED_METRIC, "tier", "agent").count());
+        assertTrue(meterRegistry.find(RateLimitFilter.REJECTED_METRIC).counters().stream()
+                        .flatMap(c -> c.getId().getTags().stream())
+                        .noneMatch(tag -> tag.getValue().contains(":")),
+                "a bucket key leaked into a metric tag");
+    }
+
+    @Test
+    void shouldNotCountAnythingWhenNoLimitIsHit() throws Exception {
+        authenticateUser();
+
+        callFilter("POST", "/ai/agent/chats/" + UUID.randomUUID() + "/stream");
+
+        assertNull(meterRegistry.find(RateLimitFilter.REJECTED_METRIC).counter());
     }
 
     private void authenticateUser() {

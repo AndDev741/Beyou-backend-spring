@@ -7,7 +7,9 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
@@ -20,10 +22,27 @@ import java.util.Set;
 @Component
 @Order(1)
 @RequiredArgsConstructor
+@Slf4j
 @ConditionalOnProperty(name = "rate-limit.enabled", havingValue = "true", matchIfMissing = true)
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private final Cache<String, Bucket> rateLimitCache;
+    private final MeterRegistry meterRegistry;
+
+    /**
+     * Counter for requests this filter turned away, tagged with the tier only.
+     *
+     * <p>Deliberately not tagged with the bucket key. The key carries a user id or an
+     * address, so tagging it would give the metric unbounded cardinality — and an
+     * attacker rotating addresses would be minting Prometheus series, which is a denial
+     * of service against the monitoring rather than a defence of the app. The tier is a
+     * closed set of about ten values, so it is safe to keep forever.
+     *
+     * <p>Identity lives in the log line instead: metrics answer "which limit is biting,
+     * how often", the log answers "who". Splitting them that way is what keeps the
+     * dashboard cheap and the forensics possible.
+     */
+    public static final String REJECTED_METRIC = "beyou.ratelimit.rejected";
 
     /**
      * The header the proxy in front sets to the caller's real address, or blank when
@@ -182,6 +201,21 @@ public class RateLimitFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } else {
             long waitSeconds = probe.getNanosToWaitForRefill() / 1_000_000_000;
+
+            // A rejection used to leave no trace at all: it is not an exception, so the
+            // error tracker never sees it, and nothing here logged or counted. That made
+            // throttling invisible in both directions — you could not tell a user being
+            // turned away from a limit that never bit, and the only way to find out was
+            // for someone to complain.
+            int separator = bucketKey.indexOf(':');
+            String tier = separator < 0 ? "unknown" : bucketKey.substring(0, separator);
+            meterRegistry.counter(REJECTED_METRIC, "tier", tier).increment();
+            // WARN, not INFO: every line here is a request that did not happen, which is
+            // either abuse worth seeing or a limit sized too tightly. The identity is the
+            // whole point of the line — it is what the metric cannot carry.
+            log.warn("Rate limit rejected {} {} — tier={} key={} retryAfter={}s",
+                    method, path, tier, bucketKey, waitSeconds);
+
             response.setStatus(429);
             response.addHeader("Retry-After", String.valueOf(waitSeconds));
             response.setContentType("application/json");
