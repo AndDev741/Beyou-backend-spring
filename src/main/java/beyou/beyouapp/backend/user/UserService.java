@@ -309,7 +309,8 @@ public class UserService {
      * must be deleted by hand, innermost first.
      *
      * <pre>{@code
-     * -- 1. the attachment directories, noted BEFORE the rows go
+     * -- 1. the attachment directories, noted BEFORE the rows go. The profile photo
+     * --    needs no lookup: it is named after the account.
      * SELECT id FROM feedback WHERE user_id = :userId;
      *
      * BEGIN;
@@ -347,7 +348,7 @@ public class UserService {
             // with no transaction there is no commit callback to defer the purge
             // to, and the row delete below would commit on its own.
             throw new IllegalStateException(
-                    "deleteUser must run inside a transaction — the attachment purge is deferred to its commit");
+                    "deleteUser must run inside a transaction — the file purge is deferred to its commit");
         }
 
         try{
@@ -366,7 +367,7 @@ public class UserService {
             userRepository.delete(user);
             userRepository.flush();
 
-            purgeAttachmentsAfterCommit(user.getId(), submissionIds);
+            purgeFilesAfterCommit(user.getId(), submissionIds);
             return ResponseEntity.ok(Map.of("success", "User deleted successfully"));
         }catch(Exception e){
             // Rethrown, not returned. A 400 body here reads as "handled" to the caller,
@@ -382,6 +383,9 @@ public class UserService {
     /**
      * Hands the file purge to the transaction's commit callback.
      *
+     * <p>Purges both kinds of file this account owns: its feedback attachments and
+     * its profile photo. Neither cascades — the rows do, the bytes do not.
+     *
      * <p>Deliberately a synchronization rather than an
      * {@code @TransactionalEventListener(AFTER_COMMIT)}: an event published
      * without an active transaction is silently DROPPED, which for this purge
@@ -394,13 +398,20 @@ public class UserService {
      * remember, and the caller that matters most is the route that does not
      * exist yet.
      */
-    private void purgeAttachmentsAfterCommit(UUID userId, List<UUID> submissionIds) {
+    private void purgeFilesAfterCommit(UUID userId, List<UUID> submissionIds) {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 log.info("User {} deleted — purging attachment files for {} submission(s)",
                         userId, submissionIds.size());
                 feedbackAttachmentService.purgeStoredFiles(submissionIds);
+                // The profile photo is the other file this account owns, and it was
+                // outliving the deletion: the row it hung off vanished with the user
+                // while the JPEG stayed on disk under a name that is still the user's
+                // id. A face left behind by an account that no longer exists is the
+                // exact thing "deleted immediately, no way to undo it" promises not
+                // to happen.
+                photoStorageService.delete(userId);
             }
         });
     }

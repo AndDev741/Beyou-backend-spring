@@ -24,3 +24,20 @@ springdoc:
     enabled: false
   swagger-ui:
     enabled: false
+
+# The assistant's model chain, in production.
+#
+# Beyou's controller is established in Portugal, so an assistant message leaving
+# for a provider outside the EEA is a transfer, and a transfer needs a legal route.
+# Mistral AI is in France and Google Gemini runs under the EU-US Data Privacy
+# Framework; both have one. Z.ai (glm) and DeepSeek are established in China, for
+# which the European Commission has issued no adequacy decision, and the assistant
+# carries whatever a person typed plus the habits and goals it read to answer.
+#
+# So they are out of the default order AND on the blocklist. The order is only a
+# default an operator can override; the blocklist is not, and it is what makes the
+# privacy policy's promise survive a hurried environment edit.
+ai:
+  llm-chain:
+    order: ${LLM_CHAIN_ORDER:mistral,gemini}
+    blocked: ${LLM_CHAIN_BLOCKED:glm,deepseek}

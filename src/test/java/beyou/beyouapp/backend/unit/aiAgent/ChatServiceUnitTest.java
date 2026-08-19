@@ -27,6 +27,7 @@ import beyou.beyouapp.backend.domain.aiAgent.chat.ChatRepository;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatResponseDTO;
 import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessageService;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
@@ -43,6 +44,9 @@ public class ChatServiceUnitTest {
 
     @Mock
     private ChatMemory chatMemory;
+
+    @Mock
+    private AgentMessageService agentMessageService;
 
     private ChatService chatService;
 
@@ -61,7 +65,7 @@ public class ChatServiceUnitTest {
         chat.setCreatedAt(LocalDateTime.now().minusDays(1));
         chat.setUpdatedAt(LocalDateTime.now().minusDays(1));
 
-        chatService = new ChatService(chatRepository, userRepository, chatMemory);
+        chatService = new ChatService(chatRepository, userRepository, chatMemory, agentMessageService);
     }
 
     @Test

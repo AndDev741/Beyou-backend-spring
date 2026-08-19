@@ -127,5 +127,7 @@ COMMIT;
 -- 9. Only after the commit succeeded, and only for feedback ids collected BEFORE step
 -- 8 (the rows are gone by now):
 --     rm -rf "$UPLOAD_DIR/feedback-attachments/<feedbackId>"
--- If the commit failed, stop and keep the directories. The bytes are the one part of
--- this that no transaction can give back.
+--     rm -f  "$UPLOAD_DIR/user-photos/<userId>.jpg"
+-- The profile photo needs no id collected in advance — it is named after the account.
+-- If the commit failed, stop and keep the files. The bytes are the one part of this
+-- that no transaction can give back.

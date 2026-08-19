@@ -9,6 +9,7 @@ import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentService;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.PhotoStorageService;
+import beyou.beyouapp.backend.user.PhotoUrlSigner;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserMapper;
 import beyou.beyouapp.backend.user.UserRepository;
@@ -106,7 +107,7 @@ public class UserServiceUnitTest {
         // The real walk over a mocked row store: these tests are about the streak rules,
         // so nothing between the service and the arithmetic is faked.
         userStreakService = new UserStreakService(entityCheckDayRepository);
-        userMapper = new UserMapper(userStreakService);
+        userMapper = new UserMapper(userStreakService, new PhotoUrlSigner("a-token-secret-for-tests", 720));
 
         user.setId(userId);
         user.setName("AndDev741");

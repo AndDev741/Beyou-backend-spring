@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.category.CategoryRepository;
 import beyou.beyouapp.backend.domain.checkday.CheckHistoryService;
 import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
@@ -44,6 +45,7 @@ public class UserExportService {
     private final FeedbackService feedbackService;
     private final EntityCheckDayRepository entityCheckDayRepository;
     private final DiaryRoutineRepository diaryRoutineRepository;
+    private final ChatService chatService;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -67,6 +69,10 @@ public class UserExportService {
         profile.put("theme", user.getThemeInUse());
         profile.put("widgetsInUse", user.getWidgetsIdInUse() == null
                 ? List.of() : List.copyOf(user.getWidgetsIdInUse()));
+        // The note the assistant keeps about this person ACROSS conversations. It is
+        // written by a model, about a user, and stored on their row — an inference held
+        // about someone is their data whether or not they typed it.
+        profile.put("assistantNotesAboutYou", user.getUserContext());
         profile.put("progress", xp(user.getXpProgress()));
         profile.put("streak", streak(user.getCheckProgress()));
         export.put("profile", profile);
@@ -137,6 +143,11 @@ public class UserExportService {
         // itself; the shape of a submission is not this class's business.
         export.put("feedback", feedbackService.exportForUser(userId));
 
+        // Assistant conversations, the transcript and the notes the model wrote. This
+        // is the part of the account that left the server for a third-party provider,
+        // which makes it the part someone asking for their data most wants to see.
+        export.put("agentChats", chatService.exportForUser(userId));
+
         // Check-in history (R10)
         export.put("checkHistory", checkHistory(user));
 
@@ -147,8 +158,6 @@ public class UserExportService {
                 + "routine per day, each carrying a full copy of that day's structure. The "
                 + "outcomes they record are in checkHistory, in bounded form; the copies "
                 + "themselves would grow this file without limit.");
-        omitted.put("agentChat", "Conversations with the assistant, along with the memory it "
-                + "keeps of them.");
         omitted.put("credentials", "Password hash, refresh tokens and any pending "
                 + "verification or reset tokens. Nothing here is useful to you and all of it "
                 + "is dangerous in a file.");
