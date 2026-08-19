@@ -7,6 +7,7 @@ import beyou.beyouapp.backend.user.User;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.bucket4j.Bucket;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.FilterChain;
 
 import org.junit.jupiter.api.AfterEach;
@@ -40,7 +41,7 @@ class FeedbackRateLimitTest {
                 .maximumSize(1000)
                 .expireAfterAccess(Duration.ofMinutes(5))
                 .build();
-        filter = new RateLimitFilter(cache);
+        filter = new RateLimitFilter(cache, new SimpleMeterRegistry());
         filterChain = mock(FilterChain.class);
     }
 
