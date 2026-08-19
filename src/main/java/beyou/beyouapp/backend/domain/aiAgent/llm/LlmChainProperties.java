@@ -11,11 +11,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * entry in {@code providers} (OpenAI-compatible endpoint).
  *
  * <p>{@code blocked} names providers that must never join the chain in this
- * environment, whatever {@code order} says. It exists because {@code order} is
- * an environment variable and the reason for leaving a provider out can be a
- * legal one: prod blocks the providers established in countries with no EU
- * adequacy decision, and a blocklist means a hurried {@code LLM_CHAIN_ORDER}
- * edit cannot quietly send European users' assistant messages back to them.
+ * environment, whatever {@code order} says. The two are separate because the
+ * reason for leaving a provider out can be a legal rather than an operational
+ * one: production runs only the providers whose transfers have a route out of
+ * the EEA, and naming the others explicitly says that was a decision rather
+ * than an omission from {@code order}. Both are set in production's own .env —
+ * see {@code envExample} for which providers and why.
  */
 @ConfigurationProperties(prefix = "ai.llm-chain")
 public record LlmChainProperties(

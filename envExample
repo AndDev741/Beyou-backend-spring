@@ -38,14 +38,27 @@ PASSWORD_RESET_COOLDOWN_MINUTES=5
 ACCOUNT_DELETION_CODE_TTL_MINUTES=15
 ACCOUNT_DELETION_COOLDOWN_SECONDS=60
 
-# The assistant's model fallback chain, tried left to right.
+# The assistant's model fallback chain, tried left to right. The values below are
+# the LOCAL ones — the whole chain, so development can exercise every link.
 #
-# PRODUCTION runs mistral,gemini and nothing else — those two are the providers
-# whose transfers have a legal route out of the EEA (France; EU-US Data Privacy
-# Framework). Z.ai (glm) and DeepSeek are established in China, which has no
-# adequacy decision, so application-prod.yaml both drops them from the default
-# order and puts them on LLM_CHAIN_BLOCKED, where an env override cannot bring
-# them back. Leave that blocklist alone unless the legal picture changes.
+# PRODUCTION MUST SET BOTH OF THESE, and to these values:
+#
+#     LLM_CHAIN_ORDER=mistral,gemini
+#     LLM_CHAIN_BLOCKED=glm,deepseek
+#
+# Mistral AI is in France and Google Gemini runs under the EU-US Data Privacy
+# Framework, so both have a legal route for a transfer out of the EEA. Z.ai (glm)
+# and DeepSeek are established in China, for which the European Commission has
+# issued no adequacy decision — and the assistant carries whatever a person typed
+# plus the habits and goals it read to answer them. The published privacy policy
+# says production does not call them.
+#
+# LLM_CHAIN_BLOCKED is not redundant with the order. It says the omission was a
+# decision, and it keeps holding if someone later widens LLM_CHAIN_ORDER without
+# knowing why it was narrow.
+#
+# NVIDIA is in the United States and covered by the same framework as Gemini, so
+# `mistral,gemini,nvidia` is a legally fine order if you want a third link.
 #
 # The chain must end up with at least one usable provider or the app refuses to
 # boot: in prod that means MISTRAL_API_KEY or GEMINI_API_KEY has to be set.

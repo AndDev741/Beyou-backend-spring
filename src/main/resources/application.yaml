@@ -130,8 +130,8 @@ ai:
   llm-chain:
     order: ${LLM_CHAIN_ORDER:mistral,gemini,glm,nvidia,deepseek}
     # Providers this environment refuses to call, whatever `order` says. Empty here
-    # so local and e2e can exercise the whole chain; application-prod.yaml fills it
-    # in, and that is where the reason lives.
+    # so local and e2e can exercise the whole chain. Production sets it in its own
+    # .env, together with `order` — see envExample for which providers and why.
     blocked: ${LLM_CHAIN_BLOCKED:}
     cooldown-rate-limit-seconds: ${LLM_COOLDOWN_RATELIMIT:300}
     cooldown-error-seconds: ${LLM_COOLDOWN_ERROR:30}
