@@ -24,3 +24,11 @@ springdoc:
     enabled: false
   swagger-ui:
     enabled: false
+
+# Mistral (France) and Gemini (EU-US Data Privacy Framework) have a legal route
+# for a transfer out of the EEA. Z.ai (glm) and DeepSeek are in China, which has
+# no adequacy decision, so they are blocked as well as left out of the order.
+ai:
+  llm-chain:
+    order: ${LLM_CHAIN_ORDER:mistral,gemini}
+    blocked: ${LLM_CHAIN_BLOCKED:glm,deepseek}

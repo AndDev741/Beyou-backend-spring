@@ -10,13 +10,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * "deepseek" is the native starter bean, every other name must have an
  * entry in {@code providers} (OpenAI-compatible endpoint).
  *
- * <p>{@code blocked} names providers that must never join the chain in this
- * environment, whatever {@code order} says. The two are separate because the
- * reason for leaving a provider out can be a legal rather than an operational
- * one: production runs only the providers whose transfers have a route out of
- * the EEA, and naming the others explicitly says that was a decision rather
- * than an omission from {@code order}. Both are set in production's own .env —
- * see {@code envExample} for which providers and why.
+ * <p>{@code blocked} names providers that must never join the chain here,
+ * whatever {@code order} says. Separate from the order because it records that
+ * leaving one out was a decision, so it keeps holding if someone later widens
+ * {@code LLM_CHAIN_ORDER} without knowing why it was narrow.
  */
 @ConfigurationProperties(prefix = "ai.llm-chain")
 public record LlmChainProperties(
