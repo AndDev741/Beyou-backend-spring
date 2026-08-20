@@ -29,6 +29,7 @@ import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.PhotoUrlSigner;
 import beyou.beyouapp.backend.user.UserMapper;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
+import beyou.beyouapp.backend.user.enums.TimezoneSource;
 
 /**
  * The login response carries the streak scalars the frontend and the E2E suite assert on.
@@ -150,6 +151,24 @@ class UserMapperUnitTest {
                 "the minted URL should validate for its own owner");
         assertFalse(photoUrlSigner.isValid(UUID.randomUUID(), query.get("exp"), query.get("sig")),
                 "a signature must not carry over to another user's id");
+    }
+
+    @Test
+    void shouldReportWhetherTheTimezoneWasEverChosen() {
+        user.setTimezone("UTC");
+        user.setTimezoneSource(TimezoneSource.DEFAULT);
+
+        // The clients decide whether they may adopt the device's zone from this field
+        // alone. Dropping it from the response would leave them guessing from the string
+        // "UTC", which is exactly the ambiguity TimezoneSource exists to remove.
+        assertEquals(TimezoneSource.DEFAULT, userMapper.toResponseDTO(user).timezoneSource());
+
+        user.setTimezone("Europe/Lisbon");
+        user.setTimezoneSource(TimezoneSource.EXPLICIT);
+
+        UserResponseDTO chosen = userMapper.toResponseDTO(user);
+        assertEquals("Europe/Lisbon", chosen.timezone());
+        assertEquals(TimezoneSource.EXPLICIT, chosen.timezoneSource());
     }
 
     private static Map<String, String> queryOf(String url) {

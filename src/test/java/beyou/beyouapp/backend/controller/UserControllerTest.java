@@ -93,7 +93,7 @@ public class UserControllerTest extends AbstractIntegrationTest {
             "Andree", null, "phrase", "author",
             List.of("widget1"), "dark",
             ConstanceConfiguration.ANY, "en", true,
-            null, null
+            null, null, null
         );
         when(userService.editUser(dto, userId)).thenReturn(userResponseDTO);
 
@@ -112,7 +112,7 @@ public class UserControllerTest extends AbstractIntegrationTest {
             null, null, null, null,
             List.of("widgetA", "widgetB"), null,
             ConstanceConfiguration.ANY, "en", null,
-            null, null
+            null, null, null
         );
        
         when(userService.editUser(dto, userId)).thenReturn(userResponseDTO);
@@ -131,7 +131,7 @@ public class UserControllerTest extends AbstractIntegrationTest {
         UserEditDTO dto = new UserEditDTO(
             "a",
             null, null, null, null, null,
-            null, null, null, null, null
+            null, null, null, null, null, null
         );
 
         mockMvc.perform(put("/user")
@@ -148,7 +148,7 @@ public class UserControllerTest extends AbstractIntegrationTest {
         UserEditDTO dto = new UserEditDTO(
             null, longPhoto,
             null, null, null, null,
-            null, null, null, null, null
+            null, null, null, null, null, null
         );
 
         mockMvc.perform(put("/user")
@@ -164,7 +164,7 @@ public class UserControllerTest extends AbstractIntegrationTest {
         UserEditDTO dto = new UserEditDTO(
             null, "javascript:alert(1)",
             null, null, null, null,
-            null, null, null, null, null
+            null, null, null, null, null, null
         );
 
         mockMvc.perform(put("/user")

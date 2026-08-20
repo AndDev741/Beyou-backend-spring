@@ -22,6 +22,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
+import beyou.beyouapp.backend.user.enums.TimezoneSource;
 import beyou.beyouapp.backend.user.enums.UserRole;
 
 import java.time.LocalDate;
@@ -133,6 +134,16 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private String timezone = "UTC";
 
+    /**
+     * Whether anyone ever actually answered the question above. Without it, the entity
+     * default 'UTC' is indistinguishable from a deliberate UTC pick and no automatic
+     * correction is safe. See {@link TimezoneSource} for the policy each value carries;
+     * it is enforced in {@code UserService.editUser}, not in the clients.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "timezone_source", nullable = false, length = 16)
+    private TimezoneSource timezoneSource = TimezoneSource.DEFAULT;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private XpDecayStrategy xpDecayStrategy = XpDecayStrategy.GRADUAL;
@@ -159,6 +170,7 @@ public class User implements UserDetails {
         getXpProgress().setXp(0D);
         setConstanceConfiguration(ConstanceConfiguration.ANY);
         if (this.timezone == null) this.timezone = "UTC";
+        if (this.timezoneSource == null) this.timezoneSource = TimezoneSource.DEFAULT;
         if (this.xpDecayStrategy == null) this.xpDecayStrategy = XpDecayStrategy.GRADUAL;
         setTutorialCompleted(false);
         if (!this.emailVerified) this.emailVerified = false;

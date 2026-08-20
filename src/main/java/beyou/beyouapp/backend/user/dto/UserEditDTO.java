@@ -4,6 +4,7 @@ import java.util.List;
 
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
+import beyou.beyouapp.backend.user.enums.TimezoneSource;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -24,6 +25,14 @@ public record UserEditDTO(
     String language,
     Boolean isTutorialCompleted,
     String timezone,
+    /**
+     * How the accompanying {@code timezone} was arrived at. Only {@code DETECTED} is
+     * meaningful from a client, and it is a request rather than an instruction: the
+     * server adopts it only while the account is still {@code DEFAULT}. Null and
+     * {@code EXPLICIT} both mean "a person picked this"; {@code DEFAULT} is rejected,
+     * since no client has any business resetting an account to "never answered".
+     */
+    TimezoneSource timezoneSource,
     XpDecayStrategy xpDecayStrategy
 ) {
     

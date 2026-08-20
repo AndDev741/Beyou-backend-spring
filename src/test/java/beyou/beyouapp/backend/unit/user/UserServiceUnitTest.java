@@ -217,6 +217,7 @@ public class UserServiceUnitTest {
                 "en",
                 null,
                 null,
+                null,
                 null
                 );
 
@@ -246,6 +247,7 @@ public class UserServiceUnitTest {
                 null,
                 ConstanceConfiguration.ANY,
                 "en",
+                null,
                 null,
                 null,
                 null
