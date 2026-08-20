@@ -110,9 +110,12 @@ public class PhotoStorageService {
         } catch (BusinessException e) {
             throw e;
         } catch (IOException e) {
+            // The exception detail stays in the log. It was going into the response
+            // body, and an IOException's message here is usually a server path: an
+            // unwritable upload dir answered the client with "/app/./uploads".
             log.error("Failed to store photo for user {}", userId, e);
             throw new BusinessException(ErrorKey.PHOTO_UPLOAD_CORRUPT,
-                "Could not process image: " + e.getMessage());
+                "Could not process image");
         } finally {
             if (tmp != null) {
                 try {
@@ -128,6 +131,30 @@ public class PhotoStorageService {
     public Path getPath(UUID userId) {
         Path path = resolvePath(userId);
         return Files.exists(path) ? path : null;
+    }
+
+    /**
+     * Removes a user's stored photo, if there is one. Best-effort by design: this
+     * runs after the account row is already gone, so a failure here must not throw
+     * into a transaction that has committed — it is logged and the file is left for
+     * an operator. Silence would be worse, since the leftover is a face on a disk
+     * belonging to an account that no longer exists.
+     *
+     * @return true when a file was actually deleted
+     */
+    public boolean delete(UUID userId) {
+        Path path = resolvePath(userId);
+        try {
+            boolean deleted = Files.deleteIfExists(path);
+            if (deleted) {
+                log.info("Deleted profile photo for user {}", userId);
+            }
+            return deleted;
+        } catch (IOException e) {
+            log.error("Could not delete the profile photo at {} for user {} — the file is still on disk",
+                path, userId, e);
+            return false;
+        }
     }
 
     /** Returns the photo as a Spring Resource, or null if none exists. */

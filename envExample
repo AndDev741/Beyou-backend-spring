@@ -38,12 +38,25 @@ PASSWORD_RESET_COOLDOWN_MINUTES=5
 ACCOUNT_DELETION_CODE_TTL_MINUTES=15
 ACCOUNT_DELETION_COOLDOWN_SECONDS=60
 
-LLM_CHAIN_ORDER=mistral,gemini,openrouter,deepseek
+# The assistant's model fallback chain, tried left to right. The values below are
+# the local ones — the whole chain. Production overrides them in application-prod.yaml
+# (mistral,gemini, with glm,deepseek blocked): the two Chinese providers have no EU
+# adequacy decision and the assistant carries whatever a person typed.
+#
+# The chain needs at least one provider with a key or the app refuses to boot, so
+# prod needs MISTRAL_API_KEY or GEMINI_API_KEY.
+LLM_CHAIN_ORDER=mistral,gemini,glm,nvidia,deepseek
+LLM_CHAIN_BLOCKED=
 MISTRAL_API_KEY=
 GEMINI_API_KEY=
-OPENROUTER_API_KEY=
-# Optional model overrides: MISTRAL_MODEL, GEMINI_MODEL, OPENROUTER_MODEL
+GLM_API_KEY=
+NVIDIA_API_KEY=
+# Optional model overrides: MISTRAL_MODEL, GEMINI_MODEL, GLM_MODEL, NVIDIA_MODEL
 # Optional cooldowns (seconds): LLM_COOLDOWN_RATELIMIT=300, LLM_COOLDOWN_ERROR=30
+
+# How long a signed profile-photo URL stays loadable, in minutes. The URL is the
+# only proof GET /user/photo/{id} gets, so it expires.
+PHOTO_URL_TTL_MINUTES=720
 
 # Docs Import
 DOCS_IMPORT_REPO_OWNER=AndDev741

@@ -41,6 +41,13 @@ public class LlmChainConfig {
             ObservationRegistry observationRegistry, MeterRegistry meterRegistry) {
         List<NamedChatModel> chain = new ArrayList<>();
         for (String name : props.order()) {
+            // Ahead of every other check: a blocked provider is not a misconfiguration
+            // to work around, it is one this deployment is not allowed to call at all.
+            if (props.isBlocked(name)) {
+                log.warn("LLM chain: provider '{}' is blocked in this environment — dropping it from the chain",
+                        name);
+                continue;
+            }
             if ("deepseek".equals(name)) {
                 chain.add(new NamedChatModel("deepseek", deepSeek));
                 continue;

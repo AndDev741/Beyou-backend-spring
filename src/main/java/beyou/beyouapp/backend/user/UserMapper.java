@@ -21,6 +21,13 @@ public class UserMapper {
      */
     private final UserStreakService userStreakService;
 
+    /**
+     * The photo URL is the one field here nobody else can mint. It goes out signed,
+     * because an {@code <img src>} cannot carry the JWT and the endpoint behind it
+     * used to answer anyone who could guess a UUID.
+     */
+    private final PhotoUrlSigner photoUrlSigner;
+
     public UserResponseDTO toResponseDTO(User user){
         return toResponseDTO(user, null);
     }
@@ -39,7 +46,8 @@ public class UserMapper {
 
         String photo;
         if (photoVersion != null) {
-            photo = "/api/v1/user/photo/" + user.getId() + "?v=" + photoVersion;
+            photo = "/api/v1/user/photo/" + user.getId()
+                    + photoUrlSigner.signedQuery(user.getId(), photoVersion);
         } else {
             photo = user.getPerfilPhoto(); // null or Google CDN URL
         }

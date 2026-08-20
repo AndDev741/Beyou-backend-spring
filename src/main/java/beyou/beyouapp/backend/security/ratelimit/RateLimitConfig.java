@@ -108,7 +108,7 @@ public class RateLimitConfig {
                 .build();
     }
 
-    /** Public, unauthenticated GET /user/photo/** — per-IP so anonymous callers can't flood disk reads. */
+    /** Header-less GET /user/photo/** (signed URL, no JWT) — per-IP so callers can't flood disk reads. */
     public static Bucket createPhotoBucket() {
         return Bucket.builder()
                 .addLimit(Bandwidth.builder()

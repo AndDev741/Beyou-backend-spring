@@ -8,6 +8,7 @@
 #   - Auto-verifies emails on registration (no SMTP needed)
 #   - Disables rate limiting so tests can hammer the API
 #   - Uses a noop mail config (no real SMTP server expected)
+#   - Writes uploads under /tmp (see app.upload-dir at the bottom)
 #
 # Schema: Flyway migrates the (throwaway) beyou_e2e database on boot — the
 # exact path production takes. In the compose stack, clean state per run comes
@@ -127,3 +128,17 @@ sentry:
 monitoring:
   heartbeat:
     snapshot-url: ""
+
+# Somewhere writable, wherever this profile runs.
+#
+# The default is ./uploads, which resolves inside the image to /app — not
+# writable by the runtime user — and docker-compose.e2e.yml mounts nothing, so
+# a photo upload answered PHOTO_UPLOAD_CORRUPT for a perfectly good JPEG. No
+# spec uploaded one until user-photo-access.spec.ts did.
+#
+# Fixed here rather than in the compose file because the e2e CI pins dev-env to
+# main: a fix over there could not go green until it had already merged. /tmp is
+# writable in any container, and uploads that die with the container are what a
+# throwaway stack wants anyway.
+app:
+  upload-dir: ${UPLOAD_DIR:/tmp/beyou-e2e-uploads}

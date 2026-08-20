@@ -1,6 +1,8 @@
 package beyou.beyouapp.backend.domain.aiAgent.chat;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -29,6 +31,8 @@ public class ChatService {
     private final ChatRepository chatRepository;
     private final UserRepository userRepository;
     private final ChatMemory chatMemory;
+    /** Only for {@link #exportForUser(UUID)} — the transcript is not this class's table. */
+    private final AgentMessageService agentMessageService;
 
     public Chat getChat(UUID chatId, UUID userId) {
         Chat chat = chatRepository.findById(chatId)
@@ -105,6 +109,42 @@ public class ChatService {
         Chat chat = getChat(chatId, userId);
         chat.setTitle(clamp(title, TITLE_MAX));
         return ChatResponseDTO.from(chatRepository.save(chat));
+    }
+
+    /**
+     * Every conversation with the assistant, for the data export.
+     *
+     * <p>The export used to name this under {@code notIncluded}, which made it the one
+     * thing a person could not get a copy of without writing an email — and it is the
+     * most sensitive thing here, because it is the part that left the server for a
+     * third-party model. What the assistant was told is data about its user, so it
+     * belongs in the file.
+     *
+     * <p>Read through {@link AgentMessageService#getMessages(UUID)} rather than off the
+     * table directly, so conversations older than {@code agent_message} still export —
+     * those live only in the model's memory window and would otherwise come back as an
+     * empty chat with a title.
+     *
+     * <p>{@code userContextInChat} goes with each conversation: it is the note the model
+     * wrote about the person while they talked, which is exactly the kind of inference
+     * someone asking for their data is asking about.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> exportForUser(UUID userId) {
+        return chatRepository.findAllByUserIdOrderByUpdatedAtDesc(userId).stream()
+                .map(this::toExportMap)
+                .toList();
+    }
+
+    private Map<String, Object> toExportMap(Chat chat) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", chat.getId());
+        map.put("title", chat.getTitle());
+        map.put("createdAt", chat.getCreatedAt());
+        map.put("updatedAt", chat.getUpdatedAt());
+        map.put("assistantNotesAboutThisChat", chat.getUserContextInChat());
+        map.put("messages", agentMessageService.getMessages(chat.getId()));
+        return map;
     }
 
     /**

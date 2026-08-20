@@ -59,6 +59,10 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/docs/admin/**").authenticated()
                         .requestMatchers("/docs/**").permitAll()
+                        // Outside the JWT filter on purpose: the callers are an <img src>
+                        // and an <Image uri>, which cannot send a header. Authorization
+                        // rides in the query string instead — UserPhotoController refuses
+                        // anything without a live signature from PhotoUrlSigner.
                         .requestMatchers(HttpMethod.GET, "/user/photo/**").permitAll()
                         // Admin console. The ADMIN role is granted only by a manual
                         // database UPDATE — no code path assigns it.

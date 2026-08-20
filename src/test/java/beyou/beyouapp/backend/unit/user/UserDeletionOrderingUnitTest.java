@@ -7,6 +7,7 @@ import beyou.beyouapp.backend.domain.feedback.FeedbackAttachmentService;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.PhotoStorageService;
+import beyou.beyouapp.backend.user.PhotoUrlSigner;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserMapper;
 import beyou.beyouapp.backend.user.UserRepository;
@@ -111,7 +112,8 @@ class UserDeletionOrderingUnitTest {
         user.setName("deletion order");
         user.setEmail("deletion-order@beyou.test");
         userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService,
-                new UserMapper(userStreakService), photoStorageService, eventPublisher,
+                new UserMapper(userStreakService, new PhotoUrlSigner("a-token-secret-for-tests", 720)),
+                photoStorageService, eventPublisher,
                 feedbackAttachmentService, userStreakService, passwordResetTokenRepository, chatService);
     }
 
@@ -154,6 +156,11 @@ class UserDeletionOrderingUnitTest {
         order.verify(userRepository).flush();
         order.verify(feedbackAttachmentService).purgeStoredFiles(submissionIds);
         order.verifyNoMoreInteractions();
+
+        // The profile photo is the other file no foreign key reaches, and it used to
+        // outlive the account: the row went, the JPEG stayed on disk under a name
+        // that is still the deleted user's id.
+        verify(photoStorageService).delete(userId);
     }
 
     @Test
@@ -183,6 +190,7 @@ class UserDeletionOrderingUnitTest {
         // And the rollback that actually follows still touches no file.
         TransactionSynchronizationUtils.triggerAfterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
         verify(feedbackAttachmentService, never()).purgeStoredFiles(anyCollection());
+        verify(photoStorageService, never()).delete(any(UUID.class));
     }
 
     @Test
@@ -202,6 +210,7 @@ class UserDeletionOrderingUnitTest {
 
         TransactionSynchronizationUtils.triggerAfterCommit();
         verify(feedbackAttachmentService, never()).purgeStoredFiles(anyCollection());
+        verify(photoStorageService, never()).delete(any(UUID.class));
     }
 
     @Test
@@ -215,6 +224,7 @@ class UserDeletionOrderingUnitTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("must run inside a transaction");
 
-        verifyNoInteractions(userRepository, refreshTokenService, feedbackAttachmentService);
+        verifyNoInteractions(userRepository, refreshTokenService, feedbackAttachmentService,
+                photoStorageService);
     }
 }

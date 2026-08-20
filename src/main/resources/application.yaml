@@ -69,6 +69,10 @@ spring:
 
 app:
   upload-dir: ${UPLOAD_DIR:./uploads}
+  # How long a signed profile-photo URL stays loadable. The URL is the only proof
+  # the image endpoint gets, so it expires; 12h keeps a tab left open overnight
+  # working while a link leaked into a log or a browser history dies the same day.
+  photo-url-ttl-minutes: ${PHOTO_URL_TTL_MINUTES:720}
 
 server:
   port: 8099
@@ -125,6 +129,10 @@ rate-limit:
 ai:
   llm-chain:
     order: ${LLM_CHAIN_ORDER:mistral,gemini,glm,nvidia,deepseek}
+    # Providers this environment refuses to call, whatever `order` says. Empty
+    # here so local and e2e can exercise the whole chain; application-prod.yaml
+    # fills it in.
+    blocked: ${LLM_CHAIN_BLOCKED:}
     cooldown-rate-limit-seconds: ${LLM_COOLDOWN_RATELIMIT:300}
     cooldown-error-seconds: ${LLM_COOLDOWN_ERROR:30}
     providers:

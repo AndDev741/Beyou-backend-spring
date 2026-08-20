@@ -31,6 +31,10 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutin
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.HabitGroupDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
+import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessageService;
+import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
+import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
+import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 
@@ -64,6 +68,8 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
     @Autowired TaskService taskService;
     @Autowired DiaryRoutineService diaryRoutineService;
     @Autowired ScheduleService scheduleService;
+    @Autowired ChatService chatService;
+    @Autowired AgentMessageService agentMessageService;
 
     private User user;
 
@@ -170,7 +176,58 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         // Whatever stays out stays out on the record, so the file can be read as a
         // whole instead of spot-checked against the app.
         assertThat((Map<String, Object>) export.get("notIncluded"))
-                .containsKeys("routineSnapshots", "agentChat", "credentials");
+                .containsKeys("routineSnapshots", "credentials")
+                .doesNotContainKey("agentChat");
+
+        userService.deleteUser(user);
+    }
+
+    /**
+     * Assistant conversations were the one thing named in {@code notIncluded}, which
+     * made them the one thing nobody could get a copy of — and they are the part of
+     * the account that actually left the server for a third-party model. What the
+     * assistant was told, and the notes it wrote back, are data about its user.
+     */
+    @Test
+    @DisplayName("the export carries the assistant conversations, their transcript and the notes the model kept")
+    @SuppressWarnings("unchecked")
+    void exportsTheAssistantConversations() {
+        UUID userId = user.getId();
+
+        UUID chatId = chatService.createChat("Planning my week", userId).id();
+        chatService.updateChatContext("Prefers mornings", chatId, userId);
+        chatService.updateGlobalContext("Training for a half marathon", userId);
+        agentMessageService.recordTurn(chatId, "Build me a morning routine",
+                List.of(AgentSegment.text("Done — here it is.")));
+
+        // The global note is written straight to the row, so the instance parked in the
+        // security context by setUp() is now stale. A real request never sees that —
+        // SecurityFilter loads the user fresh every time — so reload here rather than
+        // asserting against a copy from before the write.
+        user = userRepository.findById(userId).orElseThrow();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
+
+        Map<String, Object> export = exportService.exportUserData();
+
+        List<Map<String, Object>> chats = (List<Map<String, Object>>) export.get("agentChats");
+        assertThat(chats).hasSize(1);
+        assertThat(chats.get(0))
+                .containsEntry("title", "Planning my week")
+                .containsEntry("assistantNotesAboutThisChat", "Prefers mornings");
+
+        // The turn itself, not just a count: a chat reduced to its title is the shape
+        // the omission had.
+        List<AgentMessageDTO> messages = (List<AgentMessageDTO>) chats.get(0).get("messages");
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(0).role()).isEqualTo("USER");
+        assertThat(messages.get(0).segments().get(0).text()).isEqualTo("Build me a morning routine");
+        assertThat(messages.get(1).segments().get(0).text()).isEqualTo("Done — here it is.");
+
+        // The cross-chat note the model keeps about the person lives on their row, so
+        // it travels with the profile rather than with any one conversation.
+        assertThat((Map<String, Object>) export.get("profile"))
+                .containsEntry("assistantNotesAboutYou", "Training for a half marathon");
 
         userService.deleteUser(user);
     }
