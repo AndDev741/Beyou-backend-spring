@@ -110,9 +110,12 @@ public class PhotoStorageService {
         } catch (BusinessException e) {
             throw e;
         } catch (IOException e) {
+            // The exception detail stays in the log. It was going into the response
+            // body, and an IOException's message here is usually a server path: an
+            // unwritable upload dir answered the client with "/app/./uploads".
             log.error("Failed to store photo for user {}", userId, e);
             throw new BusinessException(ErrorKey.PHOTO_UPLOAD_CORRUPT,
-                "Could not process image: " + e.getMessage());
+                "Could not process image");
         } finally {
             if (tmp != null) {
                 try {

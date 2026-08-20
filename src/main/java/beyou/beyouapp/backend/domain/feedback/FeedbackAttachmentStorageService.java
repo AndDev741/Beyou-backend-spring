@@ -169,9 +169,11 @@ public class FeedbackAttachmentStorageService {
         } catch (BusinessException e) {
             throw e;
         } catch (IOException e) {
+            // Detail to the log, not to the caller — an IOException's message here
+            // is usually a server path. Same reason as PhotoStorageService.store.
             log.warn("Could not decode or re-encode a feedback attachment", e);
             throw new BusinessException(ErrorKey.FEEDBACK_ATTACHMENT_CORRUPT,
-                "Could not process image: " + e.getMessage());
+                "Could not process image");
         }
     }
 
