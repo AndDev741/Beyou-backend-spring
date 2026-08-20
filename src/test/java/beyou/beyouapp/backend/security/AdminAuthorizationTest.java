@@ -59,7 +59,7 @@ public class AdminAuthorizationTest extends AbstractIntegrationTest {
             refreshTokenRepository.deleteAll(refreshTokenRepository.findAllByUserId(existing.getId()));
             userRepository.delete(existing);
         });
-        userService.registerUser(new UserRegisterDTO("authz test", EMAIL, PASSWORD));
+        userService.registerUser(new UserRegisterDTO("authz test", EMAIL, PASSWORD, null));
 
         User user = userRepository.findByEmail(EMAIL).orElseThrow();
         user.setEmailVerified(true);

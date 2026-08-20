@@ -44,16 +44,22 @@ public class AuthenticationController {
         return userService.registerUser(userRegisterDTO);
     }
 
+    /**
+     * {@code timezone} is optional and carries the browser's detected IANA zone, so a
+     * Google account is not created on the UTC calendar. A client that does not send it
+     * still works; the boot reconcile picks the account up afterwards.
+     */
     @GetMapping("/google")
     public ResponseEntity<Map<String, Object>> googleAuth(@RequestParam("code") String code,
+                                @RequestParam(value = "timezone", required = false) String timezone,
                                 HttpServletResponse response){
-        return userServiceGoogleOAuth.googleAuth(code, response);
+        return userServiceGoogleOAuth.googleAuth(code, timezone, response);
     }
 
     @PostMapping("/google/mobile")
     public ResponseEntity<Map<String, Object>> googleMobileAuth(@RequestBody @Valid GoogleMobileLoginDTO request,
                                 HttpServletResponse response){
-        return userServiceGoogleOAuth.googleMobileAuth(request.idToken(), response);
+        return userServiceGoogleOAuth.googleMobileAuth(request.idToken(), request.timezone(), response);
     }
 
     @PostMapping("/refresh")

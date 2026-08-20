@@ -146,7 +146,7 @@ public class UserServiceUnitTest {
         @Test
         public void shouldRegisterANewUser() {
             UserRegisterDTO userRegisterDTO = new UserRegisterDTO("Name", "email1234@gmail.com",
-                    "TestPassword1!");
+                    "TestPassword1!", null);
             ResponseEntity<Map<String, String>> response = userService.registerUser(userRegisterDTO);
 
             assertEquals(ResponseEntity.ok().body(Map.of("success", "User registered successfully")),
@@ -192,7 +192,7 @@ public class UserServiceUnitTest {
         @Test
         public void shouldDeleteSuccessfullyAUser() {
             UserRegisterDTO userRegisterDTO = new UserRegisterDTO("Name", "newUser@gmail.com",
-                    "TestPassword1!");
+                    "TestPassword1!", null);
             userService.registerUser(userRegisterDTO);
             Optional<User> newUser = userService.getUser(userRegisterDTO.email());
 
@@ -215,6 +215,7 @@ public class UserServiceUnitTest {
                 "light",
                 ConstanceConfiguration.ANY,
                 "en",
+                null,
                 null,
                 null,
                 null
@@ -246,6 +247,7 @@ public class UserServiceUnitTest {
                 null,
                 ConstanceConfiguration.ANY,
                 "en",
+                null,
                 null,
                 null,
                 null
@@ -488,7 +490,7 @@ public class UserServiceUnitTest {
         @Test
         public void shouldThrowEmailAlreadyInUseError() {
             UserRegisterDTO userRegisterDTO = new UserRegisterDTO("Name", "email@gmail.com",
-                    "TestPassword1!");
+                    "TestPassword1!", null);
             User user = new User(userRegisterDTO);
             when(userRepository.findByEmail(userRegisterDTO.email())).thenReturn(Optional.of(user));
 
@@ -502,7 +504,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForRequiredName() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("     ", "email@gmail.com",
-                        "TestPassword1!");
+                        "TestPassword1!", null);
                 userService.registerUser(newUser);
             });
 
@@ -513,7 +515,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForMinimumCharactersInName() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("N", "email@gmail.com",
-                        "TestPassword1!");
+                        "TestPassword1!", null);
                 userService.registerUser(newUser);
             });
 
@@ -524,7 +526,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForRequiredEmail() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("Name", "",
-                        "TestPassword1!");
+                        "TestPassword1!", null);
                 userService.registerUser(newUser);
             });
 
@@ -535,7 +537,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForInvalidEmail() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("Name", "email",
-                        "TestPassword1!");
+                        "TestPassword1!", null);
                 userService.registerUser(newUser);
             });
 
@@ -546,7 +548,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForRequiredPassword() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("Name", "email@gmail.com",
-                        "   ");
+                        "   ", null);
                 userService.registerUser(newUser);
             });
 
@@ -563,7 +565,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForMinimumCharacterInPassword() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("Name", "email@gmail.com",
-                        "12345");
+                        "12345", null);
                 userService.registerUser(newUser);
             });
 

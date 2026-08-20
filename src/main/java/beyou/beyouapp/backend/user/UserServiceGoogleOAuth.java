@@ -43,14 +43,22 @@ public class UserServiceGoogleOAuth {
     @Value("${google.url.userInfo}")
     String USER_INFO_GOOGLE_URL;
 
-    public ResponseEntity<Map<String, Object>> googleAuth(String code, HttpServletResponse response){
+    /**
+     * @param claimedTimezone the IANA zone the browser detected, or null. Applied only on
+     *                        the create branch below: an existing account already has an
+     *                        answer, and whether a detected zone may replace it is a
+     *                        decision that belongs to {@code UserService.editUser}, which
+     *                        the client reaches through the boot reconcile.
+     */
+    public ResponseEntity<Map<String, Object>> googleAuth(String code, String claimedTimezone,
+                                                          HttpServletResponse response){
         String googleAccessToken = getOAuthAccessTokenGoogle(code);
         Map<String, String> profileDetails = getProfileDetailsFromGoogle(googleAccessToken);
         String name = profileDetails.get("name");
         String email = profileDetails.get("email");
         String perfilPhoto = profileDetails.get("picture");
 
-        GoogleUserDTO googleUser = new GoogleUserDTO(email, name, perfilPhoto);
+        GoogleUserDTO googleUser = new GoogleUserDTO(email, name, perfilPhoto, claimedTimezone);
         Optional<User> optionalUser = userRepository.findByEmail(googleUser.email());
 
         if(optionalUser.isPresent()){
@@ -81,8 +89,12 @@ public class UserServiceGoogleOAuth {
      * JWT + refresh token using the mobile contract (X-Access-Token header +
      * refreshToken in the body, no cookie).
      */
-    public ResponseEntity<Map<String, Object>> googleMobileAuth(String idToken, HttpServletResponse response) {
-        GoogleUserDTO googleUser = googleIdTokenVerifierService.verify(idToken);
+    public ResponseEntity<Map<String, Object>> googleMobileAuth(String idToken, String claimedTimezone,
+                                                                HttpServletResponse response) {
+        // The zone does not come from Google: a verified ID token carries no such claim,
+        // so the device sends it alongside and it is merged in here.
+        GoogleUserDTO googleUser = googleIdTokenVerifierService.verify(idToken)
+                .withTimezone(claimedTimezone);
 
         User user = userRepository.findByEmail(googleUser.email())
                 .orElseGet(() -> userRepository.save(new User(googleUser)));

@@ -15,6 +15,7 @@ import beyou.beyouapp.backend.security.passwordreset.PasswordResetTokenRepositor
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
+import beyou.beyouapp.backend.user.enums.TimezoneSource;
 import beyou.beyouapp.backend.user.event.UserRegisteredEvent;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -443,14 +444,7 @@ public class UserService {
             user.setConstanceConfiguration(userEdit.constanceConfiguration() != null ? userEdit.constanceConfiguration() : user.getConstanceConfiguration());
             user.setLanguageInUse(userEdit.language() != null ? userEdit.language() : user.getLanguageInUse());
             user.setTutorialCompleted(userEdit.isTutorialCompleted() != null ? userEdit.isTutorialCompleted() : user.isTutorialCompleted());
-            if (userEdit.timezone() != null) {
-                if (java.time.ZoneId.getAvailableZoneIds().contains(userEdit.timezone())) {
-                    user.setTimezone(userEdit.timezone());
-                } else {
-                    throw new BusinessException(ErrorKey.INVALID_REQUEST,
-                            "Invalid timezone: " + userEdit.timezone());
-                }
-            }
+            applyTimezoneEdit(user, userEdit);
             user.setXpDecayStrategy(userEdit.xpDecayStrategy() != null ? userEdit.xpDecayStrategy() : user.getXpDecayStrategy());
 
             try{
@@ -462,6 +456,51 @@ public class UserService {
         }else{
             throw new UserNotFound("User not found by id");
         }
+    }
+
+    /**
+     * Applies a timezone edit under the rule that makes automatic correction safe.
+     *
+     * <p>Two kinds of write arrive here. A person picking a zone in Configuration (or
+     * asking the agent to) sends no {@code timezoneSource}, and that always wins. A
+     * client reporting the device's zone sends {@code DETECTED}, and that is a request:
+     * it is honoured only while the account has never had a real answer.
+     *
+     * <p>The asymmetry is the point. Adopting over {@code DEFAULT} is how accounts that
+     * predate signup-time detection get fixed at all. Re-adopting over a zone somebody
+     * already has would mean a laptop opened in another country silently moves a
+     * travelling user's day boundary, and every date this account has ever written is
+     * resolved against that boundary. The UI surfaces such a mismatch as a suggestion
+     * instead, which is a question rather than a decision.
+     *
+     * <p>Kept on the server rather than in the two clients so a buggy or hostile one
+     * cannot overwrite an explicit pick, and so web and mobile cannot drift apart.
+     *
+     * <p>An unknown zone throws here, unlike on the registration path, where the same
+     * string is dropped in favour of the default. The difference is what the user is
+     * owed: this value came from a picker and a silent no-op would read as a failed
+     * save, while a signup must not be refused over a cosmetic field.
+     */
+    private void applyTimezoneEdit(User user, UserEditDTO userEdit) {
+        if (userEdit.timezoneSource() == TimezoneSource.DEFAULT) {
+            throw new BusinessException(ErrorKey.INVALID_REQUEST,
+                    "timezoneSource DEFAULT cannot be set by a client");
+        }
+        if (userEdit.timezone() == null) {
+            return;
+        }
+        if (!java.time.ZoneId.getAvailableZoneIds().contains(userEdit.timezone())) {
+            throw new BusinessException(ErrorKey.INVALID_REQUEST,
+                    "Invalid timezone: " + userEdit.timezone());
+        }
+        boolean detected = userEdit.timezoneSource() == TimezoneSource.DETECTED;
+        if (detected && user.getTimezoneSource() != TimezoneSource.DEFAULT) {
+            log.debug("Ignoring a detected timezone for user {}: the account already answers {} ({})",
+                    user.getId(), user.getTimezone(), user.getTimezoneSource());
+            return;
+        }
+        user.setTimezone(userEdit.timezone());
+        user.setTimezoneSource(detected ? TimezoneSource.DETECTED : TimezoneSource.EXPLICIT);
     }
 
     private static String generateVerificationToken() {

@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.common.CheckProgress;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.habit.Habit;
@@ -22,6 +23,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
+import beyou.beyouapp.backend.user.enums.TimezoneSource;
 import beyou.beyouapp.backend.user.enums.UserRole;
 
 import java.time.LocalDate;
@@ -133,6 +135,16 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private String timezone = "UTC";
 
+    /**
+     * Whether anyone ever actually answered the question above. Without it, the entity
+     * default 'UTC' is indistinguishable from a deliberate UTC pick and no automatic
+     * correction is safe. See {@link TimezoneSource} for the policy each value carries;
+     * it is enforced in {@code UserService.editUser}, not in the clients.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "timezone_source", nullable = false, length = 16)
+    private TimezoneSource timezoneSource = TimezoneSource.DEFAULT;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private XpDecayStrategy xpDecayStrategy = XpDecayStrategy.GRADUAL;
@@ -159,6 +171,7 @@ public class User implements UserDetails {
         getXpProgress().setXp(0D);
         setConstanceConfiguration(ConstanceConfiguration.ANY);
         if (this.timezone == null) this.timezone = "UTC";
+        if (this.timezoneSource == null) this.timezoneSource = TimezoneSource.DEFAULT;
         if (this.xpDecayStrategy == null) this.xpDecayStrategy = XpDecayStrategy.GRADUAL;
         setTutorialCompleted(false);
         if (!this.emailVerified) this.emailVerified = false;
@@ -174,6 +187,7 @@ public class User implements UserDetails {
         setEmail(user.email());
         setPassword(user.password());
         setGoogleAccount(false);
+        adoptClaimedTimezone(user.timezone());
     }
 
     public User(GoogleUserDTO googleUser) {
@@ -183,6 +197,27 @@ public class User implements UserDetails {
         setGoogleAccount(googleUser.isGoogleAccount());
         setPerfilPhoto(googleUser.perfilPhoto());
         setEmailVerified(true);
+        adoptClaimedTimezone(googleUser.timezone());
+    }
+
+    /**
+     * Takes the zone a signup claimed, when it is one this JVM can use.
+     *
+     * <p>Lives on the entity so no signup path can forget it: all four of them
+     * (web register, mobile register, Google web, Google mobile) end at one of the two
+     * constructors above, and an account created without this call is an account born on
+     * the UTC calendar wherever its owner actually is.
+     *
+     * <p>Silent when the claim is unusable. The fields keep their declared defaults, the
+     * account is DEFAULT rather than DETECTED, and the client reconcile gets another go
+     * at it on the next boot.
+     */
+    private void adoptClaimedTimezone(String claimed) {
+        String usable = UserDateResolver.usableZoneIdOrNull(claimed);
+        if (usable != null) {
+            setTimezone(usable);
+            setTimezoneSource(TimezoneSource.DETECTED);
+        }
     }
 
     // R14/KTD11 — the streak walk used to live here as getCurrentConstance(LocalDate),

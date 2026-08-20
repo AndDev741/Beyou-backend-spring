@@ -160,13 +160,18 @@ public class SnapshotCheckService {
         // decay still applies below. Snapshot has no constance to read anyway.
         double baseXp = CheckXpCalculator.calculate(check.getDifficulty(), check.getImportance(), 0);
 
-        LocalDate userLocalDate = LocalDate.now(ZoneId.of(user.getTimezone()));
+        // UserDateResolver, not a raw ZoneId.of: an unparseable stored zone must not throw
+        // here. Its whole contract is that a bad timezone string never blocks a check-in,
+        // and RoutineSnapshotSchedulerTest already seeds an account with "INVALID/TIMEZONE".
+        LocalDate userLocalDate = UserDateResolver.today(user);
         double decayedXp = xpDecayCalculator.calculateDecayedXp(
                 baseXp, user.getXpDecayStrategy(), snapshot.getSnapshotDate(), userLocalDate);
 
         check.setChecked(true);
         check.setSkipped(false);
-        check.setCheckTime(LocalTime.now());
+        // The owner's clock, matching the day the row is filed under. See the note on
+        // CheckItemService.nowInZoneOf — the two fields disagreeing is the bug.
+        check.setCheckTime(LocalTime.now(UserDateResolver.zoneOf(user)));
         check.setXpGenerated(decayedXp);
 
         applyXp(user, routine, check, decayedXp, true);

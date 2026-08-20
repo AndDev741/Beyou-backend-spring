@@ -61,7 +61,7 @@ public class AuthVerificationControllerTest extends AbstractIntegrationTest {
 
     @Test
     public void shouldVerifyEmailSuccessfully() throws Exception {
-        UserRegisterDTO register = new UserRegisterDTO("test", "verify@test.com", "TestPassword1!");
+        UserRegisterDTO register = new UserRegisterDTO("test", "verify@test.com", "TestPassword1!", null);
         userService.registerUser(register);
 
         User user = userRepository.findByEmail("verify@test.com").orElseThrow();
@@ -89,7 +89,7 @@ public class AuthVerificationControllerTest extends AbstractIntegrationTest {
 
     @Test
     public void shouldRejectExpiredToken() throws Exception {
-        UserRegisterDTO register = new UserRegisterDTO("test", "expired@test.com", "TestPassword1!");
+        UserRegisterDTO register = new UserRegisterDTO("test", "expired@test.com", "TestPassword1!", null);
         userService.registerUser(register);
 
         User user = userRepository.findByEmail("expired@test.com").orElseThrow();
@@ -103,7 +103,7 @@ public class AuthVerificationControllerTest extends AbstractIntegrationTest {
 
     @Test
     public void shouldBlockLoginForUnverifiedUser() throws Exception {
-        UserRegisterDTO register = new UserRegisterDTO("test", "unverified@test.com", "TestPassword1!");
+        UserRegisterDTO register = new UserRegisterDTO("test", "unverified@test.com", "TestPassword1!", null);
         userService.registerUser(register);
 
         mockMvc.perform(post("/auth/login")
@@ -115,7 +115,7 @@ public class AuthVerificationControllerTest extends AbstractIntegrationTest {
 
     @Test
     public void shouldAllowLoginAfterVerification() throws Exception {
-        UserRegisterDTO register = new UserRegisterDTO("test", "verified@test.com", "TestPassword1!");
+        UserRegisterDTO register = new UserRegisterDTO("test", "verified@test.com", "TestPassword1!", null);
         userService.registerUser(register);
 
         User user = userRepository.findByEmail("verified@test.com").orElseThrow();

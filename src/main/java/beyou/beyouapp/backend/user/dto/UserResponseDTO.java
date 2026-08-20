@@ -4,6 +4,7 @@ import java.util.List;
 
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
+import beyou.beyouapp.backend.user.enums.TimezoneSource;
 
 public record UserResponseDTO(
         String name,
@@ -33,6 +34,13 @@ public record UserResponseDTO(
         boolean isTutorialCompleted,
         String languageInUse,
         String timezone,
+        /**
+         * Whether {@code timezone} was ever actually chosen. The clients read this to
+         * decide whether they may adopt the device's zone over it: only {@code DEFAULT}
+         * is adoptable. Sending it saves them from re-deriving the rule, and keeps the
+         * rule itself in one place.
+         */
+        TimezoneSource timezoneSource,
         XpDecayStrategy xpDecayStrategy
 ) {
 }

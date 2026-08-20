@@ -72,6 +72,7 @@ public class UserMapper {
             user.isTutorialCompleted(),
             user.getLanguageInUse(),
             user.getTimezone(),
+            user.getTimezoneSource(),
             user.getXpDecayStrategy()
         );
     }

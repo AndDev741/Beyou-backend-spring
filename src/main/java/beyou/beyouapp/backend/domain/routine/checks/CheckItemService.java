@@ -331,7 +331,7 @@ public class CheckItemService {
 
     private RefreshUiDTO skipHabitGroup(HabitGroup habitGroup, LocalDate date) {
         DiaryRoutine routine = (DiaryRoutine) habitGroup.getRoutineSection().getRoutine();
-        HabitGroupCheck check = upsertHabitGroupCheck(habitGroup, date, false, true, 0);
+        HabitGroupCheck check = upsertHabitGroupCheck(habitGroup, routine.getUser(), date, false, true, 0);
         // R12 — a deliberate skip is not a failure. The row keeps the day out of the
         // MISSED column, so the streak walks straight through it, and it is not DONE, so
         // the lifetime total does not move.
@@ -350,7 +350,7 @@ public class CheckItemService {
 
     private RefreshUiDTO unskipHabitGroup(HabitGroup habitGroup, LocalDate date) {
         DiaryRoutine routine = (DiaryRoutine) habitGroup.getRoutineSection().getRoutine();
-        HabitGroupCheck check = upsertHabitGroupCheck(habitGroup, date, false, false, 0);
+        HabitGroupCheck check = upsertHabitGroupCheck(habitGroup, routine.getUser(), date, false, false, 0);
         recordHabitDay(habitGroup.getHabit(), routine,
                 date, absenceOutcome(CheckDayOwnerType.HABIT, habitGroup.getHabit().getId(), routine, date));
         updateHabitGroupInRoutine(routine, habitGroup);
@@ -367,7 +367,7 @@ public class CheckItemService {
 
     private RefreshUiDTO skipTaskGroup(TaskGroup taskGroup, LocalDate date) {
         DiaryRoutine routine = (DiaryRoutine) taskGroup.getRoutineSection().getRoutine();
-        TaskGroupCheck check = upsertTaskGroupCheck(taskGroup, date, false, true, 0);
+        TaskGroupCheck check = upsertTaskGroupCheck(taskGroup, routine.getUser(), date, false, true, 0);
         // R12, same as the habit side.
         recordTaskDay(taskGroup.getTask(), routine, date, CheckDayOutcome.SKIPPED);
         updateTaskGroupInRoutine(routine, taskGroup);
@@ -384,7 +384,7 @@ public class CheckItemService {
 
     private RefreshUiDTO unskipTaskGroup(TaskGroup taskGroup, LocalDate date) {
         DiaryRoutine routine = (DiaryRoutine) taskGroup.getRoutineSection().getRoutine();
-        TaskGroupCheck check = upsertTaskGroupCheck(taskGroup, date, false, false, 0);
+        TaskGroupCheck check = upsertTaskGroupCheck(taskGroup, routine.getUser(), date, false, false, 0);
         recordTaskDay(taskGroup.getTask(), routine,
                 date, absenceOutcome(CheckDayOwnerType.TASK, taskGroup.getTask().getId(), routine, date));
         updateTaskGroupInRoutine(routine, taskGroup);
@@ -409,8 +409,23 @@ public class CheckItemService {
         );
     }
 
+    /**
+     * The wall-clock time to stamp on a check, read in the OWNER's zone.
+     *
+     * <p>Bare {@code LocalTime.now()} resolves against the server's zone, and every one of
+     * these sites sets {@code checkDate} from {@link UserDateResolver} on the neighbouring
+     * line. The pair then contradicts itself for anyone not sitting in the server's zone:
+     * a Lisbon user checking at 00:30 in summer got date and time an hour apart, and at a
+     * larger offset the gap is hours. {@code SnapshotCheckMigrator} copies {@code checkTime}
+     * into the permanent snapshot history, so the contradiction outlives the live row.
+     */
+    private static LocalTime nowInZoneOf(User owner) {
+        return LocalTime.now(UserDateResolver.zoneOf(owner));
+    }
+
     private HabitGroupCheck upsertHabitGroupCheck(
             HabitGroup habitGroup,
+            User owner,
             LocalDate date,
             boolean checked,
             boolean skipped,
@@ -418,7 +433,7 @@ public class CheckItemService {
     ) {
         HabitGroupCheck check = checkIfHabitGroupIsAlreadyCheckedAndOverride(habitGroup, date);
         check.setCheckDate(date);
-        check.setCheckTime(LocalTime.now());
+        check.setCheckTime(nowInZoneOf(owner));
         check.setChecked(checked);
         check.setSkipped(skipped);
         check.setXpGenerated(xpGenerated);
@@ -429,6 +444,7 @@ public class CheckItemService {
 
     private TaskGroupCheck upsertTaskGroupCheck(
             TaskGroup taskGroup,
+            User owner,
             LocalDate date,
             boolean checked,
             boolean skipped,
@@ -436,7 +452,7 @@ public class CheckItemService {
     ) {
         TaskGroupCheck check = checkIfTaskGroupIsAlreadyCheckedAndOverrideCheck(taskGroup, date);
         check.setCheckDate(date);
-        check.setCheckTime(LocalTime.now());
+        check.setCheckTime(nowInZoneOf(owner));
         check.setChecked(checked);
         check.setSkipped(skipped);
         check.setXpGenerated(xpGenerated);
@@ -496,7 +512,7 @@ public class CheckItemService {
                 date, absenceOutcome(CheckDayOwnerType.HABIT, habitToCheck.getId(), routine, date));
 
         existingCheck.setCheckDate(date);
-        existingCheck.setCheckTime(LocalTime.now());
+        existingCheck.setCheckTime(nowInZoneOf(routine.getUser()));
         existingCheck.setChecked(false);
         existingCheck.setSkipped(false);
         existingCheck.setXpGenerated(0);
@@ -527,7 +543,7 @@ public class CheckItemService {
 
         //Set check object
         check.setCheckDate(date);
-        check.setCheckTime(LocalTime.now());
+        check.setCheckTime(nowInZoneOf(routine.getUser()));
         check.setChecked(true);
         check.setSkipped(false);
         check.setXpGenerated(0);
@@ -600,7 +616,7 @@ public class CheckItemService {
 
         // Set check object
         check.setCheckDate(date);
-        check.setCheckTime(LocalTime.now());
+        check.setCheckTime(nowInZoneOf(routine.getUser()));
         check.setChecked(true);
         check.setSkipped(false);
         check.setXpGenerated(newXp);
@@ -654,7 +670,7 @@ public class CheckItemService {
         }
 
         existingCheck.setCheckDate(date);
-        existingCheck.setCheckTime(LocalTime.now());
+        existingCheck.setCheckTime(nowInZoneOf(routine.getUser()));
         existingCheck.setChecked(false);
         existingCheck.setSkipped(false);
         existingCheck.setXpGenerated(0);
