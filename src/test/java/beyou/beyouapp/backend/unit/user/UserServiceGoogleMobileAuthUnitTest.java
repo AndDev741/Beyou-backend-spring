@@ -74,7 +74,7 @@ class UserServiceGoogleMobileAuthUnitTest {
         when(refreshTokenService.createRefreshToken(user)).thenReturn("refresh");
         when(userMapper.toResponseDTO(user)).thenReturn(dto);
 
-        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, response);
+        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, response);
 
         assertThat(result.getStatusCode().value()).isEqualTo(200);
         assertThat(result.getBody()).containsEntry("success", dto).containsEntry("refreshToken", "refresh");
@@ -95,7 +95,7 @@ class UserServiceGoogleMobileAuthUnitTest {
         when(userMapper.toResponseDTO(org.mockito.ArgumentMatchers.any(User.class)))
                 .thenReturn(dummyDto());
 
-        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, response);
+        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, response);
 
         ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(saved.capture());
@@ -105,12 +105,52 @@ class UserServiceGoogleMobileAuthUnitTest {
     }
 
     @Test
+    @DisplayName("new user: the device's timezone is merged in, because the ID token has none")
+    void newUser_adoptsDeviceTimezone() {
+        when(googleIdTokenVerifierService.verify(ID_TOKEN)).thenReturn(GOOGLE_USER);
+        when(userRepository.findByEmail(GOOGLE_USER.email())).thenReturn(Optional.empty());
+        when(userRepository.save(org.mockito.ArgumentMatchers.any(User.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tokenService.generateJwtToken(org.mockito.ArgumentMatchers.any(User.class))).thenReturn("jwt");
+        when(refreshTokenService.createRefreshToken(org.mockito.ArgumentMatchers.any(User.class))).thenReturn("refresh");
+        when(userMapper.toResponseDTO(org.mockito.ArgumentMatchers.any(User.class)))
+                .thenReturn(dummyDto());
+
+        service.googleMobileAuth(ID_TOKEN, "Europe/Lisbon", response);
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getTimezone()).isEqualTo("Europe/Lisbon");
+        assertThat(saved.getValue().getTimezoneSource())
+                .isEqualTo(beyou.beyouapp.backend.user.enums.TimezoneSource.DETECTED);
+    }
+
+    @Test
+    @DisplayName("existing user: a claimed timezone does NOT touch the account here")
+    void existingUser_ignoresClaimedTimezone() {
+        User user = new User(GOOGLE_USER);
+        UserResponseDTO dto = dummyDto();
+        when(googleIdTokenVerifierService.verify(ID_TOKEN)).thenReturn(GOOGLE_USER);
+        when(userRepository.findByEmail(GOOGLE_USER.email())).thenReturn(Optional.of(user));
+        when(tokenService.generateJwtToken(user)).thenReturn("jwt");
+        when(refreshTokenService.createRefreshToken(user)).thenReturn("refresh");
+        when(userMapper.toResponseDTO(user)).thenReturn(dto);
+
+        service.googleMobileAuth(ID_TOKEN, "America/Sao_Paulo", response);
+
+        // Sign-in is not the place to decide whether a detected zone may replace one the
+        // account already has. That rule lives in UserService.editUser, which the client
+        // reaches through the boot reconcile, and it depends on the stored TimezoneSource.
+        verify(userRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     @DisplayName("invalid token: propagates the verifier error and issues no tokens")
     void invalidToken_propagatesAndIssuesNothing() {
         when(googleIdTokenVerifierService.verify(ID_TOKEN))
                 .thenThrow(new BusinessException(ErrorKey.INVALID_REQUEST, "Invalid Google ID token"));
 
-        assertThatThrownBy(() -> service.googleMobileAuth(ID_TOKEN, response))
+        assertThatThrownBy(() -> service.googleMobileAuth(ID_TOKEN, null, response))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Invalid Google ID token");
 

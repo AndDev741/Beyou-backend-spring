@@ -84,7 +84,7 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
         feedbackAttachmentRepository.deleteAll();
         feedbackRepository.deleteAll();
         userRepository.deleteAll();
-        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!");
+        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!", null);
         userService.registerUser(register);
 
         // Verify the user's email so login tests work
@@ -259,7 +259,7 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
 
     @Test
     public void shouldReturnSuccessWithoutTokenForGoogleAccountResetRequest() throws Exception {
-        UserRegisterDTO googleUser = new UserRegisterDTO("google", "googleuser@gmail.com", "TestPassword1!");
+        UserRegisterDTO googleUser = new UserRegisterDTO("google", "googleuser@gmail.com", "TestPassword1!", null);
         userService.registerUser(googleUser);
         // Simulate Google OAuth account by setting the flag directly (not via registration DTO)
         User googleUserEntity = userRepository.findByEmail("googleuser@gmail.com").orElseThrow();

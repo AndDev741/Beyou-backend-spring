@@ -15,5 +15,17 @@ public record UserRegisterDTO(@NotBlank(message = "Name is Required")
                             @NotBlank(message = "Password is Required")
                             @Size(min = 12, message = "Password require a minimum of 12 characters")
                             @Size(max = 256, message = "Password is too long")
-                            String password) {
+                            String password,
+                            /**
+                             * The IANA zone the client detected on the device, or null from a
+                             * client that predates this field.
+                             *
+                             * <p>Deliberately unvalidated by bean validation. An unknown string
+                             * is dropped in favour of the default rather than refusing the
+                             * registration: this is a convenience field, and a browser
+                             * reporting something the JVM's tz database has not heard of must
+                             * not cost someone their account. {@code UserService.registerUser}
+                             * does the checking.
+                             */
+                            String timezone) {
 }

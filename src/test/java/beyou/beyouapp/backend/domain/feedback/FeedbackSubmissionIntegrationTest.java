@@ -245,7 +245,7 @@ class FeedbackSubmissionIntegrationTest extends AbstractIntegrationTest {
             refreshTokenRepository.deleteAll(refreshTokenRepository.findAllByUserId(existing.getId()));
             userRepository.delete(existing);
         });
-        userService.registerUser(new UserRegisterDTO(name, email, PASSWORD));
+        userService.registerUser(new UserRegisterDTO(name, email, PASSWORD, null));
 
         User user = userRepository.findByEmail(email).orElseThrow();
         user.setEmailVerified(true);

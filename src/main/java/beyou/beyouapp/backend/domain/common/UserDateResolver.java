@@ -29,6 +29,30 @@ public final class UserDateResolver {
 
     private UserDateResolver() {}
 
+    /**
+     * A client-claimed zone id, or null when it is not one this JVM can use.
+     *
+     * <p>For the signup paths, where the value arrives from a browser or a phone and
+     * nobody has confirmed it. Unlike the settings path, a bad value here is dropped and
+     * the account falls back to its default rather than the request being refused: a
+     * registration must not fail over a convenience field, and a device reporting a zone
+     * the tz database has not heard of is the device's problem, not the user's.
+     *
+     * <p>Membership of {@link ZoneId#getAvailableZoneIds()} rather than a
+     * {@link ZoneId#of} parse, matching the check {@code UserService.editUser} already
+     * applies, so the two paths accept exactly the same set.
+     */
+    public static String usableZoneIdOrNull(String claimed) {
+        if (claimed == null || claimed.isBlank()) {
+            return null;
+        }
+        if (ZoneId.getAvailableZoneIds().contains(claimed)) {
+            return claimed;
+        }
+        log.warn("Ignoring unusable timezone '{}' claimed at signup", claimed);
+        return null;
+    }
+
     /** Today's date in the owner's timezone, falling back to the server zone. */
     public static LocalDate today(User user) {
         return LocalDate.now(zoneOf(user));

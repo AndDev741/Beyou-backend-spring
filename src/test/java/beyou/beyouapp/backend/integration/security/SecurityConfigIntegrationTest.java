@@ -53,7 +53,7 @@ public class SecurityConfigIntegrationTest extends AbstractIntegrationTest {
 
         refreshTokenRepository.deleteAll();
         userRepository.deleteAll(); // Clean before all tests
-        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!");
+        UserRegisterDTO register = new UserRegisterDTO("test", "testebeyou@gmail.com", "TestPassword1!", null);
         userService.registerUser(register);
 
         // Verify the user's email so login tests work
