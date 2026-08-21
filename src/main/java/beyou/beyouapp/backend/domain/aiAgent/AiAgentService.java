@@ -14,6 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import org.springframework.ai.chat.client.ChatClient;
@@ -150,9 +151,12 @@ public class AiAgentService {
 
         Map<String, Object> toolContext = toolContext(userId, chatId, currentPage);
         toolContext.put(MeteredToolCallback.EVENTS_KEY, send);
-        if (toolChoice != null && !toolChoice.isBlank()) {
-            toolContext.put(FallbackChatModel.TOOL_CHOICE_KEY, toolChoice);
-        }
+        // The chain reports which provider it attempted, so the persisted turn can name
+        // the model that produced it. Read after the stream ends, on whichever thread
+        // the subscriber lands on — an AtomicReference rather than a ThreadLocal for
+        // exactly that reason.
+        AtomicReference<String> provider = new AtomicReference<>();
+        toolContext.put(FallbackChatModel.PROVIDER_KEY, provider);
         Flux<String> tokens = buildPrompt(chat, userInput, currentPage, toolContext)
                 .stream()
                 .content();
@@ -163,7 +167,7 @@ public class AiAgentService {
                     log.error("Error on agent stream subscription -> {}", error.getMessage(), error);
                     // Tool side-effects already committed; persist the partial turn
                     // (if anything streamed) so history isn't lost, THEN report error.
-                    persistTurnSafely(chatId, userInput, turn.build());
+                    persistTurnSafely(chatId, userInput, turn.build(), provider.get());
                     try {
                         send.accept(AgentEvent.error(error.getClass().getSimpleName()));
                     } catch (RuntimeException e) {
@@ -179,7 +183,7 @@ public class AiAgentService {
                     // If persistence fails, the client must learn it failed rather
                     // than get a clean close with committed tool side-effects but
                     // no chat record — so emit an error event instead of done.
-                    boolean persisted = persistTurnSafely(chatId, userInput, segments);
+                    boolean persisted = persistTurnSafely(chatId, userInput, segments, provider.get());
                     try {
                         send.accept(persisted
                                 ? AgentEvent.done(segments)
@@ -233,10 +237,11 @@ public class AiAgentService {
 
     /** Persist a turn without letting a DB failure escape; returns whether it stuck.
      *  Empty segments (nothing streamed before an early error) are skipped. */
-    private boolean persistTurnSafely(UUID chatId, String userInput, List<AgentSegment> segments) {
+    private boolean persistTurnSafely(UUID chatId, String userInput, List<AgentSegment> segments,
+                                      String provider) {
         if (segments.isEmpty()) return false;
         try {
-            agentMessageService.recordTurn(chatId, userInput, segments);
+            agentMessageService.recordTurn(chatId, userInput, segments, provider);
             return true;
         } catch (RuntimeException e) {
             log.error("Failed to persist agent transcript for chat {}", chatId, e);
