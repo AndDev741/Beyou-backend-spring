@@ -13,7 +13,15 @@
 -- enum because the chain is configuration — a provider can be added or removed
 -- via LLM_CHAIN_ORDER without a migration.
 --
--- Squawk ignores: adding a nullable column with no default and no constraint
--- does not rewrite the table or take a long lock.
+-- SET LOCAL, not SET — see V13/V14/V20. Flyway has no datasource of its own, so a
+-- session-scoped SET would ride back into the pool serving live requests.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
+
+-- Adding a nullable column with no default rewrites nothing: the catalog records it
+-- and existing rows are read as null, so this takes a brief ACCESS EXCLUSIVE lock and
+-- returns. The lock_timeout above is the backstop if it ever queues behind live
+-- traffic. varchar(32) rather than text to match the other short bounded strings in
+-- this schema (agent_message.role, entity_check_day.owner_type).
 -- squawk-ignore prefer-text-field
 ALTER TABLE agent_message ADD COLUMN IF NOT EXISTS provider varchar(32);
