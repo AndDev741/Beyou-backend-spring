@@ -198,7 +198,7 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         chatService.updateChatContext("Prefers mornings", chatId, userId);
         chatService.updateGlobalContext("Training for a half marathon", userId);
         agentMessageService.recordTurn(chatId, "Build me a morning routine",
-                List.of(AgentSegment.text("Done — here it is.")));
+                List.of(AgentSegment.text("Done — here it is.")), "gemini");
 
         // The global note is written straight to the row, so the instance parked in the
         // security context by setUp() is now stale. A real request never sees that —
