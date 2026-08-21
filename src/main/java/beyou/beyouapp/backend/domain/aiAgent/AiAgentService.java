@@ -157,6 +157,9 @@ public class AiAgentService {
         // exactly that reason.
         AtomicReference<String> provider = new AtomicReference<>();
         toolContext.put(FallbackChatModel.PROVIDER_KEY, provider);
+        if (toolChoice != null && !toolChoice.isBlank()) {
+            toolContext.put(FallbackChatModel.TOOL_CHOICE_KEY, toolChoice);
+        }
         Flux<String> tokens = buildPrompt(chat, userInput, currentPage, toolContext)
                 .stream()
                 .content();

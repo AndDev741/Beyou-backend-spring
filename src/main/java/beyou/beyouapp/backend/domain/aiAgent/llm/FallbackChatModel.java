@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -77,6 +76,22 @@ public class FallbackChatModel implements ChatModel {
      * exactly the ones that did not finish cleanly.
      */
     public static final String PROVIDER_KEY = "llmProvider";
+
+    /**
+     * Tool-context key carrying the {@code tool_choice} the caller wants applied, e.g.
+     * {@code "required"} to make answering without calling a tool impossible.
+     *
+     * <p>It travels in the tool context rather than in the options because
+     * {@link ToolCallingChatOptions} has no {@code toolChoice}: it is provider-specific
+     * (OpenAiChatOptions, DeepSeekChatOptions), so there is nothing portable to set. That
+     * also means {@link #adaptFor} has to apply it per provider — see
+     * {@link #applyToolChoice} — and a provider whose options do not carry the concept
+     * silently keeps its default, which is the safe direction.
+     *
+     * <p>Absent means "leave the provider's default", which is {@code auto}: the model
+     * may answer without calling anything.
+     */
+    public static final String TOOL_CHOICE_KEY = "llmToolChoice";
 
     /** Provider names in chain order (boot log + tests). */
     public List<String> providerNames() {
