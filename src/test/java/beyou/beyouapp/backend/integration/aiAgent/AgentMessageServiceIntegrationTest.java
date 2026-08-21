@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.integration.aiAgent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -20,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.aiAgent.chat.Chat;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatRepository;
+import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessage;
 import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessageRepository;
 import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessageService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
@@ -71,7 +73,8 @@ class AgentMessageServiceIntegrationTest extends AbstractIntegrationTest {
         UUID chatId = newChat().getId();
 
         agentMessageService.recordTurn(chatId, "create a habit",
-                List.of(AgentSegment.text("Done! "), AgentSegment.tool("createUserHabit", null, List.of("habits"))));
+                List.of(AgentSegment.text("Done! "), AgentSegment.tool("createUserHabit", null, List.of("habits"))),
+                "mistral");
 
         List<AgentMessageDTO> messages = agentMessageService.getMessages(chatId);
         assertEquals(2, messages.size());
@@ -80,6 +83,37 @@ class AgentMessageServiceIntegrationTest extends AbstractIntegrationTest {
         assertEquals("ASSISTANT", messages.get(1).role());
         assertEquals("tool", messages.get(1).segments().get(1).type());
         assertEquals("createUserHabit", messages.get(1).segments().get(1).tool());
+    }
+
+    // The provider belongs to the assistant row and only to it: the user's message did
+    // not come from a model. This is what lets a reported bad answer be attributed to a
+    // specific link in the chain afterwards, which the per-provider counter cannot do.
+    @Test
+    void recordTurnStampsTheProviderOnTheAssistantTurnOnly() {
+        UUID chatId = newChat().getId();
+
+        agentMessageService.recordTurn(chatId, "update my goal",
+                List.of(AgentSegment.text("Done.")), "mistral");
+
+        List<AgentMessage> rows = agentMessageRepository.findByChatIdOrderBySequenceIdAsc(chatId);
+        assertEquals(2, rows.size());
+        assertEquals("USER", rows.get(0).getRole());
+        assertNull(rows.get(0).getProvider(), "a user turn has no provider");
+        assertEquals("ASSISTANT", rows.get(1).getRole());
+        assertEquals("mistral", rows.get(1).getProvider());
+    }
+
+    // A turn the chain never got to report on still has to persist — the transcript
+    // matters more than knowing who produced it.
+    @Test
+    void recordTurnAcceptsAnUnknownProvider() {
+        UUID chatId = newChat().getId();
+
+        agentMessageService.recordTurn(chatId, "hi", List.of(AgentSegment.text("hello")), null);
+
+        List<AgentMessage> rows = agentMessageRepository.findByChatIdOrderBySequenceIdAsc(chatId);
+        assertEquals(2, rows.size());
+        assertNull(rows.get(1).getProvider());
     }
 
     @Test
@@ -97,7 +131,7 @@ class AgentMessageServiceIntegrationTest extends AbstractIntegrationTest {
                 try {
                     start.await(); // fire them as simultaneously as possible
                     agentMessageService.recordTurn(chatId, "msg " + n,
-                            List.of(AgentSegment.text("reply " + n)));
+                            List.of(AgentSegment.text("reply " + n)), "mistral");
                 } catch (Exception ignored) {
                     // a failure would show up as a missing/duplicate seq below
                 } finally {

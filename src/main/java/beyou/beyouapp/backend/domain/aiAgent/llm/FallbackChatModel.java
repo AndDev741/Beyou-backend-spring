@@ -6,7 +6,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -57,9 +59,40 @@ public class FallbackChatModel implements ChatModel {
         this.clock = clock;
     }
 
+    /**
+     * Tool-context key under which a caller may pass an {@link AtomicReference} for this
+     * chain to report which provider it attempted.
+     *
+     * <p>The tool context is the only channel that reaches here: it rides on the prompt
+     * options, {@link #adaptFor} already forwards it to every delegate, and it needs no
+     * ThreadLocal — which would be wrong anyway, since the streaming path hops reactor
+     * threads between the call and the subscriber that persists the turn. Same mechanism
+     * {@code MeteredToolCallback.EVENTS_KEY} already uses to pass its event sink down.
+     *
+     * <p>Written at attempt time rather than on success, so a turn that dies mid-stream
+     * still names the provider that was serving it — the failures worth attributing are
+     * exactly the ones that did not finish cleanly.
+     */
+    public static final String PROVIDER_KEY = "llmProvider";
+
     /** Provider names in chain order (boot log + tests). */
     public List<String> providerNames() {
         return chain.stream().map(NamedChatModel::name).toList();
+    }
+
+    /** Report the provider about to be attempted, if the caller asked to be told. */
+    @SuppressWarnings("unchecked")
+    private static void reportProvider(Prompt prompt, String name) {
+        if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) {
+            return;
+        }
+        Map<String, Object> context = options.getToolContext();
+        if (context == null) {
+            return;
+        }
+        if (context.get(PROVIDER_KEY) instanceof AtomicReference<?> sink) {
+            ((AtomicReference<String>) sink).set(name);
+        }
     }
 
     @Override
@@ -71,6 +104,7 @@ public class FallbackChatModel implements ChatModel {
                 continue;
             }
             try {
+                reportProvider(prompt, provider.name());
                 ChatResponse response = provider.model().call(adaptFor(provider, prompt));
                 count(provider.name(), "ok");
                 return response;
@@ -130,7 +164,10 @@ public class FallbackChatModel implements ChatModel {
             return attempt(prompt, index + 1); // in-bounds: the last link never skips
         }
         AtomicBoolean emitted = new AtomicBoolean();
-        return Flux.defer(() -> provider.model().stream(adaptFor(provider, prompt)))
+        return Flux.defer(() -> {
+                    reportProvider(prompt, provider.name());
+                    return provider.model().stream(adaptFor(provider, prompt));
+                })
                 .doOnNext(chunk -> emitted.set(true))
                 .doOnComplete(() -> count(provider.name(), "ok"))
                 .onErrorResume(e -> {

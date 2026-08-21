@@ -18,6 +18,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -50,6 +51,60 @@ class FallbackChatModelTest {
         return new FallbackChatModel(
                 List.of(new NamedChatModel("first", first), new NamedChatModel("second", second)),
                 Duration.ofSeconds(300), Duration.ofSeconds(30), meters, clock);
+    }
+
+    // Which provider answered is reported through the tool context, because that is the
+    // only channel that reaches the chain from the caller and it survives the reactor
+    // thread hops the streaming path makes between the call and the turn being persisted.
+    private static Prompt promptWithSink(AtomicReference<String> sink) {
+        return new Prompt(List.of(new UserMessage("hi")),
+                ToolCallingChatOptions.builder()
+                        .toolContext(Map.of(FallbackChatModel.PROVIDER_KEY, sink))
+                        .build());
+    }
+
+    @Test
+    void call_reportsTheProviderThatAnswered() {
+        AtomicReference<String> reported = new AtomicReference<>();
+        Prompt prompt = promptWithSink(reported);
+        when(first.call(prompt)).thenReturn(OK);
+
+        twoLinkChain().call(prompt);
+
+        assertThat(reported.get()).isEqualTo("first");
+    }
+
+    // On fallback the sink must end up naming the link that actually served the turn,
+    // not the one that failed — otherwise a bad answer gets blamed on the wrong model.
+    @Test
+    void call_onFallback_reportsTheProviderThatServed() {
+        AtomicReference<String> reported = new AtomicReference<>();
+        Prompt prompt = promptWithSink(reported);
+        when(first.call(prompt)).thenThrow(new RuntimeException("boom"));
+        when(second.call(prompt)).thenReturn(OK);
+
+        twoLinkChain().call(prompt);
+
+        assertThat(reported.get()).isEqualTo("second");
+    }
+
+    @Test
+    void stream_reportsTheProviderThatAnswered() {
+        AtomicReference<String> reported = new AtomicReference<>();
+        Prompt prompt = promptWithSink(reported);
+        when(first.stream(prompt)).thenReturn(Flux.just(OK));
+
+        twoLinkChain().stream(prompt).blockLast();
+
+        assertThat(reported.get()).isEqualTo("first");
+    }
+
+    // A caller that does not care must not be forced to pass a sink.
+    @Test
+    void call_withoutASink_stillWorks() {
+        when(first.call(PROMPT)).thenReturn(OK);
+
+        assertThat(twoLinkChain().call(PROMPT)).isSameAs(OK);
     }
 
     @Test

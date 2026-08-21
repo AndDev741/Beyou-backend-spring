@@ -1,0 +1,19 @@
+-- Which LLM provider produced an assistant turn.
+--
+-- The agent runs behind FallbackChatModel, an ordered chain of providers
+-- (LLM_CHAIN_ORDER, today mistral,gemini,glm,deepseek). Whichever link answers
+-- first wins, so tool discipline — whether the model invents ids, whether it
+-- claims a write it never attempted — varies by turn with no record of which
+-- model was responsible. beyou.ai.llm.calls counts calls per provider, but a
+-- counter cannot tell you which provider produced a specific bad answer, which
+-- is exactly what you need when tuning a prompt against a reported incident.
+--
+-- Nullable on purpose: every row written before this column existed genuinely
+-- has no known provider, and user turns never have one. varchar rather than an
+-- enum because the chain is configuration — a provider can be added or removed
+-- via LLM_CHAIN_ORDER without a migration.
+--
+-- Squawk ignores: adding a nullable column with no default and no constraint
+-- does not rewrite the table or take a long lock.
+-- squawk-ignore prefer-text-field
+ALTER TABLE agent_message ADD COLUMN IF NOT EXISTS provider varchar(32);

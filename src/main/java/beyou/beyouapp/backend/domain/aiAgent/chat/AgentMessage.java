@@ -46,11 +46,25 @@ public class AgentMessage {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    /**
+     * Which provider in the fallback chain produced this turn, or null when it is a
+     * user turn or predates the column. Recorded per turn rather than inferred from
+     * {@code beyou.ai.llm.calls}, because a counter says how often each provider was
+     * used and never which one produced the answer you are looking at.
+     */
+    @Column(length = 32)
+    private String provider;
+
     public AgentMessage(UUID chatId, String role, String content, long sequenceId) {
+        this(chatId, role, content, sequenceId, null);
+    }
+
+    public AgentMessage(UUID chatId, String role, String content, long sequenceId, String provider) {
         this.chatId = chatId;
         this.role = role;
         this.content = content;
         this.sequenceId = sequenceId;
+        this.provider = provider;
     }
 
     @PrePersist
