@@ -59,6 +59,19 @@ public class AiAgentService {
     private final Object[] toolCallbacks;
     private final Resource systemTemplate;
 
+    /**
+     * {@code tool_choice} sent with every agent turn. Blank (the default) leaves the
+     * provider on {@code auto}, where answering without calling a tool is a legal move —
+     * which is how a turn once told a user their goal was updated without ever attempting
+     * the write. {@code required} removes that move.
+     *
+     * <p>Off by default because {@code required} forces a tool call on *every* message,
+     * including "thanks", and the model picks which tool. With 42 registered tools the
+     * likely pick for an ambiguous message is a read, but it is the model's choice, not
+     * ours. Enable it deliberately and watch what the agent reaches for.
+     */
+    private final String toolChoice;
+
     // emitter.send() is BLOCKING: a stalled client applies TCP backpressure and
     // holds its scheduler thread until the emitter times out. A pool bounds the
     // blast radius (one stalled client can't starve every other stream's ping);
@@ -80,13 +93,15 @@ public class AiAgentService {
             AgentMessageService agentMessageService,
             Tools tools,
             MeterRegistry meterRegistry,
-            @Value("classpath:/prompts/aiAgent.st") Resource systemTemplate) {
+            @Value("classpath:/prompts/aiAgent.st") Resource systemTemplate,
+            @Value("${ai.agent.tool-choice:}") String toolChoice) {
         this.chatService = chatService;
         this.agentMessageService = agentMessageService;
         this.toolCallbacks = Arrays.stream(ToolCallbacks.from(tools))
                 .map(callback -> (Object) new MeteredToolCallback(callback, meterRegistry))
                 .toArray();
         this.systemTemplate = systemTemplate;
+        this.toolChoice = toolChoice;
         this.chatClient = ChatClient.builder(chatModel)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .build();
@@ -142,6 +157,9 @@ public class AiAgentService {
         // exactly that reason.
         AtomicReference<String> provider = new AtomicReference<>();
         toolContext.put(FallbackChatModel.PROVIDER_KEY, provider);
+        if (toolChoice != null && !toolChoice.isBlank()) {
+            toolContext.put(FallbackChatModel.TOOL_CHOICE_KEY, toolChoice);
+        }
         Flux<String> tokens = buildPrompt(chat, userInput, currentPage, toolContext)
                 .stream()
                 .content();

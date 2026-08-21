@@ -127,6 +127,14 @@ rate-limit:
   enabled: true
 
 ai:
+  agent:
+    # tool_choice sent with every agent turn. Blank leaves the provider on `auto`,
+    # where the model may answer without calling anything — which is how a turn once
+    # told a user their goal was updated without ever attempting the write.
+    # `required` removes that move, at the cost of forcing a tool call on every
+    # message including "thanks", with the model choosing which tool. Flip it
+    # deliberately and watch what the agent reaches for.
+    tool-choice: ${AI_AGENT_TOOL_CHOICE:}
   llm-chain:
     order: ${LLM_CHAIN_ORDER:mistral,gemini,glm,nvidia,deepseek}
     # Providers this environment refuses to call, whatever `order` says. Empty
