@@ -13,6 +13,7 @@ import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.user.UserNotFound;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
+import beyou.beyouapp.backend.user.enums.UserRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -90,9 +91,31 @@ public class FeedbackService {
                 user.getEmail(),
                 acknowledgementLanguage(saved, user),
                 saved.getCategory(),
-                saved.getBody()));
+                saved.getBody(),
+                inboxAlertRecipients(user)));
 
         return feedbackMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * Who hears that a submission landed: every ROLE_ADMIN account, minus the
+     * person who wrote it.
+     *
+     * Resolved here, in the transaction, rather than in the mail listener. The
+     * listener runs on another thread after commit and is built to need no
+     * database at all; giving it a repository would hand it a second failure
+     * mode for no gain. The query is cheap and submissions are rate-limited to
+     * ten an hour per user, so this is not a hot path.
+     *
+     * Excluding the submitter is the point of the filter, not a detail: an
+     * admin who sends feedback already has the acknowledgement in the same
+     * inbox, and a second mail telling them somebody wrote in is noise.
+     */
+    private List<String> inboxAlertRecipients(User submitter) {
+        return userRepository.findEmailsByUserRole(UserRole.ADMIN).stream()
+                .filter(StringUtils::hasText)
+                .filter(email -> !email.equalsIgnoreCase(submitter.getEmail()))
+                .toList();
     }
 
     /**

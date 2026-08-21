@@ -2,6 +2,8 @@ package beyou.beyouapp.backend.notification;
 
 import java.time.Duration;
 import java.time.Year;
+import java.util.List;
+import java.util.UUID;
 
 import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
 import beyou.beyouapp.backend.domain.feedback.event.FeedbackRepliedEvent;
@@ -75,6 +77,15 @@ public class EmailService {
         } catch (Exception e) {
             log.error("Failed to send the acknowledgement for feedback {}", event.getFeedbackId(), e);
         }
+
+        // Its own try, deliberately: the receipt and the alert answer to
+        // different people, and a dead mailbox on one side must not silence
+        // the other.
+        try {
+            sendFeedbackInboxAlertEmails(event.getAdminRecipients(), event.getFeedbackId());
+        } catch (Exception e) {
+            log.error("Failed to alert the inbox about feedback {}", event.getFeedbackId(), e);
+        }
     }
 
     /**
@@ -125,6 +136,115 @@ public class EmailService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to send feedback reply email", e);
         }
+    }
+
+    /**
+     * Tell whoever runs the console that something arrived.
+     *
+     * One message per admin rather than one message addressed to all of them:
+     * a shared To: line shows each admin the others' addresses, and a single
+     * bad mailbox would take the whole send down with it. Here a failure costs
+     * one recipient and is logged with the address that failed.
+     *
+     * The mail carries a link and nothing else — no category, no submitter, and
+     * above all none of what the user wrote. Feedback text can be personal, and
+     * routing it into a mail provider to save one click is a bad trade. The
+     * console is one tap away and already holds the whole thread.
+     */
+    public void sendFeedbackInboxAlertEmails(List<String> recipients, UUID feedbackId) {
+        if (recipients == null || recipients.isEmpty()) {
+            log.debug("No admin recipients to alert about feedback {}", feedbackId);
+            return;
+        }
+
+        String consoleLink = frontendLink("/admin/feedback");
+
+        for (String recipient : recipients) {
+            try {
+                MimeMessage mimeMessage = mailSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+
+                helper.setTo(recipient);
+                helper.setFrom(fromAddress);
+                helper.setSubject("New feedback in the Beyou inbox");
+                helper.setText(buildFeedbackInboxAlertHtmlBody(consoleLink), true);
+
+                mailSender.send(mimeMessage);
+            } catch (Exception e) {
+                log.error("Failed to alert {} about feedback {}", recipient, feedbackId, e);
+            }
+        }
+    }
+
+    /**
+     * English only, and not by oversight. Every other template here branches on
+     * the reader's language because it is addressed to a user; this one is
+     * addressed to whoever operates the product, is two sentences long, and its
+     * payload is a URL. A second translation would be upkeep with no reader.
+     */
+    private String buildFeedbackInboxAlertHtmlBody(String consoleLink) {
+        String template = """
+                <html>
+                <body style="margin:0;padding:0;background-color:#f5f7fa;font-family:Arial,Helvetica,sans-serif;">
+                    <table width="100%%" cellpadding="0" cellspacing="0" style="padding:40px 0;">
+                        <tr>
+                            <td align="center">
+                                <table width="600" cellpadding="0" cellspacing="0"
+                                       style="background:#ffffff;border-radius:16px;padding:40px;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
+
+                                    <tr>
+                                        <td align="center" style="padding-bottom:20px;">
+                                            <h1 style="margin:0;color:#0082E1;">Beyou</h1>
+                                            <p style="margin:5px 0 0 0;color:#6b7280;">Level up your life.</p>
+                                        </td>
+                                    </tr>
+
+                                    <tr>
+                                        <td style="padding-top:20px;">
+                                            <h2 style="color:#111827;">Someone just sent feedback</h2>
+                                            <p style="color:#374151;line-height:1.6;">
+                                                It is waiting in the console. Open the inbox to read it and reply.
+                                            </p>
+
+                                            <table cellpadding="0" cellspacing="0" style="margin:30px 0;">
+                                                <tr>
+                                                    <td align="center" bgcolor="#0082E1" style="border-radius:8px;">
+                                                        <a href="%s"
+                                                           style="display:inline-block;padding:14px 28px;color:#ffffff;
+                                                                  font-size:16px;text-decoration:none;font-weight:bold;">
+                                                            Open the feedback inbox
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                            </table>
+
+                                            <p style="color:#6b7280;font-size:14px;line-height:1.5;">
+                                                If the button does not work, paste this into your browser:<br/>
+                                                <a href="%s" style="color:#0082E1;word-break:break-all;">%s</a>
+                                            </p>
+
+                                            <hr style="margin:30px 0;border:none;border-top:1px solid #e5e7eb;"/>
+
+                                            <p style="color:#9ca3af;font-size:12px;line-height:1.5;">
+                                                You get this because your account holds the admin role.
+                                            </p>
+                                        </td>
+                                    </tr>
+
+                                </table>
+
+                                <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
+                                    &copy; %d Beyou. Keep evolving.
+                                </p>
+
+                            </td>
+                        </tr>
+                    </table>
+                </body>
+                </html>
+                """;
+
+        return template.formatted(consoleLink, consoleLink, consoleLink, Year.now().getValue());
     }
 
     private String buildFeedbackAcknowledgementHtmlBody(FeedbackCategory category, String body, String language) {
@@ -404,13 +524,25 @@ public class EmailService {
         return text == null ? "" : HtmlUtils.htmlEscape(text);
     }
 
+    /**
+     * Absolute link into the web app. One place, because {@code FRONTEND_URL}
+     * is configured with a trailing slash locally and without one in some
+     * deployments, and every caller that re-derives that ends up shipping a
+     * double slash the day the other form is used.
+     *
+     * @param path a leading-slash path, e.g. {@code /admin/feedback}
+     */
+    private String frontendLink(String path) {
+        String base = frontendUrl == null ? "" : frontendUrl.trim();
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base + path;
+    }
+
     public void sendVerificationEmail(String to, String token, String language) {
         try {
-            String base = frontendUrl == null ? "" : frontendUrl.trim();
-            if (base.endsWith("/")) {
-                base = base.substring(0, base.length() - 1);
-            }
-            String verifyLink = base + "/auth/verify?token=" + token;
+            String verifyLink = frontendLink("/auth/verify?token=" + token);
 
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
