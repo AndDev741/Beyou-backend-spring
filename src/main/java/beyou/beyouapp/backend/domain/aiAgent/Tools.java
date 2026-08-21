@@ -25,6 +25,8 @@ import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackRequestDTO;
 import beyou.beyouapp.backend.domain.feedback.dto.FeedbackContextDTO;
 import beyou.beyouapp.backend.domain.goal.GoalService;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
@@ -213,34 +215,109 @@ public class Tools {
         return goalService.editGoal(valid(goal), userId(toolContext)).getBody();
     }
 
-    @Tool(description = "Delete a user goal by its id")
-    Map<String, String> deleteUserGoal(UUID goalId, ToolContext toolContext) {
-        log.info("AI agent is deleting goal {} for user: {}", goalId, userId(toolContext));
-        return goalService.deleteGoal(goalId, userId(toolContext)).getBody();
+    @Tool(description = "Delete a user goal, by id or by name")
+    Map<String, String> deleteUserGoal(@ToolParam(description = "The goal: its id from getUserGoals, or the goal name as the user said it") String goal, ToolContext toolContext) {
+        UUID userId = userId(toolContext);
+        UUID goalId = resolveGoalId(goal, userId);
+        log.info("AI agent is deleting goal {} for user: {}", goalId, userId);
+        return goalService.deleteGoal(goalId, userId).getBody();
     }
 
-    @Tool(description = "Toggle a goal completion by its id. Completing awards XP, un-completing removes it")
-    RefreshUiDTO completeUserGoal(UUID goalId, ToolContext toolContext) {
-        log.info("AI agent is toggling completion of goal {} for user: {}", goalId, userId(toolContext));
-        return goalService.checkGoal(goalId, userId(toolContext));
+    @Tool(description = "Toggle a goal completion, by id or by name. Completing awards XP, un-completing removes it")
+    RefreshUiDTO completeUserGoal(@ToolParam(description = "The goal: its id from getUserGoals, or the goal name as the user said it") String goal, ToolContext toolContext) {
+        UUID userId = userId(toolContext);
+        UUID goalId = resolveGoalId(goal, userId);
+        log.info("AI agent is toggling completion of goal {} for user: {}", goalId, userId);
+        return goalService.checkGoal(goalId, userId);
     }
 
-    @Tool(description = "Increase a goal's current value by a given amount (defaults to 1 if not specified)")
+    @Tool(description = "Increase a goal's current value by a given amount (defaults to 1 if not specified). Identify the goal by id or by name")
     GoalResponseDTO increaseUserGoalValue(
-            UUID goalId,
+            @ToolParam(description = "The goal: its id from getUserGoals, or the goal name as the user said it") String goal,
             @ToolParam(description = "Amount to increase by, optional (defaults to 1)") Double value,
             ToolContext toolContext) {
-        log.info("AI agent is increasing goal {} for user: {}", goalId, userId(toolContext));
-        return goalService.increaseCurrentValue(goalId, value, userId(toolContext));
+        UUID userId = userId(toolContext);
+        UUID goalId = resolveGoalId(goal, userId);
+        log.info("AI agent is increasing goal {} for user: {}", goalId, userId);
+        return goalService.increaseCurrentValue(goalId, value, userId);
     }
 
-    @Tool(description = "Decrease a goal's current value by a given amount (defaults to 1 if not specified, never below 0)")
+    @Tool(description = "Decrease a goal's current value by a given amount (defaults to 1 if not specified, never below 0). Identify the goal by id or by name")
     GoalResponseDTO decreaseUserGoalValue(
-            UUID goalId,
+            @ToolParam(description = "The goal: its id from getUserGoals, or the goal name as the user said it") String goal,
             @ToolParam(description = "Amount to decrease by, optional (defaults to 1)") Double value,
             ToolContext toolContext) {
-        log.info("AI agent is decreasing goal {} for user: {}", goalId, userId(toolContext));
-        return goalService.decreaseCurrentValue(goalId, value, userId(toolContext));
+        UUID userId = userId(toolContext);
+        UUID goalId = resolveGoalId(goal, userId);
+        log.info("AI agent is decreasing goal {} for user: {}", goalId, userId);
+        return goalService.decreaseCurrentValue(goalId, value, userId);
+    }
+
+
+    /**
+     * Turn whatever the model sent for a goal into an id that exists.
+     *
+     * <p>The agent used to take a raw {@code UUID} here, and it fabricated them: on the
+     * turn that produced this change it sent two ids in a row that were in nobody's
+     * database, the second one *after* having called {@code getUserGoals} and been handed
+     * the real ones. The prompt already forbids inventing ids, so the fix is not another
+     * rule — it is removing the field that can be invented. A name is something the user
+     * actually said, and resolving it is the server's job.
+     *
+     * <p>An id is still accepted, because that is what {@code getUserGoals} returns and
+     * there is no reason to make the correct path harder. Names match exactly first, then
+     * as a unique substring: two goals containing "read" is ambiguous, and guessing between
+     * them is how you update the wrong one.
+     */
+    private UUID resolveGoalId(String sent, UUID userId) {
+        List<GoalResponseDTO> goals = goalService.getAllGoals(userId);
+        String trimmed = sent == null ? "" : sent.trim();
+        if (!trimmed.isBlank()) {
+            for (GoalResponseDTO goal : goals) {
+                if (goal.id().toString().equalsIgnoreCase(trimmed)) {
+                    return goal.id();
+                }
+            }
+            UUID exact = uniqueMatch(goals, name -> name.equalsIgnoreCase(trimmed));
+            if (exact != null) {
+                return exact;
+            }
+            String lowered = trimmed.toLowerCase();
+            UUID partial = uniqueMatch(goals, name -> name.toLowerCase().contains(lowered));
+            if (partial != null) {
+                return partial;
+            }
+        }
+        throw new BusinessException(ErrorKey.GOAL_NOT_FOUND, goalNotResolvedMessage(trimmed, goals));
+    }
+
+    private static UUID uniqueMatch(List<GoalResponseDTO> goals, java.util.function.Predicate<String> test) {
+        List<GoalResponseDTO> hits = goals.stream()
+                .filter(goal -> goal.name() != null && test.test(goal.name()))
+                .toList();
+        return hits.size() == 1 ? hits.get(0).id() : null;
+    }
+
+    /**
+     * The error the agent reads when resolution fails. It lists the user's real goals so
+     * the next attempt can be right, following {@code ItemGroupService}: a message that
+     * only says "not found" leaves the model to either give up or retry the same wrong
+     * value, and on the reported turn it did something worse — it offered to delete the
+     * goal and recreate it, which is how the user ended up with a duplicate.
+     *
+     * <p>Users never see this text; the frontend renders GOAL_NOT_FOUND from its own
+     * translations.
+     */
+    private static String goalNotResolvedMessage(String sent, List<GoalResponseDTO> goals) {
+        if (goals.isEmpty()) {
+            return "This user has no goals at all, so '" + sent + "' cannot be resolved. "
+                    + "Ask before creating one.";
+        }
+        String available = goals.stream()
+                .map(goal -> goal.name() + " -> " + goal.id())
+                .collect(Collectors.joining("; "));
+        return "No goal matches '" + sent + "'. Do not invent an id or create a replacement. "
+                + "The user's goals are: " + available;
     }
 
     // Context memory
