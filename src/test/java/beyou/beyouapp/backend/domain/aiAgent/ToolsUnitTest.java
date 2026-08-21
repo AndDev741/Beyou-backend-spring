@@ -31,6 +31,10 @@ import beyou.beyouapp.backend.domain.common.ExperienceLevel;
 import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
 import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackRequestDTO;
+import beyou.beyouapp.backend.domain.goal.GoalService;
+import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
+import beyou.beyouapp.backend.exceptions.BusinessException;
+import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
@@ -61,6 +65,9 @@ public class ToolsUnitTest {
 
     @Mock
     private DiaryRoutineService diaryRoutineService;
+
+    @Mock
+    private GoalService goalService;
 
     @InjectMocks
     private Tools tools;
@@ -220,4 +227,88 @@ public class ToolsUnitTest {
                 CreateTaskRequestDTO.class);
         assertEquals(3, dto.difficulty());
     }
+
+    // --- Goal identification -------------------------------------------------------
+    // The agent fabricated goal ids on a real user's turn — twice, the second time after
+    // getUserGoals had handed it the real ones. The prompt already forbade that, so these
+    // cover the structural answer: a name it cannot invent, and a failure that teaches.
+
+    private GoalResponseDTO goal(UUID id, String name) {
+        return new GoalResponseDTO(id, name, "icon", null, 208.0, "pages", 21.0, false,
+                Map.of(), null, null, null, 0, null, null, null);
+    }
+
+    @Test
+    void increaseGoalResolvesByExactName() {
+        UUID goalId = UUID.randomUUID();
+        when(goalService.getAllGoals(userId)).thenReturn(List.of(goal(goalId, "Ler 50 Ideias")));
+
+        tools.increaseUserGoalValue("Ler 50 Ideias", 16.0, toolContext);
+
+        verify(goalService).increaseCurrentValue(goalId, 16.0, userId);
+    }
+
+    @Test
+    void increaseGoalStillAcceptsAnId() {
+        UUID goalId = UUID.randomUUID();
+        when(goalService.getAllGoals(userId)).thenReturn(List.of(goal(goalId, "Ler 50 Ideias")));
+
+        tools.increaseUserGoalValue(goalId.toString(), 1.0, toolContext);
+
+        verify(goalService).increaseCurrentValue(goalId, 1.0, userId);
+    }
+
+    @Test
+    void increaseGoalResolvesByUniqueSubstring() {
+        UUID goalId = UUID.randomUUID();
+        when(goalService.getAllGoals(userId))
+                .thenReturn(List.of(goal(goalId, "Ler '50 Ideias de Fisica Quantica'"),
+                                    goal(UUID.randomUUID(), "Resolver 7 problemas")));
+
+        tools.increaseUserGoalValue("Fisica", 2.0, toolContext);
+
+        verify(goalService).increaseCurrentValue(goalId, 2.0, userId);
+    }
+
+    // Guessing between two plausible goals is how you update the wrong one.
+    @Test
+    void increaseGoalRefusesAnAmbiguousName() {
+        when(goalService.getAllGoals(userId))
+                .thenReturn(List.of(goal(UUID.randomUUID(), "Read a book"),
+                                    goal(UUID.randomUUID(), "Read the docs")));
+
+        BusinessException thrown = assertThrows(BusinessException.class,
+                () -> tools.increaseUserGoalValue("Read", 1.0, toolContext));
+
+        assertEquals(ErrorKey.GOAL_NOT_FOUND, thrown.getErrorKey());
+        verify(goalService, never()).increaseCurrentValue(any(), any(), any());
+    }
+
+    // The message is what the agent reads next. "Not found" left it to retry the same
+    // wrong id or, as it actually did, offer to delete and recreate the goal.
+    @Test
+    void unresolvableGoalErrorListsTheRealGoals() {
+        UUID goalId = UUID.randomUUID();
+        when(goalService.getAllGoals(userId)).thenReturn(List.of(goal(goalId, "Ler 50 Ideias")));
+
+        BusinessException thrown = assertThrows(BusinessException.class,
+                () -> tools.increaseUserGoalValue("d1ce6f05-8f32-4aa5-a8eb-2f46e2d29b00", 1.0, toolContext));
+
+        assertTrue(thrown.getMessage().contains("Ler 50 Ideias"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains(goalId.toString()), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("Do not invent an id"), thrown.getMessage());
+        verify(goalService, never()).increaseCurrentValue(any(), any(), any());
+    }
+
+    @Test
+    void deleteGoalAlsoResolvesByName() {
+        UUID goalId = UUID.randomUUID();
+        when(goalService.getAllGoals(userId)).thenReturn(List.of(goal(goalId, "Ler 50 Ideias")));
+        when(goalService.deleteGoal(goalId, userId)).thenReturn(ResponseEntity.ok(Map.of("success", "ok")));
+
+        tools.deleteUserGoal("Ler 50 Ideias", toolContext);
+
+        verify(goalService).deleteGoal(goalId, userId);
+    }
+
 }
