@@ -4,6 +4,7 @@ import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
 import lombok.Getter;
 import org.springframework.context.ApplicationEvent;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -15,7 +16,9 @@ import java.util.UUID;
  *
  * The event carries everything the mail needs (recipient, language, what they
  * wrote), so the listener never has to reach back into the database on another
- * thread.
+ * thread. {@code adminRecipients} is here for that reason and no other: the
+ * inbox alert goes to whoever holds ROLE_ADMIN, and resolving that list is the
+ * sender's job, inside the transaction, not the listener's.
  */
 @Getter
 public class FeedbackSubmittedEvent extends ApplicationEvent {
@@ -26,18 +29,25 @@ public class FeedbackSubmittedEvent extends ApplicationEvent {
     private final String recipientLanguage;
     private final FeedbackCategory category;
     private final String body;
+    /**
+     * Who gets told a submission landed. Already excludes the submitter, so an
+     * admin writing feedback is not alerted about their own message.
+     */
+    private final List<String> adminRecipients;
 
     public FeedbackSubmittedEvent(Object source,
                                   UUID feedbackId,
                                   String recipientEmail,
                                   String recipientLanguage,
                                   FeedbackCategory category,
-                                  String body) {
+                                  String body,
+                                  List<String> adminRecipients) {
         super(source);
         this.feedbackId = feedbackId;
         this.recipientEmail = recipientEmail;
         this.recipientLanguage = recipientLanguage;
         this.category = category;
         this.body = body;
+        this.adminRecipients = adminRecipients == null ? List.of() : List.copyOf(adminRecipients);
     }
 }
