@@ -27,6 +27,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
@@ -216,6 +217,62 @@ class FallbackChatModelTest {
         assertThat(options.getModel()).isEqualTo("llama-3.3-70b");
         assertThat(options.getToolCallbacks()).containsExactly(tool);
         assertThat(options.getToolContext()).containsEntry("userId", "u1");
+    }
+
+    // ToolCallingChatOptions has no toolChoice — it is provider-specific — so the chain
+    // carries it in the tool context and applies it per delegate. Without this the value
+    // is silently dropped by the retype, and the caller believes it forced a tool call.
+    @Test
+    void call_appliesToolChoiceToOpenAiCompatibleOptions() {
+        when(first.getOptions()).thenReturn(OpenAiChatOptions.builder().model("mistral-small").build());
+        when(first.call(any(Prompt.class))).thenReturn(OK);
+
+        Prompt prompt = new Prompt(List.of(new UserMessage("update my goal")),
+                ToolCallingChatOptions.builder()
+                        .toolContext(Map.of(FallbackChatModel.TOOL_CHOICE_KEY, "required"))
+                        .build());
+
+        twoLinkChain().call(prompt);
+
+        ArgumentCaptor<Prompt> sent = ArgumentCaptor.forClass(Prompt.class);
+        verify(first).call(sent.capture());
+        assertThat(((OpenAiChatOptions) sent.getValue().getOptions()).getToolChoice())
+                .isEqualTo("required");
+    }
+
+    @Test
+    void call_appliesToolChoiceToDeepSeekOptions() {
+        when(first.getOptions()).thenReturn(DeepSeekChatOptions.builder().model("deepseek-chat").build());
+        when(first.call(any(Prompt.class))).thenReturn(OK);
+
+        Prompt prompt = new Prompt(List.of(new UserMessage("update my goal")),
+                ToolCallingChatOptions.builder()
+                        .toolContext(Map.of(FallbackChatModel.TOOL_CHOICE_KEY, "required"))
+                        .build());
+
+        twoLinkChain().call(prompt);
+
+        ArgumentCaptor<Prompt> sent = ArgumentCaptor.forClass(Prompt.class);
+        verify(first).call(sent.capture());
+        assertThat(((DeepSeekChatOptions) sent.getValue().getOptions()).getToolChoice())
+                .isEqualTo("required");
+    }
+
+    // Absent must mean "leave the provider alone", not "send null" — the default has to
+    // stay auto so turning the feature off is genuinely off.
+    @Test
+    void call_withoutAToolChoice_leavesTheProviderDefault() {
+        when(first.getOptions()).thenReturn(OpenAiChatOptions.builder().model("mistral-small").build());
+        when(first.call(any(Prompt.class))).thenReturn(OK);
+
+        Prompt prompt = new Prompt(List.of(new UserMessage("hi")),
+                ToolCallingChatOptions.builder().toolContext(Map.of("userId", "u1")).build());
+
+        twoLinkChain().call(prompt);
+
+        ArgumentCaptor<Prompt> sent = ArgumentCaptor.forClass(Prompt.class);
+        verify(first).call(sent.capture());
+        assertThat(((OpenAiChatOptions) sent.getValue().getOptions()).getToolChoice()).isNull();
     }
 
     @Test

@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -12,7 +13,9 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.openai.OpenAiChatOptions;
 
 import com.openai.errors.RateLimitException;
 
@@ -56,6 +59,22 @@ public class FallbackChatModel implements ChatModel {
         this.meterRegistry = meterRegistry;
         this.clock = clock;
     }
+
+    /**
+     * Tool-context key carrying the {@code tool_choice} the caller wants applied, e.g.
+     * {@code "required"} to make answering without calling a tool impossible.
+     *
+     * <p>It travels in the tool context rather than in the options because
+     * {@link ToolCallingChatOptions} has no {@code toolChoice}: it is provider-specific
+     * (OpenAiChatOptions, DeepSeekChatOptions), so there is nothing portable to set. That
+     * also means {@link #adaptFor} has to apply it per provider — see there — and a
+     * provider whose options do not carry the concept silently keeps its default, which
+     * is the safe direction.
+     *
+     * <p>Absent means "leave the provider's default", which is {@code auto}: the model
+     * may answer without calling anything.
+     */
+    public static final String TOOL_CHOICE_KEY = "llmToolChoice";
 
     /** Provider names in chain order (boot log + tests). */
     public List<String> providerNames() {
@@ -120,8 +139,38 @@ public class FallbackChatModel implements ChatModel {
                 && incoming instanceof ToolCallingChatOptions incomingTools) {
             toolBuilder.toolCallbacks(incomingTools.getToolCallbacks());
             toolBuilder.toolContext(incomingTools.getToolContext());
+            applyToolChoice(builder, incomingTools.getToolContext());
         }
         return prompt.mutate().chatOptions(builder.build()).build();
+    }
+
+    /**
+     * Apply a requested {@code tool_choice} to whichever provider options we are building.
+     *
+     * <p>Two branches because the chain has exactly two options classes: everything
+     * OpenAI-compatible (mistral, gemini, glm) and DeepSeek. This is the one place the
+     * otherwise provider-agnostic chain has to know its delegates, and it is unavoidable:
+     * {@code tool_choice} exists on both providers' options and on no shared interface.
+     *
+     * <p>A provider that gains a third options class simply keeps its default until a
+     * branch is added — failing to constrain the model is a worse answer than crashing,
+     * but it is far better than sending a field the provider will reject. Note DeepSeek in
+     * thinking mode refuses {@code required} outright, which is why AI_AGENT_MODEL points
+     * at the non-thinking {@code deepseek-chat} alias.
+     */
+    private static void applyToolChoice(ChatOptions.Builder<?> builder, Map<String, Object> context) {
+        if (context == null) {
+            return;
+        }
+        Object choice = context.get(TOOL_CHOICE_KEY);
+        if (choice == null) {
+            return;
+        }
+        if (builder instanceof OpenAiChatOptions.Builder openAi) {
+            openAi.toolChoice(choice);
+        } else if (builder instanceof DeepSeekChatOptions.Builder deepSeek) {
+            deepSeek.toolChoice(choice);
+        }
     }
 
     private Flux<ChatResponse> attempt(Prompt prompt, int index) {
