@@ -176,6 +176,18 @@ docs:
     token: ${DOCS_IMPORT_TOKEN:}
     secret: ${DOCS_IMPORT_SECRET:}
 
+# Every log line carries the id of the user the request is for. `logging.pattern.correlation`
+# is Boot's own slot for per-request identity inside the default console AND file patterns
+# (it is where trace ids go when tracing is on), so this keeps working across a Boot upgrade
+# that reshuffles those patterns — overriding `logging.pattern.console` would not.
+#
+# UserContextLogFilter fills the MDC key. Lines with no user in scope — startup, the snapshot
+# scheduler, unauthenticated calls — print `anonymous` rather than an empty field, so every
+# line has the same shape and the log-shipping side has one pattern to parse instead of two.
+logging:
+  pattern:
+    correlation: "[userId=%X{userId:-anonymous}] "
+
 # Error telemetry — unhandled exceptions are shipped to the self-hosted GlitchTip
 # collector (Sentry-API compatible) run by Beyou-dev-env's monitoring overlay.
 #
