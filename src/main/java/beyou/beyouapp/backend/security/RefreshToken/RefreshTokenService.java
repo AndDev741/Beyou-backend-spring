@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenDontMatchRaw;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenExpiredException;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenNotFoundException;
+import beyou.beyouapp.backend.monitoring.UserActivityTracker;
 import beyou.beyouapp.backend.security.ClientType;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.User;
@@ -34,6 +35,7 @@ public class RefreshTokenService {
     private final RefreshTokenRepository repository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
+    private final UserActivityTracker userActivityTracker;
     private static final SecureRandom secureRandom = new SecureRandom();
     private static final Base64.Encoder base64Encoder = Base64.getUrlEncoder().withoutPadding();
 
@@ -46,6 +48,10 @@ public class RefreshTokenService {
         token.setTokenHash(passwordEncoder.encode(opaqueToken));
 
         repository.save(token);
+
+        // The one place every session-issuing path (password login, Google web, Google
+        // mobile, refresh) already converges, so last_login_at cannot miss a path.
+        userActivityTracker.recordLogin(user.getId());
 
         return token.getId() + "." + opaqueToken; //id.token
     }

@@ -27,6 +27,7 @@ import beyou.beyouapp.backend.exceptions.security.RefreshTokenDontMatchRaw;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenExpiredException;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenNotFoundException;
 import org.springframework.http.ResponseCookie;
+import beyou.beyouapp.backend.monitoring.UserActivityTracker;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshToken;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenRepository;
@@ -54,6 +55,9 @@ public class RefreshTokenServiceUnitTest {
     @Mock
     private HttpServletResponse response;
 
+    @Mock
+    private UserActivityTracker userActivityTracker;
+
     @InjectMocks
     private RefreshTokenService refreshTokenService;
 
@@ -66,6 +70,11 @@ public class RefreshTokenServiceUnitTest {
         refreshToken.setId(tokenId);
         refreshToken.setTokenHash("hashedToken");
         refreshToken.setExpiresAt(new Timestamp(System.currentTimeMillis() + 100000)); // expires in the future
+        // The rotation path issues a new token for the token's owner, which now also
+        // records login activity — so the fixture needs an owner with an id.
+        User owner = new User();
+        owner.setId(userId);
+        refreshToken.setUser(owner);
     }
 
     @Nested
