@@ -153,6 +153,19 @@ public class GoalService {
         xpCalculatorService.removeXpOfUserGoalAndCategoriesAndPersist(goal.getUser(), xpReward, goal, goal.getCategories());
     }
 
+    /**
+     * Transactional because of who calls it, not because of what it writes.
+     *
+     * <p>The AI agent's tools run inside the SSE Flux, on a reactor thread, and Open
+     * Session In View binds its EntityManager to the servlet request thread — so the
+     * agent gets no ambient session. Without one, getGoal returns a detached Goal and
+     * toResponseDTO walks the lazy {@code categories} @ManyToMany, which is a
+     * LazyInitializationException rolling the whole increment back. Over HTTP the same
+     * code worked, because OSIV held a session open for the request; that is why this
+     * only ever failed through the chat. checkGoal already carried the annotation for
+     * the same reason.
+     */
+    @Transactional
     public GoalResponseDTO increaseCurrentValue(UUID goalId, Double value, UUID userId) {
         Goal goal = getGoal(goalId);
         checkIfGoalIsFromTheUserInContext(goal, userId);
@@ -179,6 +192,8 @@ public class GoalService {
         return increaseCurrentValue(goalId, 1.0, userId);
     }
 
+    /** Transactional for the same reason as {@link #increaseCurrentValue}. */
+    @Transactional
     public GoalResponseDTO decreaseCurrentValue(UUID goalId, Double value, UUID userId) {
         Goal goal = getGoal(goalId);
         checkIfGoalIsFromTheUserInContext(goal, userId);
