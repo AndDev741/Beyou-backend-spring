@@ -52,6 +52,7 @@ public class UserMapper {
             photo = user.getPerfilPhoto(); // null or Google CDN URL
         }
         return new UserResponseDTO(
+            user.getId(),
             user.getName(),
             user.getEmail(),
             user.getPerfilPhrase(),

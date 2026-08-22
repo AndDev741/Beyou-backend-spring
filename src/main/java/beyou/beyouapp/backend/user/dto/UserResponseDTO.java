@@ -1,12 +1,19 @@
 package beyou.beyouapp.backend.user.dto;
 
 import java.util.List;
+import java.util.UUID;
 
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import beyou.beyouapp.backend.user.enums.TimezoneSource;
 
 public record UserResponseDTO(
+        /**
+         * The account's UUID. Sent so clients can identify the user to product
+         * analytics (PostHog) by an opaque internal id instead of PII like the
+         * email — the same no-PII posture the telemetry stack follows.
+         */
+        UUID id,
         String name,
         String email,
         String phrase,

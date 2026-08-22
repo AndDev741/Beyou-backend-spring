@@ -3,6 +3,7 @@ package beyou.beyouapp.backend.security;
 import beyou.beyouapp.backend.exceptions.ApiErrorResponse;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.security.JwtNotFoundException;
+import beyou.beyouapp.backend.monitoring.UserActivityTracker;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +29,9 @@ public class SecurityFilter extends OncePerRequestFilter {
 
     @Autowired
     UserRepository userRepository;
+
+    @Autowired
+    UserActivityTracker userActivityTracker;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -80,6 +84,7 @@ public class SecurityFilter extends OncePerRequestFilter {
                     User user = userOptional.get();
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
                     SecurityContextHolder.getContext().setAuthentication(authentication);
+                    userActivityTracker.touch(user.getId());
                 }else{
                     setResponseAsUnatuhorized(response, ErrorKey.USER_NOT_FOUND, "User not found for the provided JWT");
                     return;

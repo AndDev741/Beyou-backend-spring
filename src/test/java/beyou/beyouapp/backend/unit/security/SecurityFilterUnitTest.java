@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.unit.security;
 
+import beyou.beyouapp.backend.monitoring.UserActivityTracker;
 import beyou.beyouapp.backend.security.SecurityFilter;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.user.User;
@@ -40,6 +41,9 @@ public class SecurityFilterUnitTest {
 
     @Mock
     private PrintWriter printWriter;
+
+    @Mock
+    private UserActivityTracker userActivityTracker;
 
     @InjectMocks
     private SecurityFilter securityFilter;

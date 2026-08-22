@@ -2,10 +2,13 @@ package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.user.enums.UserRole;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,4 +36,22 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      */
     @Query("SELECT u.email FROM User u WHERE u.userRole = :role")
     List<String> findEmailsByUserRole(@Param("role") UserRole role);
+
+    /**
+     * Native on purpose: {@code last_login_at} / {@code last_seen_at} exist only in the
+     * database (V22), never on the entity — see the migration header for why. Each method
+     * opens its own transaction so {@link beyou.beyouapp.backend.monitoring.UserActivityTracker}
+     * can catch a failure OUTSIDE the transactional proxy and let the request proceed;
+     * a {@code @Transactional} wrapper up there that swallowed the exception would commit
+     * a rollback-marked transaction and fail the request it was trying not to fail.
+     */
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE users SET last_login_at = :at, last_seen_at = :at WHERE id = :id", nativeQuery = true)
+    void recordLogin(@Param("id") UUID id, @Param("at") Instant at);
+
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE users SET last_seen_at = :at WHERE id = :id", nativeQuery = true)
+    void recordSeen(@Param("id") UUID id, @Param("at") Instant at);
 }
