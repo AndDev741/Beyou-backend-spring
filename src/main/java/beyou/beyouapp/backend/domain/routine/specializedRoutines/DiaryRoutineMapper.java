@@ -7,8 +7,6 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutin
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.HabitGroupDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
-import beyou.beyouapp.backend.domain.routine.checks.HabitGroupCheck;
-import beyou.beyouapp.backend.domain.routine.checks.TaskGroupCheck;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
@@ -26,6 +24,29 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+/**
+ * Builds routine structure from request DTOs. Everything it returns is NEW: no caller
+ * may hand it an id and expect that row to be reused.
+ *
+ * <p>It used to reapply the client's section/entry ids, which is how GlitchTip issue 37
+ * happened. Both callers put the result into a {@code cascade = ALL} collection, so at
+ * flush Hibernate cascades PERSIST onto whatever it finds, and an id that already exists
+ * is a detached entity — "detached entity passed to persist", whole request rolled back.
+ * Hibernate decides transient-vs-detached from "is the id null", never from a lookup, so
+ * an invented id fails the same way as a real one.
+ *
+ * <p>Neither caller ever wanted those ids. {@code toEntity} builds a brand-new routine,
+ * and {@code mapToRoutineSection} only serves the update's NEW-section branch; the
+ * existing-section branch never comes through here, it constructs its groups directly.
+ * Reusing a row is {@code mergeHabitGroups}/{@code mergeTaskGroups}' job, matched by id
+ * against the section that actually owns it.
+ *
+ * <p>Incoming check lists are dropped for the same reason plus one more: they arrive with
+ * no back-reference to their group and {@code habitGroupChecks} is {@code mappedBy}, so
+ * persisting them violates {@code habit_group_checks.habit_group_id NOT NULL} — and
+ * honouring them would let a caller post {@code checked=true} with an {@code xpGenerated}
+ * of its choosing.
+ */
 @Component
 @RequiredArgsConstructor
 public class DiaryRoutineMapper {
@@ -41,13 +62,6 @@ public class DiaryRoutineMapper {
         diaryRoutine.setIconId(dto.iconId());
         diaryRoutine.setRoutineSections(mapToRoutineSections(dto.routineSections(), diaryRoutine, userId));
         return diaryRoutine;
-    }
-
-    public void updateEntity(DiaryRoutine target, DiaryRoutineRequestDTO dto, UUID userId) {
-        target.setName(dto.name());
-        target.setIconId(dto.iconId());
-        target.getRoutineSections().clear();
-        target.getRoutineSections().addAll(mapToRoutineSections(dto.routineSections(), target, userId));
     }
 
     public DiaryRoutineResponseDTO toResponse(DiaryRoutine entity) {
@@ -83,9 +97,6 @@ public class DiaryRoutineMapper {
         AtomicInteger index = new AtomicInteger(0);
         return dtos.stream().map(dto -> {
             RoutineSection section = new RoutineSection();
-            if (dto.id() != null) {
-                section.setId(dto.id());
-            }
             section.setOrderIndex(index.getAndIncrement());
             section.setName(dto.name());
             section.setIconId(dto.iconId());
@@ -106,9 +117,6 @@ public class DiaryRoutineMapper {
         }
 
         RoutineSection section = new RoutineSection();
-        if (dto.id() != null) {
-            section.setId(dto.id());
-        }
         section.setName(dto.name());
         section.setIconId(dto.iconId());
         section.setStartTime(dto.startTime());
@@ -133,19 +141,13 @@ public class DiaryRoutineMapper {
             // victim's data and handed it back in the response.
             Task task = taskService.getOwnedTask(taskDto.taskId(), userId);
 
-            if (taskDto.id() != null) {
-                taskGroup.setId(taskDto.id());
-            }
             taskGroup.setTask(task);
             taskGroup.setStartTime(taskDto.startTime());
             taskGroup.setEndTime(taskDto.endTime());
             taskGroup.setRoutineSection(section);
-
-            List<TaskGroupCheck> taskChecks = new ArrayList<>();
-            if (taskDto.taskGroupCheck() != null) {
-                taskChecks.addAll(taskDto.taskGroupCheck());
-            }
-            taskGroup.setTaskGroupChecks(taskChecks);
+            // Never null: toResponse maps it straight after the save, and a null list
+            // NPE'd there before (DiaryRoutineUpdateOrphanIT covers that regression).
+            taskGroup.setTaskGroupChecks(new ArrayList<>());
 
             return taskGroup;
         }).collect(Collectors.toList());
@@ -161,22 +163,11 @@ public class DiaryRoutineMapper {
             // Owner-checked, same reason as the task above.
             Habit habit = habitService.getOwnedHabit(habitDto.habitId(), userId);
 
-            if (habitDto.id() != null) {
-                habitGroup.setId(habitDto.id());
-            }
             habitGroup.setHabit(habit);
             habitGroup.setStartTime(habitDto.startTime());
             habitGroup.setEndTime(habitDto.endTime());
             habitGroup.setRoutineSection(section);
-
-            List<HabitGroupCheck> checks = new ArrayList<>();
-            if (habitGroup.getHabitGroupChecks() != null) {
-                checks.addAll(habitGroup.getHabitGroupChecks());
-            }
-            if (habitDto.habitGroupCheck() != null) {
-                checks.addAll(habitDto.habitGroupCheck());
-            }
-            habitGroup.setHabitGroupChecks(checks);
+            habitGroup.setHabitGroupChecks(new ArrayList<>());
 
             return habitGroup;
         }).collect(Collectors.toList());

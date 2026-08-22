@@ -358,7 +358,11 @@ public class Tools {
 
     @Tool(description = "Create a new routine. Sections need name, iconId and HH:mm start/end times; "
             + "habitGroup/taskGroup items reference existing habitId/taskId and their times must be "
-            + "inside the section time window")
+            + "inside the section time window. Send NO id anywhere in this payload — not for the "
+            + "routine, the sections or the items; the server assigns them and ignores any id you "
+            + "send here. If the routine needs a habit or task the user does "
+            + "not have yet, create it first with createUserHabit/createUserTask — never point an "
+            + "item at an unrelated habit just because it exists")
     DiaryRoutineResponseDTO createUserRoutine(DiaryRoutineRequestDTO routine, ToolContext toolContext) {
         log.info("AI agent is creating a routine for user: {}", userId(toolContext));
         return diaryRoutineService.createDiaryRoutine(valid(withIcons(routine)), userId(toolContext));
@@ -407,7 +411,9 @@ public class Tools {
     }
 
     @Tool(description = "Add ONE existing habit to a routine section. Times are HH:mm inside the "
-            + "section window. routineId/sectionId come from getUserRoutines, habitId from getUserHabits")
+            + "section window. routineId/sectionId come from getUserRoutines, habitId from getUserHabits. "
+            + "If the user has no habit for what they asked for, create it with createUserHabit first "
+            + "rather than adding a habit that only looks close")
     DiaryRoutineResponseDTO addHabitToRoutineSection(UUID routineId, UUID sectionId, UUID habitId,
             String startTime, String endTime, ToolContext toolContext) {
         log.info("AI agent is adding habit {} to routine {} for user: {}", habitId, routineId, userId(toolContext));
