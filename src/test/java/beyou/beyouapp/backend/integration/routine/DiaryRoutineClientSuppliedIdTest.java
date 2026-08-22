@@ -34,7 +34,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * GlitchTip issue 37 — a client (the AI agent) echoes a routine back with real
@@ -169,12 +169,16 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
         cleanUp(routineId);
     }
 
-    /** The create path is untouched by this fix — recorded so the gap is explicit. */
+    /**
+     * GlitchTip issue 37's other half, and the one the production events actually name:
+     * the agent's createUserRoutine echoing back a routine it had just fetched. This
+     * asserted the crash until the mapper stopped honouring client ids.
+     */
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void createWithEchoedIdsStillFails() {
+    void createWithEchoedSectionAndGroupIds() {
         DiaryRoutineResponseDTO created = created();
-        UUID routineId = created.id();
+        UUID sourceRoutineId = created.id();
         UUID sectionId = created.routineSections().get(0).id();
         UUID habitGroupId = created.routineSections().get(0).habitGroup().get(0).id();
 
@@ -185,11 +189,54 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
                         LocalTime.of(6, 0), LocalTime.of(6, 30), null)),
                 false);
 
-        Exception thrown = assertThrows(Exception.class, () ->
-                diaryRoutineService.createDiaryRoutine(
-                        new DiaryRoutineRequestDTO("Copy of R", "", List.of(echoed)), user));
-        System.out.println(">>> CREATE echoed ids: " + thrown.getMessage());
+        DiaryRoutineResponseDTO copy = diaryRoutineService.createDiaryRoutine(
+                new DiaryRoutineRequestDTO("Copy of R", "", List.of(echoed)), user.getId());
 
+        assertNotEquals(sourceRoutineId, copy.id(), "a copy, not the original");
+        assertNotEquals(sectionId, copy.routineSections().get(0).id(),
+                "the echoed section id was ignored, not reused");
+        assertNotEquals(habitGroupId, copy.routineSections().get(0).habitGroup().get(0).id(),
+                "the echoed entry id was ignored, not reused");
+        assertEquals(habitId, copy.routineSections().get(0).habitGroup().get(0).habitId(),
+                "the habit it points at is still the one asked for");
+
+        // The source routine is untouched: its entry keeps its own id.
+        DiaryRoutineResponseDTO source = diaryRoutineService.getDiaryRoutineById(
+                sourceRoutineId, user.getId());
+        assertEquals(habitGroupId, source.routineSections().get(0).habitGroup().get(0).id(),
+                "copying must not move the original's entry");
+
+        cleanUp(copy.id());
+        cleanUp(sourceRoutineId);
+    }
+
+    /**
+     * The production signature from GlitchTip issue 37: the failure names HabitGroup,
+     * not RoutineSection. Same hole, different half of the payload — a section with no
+     * id is transient, so the cascade reaches an entry whose id already exists.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void createWithEchoedGroupIdButNoSectionId() {
+        DiaryRoutineResponseDTO created = created();
+        UUID routineId = created.id();
+        UUID habitGroupId = created.routineSections().get(0).habitGroup().get(0).id();
+
+        RoutineSectionRequestDTO echoed = new RoutineSectionRequestDTO(
+                null, "Manha", "ic", LocalTime.of(6, 0), LocalTime.of(9, 0),
+                List.of(),
+                List.of(new HabitGroupDTO(habitGroupId, habitId,
+                        LocalTime.of(6, 0), LocalTime.of(6, 30), null)),
+                false);
+
+        DiaryRoutineResponseDTO copy = diaryRoutineService.createDiaryRoutine(
+                new DiaryRoutineRequestDTO("Copia", "", List.of(echoed)), user.getId());
+
+        assertEquals(1, copy.routineSections().get(0).habitGroup().size());
+        assertNotEquals(habitGroupId, copy.routineSections().get(0).habitGroup().get(0).id(),
+                "the echoed entry id was ignored");
+
+        cleanUp(copy.id());
         cleanUp(routineId);
     }
 

@@ -38,7 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.TextStyle;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -184,39 +183,14 @@ public class DiaryRoutineService {
                 mergeTaskGroups(existing, sectionDTO.taskGroup(), userId);
             } else {
                 // Create new section
+                // Everything the mapper returns is new — it honours no id from the
+                // request, deliberately. See DiaryRoutineMapper's javadoc.
                 RoutineSection newSection = mapper.mapToRoutineSection(sectionDTO, routine, userId);
-                newSection.setId(null);
                 newSection.setOrderIndex(index);
-                resetClientSuppliedEntryIds(newSection);
                 routine.getRoutineSections().add(newSection);
             }
             index++;
         }
-    }
-
-    /**
-     * A brand-new section holds brand-new entries, whatever ids the client echoed back.
-     *
-     * <p>The mapper reapplies the DTO's habitGroup/taskGroup ids, and the section it built
-     * goes into a {@code cascade = ALL} collection — so at flush Hibernate cascades PERSIST
-     * onto entries whose ids already exist, which is "detached entity passed to persist" and
-     * rolls the whole edit back. The AI agent walks into this by design: editUserRoutine asks
-     * for the routine fetched via getUserRoutines, and that response carries every entry id.
-     *
-     * <p>Incoming check lists are dropped for the same reason and one more: a freshly created
-     * entry has no history, and the checks arrive with no back-reference to their group, so
-     * persisting them violates habit_group_checks.habit_group_id NOT NULL. The existing-section
-     * branch below already ignores them.
-     */
-    private void resetClientSuppliedEntryIds(RoutineSection section) {
-        section.getHabitGroups().forEach(group -> {
-            group.setId(null);
-            group.setHabitGroupChecks(new ArrayList<>());
-        });
-        section.getTaskGroups().forEach(group -> {
-            group.setId(null);
-            group.setTaskGroupChecks(new ArrayList<>());
-        });
     }
 
     private void mergeHabitGroups(RoutineSection section, List<HabitGroupDTO> dtoGroups, UUID userId) {
