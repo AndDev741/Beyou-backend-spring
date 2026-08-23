@@ -261,7 +261,7 @@ public class EmailService {
 
                                     <tr>
                                         <td align="center" style="padding-bottom:20px;">
-                                            <h1 style="margin:0;color:#0082E1;">BeYou</h1>
+                                            <h1 style="margin:0;color:#0082E1;">Beyou</h1>
                                             <p style="margin:5px 0 0 0;color:#6b7280;">Evolua sua vida.</p>
                                         </td>
                                     </tr>
@@ -290,7 +290,7 @@ public class EmailService {
                                             <hr style="margin:30px 0;border:none;border-top:1px solid #e5e7eb;"/>
 
                                             <p style="color:#9ca3af;font-size:12px;line-height:1.5;">
-                                                Obrigado por ajudar a melhorar o BeYou.
+                                                Obrigado por ajudar a melhorar o Beyou.
                                             </p>
                                         </td>
                                     </tr>
@@ -298,7 +298,7 @@ public class EmailService {
                                 </table>
 
                                 <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
-                                    &copy; %d BeYou. Continue evoluindo.
+                                    &copy; %d Beyou. Continue evoluindo.
                                 </p>
 
                             </td>
@@ -318,7 +318,7 @@ public class EmailService {
 
                                     <tr>
                                         <td align="center" style="padding-bottom:20px;">
-                                            <h1 style="margin:0;color:#0082E1;">BeYou</h1>
+                                            <h1 style="margin:0;color:#0082E1;">Beyou</h1>
                                             <p style="margin:5px 0 0 0;color:#6b7280;">Level up your life.</p>
                                         </td>
                                     </tr>
@@ -347,7 +347,7 @@ public class EmailService {
                                             <hr style="margin:30px 0;border:none;border-top:1px solid #e5e7eb;"/>
 
                                             <p style="color:#9ca3af;font-size:12px;line-height:1.5;">
-                                                Thank you for helping make BeYou better.
+                                                Thank you for helping make Beyou better.
                                             </p>
                                         </td>
                                     </tr>
@@ -355,7 +355,7 @@ public class EmailService {
                                 </table>
 
                                 <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
-                                    &copy; %d BeYou. Keep evolving.
+                                    &copy; %d Beyou. Keep evolving.
                                 </p>
 
                             </td>
@@ -385,7 +385,7 @@ public class EmailService {
 
                                     <tr>
                                         <td align="center" style="padding-bottom:20px;">
-                                            <h1 style="margin:0;color:#0082E1;">BeYou</h1>
+                                            <h1 style="margin:0;color:#0082E1;">Beyou</h1>
                                             <p style="margin:5px 0 0 0;color:#6b7280;">Evolua sua vida.</p>
                                         </td>
                                     </tr>
@@ -414,7 +414,7 @@ public class EmailService {
                                             <hr style="margin:30px 0;border:none;border-top:1px solid #e5e7eb;"/>
 
                                             <p style="color:#9ca3af;font-size:12px;line-height:1.5;">
-                                                Obrigado por ajudar a melhorar o BeYou.
+                                                Obrigado por ajudar a melhorar o Beyou.
                                             </p>
                                         </td>
                                     </tr>
@@ -422,7 +422,7 @@ public class EmailService {
                                 </table>
 
                                 <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
-                                    &copy; %d BeYou. Continue evoluindo.
+                                    &copy; %d Beyou. Continue evoluindo.
                                 </p>
 
                             </td>
@@ -442,7 +442,7 @@ public class EmailService {
 
                                     <tr>
                                         <td align="center" style="padding-bottom:20px;">
-                                            <h1 style="margin:0;color:#0082E1;">BeYou</h1>
+                                            <h1 style="margin:0;color:#0082E1;">Beyou</h1>
                                             <p style="margin:5px 0 0 0;color:#6b7280;">Level up your life.</p>
                                         </td>
                                     </tr>
@@ -471,7 +471,7 @@ public class EmailService {
                                             <hr style="margin:30px 0;border:none;border-top:1px solid #e5e7eb;"/>
 
                                             <p style="color:#9ca3af;font-size:12px;line-height:1.5;">
-                                                Thank you for helping make BeYou better.
+                                                Thank you for helping make Beyou better.
                                             </p>
                                         </td>
                                     </tr>
@@ -479,7 +479,7 @@ public class EmailService {
                                 </table>
 
                                 <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
-                                    &copy; %d BeYou. Keep evolving.
+                                    &copy; %d Beyou. Keep evolving.
                                 </p>
 
                             </td>
@@ -494,14 +494,14 @@ public class EmailService {
 
     private String resolveFeedbackAcknowledgementSubject(String language) {
         return normalizeLanguage(language).equals("pt")
-            ? "Recebemos seu feedback - BeYou"
-            : "We got your feedback - BeYou";
+            ? "Recebemos seu feedback - Beyou"
+            : "We got your feedback - Beyou";
     }
 
     private String resolveFeedbackReplySubject(String language) {
         return normalizeLanguage(language).equals("pt")
-            ? "Respondemos seu feedback - BeYou"
-            : "We replied to your feedback - BeYou";
+            ? "Respondemos seu feedback - Beyou"
+            : "We replied to your feedback - Beyou";
     }
 
     private String resolveCategoryLabel(FeedbackCategory category, String normalizedLanguage) {
@@ -572,7 +572,7 @@ public class EmailService {
 
                                     <tr>
                                         <td align="center" style="padding-bottom:20px;">
-                                            <h1 style="margin:0;color:#0082E1;">BeYou</h1>
+                                            <h1 style="margin:0;color:#0082E1;">Beyou</h1>
                                             <p style="margin:5px 0 0 0;color:#6b7280;">Evolua sua vida.</p>
                                         </td>
                                     </tr>
@@ -581,7 +581,7 @@ public class EmailService {
                                         <td style="padding-top:20px;">
                                             <h2 style="color:#111827;">Verifique seu email</h2>
                                             <p style="color:#374151;line-height:1.6;">
-                                                Bem-vindo ao BeYou! Para completar seu cadastro, por favor verifique seu email
+                                                Bem-vindo ao Beyou! Para completar seu cadastro, por favor verifique seu email
                                                 clicando no botao abaixo.
                                             </p>
 
@@ -603,7 +603,7 @@ public class EmailService {
                                             </p>
 
                                             <p style="color:#6b7280;font-size:14px;">
-                                                Se voce nao criou uma conta no BeYou, pode ignorar este email.
+                                                Se voce nao criou uma conta no Beyou, pode ignorar este email.
                                             </p>
 
                                             <hr style="margin:30px 0;border:none;border-top:1px solid #e5e7eb;"/>
@@ -619,7 +619,7 @@ public class EmailService {
                                 </table>
 
                                 <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
-                                    &copy; %d BeYou. Continue evoluindo.
+                                    &copy; %d Beyou. Continue evoluindo.
                                 </p>
 
                             </td>
@@ -639,7 +639,7 @@ public class EmailService {
 
                                     <tr>
                                         <td align="center" style="padding-bottom:20px;">
-                                            <h1 style="margin:0;color:#0082E1;">BeYou</h1>
+                                            <h1 style="margin:0;color:#0082E1;">Beyou</h1>
                                             <p style="margin:5px 0 0 0;color:#6b7280;">Level up your life.</p>
                                         </td>
                                     </tr>
@@ -648,7 +648,7 @@ public class EmailService {
                                         <td style="padding-top:20px;">
                                             <h2 style="color:#111827;">Verify your email</h2>
                                             <p style="color:#374151;line-height:1.6;">
-                                                Welcome to BeYou! To complete your registration, please verify your email
+                                                Welcome to Beyou! To complete your registration, please verify your email
                                                 by clicking the button below.
                                             </p>
 
@@ -670,7 +670,7 @@ public class EmailService {
                                             </p>
 
                                             <p style="color:#6b7280;font-size:14px;">
-                                                If you did not create a BeYou account, you can safely ignore this email.
+                                                If you did not create a Beyou account, you can safely ignore this email.
                                             </p>
 
                                             <hr style="margin:30px 0;border:none;border-top:1px solid #e5e7eb;"/>
@@ -686,7 +686,7 @@ public class EmailService {
                                 </table>
 
                                 <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
-                                    &copy; %d BeYou. Keep evolving.
+                                    &copy; %d Beyou. Keep evolving.
                                 </p>
 
                             </td>
@@ -701,8 +701,8 @@ public class EmailService {
 
     private String resolveVerificationSubject(String language) {
         return normalizeLanguage(language).equals("pt")
-            ? "Verifique seu email - BeYou"
-            : "Verify your email - BeYou";
+            ? "Verifique seu email - Beyou"
+            : "Verify your email - Beyou";
     }
 
     private String buildHtmlBody(String resetLink, Duration ttl, String language) {
@@ -721,7 +721,7 @@ public class EmailService {
 
                                     <tr>
                                         <td align="center" style="padding-bottom:20px;">
-                                            <h1 style="margin:0;color:#0082E1;">✨ BeYou</h1>
+                                            <h1 style="margin:0;color:#0082E1;">✨ Beyou</h1>
                                             <p style="margin:5px 0 0 0;color:#6b7280;">Evolua sua vida.</p>
                                         </td>
                                     </tr>
@@ -773,7 +773,7 @@ public class EmailService {
                                 </table>
 
                                 <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
-                                    © %d BeYou. Continue evoluindo.
+                                    © %d Beyou. Continue evoluindo.
                                 </p>
 
                             </td>
@@ -793,7 +793,7 @@ public class EmailService {
 
                                     <tr>
                                         <td align="center" style="padding-bottom:20px;">
-                                            <h1 style="margin:0;color:#0082E1;">✨ BeYou</h1>
+                                            <h1 style="margin:0;color:#0082E1;">✨ Beyou</h1>
                                             <p style="margin:5px 0 0 0;color:#6b7280;">Level up your life.</p>
                                         </td>
                                     </tr>
@@ -845,7 +845,7 @@ public class EmailService {
                                 </table>
 
                                 <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
-                                    © %d BeYou. Keep evolving.
+                                    © %d Beyou. Keep evolving.
                                 </p>
 
                             </td>
@@ -871,8 +871,8 @@ public class EmailService {
 
     private String resolveSubject(String language) {
         return normalizeLanguage(language).equals("pt")
-            ? "Redefina sua senha BeYou 🔐✨"
-            : "Reset your BeYou password 🔐✨";
+            ? "Redefina sua senha Beyou 🔐✨"
+            : "Reset your Beyou password 🔐✨";
     }
 
     /**
@@ -900,8 +900,8 @@ public class EmailService {
 
     private String resolveAccountDeletionSubject(String language) {
         return normalizeLanguage(language).equals("pt")
-            ? "Seu código para apagar a conta BeYou"
-            : "Your code to delete your BeYou account";
+            ? "Seu código para apagar a conta Beyou"
+            : "Your code to delete your Beyou account";
     }
 
     private String buildAccountDeletionHtmlBody(String code, Duration ttl, String language) {
@@ -954,7 +954,7 @@ public class EmailService {
                                 </table>
 
                                 <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
-                                    © %d BeYou. Continue evoluindo.
+                                    © %d Beyou. Continue evoluindo.
                                 </p>
 
                             </td>
@@ -1010,7 +1010,7 @@ public class EmailService {
                                 </table>
 
                                 <p style="margin-top:20px;color:#9ca3af;font-size:12px;">
-                                    © %d BeYou. Keep growing.
+                                    © %d Beyou. Keep growing.
                                 </p>
 
                             </td>

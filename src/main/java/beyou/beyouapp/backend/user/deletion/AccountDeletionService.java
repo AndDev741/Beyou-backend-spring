@@ -29,7 +29,7 @@ import lombok.extern.slf4j.Slf4j;
  *
  * A valid session is not enough to authorize this. It is the one irreversible
  * action in the app, and an unlocked phone on a table carries a valid session, so
- * the email account has to agree as well. BeYou mails six digits and nothing is
+ * the email account has to agree as well. Beyou mails six digits and nothing is
  * destroyed until they come back.
  *
  * The code is stored as a BCrypt hash, expires, is single-use, and dies after

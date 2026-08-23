@@ -556,7 +556,7 @@ public class Tools {
     }
 
     // Feedback
-    @Tool(description = "Send feedback to the BeYou team on the user's behalf (bug report, feature "
+    @Tool(description = "Send feedback to the Beyou team on the user's behalf (bug report, feature "
             + "request or anything else). Only call when the user explicitly asks to send feedback, "
             + "and confirm the final text with them first — the body must be the user's words, not "
             + "your own summary. The user gets an acknowledgement email")
@@ -570,6 +570,6 @@ public class Tools {
         feedbackService.submitFeedback(
                 valid(new CreateFeedbackRequestDTO(category, body, context)),
                 userId(toolContext));
-        return Map.of("success", "Feedback submitted to the BeYou team");
+        return Map.of("success", "Feedback submitted to the Beyou team");
     }
 }
