@@ -40,6 +40,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 /**
  * R21 — the ORDER in which account deletion does its work, and the fact that the
@@ -114,7 +115,8 @@ class UserDeletionOrderingUnitTest {
         userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService,
                 new UserMapper(userStreakService, new PhotoUrlSigner("a-token-secret-for-tests", 720)),
                 photoStorageService, eventPublisher,
-                feedbackAttachmentService, userStreakService, passwordResetTokenRepository, chatService);
+                feedbackAttachmentService, userStreakService, passwordResetTokenRepository,
+                mock(beyou.beyouapp.backend.user.verification.EmailVerificationService.class), chatService);
     }
 
     @AfterEach

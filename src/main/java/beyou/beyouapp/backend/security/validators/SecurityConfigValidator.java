@@ -18,6 +18,7 @@ public class SecurityConfigValidator {
     private final boolean cookieSecure;
     private final boolean exposeDeletionCode;
     private final boolean autoVerifyEmail;
+    private final boolean exposeVerificationToken;
 
     public SecurityConfigValidator(
             Environment env,
@@ -25,7 +26,8 @@ public class SecurityConfigValidator {
             @Value("${api.security.token.secret}") String tokenSecret,
             @Value("${cookie.secure}") boolean cookieSecure,
             @Value("${e2e.expose-deletion-code:false}") boolean exposeDeletionCode,
-            @Value("${e2e.auto-verify-email:false}") boolean autoVerifyEmail
+            @Value("${e2e.auto-verify-email:false}") boolean autoVerifyEmail,
+            @Value("${e2e.expose-verification-token:false}") boolean exposeVerificationToken
     ) {
         this.env = env;
         this.corsAllowedPattern = corsAllowedPattern;
@@ -33,6 +35,7 @@ public class SecurityConfigValidator {
         this.cookieSecure = cookieSecure;
         this.exposeDeletionCode = exposeDeletionCode;
         this.autoVerifyEmail = autoVerifyEmail;
+        this.exposeVerificationToken = exposeVerificationToken;
     }
 
     @PostConstruct
@@ -83,6 +86,18 @@ public class SecurityConfigValidator {
             throw new IllegalStateException(
                     "E2E_AUTO_VERIFY_EMAIL must not be true in production. " +
                     "It marks new accounts as verified without anyone reading the email."
+            );
+        }
+
+        // The third of the same family, and the worst of them if it ever escaped: it
+        // hands back the token that marks an address verified, and it lets the caller
+        // ask for an account that skips auto-verification, so a registration could be
+        // walked to a verified account for an address nobody owns.
+        if (exposeVerificationToken) {
+            throw new IllegalStateException(
+                    "E2E_EXPOSE_VERIFICATION_TOKEN must not be true in production. " +
+                    "It returns the email-verification token in the response body, which is " +
+                    "the whole proof that somebody owns the address they signed up with."
             );
         }
 

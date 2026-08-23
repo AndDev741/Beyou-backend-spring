@@ -27,6 +27,7 @@ import beyou.beyouapp.backend.user.enums.TimezoneSource;
 import beyou.beyouapp.backend.user.enums.UserRole;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashSet;
@@ -157,6 +158,20 @@ public class User implements UserDetails {
     private String verificationToken;
 
     private LocalDateTime verificationTokenExpiry;
+
+    /**
+     * When the last verification mail went out, for the resend cooldown.
+     *
+     * <p>An {@link Instant} against the sibling above's {@link LocalDateTime} on
+     * purpose: this one is compared to {@code Instant.now()} and never displayed,
+     * so it has no business carrying the JVM's zone. See V23 for the column.
+     *
+     * <p>Null means no mail on record. Rows that predate V23 read that way, and so
+     * does a row whose send failed after the stamp was written — clearing it back
+     * to null is how {@code EmailVerificationWrites} refuses to hold a cooldown
+     * against someone who received nothing.
+     */
+    private Instant verificationTokenSentAt;
 
     @PrePersist
     protected void onUserCreate(){

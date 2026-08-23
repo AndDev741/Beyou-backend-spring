@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 /**
  * The adoption policy on {@code users.timezone}, which is the whole reason
@@ -86,7 +87,8 @@ class UserServiceTimezoneSourceUnitTest {
 
         userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService,
                 userMapper, photoStorageService, eventPublisher, feedbackAttachmentService,
-                userStreakService, passwordResetTokenRepository, chatService);
+                userStreakService, passwordResetTokenRepository,
+                mock(beyou.beyouapp.backend.user.verification.EmailVerificationService.class), chatService);
     }
 
     /** Everything null but the two fields under test — PATCH semantics, so nothing else moves. */

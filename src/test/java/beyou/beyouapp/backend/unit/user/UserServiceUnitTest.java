@@ -46,6 +46,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(SpringExtension.class)
 public class UserServiceUnitTest {
@@ -117,7 +118,8 @@ public class UserServiceUnitTest {
         user.setPerfilPhraseAuthor("lg?");
         user.setWidgetsIdInUse(List.of("widget4, widget5"));
 
-        userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService, userMapper, photoStorageService, eventPublisher, feedbackAttachmentService, userStreakService, passwordResetTokenRepository, chatService);
+        userService = new UserService(userRepository, passwordEncoder, tokenService, refreshTokenService, userMapper, photoStorageService, eventPublisher, feedbackAttachmentService, userStreakService, passwordResetTokenRepository,
+                mock(beyou.beyouapp.backend.user.verification.EmailVerificationService.class), chatService);
     }
 
     /** One of the account's frozen day rows. */

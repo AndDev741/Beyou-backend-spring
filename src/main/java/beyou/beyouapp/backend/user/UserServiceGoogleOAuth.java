@@ -64,6 +64,10 @@ public class UserServiceGoogleOAuth {
         if(optionalUser.isPresent()){
             User user =  optionalUser.get();
 
+            if (isUnverifiedLocalAccount(user)) {
+                return unverifiedRefusal();
+            }
+
             String jwtToken = tokenService.generateJwtToken(user);
             String refreshToken = refreshTokenService.createRefreshToken(user);
 
@@ -98,6 +102,10 @@ public class UserServiceGoogleOAuth {
 
         User user = userRepository.findByEmail(googleUser.email())
                 .orElseGet(() -> userRepository.save(new User(googleUser)));
+
+        if (isUnverifiedLocalAccount(user)) {
+            return unverifiedRefusal();
+        }
 
         String jwtToken = tokenService.generateJwtToken(user);
         String refreshToken = refreshTokenService.createRefreshToken(user);
@@ -154,5 +162,41 @@ public class UserServiceGoogleOAuth {
         }
     }
 
-}
+    /**
+     * Whether this row is a password account that never proved it owns its address.
+     *
+     * <p>Both Google entry points find-or-create by email, and neither used to look at
+     * {@code emailVerified} — {@code UserService.doLogin} was the only reader of that flag
+     * in the whole backend. So an account the password door refuses could walk in through
+     * this one, and two bad things followed from that.
+     *
+     * <p>The mild one: Google sign-in was an accidental workaround for a lost verification
+     * mail, but only for addresses Google backs, and it left the row unverified forever —
+     * password login kept refusing an account the user was plainly already using.
+     *
+     * <p>The one that matters: anyone can register {@code victim@example.com} with a
+     * password of their choosing before its owner signs up. That row sits unverified and
+     * the squatter cannot log in. The owner then signs in with Google, lands inside the
+     * squatter's row, and starts filling it with their data — no click, no warning. If
+     * they ever follow the verification link that arrived when the squatter registered,
+     * and it looks legitimate because they did just sign in, the flag flips and the
+     * squatter's password opens the account.
+     *
+     * <p>Refusing here closes both. One rule now holds at every door: an unverified
+     * password account does not authenticate. It is recoverable rather than merely strict,
+     * because {@code POST /auth/resend-verification} landed alongside this and the refusal
+     * below is the same {@code EMAIL_NOT_VERIFIED} contract the login screen already
+     * renders the resend button on.
+     *
+     * <p>Rows created through Google are verified by construction, and a password account
+     * that has verified may still link Google freely; neither is touched.
+     */
+    private boolean isUnverifiedLocalAccount(User user) {
+        return !user.isGoogleAccount() && !user.isEmailVerified();
+    }
 
+    /** Byte-for-byte what {@code UserService.doLogin} returns, so both clients need one branch, not two. */
+    private ResponseEntity<Map<String, Object>> unverifiedRefusal() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "EMAIL_NOT_VERIFIED"));
+    }
+}
