@@ -94,7 +94,7 @@ See full report: `../relatories/backend-deployment-readiness-report.md`
 - ~~Actuator fully exposed~~ → `health,metrics,prometheus`, localhost-bound
 - ~~`server.adress` typo~~ → Fixed
 - ~~Grafana anonymous admin~~ → Auth required
-- ~~No rate limiting~~ → 4-tier Bucket4j
+- ~~No rate limiting~~ → Bucket4j, 10 tiers (auth, agent, onboarding, docs, photo, feedback, feedback-attachment, account-deletion, write, read); first match wins
 - ~~No security headers~~ → CSP, Referrer-Policy, Permissions-Policy
 - ~~`isGoogleAccount` mass assignment~~ → Removed from `UserRegisterDTO`
 - ~~Edit DTO validation bypass~~ → `@Min/@Max` + `@Valid` on controllers

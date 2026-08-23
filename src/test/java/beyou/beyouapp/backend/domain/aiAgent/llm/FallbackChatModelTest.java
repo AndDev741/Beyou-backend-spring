@@ -234,6 +234,36 @@ class FallbackChatModelTest {
         assertThat(meters.counter("beyou.ai.llm.exhausted").count()).isEqualTo(1.0);
     }
 
+    /**
+     * The classifier is public because the agent stream asks it the same question, to
+     * tell the user "the assistant is out of quota, wait a bit" apart from "the
+     * assistant broke". Before that, the stream reported the Java exception's class
+     * name, which matched no translation and rendered as a generic error — so a quota
+     * refusal looked exactly like a crash.
+     *
+     * Providers spell a quota refusal differently, which is the whole reason this
+     * lives in one place; each row below is a real shape from the chain.
+     */
+    @Test
+    void isRateLimit_recognisesEveryShapeAQuotaRefusalArrivesIn() {
+        assertThat(FallbackChatModel.isRateLimit(new RuntimeException("429 Too Many Requests"))).isTrue();
+        assertThat(FallbackChatModel.isRateLimit(new RuntimeException("402 payment_required"))).isTrue();
+        assertThat(FallbackChatModel.isRateLimit(new RuntimeException("413 body too large"))).isTrue();
+        assertThat(FallbackChatModel.isRateLimit(new RuntimeException("Rate limit reached"))).isTrue();
+        assertThat(FallbackChatModel.isRateLimit(new RuntimeException("daily quota exceeded"))).isTrue();
+        // Wrapped, because a provider SDK rarely throws its own reason at the top.
+        assertThat(FallbackChatModel.isRateLimit(
+                new IllegalStateException("call failed", new RuntimeException("429")))).isTrue();
+    }
+
+    @Test
+    void isRateLimit_doesNotClaimUnrelatedFailures() {
+        assertThat(FallbackChatModel.isRateLimit(new RuntimeException("connection reset"))).isFalse();
+        assertThat(FallbackChatModel.isRateLimit(new RuntimeException("500 internal error"))).isFalse();
+        // A null message must not throw while walking the cause chain.
+        assertThat(FallbackChatModel.isRateLimit(new RuntimeException((String) null))).isFalse();
+    }
+
     @Test
     void providerNames_reflectChainOrder() {
         assertThat(twoLinkChain().providerNames()).containsExactly("first", "second");

@@ -96,6 +96,12 @@ public class SecurityConfig {
         config.addAllowedOriginPattern(allowedOrigin);
         config.addAllowedHeader("*");
         config.addExposedHeader("X-Access-Token");
+        // Retry-After is not on the CORS safelist, so without this the browser cannot
+        // read it even though the filter always sends it on a 429 — a web client had
+        // no way to say how long the wait is. X-Rate-Limit-Remaining rides along so a
+        // client can warn before it hits the wall rather than only after.
+        config.addExposedHeader("Retry-After");
+        config.addExposedHeader("X-Rate-Limit-Remaining");
         config.addAllowedMethod("*");
         config.addAllowedMethod("GET");
         config.addAllowedMethod("POST");

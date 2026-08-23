@@ -53,6 +53,18 @@ public class AiAgentService {
     /** Concurrent live streams per user (two tabs = 2). Caps LLM cost/resource abuse. */
     private static final int MAX_CONCURRENT_STREAMS_PER_USER = 2;
 
+    /**
+     * Error keys the stream sends to the client. They are i18n keys, so every one of
+     * them needs a translation in packages/i18n — which is exactly what went wrong
+     * before: the stream used to report {@code error.getClass().getSimpleName()}, so a
+     * provider running out of quota reached the user as the words
+     * "NonTransientAiException", matched no translation, and rendered as the same
+     * "unexpected error" as a genuine crash. The class name is still in the log line
+     * above, which is where it was ever useful.
+     */
+    private static final String ERROR_QUOTA_EXHAUSTED = "AI_QUOTA_EXHAUSTED";
+    private static final String ERROR_STREAM_FAILED = "AI_STREAM_FAILED";
+
     private final ChatClient chatClient;
     private final ChatService chatService;
     private final AgentMessageService agentMessageService;
@@ -172,7 +184,9 @@ public class AiAgentService {
                     // (if anything streamed) so history isn't lost, THEN report error.
                     persistTurnSafely(chatId, userInput, turn.build(), provider.get());
                     try {
-                        send.accept(AgentEvent.error(error.getClass().getSimpleName()));
+                        send.accept(AgentEvent.error(FallbackChatModel.isRateLimit(error)
+                                ? ERROR_QUOTA_EXHAUSTED
+                                : ERROR_STREAM_FAILED));
                     } catch (RuntimeException e) {
                         log.error("Error trying to emit error... {}", e.getClass().getSimpleName(), e);
                     } finally {
