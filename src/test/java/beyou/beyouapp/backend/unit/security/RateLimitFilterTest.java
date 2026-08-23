@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.unit.security;
 
+import beyou.beyouapp.backend.security.ratelimit.RateLimitConfig;
 import beyou.beyouapp.backend.security.ratelimit.RateLimitFilter;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -202,6 +203,42 @@ class RateLimitFilterTest {
         callFilter("POST", "/ai/agent/chats/" + UUID.randomUUID() + "/stream");
 
         assertNull(meterRegistry.find(RateLimitFilter.REJECTED_METRIC).counter());
+    }
+
+    // GET /user/export returns the whole account in one response, so it must not be
+    // spending the generic read budget that list screens use. Six inside an hour is one
+    // more than the tier allows, and a caller on the read tier would sail past it.
+    @Test
+    void shouldGiveTheDataExportItsOwnHourlyBudget() throws Exception {
+        authenticateUser();
+
+        for (int i = 0; i < RateLimitConfig.USER_EXPORT_DOWNLOADS_PER_HOUR; i++) {
+            assertEquals(200, callFilter("GET", "/user/export").getStatus(),
+                    "an export inside the hourly allowance was turned away");
+        }
+
+        MockHttpServletResponse overLimit = callFilter("GET", "/user/export");
+
+        assertEquals(429, overLimit.getStatus(),
+                "the export is still on the 60-per-minute read budget");
+        assertNotNull(overLimit.getHeader("Retry-After"));
+        assertEquals(1.0, meterRegistry.counter(RateLimitFilter.REJECTED_METRIC, "tier", "export").count());
+    }
+
+    // The export tier sits ahead of the read branch, so the reverse has to hold too:
+    // spending the export budget must not cost the user the reads their screens make.
+    @Test
+    void shouldNotSpendTheReadBudgetOnTheDataExport() throws Exception {
+        authenticateUser();
+
+        for (int i = 0; i < RateLimitConfig.USER_EXPORT_DOWNLOADS_PER_HOUR; i++) {
+            callFilter("GET", "/user/export");
+        }
+
+        for (int i = 0; i < 60; i++) {
+            assertEquals(200, callFilter("GET", "/habit").getStatus(),
+                    "exporting the account ate the ordinary read allowance");
+        }
     }
 
     private void authenticateUser() {

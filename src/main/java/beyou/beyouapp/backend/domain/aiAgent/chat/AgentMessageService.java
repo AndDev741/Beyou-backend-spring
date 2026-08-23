@@ -1,6 +1,10 @@
 package beyou.beyouapp.backend.domain.aiAgent.chat;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -65,6 +69,41 @@ public class AgentMessageService {
                     .toList();
         }
         return legacyFromMemory(chatId);
+    }
+
+    /**
+     * The same transcripts for many chats at once, keyed by chat, in the order the ids
+     * were given.
+     *
+     * <p>{@link #getMessages(UUID)} is right for one conversation on screen and wrong for
+     * the data export, which reads all of them: a query per chat made the export cost
+     * scale with how much a person had used the assistant, so the accounts with the most
+     * to download were the slowest to serve. One query covers every stored row here.
+     *
+     * <p>The legacy path stays per chat and cannot be batched away: chats older than
+     * {@code agent_message} live in the model's own memory, and Spring AI's ChatMemory
+     * reads one conversation at a time. Only chats with nothing stored pay it, and that
+     * set shrinks with every turn anyone takes.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, List<AgentMessageDTO>> getMessagesByChat(Collection<UUID> chatIds) {
+        if (chatIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, List<AgentMessageDTO>> stored = new LinkedHashMap<>();
+        for (AgentMessage message : agentMessageRepository
+                .findByChatIdInOrderByChatIdAscSequenceIdAsc(chatIds)) {
+            stored.computeIfAbsent(message.getChatId(), key -> new ArrayList<>())
+                    .add(new AgentMessageDTO(message.getRole(), fromJson(message.getContent())));
+        }
+
+        Map<UUID, List<AgentMessageDTO>> byChat = new LinkedHashMap<>();
+        for (UUID chatId : chatIds) {
+            List<AgentMessageDTO> messages = stored.get(chatId);
+            byChat.put(chatId, messages == null ? legacyFromMemory(chatId) : List.copyOf(messages));
+        }
+        return byChat;
     }
 
     /** Chats created before agent_message existed: text-only, from model memory. */

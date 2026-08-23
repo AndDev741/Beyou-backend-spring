@@ -3,6 +3,7 @@ package beyou.beyouapp.backend.domain.feedback;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,4 +22,20 @@ public interface FeedbackReplyRepository extends JpaRepository<FeedbackReply, UU
     @Query("SELECT r FROM FeedbackReply r LEFT JOIN FETCH r.author "
             + "WHERE r.feedback.id = :feedbackId ORDER BY r.createdAt ASC")
     List<FeedbackReply> findAllByFeedbackIdOrderByCreatedAtAsc(UUID feedbackId);
+
+    /**
+     * The same thread for many submissions at once, for the data export.
+     *
+     * <p>Reading one submission at a time made the download cost grow with how much
+     * someone had written in, which is backwards: the people with the longest history
+     * are the ones most likely to ask for a copy of it.
+     *
+     * <p>Keeps the LEFT JOIN FETCH for the same reason the single-submission query has
+     * it — {@code author} is EAGER, so without it each reply costs its own select, and
+     * batching the outer query would just move the N+1 down a level.
+     */
+    @Query("SELECT r FROM FeedbackReply r LEFT JOIN FETCH r.author "
+            + "WHERE r.feedback.id IN :feedbackIds "
+            + "ORDER BY r.feedback.id ASC, r.createdAt ASC")
+    List<FeedbackReply> findAllByFeedbackIdInOrderByCreatedAtAsc(Collection<UUID> feedbackIds);
 }

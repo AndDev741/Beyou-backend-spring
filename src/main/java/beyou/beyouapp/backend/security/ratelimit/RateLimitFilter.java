@@ -174,6 +174,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
             bucketKey = "feedback-attachment:" + userId;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createFeedbackAttachmentBucket());
+        } else if ("GET".equals(method) && path.equals("/user/export")) {
+            // Ahead of the generic read branch on purpose. This GET returns the entire
+            // account in one response, so it costs nothing like the list reads the read
+            // bucket is sized for, and 60/minute of it is a way to hold the heap.
+            String userId = getUserIdFromRequest(request);
+            if (userId == null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            bucketKey = "export:" + userId;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createUserExportBucket());
         } else if (WRITE_METHODS.contains(method)) {
             String userId = getUserIdFromRequest(request);
             if (userId == null) {

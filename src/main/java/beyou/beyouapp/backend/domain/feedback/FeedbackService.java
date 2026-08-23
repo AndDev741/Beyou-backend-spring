@@ -24,11 +24,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Service
 @Slf4j
@@ -209,12 +211,42 @@ public class FeedbackService {
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> exportForUser(UUID userId) {
-        return feedbackRepository.findAllByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(this::toExportMap)
+        List<Feedback> submissions = feedbackRepository.findAllByUserIdOrderByCreatedAtDesc(userId);
+        if (submissions.isEmpty()) {
+            return List.of();
+        }
+
+        // Two queries for the whole history rather than two per submission. Reading one
+        // submission at a time made the download slower the more someone had written in,
+        // and a long history is exactly what makes a person want the file.
+        List<UUID> ids = submissions.stream().map(Feedback::getId).toList();
+        Map<UUID, List<FeedbackAttachment>> attachments = groupByFeedback(
+                feedbackAttachmentRepository.findAllByFeedbackIdInOrderByFeedbackIdAscCreatedAtAsc(ids),
+                attachment -> attachment.getFeedback().getId());
+        Map<UUID, List<FeedbackReply>> replies = groupByFeedback(
+                feedbackReplyRepository.findAllByFeedbackIdInOrderByCreatedAtAsc(ids),
+                reply -> reply.getFeedback().getId());
+
+        return submissions.stream()
+                .map(feedback -> toExportMap(
+                        feedback,
+                        attachments.getOrDefault(feedback.getId(), List.of()),
+                        replies.getOrDefault(feedback.getId(), List.of())))
                 .toList();
     }
 
-    private Map<String, Object> toExportMap(Feedback feedback) {
+    /** Rows already ordered by submission, bucketed under the id they belong to. */
+    private static <T> Map<UUID, List<T>> groupByFeedback(List<T> rows, Function<T, UUID> feedbackId) {
+        Map<UUID, List<T>> byFeedback = new LinkedHashMap<>();
+        for (T row : rows) {
+            byFeedback.computeIfAbsent(feedbackId.apply(row), key -> new ArrayList<>()).add(row);
+        }
+        return byFeedback;
+    }
+
+    private Map<String, Object> toExportMap(Feedback feedback,
+                                            List<FeedbackAttachment> attachments,
+                                            List<FeedbackReply> replies) {
         UUID feedbackId = feedback.getId();
 
         Map<String, Object> map = new LinkedHashMap<>();
@@ -224,12 +256,10 @@ public class FeedbackService {
         map.put("status", feedback.getStatus());
         map.put("createdAt", feedback.getCreatedAt());
         map.put("updatedAt", feedback.getUpdatedAt());
-        map.put("attachments", feedbackAttachmentRepository
-                .findAllByFeedbackIdOrderByCreatedAtAsc(feedbackId).stream()
+        map.put("attachments", attachments.stream()
                 .map(attachment -> feedbackMapper.toAttachmentDTO(attachment, feedbackId))
                 .toList());
-        map.put("replies", feedbackReplyRepository
-                .findAllByFeedbackIdOrderByCreatedAtAsc(feedbackId).stream()
+        map.put("replies", replies.stream()
                 .map(FeedbackService::toReplyExportMap)
                 .toList());
         return map;
