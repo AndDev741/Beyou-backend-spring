@@ -54,7 +54,8 @@ public class SecurityConfig {
                             "/auth/logout",
                             "/auth/forgot-password",
                             "/auth/reset-password/**",
-                            "/auth/verify-email"
+                            "/auth/verify-email",
+                            "/auth/resend-verification"
                         ).permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/docs/admin/**").authenticated()

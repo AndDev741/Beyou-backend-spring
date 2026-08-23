@@ -54,4 +54,16 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Transactional
     @Query(value = "UPDATE users SET last_seen_at = :at WHERE id = :id", nativeQuery = true)
     void recordSeen(@Param("id") UUID id, @Param("at") Instant at);
+
+    /**
+     * Gives back the resend cooldown of a user whose verification mail failed to send.
+     *
+     * <p>An update rather than a load-and-save because the caller runs in an
+     * {@code afterCommit} callback with its own short transaction
+     * ({@link beyou.beyouapp.backend.user.verification.EmailVerificationWrites}), and
+     * reading the whole row back to null one column would drag the profile with it.
+     */
+    @Modifying
+    @Query("UPDATE User u SET u.verificationTokenSentAt = null WHERE u.id = :id")
+    void clearVerificationTokenSentAt(@Param("id") UUID id);
 }

@@ -22,6 +22,7 @@ class SecurityConfigValidatorTest {
                 "a-secret-that-is-at-least-32-characters-long-ok",
                 true,
                 false,
+                false,
                 false
         );
 
@@ -40,6 +41,7 @@ class SecurityConfigValidatorTest {
                 "short",
                 true,
                 false,
+                false,
                 false
         );
 
@@ -56,6 +58,7 @@ class SecurityConfigValidatorTest {
                 env,
                 "https://beyou.app",
                 "a-secret-that-is-at-least-32-characters-long-ok",
+                false,
                 false,
                 false,
                 false
@@ -76,6 +79,7 @@ class SecurityConfigValidatorTest {
                 "a-secret-that-is-at-least-32-characters-long-ok",
                 true,
                 false,
+                false,
                 false
         );
 
@@ -93,6 +97,7 @@ class SecurityConfigValidatorTest {
                 "short",
                 false,
                 false,
+                false,
                 false
         );
 
@@ -108,6 +113,7 @@ class SecurityConfigValidatorTest {
                 env,
                 "*",
                 "short",
+                false,
                 false,
                 false,
                 false
@@ -133,6 +139,7 @@ class SecurityConfigValidatorTest {
                 "a-secret-that-is-at-least-32-characters-long-ok",
                 true,
                 true,
+                false,
                 false
         );
 
@@ -151,10 +158,35 @@ class SecurityConfigValidatorTest {
                 "a-secret-that-is-at-least-32-characters-long-ok",
                 true,
                 false,
-                true
+                true,
+                false
         );
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, validator::validate);
         assert ex.getMessage().contains("E2E_AUTO_VERIFY_EMAIL");
+    }
+
+    /**
+     * The third of the family, and the one that matters most: the token IS the proof
+     * that somebody owns the address. Handed back in a response, a stranger can register
+     * an address they do not own and walk it all the way to verified.
+     */
+    @Test
+    void shouldRejectTheExposedVerificationTokenInProdProfile() {
+        Environment env = mock(Environment.class);
+        when(env.getActiveProfiles()).thenReturn(new String[]{"prod"});
+
+        SecurityConfigValidator validator = new SecurityConfigValidator(
+                env,
+                "https://beyou.app",
+                "a-secret-that-is-at-least-32-characters-long-ok",
+                true,
+                false,
+                false,
+                true
+        );
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, validator::validate);
+        assert ex.getMessage().contains("E2E_EXPOSE_VERIFICATION_TOKEN");
     }
 }

@@ -39,9 +39,18 @@ public class AuthenticationController {
         return userService.doLogin(request, response, userLoginDTO);
     }
 
+    /**
+     * @param skipAutoVerify E2E only. Asks registration NOT to take the
+     *        {@code e2e.auto-verify-email} shortcut, so a test can reach the one state
+     *        that shortcut hides: an account whose verification mail never arrived.
+     *        Ignored unless {@code e2e.expose-verification-token} is on, which
+     *        {@code SecurityConfigValidator} refuses to let prod boot with.
+     */
     @PostMapping("/register")
-    public ResponseEntity<Map<String, String>> doRegister(@RequestBody @Valid UserRegisterDTO userRegisterDTO){
-        return userService.registerUser(userRegisterDTO);
+    public ResponseEntity<Map<String, String>> doRegister(
+            @RequestBody @Valid UserRegisterDTO userRegisterDTO,
+            @RequestHeader(value = "X-E2E-Skip-Auto-Verify", required = false) boolean skipAutoVerify){
+        return userService.registerUser(userRegisterDTO, skipAutoVerify);
     }
 
     /**

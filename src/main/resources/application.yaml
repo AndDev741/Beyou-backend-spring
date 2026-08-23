@@ -126,6 +126,16 @@ password-reset:
   token-ttl-minutes: ${PASSWORD_RESET_TTL_MINUTES:15}
   cooldown-minutes: ${PASSWORD_RESET_COOLDOWN_MINUTES:5}
 
+# The link that proves a new account owns its address. The cooldown is in seconds
+# for the same reason the deletion one below is: the user is sitting on the login
+# screen having just been told their email is not verified, and the resend button
+# beside that message has to work in the same sitting. It exists to stop a double
+# tap from replacing the token in the link they are about to click, not to ration
+# requests — the shared auth bucket in RateLimitFilter does the rationing.
+email-verification:
+  token-ttl-hours: ${EMAIL_VERIFICATION_TTL_HOURS:24}
+  cooldown-seconds: ${EMAIL_VERIFICATION_COOLDOWN_SECONDS:60}
+
 # The emailed code that has to come back before an account is deleted. The
 # cooldown is in seconds, not minutes like the reset above: this code is typed
 # into the app while the user waits on the screen, so "resend" has to be usable

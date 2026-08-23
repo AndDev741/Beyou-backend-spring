@@ -17,6 +17,7 @@ import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import beyou.beyouapp.backend.user.enums.TimezoneSource;
 import beyou.beyouapp.backend.user.event.UserRegisteredEvent;
+import beyou.beyouapp.backend.user.verification.EmailVerificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.*;
@@ -36,10 +37,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import beyou.beyouapp.backend.user.validation.PasswordValidator;
 
-import java.security.SecureRandom;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -65,6 +63,7 @@ public class UserService {
 
     /** Both only exist for {@link #deleteUser(User)}: their rows block the delete. */
     private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final EmailVerificationService emailVerificationService;
     private final ChatService chatService;
 
     /**
@@ -84,8 +83,15 @@ public class UserService {
     @Value("${e2e.auto-verify-email:false}")
     private boolean autoVerifyEmail;
 
-    private static final SecureRandom secureRandom = new SecureRandom();
-    private static final Base64.Encoder base64Encoder = Base64.getUrlEncoder();
+    /**
+     * E2E only, and refused in prod by {@code SecurityConfigValidator}. Hands the
+     * verification token back in the response and lets a caller ask for an account that
+     * skips {@link #autoVerifyEmail}, which is the only way a test can reach the state
+     * the resend endpoint exists for: registered, unverified, mail never arrived.
+     */
+    @Value("${e2e.expose-verification-token:false}")
+    private boolean exposeVerificationToken;
+
 
     public ResponseEntity<String> verifyAuthentication(){
         return ResponseEntity.ok().body("authenticated");
@@ -148,6 +154,14 @@ public class UserService {
     }
 
     public ResponseEntity<Map<String, String>> registerUser(UserRegisterDTO userRegisterDTO){
+        return registerUser(userRegisterDTO, false);
+    }
+
+    /**
+     * @param skipAutoVerify honoured ONLY when {@code e2e.expose-verification-token} is
+     *                       on, so nothing outside the e2e profile can reach it.
+     */
+    public ResponseEntity<Map<String, String>> registerUser(UserRegisterDTO userRegisterDTO, boolean skipAutoVerify){
         ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
         Validator validator = factory.getValidator();
 
@@ -170,23 +184,35 @@ public class UserService {
             User newUser = new User(userRegisterDTO);
             newUser.setPassword(passwordEncoder.encode(userRegisterDTO.password()));
 
-            String token = generateVerificationToken();
-            newUser.setVerificationToken(token);
-            newUser.setVerificationTokenExpiry(LocalDateTime.now().plusHours(24));
+            // Minted by EmailVerificationService rather than here, so registration and
+            // POST /auth/resend-verification cannot drift on the token's lifetime.
+            String token = emailVerificationService.issueToken(newUser);
 
             // E2E shortcut: skip email verification entirely so Playwright tests
-            // can register and log in without an SMTP server or token parser.
-            if (autoVerifyEmail) {
+            // can register and log in without an SMTP server or token parser. The
+            // opt-out exists for the one spec that has to walk the real flow.
+            boolean verifyNow = autoVerifyEmail && !(exposeVerificationToken && skipAutoVerify);
+            if (verifyNow) {
                 newUser.setEmailVerified(true);
+            } else {
+                // Stamped only on the branch that actually mails something. The stamp is
+                // what the resend cooldown reads, and claiming a send on a row nothing
+                // was sent for would refuse the first resend for no reason.
+                emailVerificationService.markSent(newUser);
             }
 
             userRepository.save(newUser);
 
-            if (!autoVerifyEmail) {
+            if (!verifyNow) {
                 eventPublisher.publishEvent(new UserRegisteredEvent(
                         this, newUser.getEmail(), token, newUser.getLanguageInUse()));
             }
 
+            if (exposeVerificationToken) {
+                return ResponseEntity.ok().body(Map.of(
+                        "success", "User registered successfully",
+                        "verificationToken", token));
+            }
             return ResponseEntity.ok().body(Map.of("success", "User registered successfully"));
         }
     }
@@ -541,12 +567,6 @@ public class UserService {
         }
         user.setTimezone(userEdit.timezone());
         user.setTimezoneSource(detected ? TimezoneSource.DETECTED : TimezoneSource.EXPLICIT);
-    }
-
-    private static String generateVerificationToken() {
-        byte[] randomBytes = new byte[32];
-        secureRandom.nextBytes(randomBytes);
-        return base64Encoder.encodeToString(randomBytes);
     }
 
     private String normalizeOptionalString(String value) {

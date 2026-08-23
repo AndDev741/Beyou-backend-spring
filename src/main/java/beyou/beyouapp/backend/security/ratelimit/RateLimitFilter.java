@@ -54,8 +54,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Value("${rate-limit.trusted-client-ip-header:CF-Connecting-IP}")
     private String trustedClientIpHeader = "CF-Connecting-IP";
 
+    /**
+     * The unauthenticated doors, all sharing one per-address bucket.
+     *
+     * <p>{@code /auth/resend-verification} belongs here because it makes the server send
+     * mail on an anonymous caller's say-so, and nothing else would bound that. Sharing
+     * the login bucket does mean a few failed sign-in attempts eat into the resend
+     * allowance of whoever is behind the same address; that is why the real control on
+     * resend is the per-user cooldown in EmailVerificationService, which this only backs
+     * up. See {@link RateLimitConfig#createAuthBucket()} for the size.
+     */
     private static final Set<String> AUTH_PATHS = Set.of(
-            "/auth/login", "/auth/register", "/auth/forgot-password", "/auth/google", "/auth/google/mobile"
+            "/auth/login", "/auth/register", "/auth/forgot-password", "/auth/resend-verification",
+            "/auth/google", "/auth/google/mobile"
     );
 
     private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "DELETE", "PATCH");

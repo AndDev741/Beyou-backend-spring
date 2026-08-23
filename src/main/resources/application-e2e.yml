@@ -54,11 +54,26 @@ e2e:
   # as auto-verify-email above: it defaults to false and is set in this profile
   # ONLY. The route still requires a live session and still spends the code.
   expose-deletion-code: true
+  # Hands the email-verification token back in the register / resend responses, and
+  # lets a request opt out of auto-verify-email above with X-E2E-Skip-Auto-Verify.
+  # Together those are the only way a test can walk the real verification flow, which
+  # auto-verify-email otherwise skips entirely — the resend endpoint exists precisely
+  # for accounts that never got verified, and this profile had no way to make one.
+  # Defaults to false and is set HERE ONLY; SecurityConfigValidator refuses to boot
+  # prod with it on.
+  expose-verification-token: true
 
 # The deletion code cooldown exists so a double-tap does not burn the first mail.
 # A test walks the flow in seconds and asks for a second code on purpose, so it
 # would only be a sleep here.
 account-deletion:
+  cooldown-seconds: 0
+
+# Same reasoning for the verification resend: registration starts that cooldown, and
+# the spec's whole point is to press "send it again" seconds later. The cooldown's own
+# behaviour — refusing SILENTLY, so the endpoint cannot be asked which addresses exist
+# — is pinned by EmailVerificationResendTest against a real clock instead.
+email-verification:
   cooldown-seconds: 0
 
 # Rate limiter off — tests fire many requests quickly and we don't want to
