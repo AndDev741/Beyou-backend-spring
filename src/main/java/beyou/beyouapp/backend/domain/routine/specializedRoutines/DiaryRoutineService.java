@@ -352,6 +352,11 @@ public class DiaryRoutineService {
         group.setRoutineSection(section);
         section.getTaskGroups().add(group);
 
+        // The group's UUID is assigned at insert time; without this flush the mapper
+        // runs first and the caller gets id: null for the very row this call created
+        // (the agent then cannot check, skip or remove what it just added).
+        diaryRoutineRepository.flush();
+
         userCacheEvictService.evictAllUserCaches(userId);
         return mapper.toResponse(routine);
     }
@@ -369,6 +374,11 @@ public class DiaryRoutineService {
         group.setEndTime(endTime);
         group.setRoutineSection(section);
         section.getHabitGroups().add(group);
+
+        // The group's UUID is assigned at insert time; without this flush the mapper
+        // runs first and the caller gets id: null for the very row this call created
+        // (the agent then cannot check, skip or remove what it just added).
+        diaryRoutineRepository.flush();
 
         userCacheEvictService.evictAllUserCaches(userId);
         return mapper.toResponse(routine);

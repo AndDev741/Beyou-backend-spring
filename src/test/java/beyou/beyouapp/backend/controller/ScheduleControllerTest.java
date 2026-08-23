@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -106,6 +107,44 @@ public class ScheduleControllerTest extends AbstractIntegrationTest {
             .andExpect(jsonPath("$.days", hasItem(WeekDay.Monday.name())));
 
         verify(scheduleService).create(dto, userID);
+    }
+
+    /**
+     * The lenient day parsing lives on the WeekDay enum, so it reaches this REST
+     * endpoint as well as the agent tool it was written for. Locked in here because
+     * this is where the schedule wire format is tested: a client sending SCREAMING_CASE
+     * or a Portuguese day name binds to the same constant, and the response still comes
+     * back in the canonical casing the schedule_days CHECK constraint stores.
+     */
+    @Test
+    void shouldAcceptDayNamesInAnyCaseAndInPortuguese() throws Exception {
+        UUID routineId = UUID.randomUUID();
+        CreateScheduleDTO canonical = new CreateScheduleDTO(Set.of(WeekDay.Monday), routineId);
+
+        when(scheduleService.create(canonical, userID)).thenReturn(schedule);
+
+        mockMvc.perform(post("/schedule")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"days\":[\"MONDAY\"],\"routineId\":\"" + routineId + "\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.days", hasItem(WeekDay.Monday.name())));
+
+        mockMvc.perform(post("/schedule")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"days\":[\"segunda-feira\"],\"routineId\":\"" + routineId + "\"}"))
+            .andExpect(status().isOk());
+
+        verify(scheduleService, times(2)).create(canonical, userID);
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenCreateScheduleWithUnknownDayName() throws Exception {
+        mockMvc.perform(post("/schedule")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"days\":[\"Funday\"],\"routineId\":\"" + UUID.randomUUID() + "\"}"))
+            .andExpect(status().isBadRequest());
+
+        verify(scheduleService, never()).create(any(CreateScheduleDTO.class), any(UUID.class));
     }
 
     @Test

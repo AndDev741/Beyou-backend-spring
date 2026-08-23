@@ -256,23 +256,19 @@ class CheckDayDeletionIntegrationTest extends AbstractIntegrationTest {
         UUID routineId = created.id();
         UUID sectionId = created.routineSections().get(0).id();
 
+        // The add's own response carries the generated group id (the service flushes
+        // before mapping since the null-id fix); RoutineGranularEditTest guards that.
+        UUID habitGroupId = null;
         if (habitId != null) {
-            diaryRoutineService.addHabitToSection(
+            habitGroupId = diaryRoutineService.addHabitToSection(
                     routineId, sectionId, habitId, LocalTime.of(7, 0), LocalTime.of(7, 30),
-                    user.getId());
+                    user.getId())
+                    .routineSections().get(0).habitGroup().get(0).id();
         }
         if (taskId != null) {
             diaryRoutineService.addTaskToSection(
                     routineId, sectionId, taskId, LocalTime.of(6, 0), LocalTime.of(6, 30),
                     user.getId());
-        }
-
-        // Re-read rather than trusting the add's own response: the group is mapped before the
-        // insert flushes, so its generated id is still null in what the add hands back.
-        UUID habitGroupId = null;
-        if (habitId != null) {
-            habitGroupId = diaryRoutineService.getDiaryRoutineById(routineId, user.getId())
-                    .routineSections().get(0).habitGroup().get(0).id();
         }
         return new Routine(routineId, sectionId, habitGroupId);
     }

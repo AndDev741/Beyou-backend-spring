@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -104,10 +105,17 @@ class RoutineGranularEditTest extends AbstractIntegrationTest {
                 routineId, sectionId, taskId, LocalTime.of(6, 0), LocalTime.of(6, 30), user.getId());
         assertEquals(1, withTask.routineSections().get(0).taskGroup().size());
         assertEquals(taskId, withTask.routineSections().get(0).taskGroup().get(0).taskId());
+        // The add's OWN response must carry the generated group id: it used to be
+        // mapped before the insert flushed and came back null, so an agent that
+        // added an item could not check, skip or remove what it had just created.
+        assertNotNull(withTask.routineSections().get(0).taskGroup().get(0).id(),
+                "task group id must be present in the add's own response");
 
         DiaryRoutineResponseDTO withHabit = diaryRoutineService.addHabitToSection(
                 routineId, sectionId, habitId, LocalTime.of(7, 0), LocalTime.of(7, 30), user.getId());
         assertEquals(1, withHabit.routineSections().get(0).habitGroup().size());
+        assertNotNull(withHabit.routineSections().get(0).habitGroup().get(0).id(),
+                "habit group id must be present in the add's own response");
 
         UUID taskGroupId = withHabit.routineSections().get(0).taskGroup().get(0).id();
         DiaryRoutineResponseDTO afterRemove = diaryRoutineService.removeItemFromRoutine(
