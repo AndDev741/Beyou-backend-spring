@@ -58,6 +58,18 @@ spring:
           auth: true
           starttls:
             enable: true
+          # JavaMail defaults all three of these to -1, which means wait forever.
+          # That is not a theoretical risk here: PasswordResetService and
+          # AccountDeletionService send synchronously inside afterCommit, so an
+          # SMTP server that never answers pins the user's request AND the JDBC
+          # connection it is still holding (afterCommit runs before the connection
+          # goes back to the pool, and the pool is at Hikari's default 10). A
+          # handful of stuck forgot-password calls is enough to starve the pool and
+          # take down every other endpoint with it. 5s is far more than a healthy
+          # Gmail handshake needs and far less than a user will sit through.
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
   servlet:
     multipart:
       # Slightly above the service-level 5MB check so a 5-6MB upload reaches
@@ -282,6 +294,29 @@ management:
     web:
       exposure:
         include: ${ACTUATOR_ENDPOINTS:health,metrics,prometheus}
+  health:
+    mail:
+      # Boot's MailHealthIndicator calls testConnection(), which opens a real
+      # TCP + EHLO + STARTTLS + AUTH LOGIN session against the SMTP host on EVERY
+      # request to /actuator/health — the health endpoint caches nothing by default.
+      # It buys nothing we do not already have: every failed send logs at ERROR and
+      # every ERROR is already an event in GlitchTip. What it cost was a probe whose
+      # latency was the mail provider's to decide, plus ~1440 AUTH LOGIN attempts a
+      # day at Gmail from a single IP.
+      enabled: false
+  endpoint:
+    health:
+      group:
+        # The uptime monitor polls this group instead of the whole endpoint, so no
+        # indicator added later can put a network call back on the probe path — the
+        # membership list is the allowlist. Deliberately NOT named "readiness":
+        # Boot autoconfigures groups called liveness/readiness when availability
+        # probes are on, and an explicit group of that name would shadow the
+        # readinessState indicator. validate-group-membership is true by default,
+        # so a misspelled contributor here fails the boot instead of quietly
+        # monitoring nothing.
+        uptime:
+          include: db,diskSpace,ping
   metrics:
     tags:
       application: beyou-backend
