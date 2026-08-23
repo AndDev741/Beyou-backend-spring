@@ -1,6 +1,8 @@
 package beyou.beyouapp.backend.domain.aiAgent;
 
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -102,6 +104,12 @@ public class Tools {
      * the model can fix its next attempt.
      */
     private <T> T valid(T dto) {
+        // A model that sends the fields without the declared wrapper object binds the
+        // whole DTO as null; the validator's own HV000116 for that says nothing usable.
+        if (dto == null) {
+            throw new IllegalArgumentException(
+                    "Missing tool arguments: send a JSON object with the fields this tool's schema declares");
+        }
         Set<ConstraintViolation<T>> violations = validator.validate(dto);
         if (!violations.isEmpty()) {
             String details = violations.stream()
@@ -111,6 +119,27 @@ public class Tools {
             throw new IllegalArgumentException("Invalid " + dto.getClass().getSimpleName() + ": " + details);
         }
         return dto;
+    }
+
+    /** Lenient on the leading zero, one optional seconds block. */
+    private static final DateTimeFormatter TOOL_TIME = DateTimeFormatter.ofPattern("H:mm[:ss]");
+
+    /**
+     * Times reach this class as raw model output, and a bare LocalTime.parse escapes
+     * the valid() contract: "7:00" (no leading zero) threw DateTimeParseException and
+     * a missing value threw NPE, neither telling the model what to send. The near-miss
+     * is accepted; garbage comes back as a message the model can act on.
+     */
+    private LocalTime parseTime(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Missing " + field + ": send a time as HH:mm, e.g. 07:30");
+        }
+        try {
+            return LocalTime.parse(value.trim(), TOOL_TIME);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Invalid " + field + " \"" + value
+                    + "\": send a time as HH:mm between 00:00 and 23:59, e.g. 07:30");
+        }
     }
 
     // Habits
@@ -407,7 +436,7 @@ public class Tools {
             String startTime, String endTime, ToolContext toolContext) {
         log.info("AI agent is adding task {} to routine {} for user: {}", taskId, routineId, userId(toolContext));
         return diaryRoutineService.addTaskToSection(routineId, sectionId, taskId,
-                LocalTime.parse(startTime), LocalTime.parse(endTime), userId(toolContext));
+                parseTime(startTime, "startTime"), parseTime(endTime, "endTime"), userId(toolContext));
     }
 
     @Tool(description = "Add ONE existing habit to a routine section. Times are HH:mm inside the "
@@ -418,7 +447,7 @@ public class Tools {
             String startTime, String endTime, ToolContext toolContext) {
         log.info("AI agent is adding habit {} to routine {} for user: {}", habitId, routineId, userId(toolContext));
         return diaryRoutineService.addHabitToSection(routineId, sectionId, habitId,
-                LocalTime.parse(startTime), LocalTime.parse(endTime), userId(toolContext));
+                parseTime(startTime, "startTime"), parseTime(endTime, "endTime"), userId(toolContext));
     }
 
     @Tool(description = "Remove ONE item from a routine by its GROUP id (habitGroup/taskGroup id from "
@@ -443,8 +472,9 @@ public class Tools {
         return scheduleService.findAll(userId(toolContext));
     }
 
-    @Tool(description = "Schedule a routine on week days (MONDAY..SUNDAY). A day can only have one "
-            + "routine — scheduling over an already-taken day moves that day to this routine")
+    @Tool(description = "Schedule a routine on week days (Monday..Sunday, any letter case; Portuguese "
+            + "day names work too). A day can only have one routine — scheduling over an already-taken "
+            + "day moves that day to this routine")
     ScheduleResponseDTO createUserSchedule(CreateScheduleDTO schedule, ToolContext toolContext) {
         log.info("AI agent is creating a schedule for user: {}", userId(toolContext));
         return ScheduleResponseDTO.from(scheduleService.create(valid(schedule), userId(toolContext)));
