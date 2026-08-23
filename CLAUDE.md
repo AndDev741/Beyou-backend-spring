@@ -94,7 +94,7 @@ See full report: `../relatories/backend-deployment-readiness-report.md`
 - ~~Actuator fully exposed~~ → `health,metrics,prometheus`, localhost-bound
 - ~~`server.adress` typo~~ → Fixed
 - ~~Grafana anonymous admin~~ → Auth required
-- ~~No rate limiting~~ → Bucket4j, 10 tiers (auth, agent, onboarding, docs, photo, feedback, feedback-attachment, account-deletion, write, read); first match wins
+- ~~No rate limiting~~ → Bucket4j, 11 tiers (auth, agent, onboarding, docs, photo, feedback, feedback-attachment, account-deletion, export, write, read); first match wins
 - ~~No security headers~~ → CSP, Referrer-Policy, Permissions-Policy
 - ~~`isGoogleAccount` mass assignment~~ → Removed from `UserRegisterDTO`
 - ~~Edit DTO validation bypass~~ → `@Min/@Max` + `@Valid` on controllers
@@ -141,7 +141,8 @@ See full report: `../relatories/backend-deployment-readiness-report.md`
   per routine because an EAGER `@OneToOne` is NOT joined into a derived query (now in
   `DiaryRoutineRepository`'s `@EntityGraph`) and `Schedule.days` was an unbatched `@ElementCollection`
   (now `@BatchSize(50)`). `UserExportQueryCountTest` guards the slope, not a ceiling — it seeds the same
-  account at two sizes and fails if the count grows.
+  account at two sizes and fails if the count grows. It has its own rate-limit tier (`export:`, 5/hour)
+  because the payload still grows with the account even though the query count does not.
 - `RoutineSnapshotScheduler` runs per-timezone — bottleneck at scale with many distinct user timezones
 - HikariCP pool at default 10 connections; configure explicitly for production load
 - `e2e` profile boots via Flyway migrate + Hibernate `validate` (was `create-drop` pre-cutover) — `E2eSafetyCheck` still enforces that the JDBC URL contains `e2e` or `test`, so a misconfigured override can't point e2e at the dev `beyou` database. Local e2e data now persists across runs until manually reset

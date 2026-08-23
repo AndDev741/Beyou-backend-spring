@@ -108,6 +108,38 @@ public class RateLimitConfig {
                 .build();
     }
 
+    /** Data exports allowed per user per hour — see {@link #createUserExportBucket()}. */
+    public static final int USER_EXPORT_DOWNLOADS_PER_HOUR = 5;
+
+    /**
+     * {@code GET /user/export} — the whole account in one response.
+     *
+     * <p>It is a GET, so it used to land in the generic read bucket at 60 a minute. That
+     * budget is sized for the reads a screen makes: fetch a list, fetch a routine. This
+     * request is not that. It reads every category, habit, task, goal, routine, feedback
+     * thread and assistant conversation the account has, assembles the lot in memory as
+     * one map, and serializes it in one go — the response is unbounded in the size of the
+     * account and there is no pagination to hide behind. Sixty a minute of that from a
+     * single authenticated user is a comfortable way to hold the heap.
+     *
+     * <p>Five an hour, because of what the endpoint is for. Someone takes their data
+     * when they are leaving, or once out of curiosity; nobody needs a sixth copy inside
+     * the hour. The allowance is there so a failed download can be retried a few times,
+     * not so the file can be fetched repeatedly.
+     *
+     * <p>The N+1 work that shipped alongside this made the export flat in query count
+     * rather than linear, which lowers the cost per call but not the shape of the risk:
+     * the payload still grows with the account, so the limit stays.
+     */
+    public static Bucket createUserExportBucket() {
+        return Bucket.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(USER_EXPORT_DOWNLOADS_PER_HOUR)
+                        .refillGreedy(USER_EXPORT_DOWNLOADS_PER_HOUR, Duration.ofHours(1))
+                        .build())
+                .build();
+    }
+
     /** Header-less GET /user/photo/** (signed URL, no JWT) — per-IP so callers can't flood disk reads. */
     public static Bucket createPhotoBucket() {
         return Bucket.builder()
