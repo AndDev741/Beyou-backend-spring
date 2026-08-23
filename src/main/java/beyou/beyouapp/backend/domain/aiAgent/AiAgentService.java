@@ -138,7 +138,7 @@ public class AiAgentService {
             return rejected;
         }
 
-        SseEmitter emitter = new SseEmitter(180_000L);
+        SseEmitter emitter = new SseEmitter(300_000L);
 
         // The heartbeat thread and the reactor thread both write to this one
         // emitter — serialize every write so events never interleave mid-frame.
