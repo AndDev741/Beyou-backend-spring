@@ -134,6 +134,14 @@ See full report: `../relatories/backend-deployment-readiness-report.md`
 - `application.yaml` hardcodes `ddl-auto: validate`; Flyway owns the schema and `SchemaOwnershipGuard` refuses boot if a mutating `ddl-auto` is set while Flyway is enabled
 - `GoalController PUT /goal/complete` accepts a raw UUID as request body. Jackson deserializes from a JSON-encoded string (`"<uuid>"`), NOT a bare UUID. External clients (E2E `apiClient`) must `JSON.stringify(uuid)` or send the quoted form; the bare UUID returns 403. `PUT /goal/increase|decrease` moved to `UpdateGoalValueDTO` (`{goalId, value}`), where `value` is optional and defaults to 1.
 - Goal `status` is derived and `complete` is the completion truth. `increaseCurrentValue` promotes `NOT_STARTED` → `IN_PROGRESS`; decrement leaves the status alone; `Goal(CreateGoalRequestDTO)` refuses to start a goal COMPLETED and `GoalMapper.updateEntity` carries completion forward, ignoring `dto.complete()`. Only `checkGoal` (PUT /goal/complete) flips completion, because that is the path that adds and removes XP. `V15__reconcile_goal_completion.sql` fixed the rows written before the invariant existed.
+- `GET /user/export` reads the whole account in one transaction and is flat in query count, not linear —
+  the four things that made it linear were: a transcript query per chat (`ChatService.exportForUser` now
+  batches via `AgentMessageService.getMessagesByChat`), attachments+replies per submission
+  (`FeedbackService.exportForUser` now batches both), and the routine's schedule, which cost two queries
+  per routine because an EAGER `@OneToOne` is NOT joined into a derived query (now in
+  `DiaryRoutineRepository`'s `@EntityGraph`) and `Schedule.days` was an unbatched `@ElementCollection`
+  (now `@BatchSize(50)`). `UserExportQueryCountTest` guards the slope, not a ceiling — it seeds the same
+  account at two sizes and fails if the count grows.
 - `RoutineSnapshotScheduler` runs per-timezone — bottleneck at scale with many distinct user timezones
 - HikariCP pool at default 10 connections; configure explicitly for production load
 - `e2e` profile boots via Flyway migrate + Hibernate `validate` (was `create-drop` pre-cutover) — `E2eSafetyCheck` still enforces that the JDBC URL contains `e2e` or `test`, so a misconfigured override can't point e2e at the dev `beyou` database. Local e2e data now persists across runs until manually reset

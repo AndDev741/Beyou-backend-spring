@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.stereotype.Service;
 
+import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.ChatResponseDTO;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
@@ -120,10 +121,10 @@ public class ChatService {
      * third-party model. What the assistant was told is data about its user, so it
      * belongs in the file.
      *
-     * <p>Read through {@link AgentMessageService#getMessages(UUID)} rather than off the
-     * table directly, so conversations older than {@code agent_message} still export —
-     * those live only in the model's memory window and would otherwise come back as an
-     * empty chat with a title.
+     * <p>Read through {@link AgentMessageService#getMessagesByChat(java.util.Collection)}
+     * rather than off the table directly, so conversations older than
+     * {@code agent_message} still export — those live only in the model's memory window
+     * and would otherwise come back as an empty chat with a title.
      *
      * <p>{@code userContextInChat} goes with each conversation: it is the note the model
      * wrote about the person while they talked, which is exactly the kind of inference
@@ -131,19 +132,28 @@ public class ChatService {
      */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<Map<String, Object>> exportForUser(UUID userId) {
-        return chatRepository.findAllByUserIdOrderByUpdatedAtDesc(userId).stream()
-                .map(this::toExportMap)
+        List<Chat> chats = chatRepository.findAllByUserIdOrderByUpdatedAtDesc(userId);
+
+        // Every transcript in one query rather than one query per conversation. Read
+        // per chat, this loop cost a round trip each, so the export got slower the more
+        // someone had talked to the assistant — the people with the most to take away
+        // waiting the longest for it.
+        Map<UUID, List<AgentMessageDTO>> transcripts = agentMessageService
+                .getMessagesByChat(chats.stream().map(Chat::getId).toList());
+
+        return chats.stream()
+                .map(chat -> toExportMap(chat, transcripts.getOrDefault(chat.getId(), List.of())))
                 .toList();
     }
 
-    private Map<String, Object> toExportMap(Chat chat) {
+    private Map<String, Object> toExportMap(Chat chat, List<AgentMessageDTO> messages) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", chat.getId());
         map.put("title", chat.getTitle());
         map.put("createdAt", chat.getCreatedAt());
         map.put("updatedAt", chat.getUpdatedAt());
         map.put("assistantNotesAboutThisChat", chat.getUserContextInChat());
-        map.put("messages", agentMessageService.getMessages(chat.getId()));
+        map.put("messages", messages);
         return map;
     }
 
