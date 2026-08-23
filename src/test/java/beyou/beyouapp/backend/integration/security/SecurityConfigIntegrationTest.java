@@ -63,6 +63,27 @@ public class SecurityConfigIntegrationTest extends AbstractIntegrationTest {
     }
 
 
+    /**
+     * A browser can only read a response header that is on the CORS safelist or named
+     * in Access-Control-Expose-Headers. Retry-After is on neither by default, so the
+     * filter's 429 carried a wait the web client was physically unable to read, and no
+     * amount of client work could have shown "try again in N seconds".
+     * X-Rate-Limit-Remaining is here for the other half: warning someone before they
+     * hit the wall rather than only after.
+     */
+    @Test
+    public void shouldExposeTheRateLimitHeadersToTheBrowser() throws Exception {
+        mockMvc.perform(options("/habit")
+                        .header("Origin", "http://localhost:3000")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Expose-Headers",
+                        org.hamcrest.Matchers.allOf(
+                                org.hamcrest.Matchers.containsString("Retry-After"),
+                                org.hamcrest.Matchers.containsString("X-Rate-Limit-Remaining"),
+                                org.hamcrest.Matchers.containsString("X-Access-Token"))));
+    }
+
     @Test
     @Transactional
     public void shouldAllowAccessToLoginAndRegisterWithoutAuthentication() throws Exception {

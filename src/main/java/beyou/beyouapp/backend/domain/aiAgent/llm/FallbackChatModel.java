@@ -270,7 +270,13 @@ public class FallbackChatModel implements ChatModel {
     // retrying them just delays first token on every message.
     // ponytail: message sniffing — providers surface these through heterogeneous SDKs;
     // typed check covers the OpenAI SDK, string match covers DeepSeek and friends.
-    private static boolean isRateLimit(Throwable e) {
+    //
+    // Public because the agent stream needs the same answer to tell the user "the
+    // assistant is out of quota, wait a bit" apart from "the assistant broke". That
+    // judgement must not be duplicated: it is the only code that knows how each
+    // provider spells a quota refusal, and a second copy would drift the moment a
+    // provider is added.
+    public static boolean isRateLimit(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
             if (t instanceof RateLimitException) {
                 return true;
