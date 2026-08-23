@@ -178,6 +178,10 @@ ai:
         base-url: https://api.z.ai/api/paas/v4
         api-key: ${GLM_API_KEY:}
         model: ${GLM_MODEL:glm-4.7-flash}
+      generic:
+        base-url: ${GENERIC_BASE_URL:}
+        api-key: ${GENERIC_API_KEY:}
+        model: ${GENERIC_MODEL:}
       nvidia:
         base-url: https://integrate.api.nvidia.com/v1
         api-key: ${NVIDIA_API_KEY:}
