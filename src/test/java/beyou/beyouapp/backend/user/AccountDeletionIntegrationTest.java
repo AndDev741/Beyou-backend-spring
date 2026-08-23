@@ -59,7 +59,7 @@ import static beyou.beyouapp.backend.user.deletion.AccountDeletionService.MAX_AT
  * row through a plain foreign key with no cascade behind it.
  *
  * Every seeded row here is one the app creates on its own during ordinary use, so
- * a green run means "the delete button works for someone who has used BeYou",
+ * a green run means "the delete button works for someone who has used Beyou",
  * which is the only version of it worth shipping.
  */
 @org.springframework.test.context.TestPropertySource(properties = "e2e.expose-deletion-code=true")

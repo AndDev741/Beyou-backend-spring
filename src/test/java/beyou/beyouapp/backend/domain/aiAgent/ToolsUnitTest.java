@@ -149,7 +149,7 @@ public class ToolsUnitTest {
         assertEquals("The streak counter resets at the wrong hour", sent.body());
         assertEquals("agent", sent.context().platform());
         assertEquals("/habits", sent.context().screen());
-        assertEquals("Feedback submitted to the BeYou team", result.get("success"));
+        assertEquals("Feedback submitted to the Beyou team", result.get("success"));
     }
 
     @Test
