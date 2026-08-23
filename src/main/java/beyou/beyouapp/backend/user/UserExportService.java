@@ -20,12 +20,17 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.task.TaskRepository;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,6 +40,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserExportService {
 
     private final AuthenticatedUser authenticatedUser;
@@ -46,6 +52,7 @@ public class UserExportService {
     private final EntityCheckDayRepository entityCheckDayRepository;
     private final DiaryRoutineRepository diaryRoutineRepository;
     private final ChatService chatService;
+    private final PhotoStorageService photoStorageService;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -59,7 +66,7 @@ public class UserExportService {
         Map<String, Object> profile = new LinkedHashMap<>();
         profile.put("name", user.getName());
         profile.put("email", user.getEmail());
-        profile.put("photo", user.getPerfilPhoto());
+        profile.put("photo", photo(user));
         profile.put("createdAt", user.getCreatedAt());
         profile.put("isGoogleAccount", user.isGoogleAccount());
         profile.put("phrase", user.getPerfilPhrase());
@@ -164,6 +171,73 @@ public class UserExportService {
         export.put("notIncluded", omitted);
 
         return export;
+    }
+
+    /**
+     * The profile photo, as bytes rather than as a link.
+     *
+     * <p>This field used to be {@code user.getPerfilPhoto()} and nothing else, which
+     * made it null for every account that uploaded a photo instead of signing in with
+     * Google: the upload writes a JPEG to disk and never touches that column. So the
+     * app showed a face on the profile screen while the export beside the delete button
+     * reported no photo at all. The one binary asset an account owns was the one thing
+     * missing from the file, and it was missing silently — not even listed under
+     * {@code notIncluded}, which is what that block exists to prevent.
+     *
+     * <p>The bytes are inlined base64 rather than a URL because of what this file is
+     * for. Someone downloads it, keeps it, and often deletes the account right after; a
+     * link is worthless in both directions. A signed photo URL expires in twelve hours
+     * by default ({@code app.photo-url-ttl-minutes}), and after the account is gone
+     * there is nothing on the other end of it regardless. Inlining is affordable here
+     * because uploads are re-encoded to at most 512x512 JPEG on the way in
+     * ({@code PhotoStorageService.MAX_DIMENSION}), so this adds tens of kilobytes to a
+     * payload that already carries every routine and conversation in the account.
+     *
+     * <p>Google's copy is the exception and stays a URL, because those bytes were never
+     * ours: the account has a CDN link, not a file, and the export says which it is
+     * instead of leaving a reader to guess from the shape.
+     *
+     * @return null when the account genuinely has no photo, so the absence reads as an
+     *         answer rather than as a field that failed to populate
+     */
+    private Map<String, Object> photo(User user) {
+        Path path = photoStorageService.getPath(user.getId());
+
+        if (path == null) {
+            String url = user.getPerfilPhoto();
+            if (url == null || url.isBlank()) {
+                return null;
+            }
+            Map<String, Object> google = new LinkedHashMap<>();
+            google.put("source", "GOOGLE");
+            google.put("url", url);
+            google.put("note", "Set when you signed in with Google. The image lives on "
+                    + "Google's servers, not ours, so there are no bytes here to give you.");
+            return google;
+        }
+
+        Map<String, Object> uploaded = new LinkedHashMap<>();
+        uploaded.put("source", "UPLOAD");
+        uploaded.put("contentType", "image/jpeg");
+        uploaded.put("filename", "profile-photo.jpg");
+        try {
+            byte[] bytes = Files.readAllBytes(path);
+            uploaded.put("sizeBytes", bytes.length);
+            uploaded.put("base64", Base64.getEncoder().encodeToString(bytes));
+            uploaded.put("note", "The photo you uploaded, base64-encoded. Decode it to get "
+                    + "the JPEG back.");
+        } catch (IOException e) {
+            // The rest of the export is worth more than this one field, so a photo that
+            // cannot be read does not take the download with it. It does have to say so:
+            // reporting the file as absent is the bug this method was written to fix.
+            log.error("Could not read the profile photo at {} for user {} while exporting",
+                    path, user.getId(), e);
+            uploaded.put("base64", null);
+            uploaded.put("readError", "Your photo is stored on our server but could not be "
+                    + "read while this file was being built. Everything else here is complete. "
+                    + "Try the download again.");
+        }
+        return uploaded;
     }
 
     /**

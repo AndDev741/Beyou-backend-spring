@@ -459,6 +459,46 @@ public class UserService {
     }
 
     /**
+     * Removes the account's profile photo, both halves of it.
+     *
+     * <p>A profile photo is stored in two unrelated places and the app reads them in
+     * priority order: an uploaded JPEG on disk wins, and {@code perfilPhoto} (a Google
+     * CDN URL, set at OAuth sign-in) is the fallback. {@link UserMapper} consults the
+     * file first, which is why clearing only the column does nothing while a file
+     * exists, and deleting only the file hands a Google user their old avatar back.
+     * Either half alone leaves a photo on screen after the user asked for none, which
+     * is the complaint this method exists to answer. So both go.
+     *
+     * <p>The file is deleted before the column is cleared, on purpose. A failed delete
+     * throws and the transaction rolls back, so the account is never left claiming to
+     * have no photo while the JPEG is still being served. The reverse order could
+     * commit "no photo" over a file that is still on disk and still winning the
+     * priority check.
+     *
+     * <p>Idempotent: removing a photo that is not there is a success, not a 404. The
+     * client's intent is "I should have no photo", and that is already true.
+     */
+    @Transactional
+    public void removePhoto(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User not found by id"));
+
+        // Asked BEFORE the delete, because delete() returns false both for "nothing
+        // was there" and for "the unlink failed". Only the second is an error, and
+        // reporting success on it would put the photo straight back on the next fetch.
+        boolean hadFile = photoStorageService.getPath(userId) != null;
+        boolean deleted = photoStorageService.delete(userId);
+        if (hadFile && !deleted) {
+            throw new BusinessException(ErrorKey.PHOTO_DELETE_FAILED,
+                "Could not remove the stored photo");
+        }
+
+        user.setPerfilPhoto(null);
+        userRepository.save(user);
+        log.info("Profile photo removed for user {} (file removed: {})", userId, deleted);
+    }
+
+    /**
      * Applies a timezone edit under the rule that makes automatic correction safe.
      *
      * <p>Two kinds of write arrive here. A person picking a zone in Configuration (or

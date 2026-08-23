@@ -109,6 +109,31 @@ class UserPhotoControllerTest extends AbstractIntegrationTest {
     }
 
     @Nested
+    @DisplayName("DELETE /user/photo")
+    class Remove {
+
+        @Test
+        @DisplayName("returns 204 and removes the authenticated caller's own photo")
+        void removesOwnPhoto() throws Exception {
+            mockMvc.perform(delete("/user/photo"))
+                .andExpect(status().isNoContent());
+
+            // The id comes from the token, never from the request, so there is no
+            // other account this call could have reached.
+            verify(userService).removePhoto(userId);
+        }
+
+        @Test
+        @DisplayName("still returns 204 when the account has no photo to remove")
+        void removingNothingIsStillSuccess() throws Exception {
+            mockMvc.perform(delete("/user/photo"))
+                .andExpect(status().isNoContent());
+
+            verify(userService).removePhoto(userId);
+        }
+    }
+
+    @Nested
     @DisplayName("GET /user/photo/{userId}")
     class Serve {
 

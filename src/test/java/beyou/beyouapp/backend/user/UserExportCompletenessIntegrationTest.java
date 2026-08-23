@@ -1,9 +1,13 @@
 package beyou.beyouapp.backend.user;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.sql.Date;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -13,7 +17,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import javax.imageio.ImageIO;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -70,6 +77,7 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
     @Autowired ScheduleService scheduleService;
     @Autowired ChatService chatService;
     @Autowired AgentMessageService agentMessageService;
+    @Autowired PhotoStorageService photoStorageService;
 
     private User user;
 
@@ -91,7 +99,77 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
 
     @AfterEach
     void tearDown() {
+        photoStorageService.delete(user.getId());
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @DisplayName("the export carries the uploaded photo as bytes a reader can decode back to an image")
+    @SuppressWarnings("unchecked")
+    void exportsTheUploadedPhotoAsBytes() throws Exception {
+        // The account this used to be wrong for: uploaded a photo, never signed in with
+        // Google, so perfilPhoto is null and the file on disk is the only copy there is.
+        BufferedImage face = new BufferedImage(48, 48, BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream jpeg = new ByteArrayOutputStream();
+        ImageIO.write(face, "jpg", jpeg);
+        photoStorageService.store(user.getId(),
+                new MockMultipartFile("file", "face.jpg", "image/jpeg", jpeg.toByteArray()));
+
+        Map<String, Object> export = exportService.exportUserData();
+        Map<String, Object> profile = (Map<String, Object>) export.get("profile");
+        Map<String, Object> photo = (Map<String, Object>) profile.get("photo");
+
+        assertThat(photo)
+                .as("this field read null for every account that uploaded a photo instead of "
+                        + "signing in with Google, because it was reading the column the "
+                        + "upload never writes")
+                .isNotNull();
+        assertThat(photo.get("source")).isEqualTo("UPLOAD");
+        assertThat(photo.get("contentType")).isEqualTo("image/jpeg");
+        assertThat(photo.get("readError")).as("the bytes were readable, so say nothing about errors").isNull();
+
+        // Decoded rather than merely present: a non-empty string in this field could
+        // still be a path, a URL or a placeholder, and none of those is the photo.
+        byte[] decoded = Base64.getDecoder().decode((String) photo.get("base64"));
+        assertThat(decoded).hasSize((int) photo.get("sizeBytes"));
+        assertThat(ImageIO.read(new ByteArrayInputStream(decoded)))
+                .as("what comes out of the file has to be an image again, or the export is "
+                        + "carrying something that only looks like one")
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("a Google avatar is exported as its URL, and says the bytes were never ours")
+    @SuppressWarnings("unchecked")
+    void exportsAGoogleAvatarAsALink() {
+        user.setGoogleAccount(true);
+        user.setPerfilPhoto("https://lh3.googleusercontent.com/a/seeded-avatar");
+        user = userRepository.saveAndFlush(user);
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
+
+        Map<String, Object> export = exportService.exportUserData();
+        Map<String, Object> profile = (Map<String, Object>) export.get("profile");
+        Map<String, Object> photo = (Map<String, Object>) profile.get("photo");
+
+        assertThat(photo).isNotNull();
+        assertThat(photo.get("source")).isEqualTo("GOOGLE");
+        assertThat(photo.get("url")).isEqualTo("https://lh3.googleusercontent.com/a/seeded-avatar");
+        assertThat(photo.get("base64"))
+                .as("we hold a link, not a file — inventing bytes here would be worse than "
+                        + "the omission this fixed")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("an account with no photo exports null, so the absence reads as an answer")
+    @SuppressWarnings("unchecked")
+    void exportsNullWhenThereIsNoPhoto() {
+        Map<String, Object> export = exportService.exportUserData();
+        Map<String, Object> profile = (Map<String, Object>) export.get("profile");
+
+        assertThat(profile).containsKey("photo");
+        assertThat(profile.get("photo")).isNull();
     }
 
     @Test
