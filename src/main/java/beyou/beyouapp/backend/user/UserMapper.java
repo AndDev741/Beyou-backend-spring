@@ -74,7 +74,12 @@ public class UserMapper {
             user.getLanguageInUse(),
             user.getTimezone(),
             user.getTimezoneSource(),
-            user.getXpDecayStrategy()
+            user.getXpDecayStrategy(),
+            // toLocalDate(), not toInstant(): the field is a java.sql.Date, whose
+            // toInstant() throws UnsupportedOperationException by contract. Null-guarded
+            // because @PrePersist writes it on insert, so an entity assembled in memory
+            // has none — and a mapper is not the place to blow up over that.
+            user.getCreatedAt() == null ? null : user.getCreatedAt().toLocalDate().toString()
         );
     }
 }
