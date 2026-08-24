@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
 
+import beyou.beyouapp.backend.domain.aiAgent.AiAgentService;
+import com.openai.core.Timeout;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
 
@@ -79,5 +82,30 @@ class LlmChainConfigTest {
                         "https://api.z.ai/api/paas/v4", "zk-123", "glm-4.7-flash")));
 
         assertThat(((FallbackChatModel) build(props)).providerNames()).containsExactly("deepseek");
+    }
+
+    /**
+     * The four HTTP timeouts of an OpenAI-compatible provider, and why they are ordered
+     * the way they are. The SDK derives an unset field from {@code request}, so handing it
+     * one Duration silently makes the per-chunk limit and the whole-call ceiling the same
+     * number — which is how a "generous read timeout for streaming" of 120s became a hard
+     * two-minute cap on every answer, cancelling the HTTP/2 stream mid-sentence while the
+     * SSE emitter still had minutes of budget left.
+     */
+    @Test
+    void streamingTimeouts_stayOrderedAndDistinct() {
+        Timeout timeout = LlmChainConfig.agentTimeout();
+
+        // A stall has to be caught before the whole-call cap, otherwise the only thing
+        // that ever fires is the cap — and by then a fallback is no longer possible.
+        assertThat(timeout.read()).isLessThan(timeout.request());
+        assertThat(timeout.connect()).isLessThan(timeout.read());
+
+        // Not derived from request: this is the collapse that caused the bug.
+        assertThat(timeout.read()).isEqualTo(Duration.ofSeconds(120));
+
+        // The upstream call gives up first, leaving the turn room to report the failure
+        // instead of the client-facing emitter timing out with no error event.
+        assertThat(timeout.request()).isLessThan(AiAgentService.STREAM_TIMEOUT);
     }
 }

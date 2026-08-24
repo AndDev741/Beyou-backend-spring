@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.aiAgent;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -49,6 +50,13 @@ public class AiAgentService {
     /** SSE comment sent on this cadence keeps idle connections alive through
      *  proxies while the agent thinks or runs a slow tool. */
     private static final long HEARTBEAT_SECONDS = 15;
+
+    /**
+     * How long one turn may take end to end, tool rounds included. Public because
+     * {@code LlmChainConfig} sizes the upstream call cap just under it — an upstream call
+     * allowed to outlive this one dies without anyone left to hear it.
+     */
+    public static final Duration STREAM_TIMEOUT = Duration.ofMinutes(5);
 
     /** Concurrent live streams per user (two tabs = 2). Caps LLM cost/resource abuse. */
     private static final int MAX_CONCURRENT_STREAMS_PER_USER = 2;
@@ -138,7 +146,7 @@ public class AiAgentService {
             return rejected;
         }
 
-        SseEmitter emitter = new SseEmitter(300_000L);
+        SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT.toMillis());
 
         // The heartbeat thread and the reactor thread both write to this one
         // emitter — serialize every write so events never interleave mid-frame.
