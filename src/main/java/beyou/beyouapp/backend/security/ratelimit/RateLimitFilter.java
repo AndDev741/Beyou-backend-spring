@@ -69,6 +69,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/auth/google", "/auth/google/mobile"
     );
 
+    /**
+     * The unsubscribe link's endpoint. Unauthenticated, so it needs a per-address bucket
+     * of its own: every other write branch below reads a user id and calls
+     * {@code doFilter} when there is none, which would leave this path unbounded.
+     *
+     * <p>Not folded into {@link #AUTH_PATHS} even though it shares that bucket's shape.
+     * Those are sign-in doors, and a shared bucket would mean a burst of unsubscribe
+     * attempts from one address eating the login allowance of everyone behind it —
+     * a captive-portal or office NAT is one address.
+     */
+    private static final String UNSUBSCRIBE_PATH = "/notification/unsubscribe";
+
     private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "DELETE", "PATCH");
 
     /**
@@ -121,6 +133,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (AUTH_PATHS.contains(path)) {
             String ip = getClientIp(request);
             bucketKey = "auth:" + ip;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAuthBucket());
+        } else if ("POST".equals(method) && UNSUBSCRIBE_PATH.equals(path)) {
+            String ip = getClientIp(request);
+            bucketKey = "unsubscribe:" + ip;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAuthBucket());
         } else if ("POST".equals(method) && isAgentLlmPath(path)) {
             String userId = getUserIdFromRequest(request);
