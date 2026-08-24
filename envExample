@@ -106,5 +106,14 @@ SENTRY_ENVIRONMENT=
 # compose stack. See Beyou-dev-env/README.md.
 SNAPSHOT_HEARTBEAT_URL=
 
+# Same idea for the engagement-nudge pass. Leave blank and the heartbeat is a no-op.
+NUDGE_HEARTBEAT_URL=
+
+# Engagement nudges. OFF until the privacy policy describes them: the policy has to
+# announce a new use of someone's data before it starts, so this flips only after that
+# page is live. Everything else has a sane default in application.yaml — see the
+# comments there for why each number is what it is.
+ENGAGEMENT_NUDGES_ENABLED=false
+
 # Spring Profile (dev or prod)
 SPRING_PROFILES_ACTIVE=dev

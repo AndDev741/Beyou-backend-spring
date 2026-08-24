@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.notification;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.Year;
 import java.util.List;
 import java.util.UUID;
@@ -8,6 +9,7 @@ import java.util.UUID;
 import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
 import beyou.beyouapp.backend.domain.feedback.event.FeedbackRepliedEvent;
 import beyou.beyouapp.backend.domain.feedback.event.FeedbackSubmittedEvent;
+import beyou.beyouapp.backend.notification.engagement.NudgeDecision;
 import beyou.beyouapp.backend.user.event.UserRegisteredEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
@@ -1021,6 +1023,189 @@ public class EmailService {
                 """;
 
         return template.formatted(escape(code), minutes, Year.now().getValue());
+    }
+
+
+    /**
+     * The seventh mail, and the first one nobody asked for.
+     *
+     * <p>Every other mail in this class answers something the user just did. This one
+     * arrives unprompted, which changes what it owes the reader: a reason it was sent, a
+     * number that makes the reason concrete, and a way to stop it that does not require
+     * signing in. All three are below, and the unsubscribe line is not optional decoration
+     * — it is the thing that makes sending this at all defensible.
+     *
+     * <p>Throws rather than swallowing, unlike the feedback mails. The caller records the
+     * send only after this returns, so a swallowed failure would write a row claiming the
+     * mail went out and silently suppress the nudge for the rest of the day.
+     */
+    public void sendEngagementNudge(String to, NudgeDecision nudge, String unsubscribeToken, String language) {
+        try {
+            String unsubscribeLink = frontendLink("/unsubscribe?token=" + unsubscribeToken);
+
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+
+            helper.setTo(to);
+            helper.setFrom(fromAddress);
+            helper.setSubject(resolveNudgeSubject(nudge, language));
+            helper.setText(buildNudgeHtmlBody(nudge, unsubscribeLink, language), true);
+
+            // The header mail clients read to offer their own "unsubscribe" button, so a
+            // reader who does not trust a link in a message still has a one-click way out.
+            // Gmail and Outlook both surface it, and its absence is one of the things that
+            // pushes bulk mail towards the spam folder.
+            mimeMessage.addHeader("List-Unsubscribe", "<" + unsubscribeLink + ">");
+
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to send engagement nudge", e);
+        }
+    }
+
+    /**
+     * The subject carries the number, because the subject is all most people read. "Your
+     * streak" is a label; "1 day from your record of 23" is a reason to open it.
+     */
+    private String resolveNudgeSubject(NudgeDecision nudge, String language) {
+        boolean pt = normalizeLanguage(language).equals("pt");
+
+        return switch (nudge.kind()) {
+            case XP_RECOVERY_WINDOW -> pt
+                    ? "Ultimo dia para recuperar " + formatDay(nudge.expiringDay(), true)
+                    : "Last day to recover " + formatDay(nudge.expiringDay(), false);
+            case STREAK_RECORD_AT_RISK -> {
+                if (nudge.isRecordWithinReach()) {
+                    yield pt
+                            ? "Voce esta batendo seu recorde de " + nudge.bestStreak() + " dias"
+                            : "You are beating your record of " + nudge.bestStreak() + " days";
+                }
+                yield pt
+                        ? "Sua sequencia de " + nudge.currentStreak() + " dias termina hoje"
+                        : "Your " + nudge.currentStreak() + "-day streak ends today";
+            }
+        };
+    }
+
+    /** ISO, not a localised long form: unambiguous, and no month-name table to maintain. */
+    private String formatDay(LocalDate day, boolean pt) {
+        return day == null ? "" : day.toString();
+    }
+
+    private String buildNudgeHtmlBody(NudgeDecision nudge, String unsubscribeLink, String language) {
+        boolean pt = normalizeLanguage(language).equals("pt");
+        String headline = HtmlUtils.htmlEscape(nudgeHeadline(nudge, pt));
+        String body = HtmlUtils.htmlEscape(nudgeBody(nudge, pt));
+        String cta = pt ? "Abrir o Beyou" : "Open Beyou";
+        String appLink = frontendLink("/dashboard");
+
+        String unsubscribeLine = pt
+                ? "Voce recebeu isto porque os e-mails sobre a sua rotina estao ligados. "
+                  + "<a href=\"%s\" style=\"color:#6b7280;\">Cancelar</a> — "
+                  + "os e-mails que voce pede, como troca de senha, continuam funcionando."
+                : "You are getting this because emails about your routine are switched on. "
+                  + "<a href=\"%s\" style=\"color:#6b7280;\">Turn them off</a> — "
+                  + "emails you ask for, like password resets, still work.";
+
+        return """
+                <html>
+                <body style="margin:0;padding:0;background-color:#f5f7fa;font-family:Arial,Helvetica,sans-serif;">
+                    <table width="100%%" cellpadding="0" cellspacing="0" style="padding:40px 0;">
+                        <tr>
+                            <td align="center">
+                                <table width="600" cellpadding="0" cellspacing="0"
+                                       style="background:#ffffff;border-radius:16px;padding:40px;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
+
+                                    <tr>
+                                        <td align="center" style="padding-bottom:20px;">
+                                            <h1 style="margin:0;color:#0082E1;">Beyou</h1>
+                                        </td>
+                                    </tr>
+
+                                    <tr>
+                                        <td style="padding-top:10px;">
+                                            <h2 style="color:#111827;">%s</h2>
+                                            <p style="color:#374151;line-height:1.6;">%s</p>
+
+                                            <div style="text-align:center;margin:30px 0;">
+                                                <a href="%s"
+                                                   style="background-color:#0082E1;
+                                                          color:#ffffff;
+                                                          padding:14px 28px;
+                                                          text-decoration:none;
+                                                          border-radius:10px;
+                                                          font-weight:bold;
+                                                          display:inline-block;">%s</a>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    <tr>
+                                        <td style="padding-top:10px;border-top:1px solid #e5e7eb;">
+                                            <p style="color:#6b7280;font-size:12px;line-height:1.6;margin:16px 0 0 0;">%s</p>
+                                        </td>
+                                    </tr>
+
+                                    <tr>
+                                        <td align="center" style="padding-top:24px;">
+                                            <p style="color:#9ca3af;font-size:11px;margin:0;">Beyou &copy; %s</p>
+                                        </td>
+                                    </tr>
+
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </body>
+                </html>
+                """.formatted(headline, body, appLink, cta,
+                        unsubscribeLine.formatted(unsubscribeLink), Year.now());
+    }
+
+    /**
+     * The headline says what is at stake. Not "hello" and not the product's name — the
+     * reader already knows who is writing.
+     */
+    private String nudgeHeadline(NudgeDecision nudge, boolean pt) {
+        return switch (nudge.kind()) {
+            case XP_RECOVERY_WINDOW -> pt
+                    ? "Hoje e o ultimo dia para recuperar " + nudge.expiringDay()
+                    : "Today is the last day to recover " + nudge.expiringDay();
+            case STREAK_RECORD_AT_RISK -> nudge.isRecordWithinReach()
+                    ? (pt ? "Seu recorde esta em jogo" : "Your record is on the line")
+                    : (pt ? "Sua sequencia termina hoje" : "Your streak ends today");
+        };
+    }
+
+    /**
+     * The body carries the numbers and nothing else. No encouragement, no exclamation
+     * marks: the reader is an adult who set themselves a routine, and the useful thing to
+     * tell them is what the situation actually is.
+     */
+    private String nudgeBody(NudgeDecision nudge, boolean pt) {
+        return switch (nudge.kind()) {
+            case XP_RECOVERY_WINDOW -> pt
+                    ? ("Voce ainda pode marcar o que ficou aberto em " + nudge.expiringDay()
+                       + ", valendo " + nudge.remainingXpPercent() + "% do XP. Depois de hoje esse dia fecha "
+                       + "e nao volta mais.")
+                    : ("You can still check off what was left open on " + nudge.expiringDay()
+                       + ", worth " + nudge.remainingXpPercent() + "% of the XP. After today that day closes "
+                       + "for good.");
+            case STREAK_RECORD_AT_RISK -> {
+                if (nudge.isRecordWithinReach()) {
+                    yield pt
+                            ? ("Voce esta em " + nudge.currentStreak() + " dias, no seu melhor de "
+                               + nudge.bestStreak() + ". Hoje esta agendado e ainda esta em aberto.")
+                            : ("You are at " + nudge.currentStreak() + " days, matching your best of "
+                               + nudge.bestStreak() + ". Today is a scheduled day and it is still open.");
+                }
+                yield pt
+                        ? ("Voce esta em " + nudge.currentStreak() + " dias e seu recorde e "
+                           + nudge.bestStreak() + ". Hoje esta agendado e ainda esta em aberto.")
+                        : ("You are at " + nudge.currentStreak() + " days, against your record of "
+                           + nudge.bestStreak() + ". Today is a scheduled day and it is still open.");
+            }
+        };
     }
 
 }

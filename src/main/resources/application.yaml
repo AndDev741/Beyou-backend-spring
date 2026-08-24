@@ -145,6 +145,38 @@ account-deletion:
   code-ttl-minutes: ${ACCOUNT_DELETION_CODE_TTL_MINUTES:15}
   cooldown-seconds: ${ACCOUNT_DELETION_COOLDOWN_SECONDS:60}
 
+# Engagement nudges (phase 1). Thresholds rather than constants because every one of
+# them was picked without a baseline to pick it from: the product analytics that would
+# justify a number only started collecting the day this was written. Expect to move them.
+engagement:
+  # OFF by default, and that is load-bearing rather than cautious. The privacy policy has
+  # to describe a new use of somebody's data BEFORE it starts, so the ordering is: policy
+  # merges and deploys, then this flips. A flag makes that a property of the deployment
+  # instead of something an operator has to remember.
+  enabled: ${ENGAGEMENT_NUDGES_ENABLED:false}
+  # The reader's local hour. Early evening: late enough that somebody who was going to do
+  # their routine today mostly has, so the mail is not nagging about a day still in
+  # progress, and early enough that acting on it does not mean staying up. Deliberately
+  # clear of the snapshot job's hours (0, and the 2-3 grace window) so the two passes do
+  # not contend for the same connection pool.
+  send-local-hour: ${ENGAGEMENT_SEND_LOCAL_HOUR:19}
+  # Across every account, per day. Sized well under the provider's free-tier ceiling of
+  # 300/day because that allowance also carries verification, password resets and deletion
+  # codes — mail people actually asked for. A reset that does not arrive because a nudge
+  # spent the budget is a much worse failure than a nudge that never goes out.
+  daily-cap: ${ENGAGEMENT_DAILY_CAP:100}
+  # Minimum gap, in the reader's days, between any two nudges to one account. Two triggers
+  # can each be individually justified on the same morning; their sum is not.
+  min-days-between: ${ENGAGEMENT_MIN_DAYS_BETWEEN:3}
+  # The shortest run worth writing to somebody about. A two-day streak costs more goodwill
+  # to defend by mail than it is worth.
+  min-streak-to-defend: ${ENGAGEMENT_MIN_STREAK_TO_DEFEND:3}
+  # How far below the account's own record still counts as "at risk".
+  record-gap: ${ENGAGEMENT_RECORD_GAP:2}
+  # Mirrors RoutineSnapshotScheduler.MAX_BACKFILL_DAYS. These two MUST agree: a mail about
+  # a day the snapshot job will not accept a check for is a lie.
+  backfill-days: ${ENGAGEMENT_BACKFILL_DAYS:7}
+
 rate-limit:
   enabled: true
 
@@ -299,6 +331,11 @@ sentry:
 monitoring:
   heartbeat:
     snapshot-url: ${SNAPSHOT_HEARTBEAT_URL:}
+    # The nudge pass, same inverted-check reasoning as above and arguably more necessary:
+    # a snapshot job that stops running eventually shows up as missing history, whereas a
+    # nudge job that stops running looks exactly like a quiet week. Nobody complains about
+    # mail they did not receive. Expect a check-in once per hour while the flag is on.
+    nudge-url: ${NUDGE_HEARTBEAT_URL:}
 
 management:
   server:
