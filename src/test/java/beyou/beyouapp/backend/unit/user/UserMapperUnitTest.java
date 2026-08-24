@@ -3,6 +3,7 @@ package beyou.beyouapp.backend.unit.user;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.HashMap;
+import java.sql.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -169,6 +171,43 @@ class UserMapperUnitTest {
         UserResponseDTO chosen = userMapper.toResponseDTO(user);
         assertEquals("Europe/Lisbon", chosen.timezone());
         assertEquals(TimezoneSource.EXPLICIT, chosen.timezoneSource());
+    }
+
+    /**
+     * Phase 0 of the engagement work reports the signup date to product analytics as a
+     * person property. It leaves here as an ISO-8601 local date, because the column
+     * behind it is a Postgres `date` and because the analytics provider's own first-seen
+     * timestamp answers a different question — when it first saw the account, not when
+     * the account was made.
+     *
+     * <p>The load-bearing part is the conversion itself: the field is a
+     * {@link java.sql.Date}, whose {@code toInstant()} throws by contract, so the
+     * obvious-looking instant formatting fails at runtime rather than at compile time.
+     * A fixture date that is not today is what keeps this from passing against a mapper
+     * that reported the current day instead of the stored one.
+     */
+    @Test
+    void shouldReportCreatedAtAsAnIsoLocalDate() {
+        user.setCreatedAt(Date.valueOf(LocalDate.of(2026, 3, 14)));
+
+        UserResponseDTO response = userMapper.toResponseDTO(user);
+
+        assertEquals("2026-03-14", response.createdAt(),
+                "The signup day goes out as an ISO-8601 local date");
+    }
+
+    /**
+     * `createdAt` is written by @PrePersist on insert, so an entity assembled in memory
+     * has none. The mapper is not the place to fail over that: a null answer costs one
+     * person property, an exception costs the whole login response.
+     */
+    @Test
+    void shouldTolerateAnAccountWithNoCreatedAt() {
+        user.setCreatedAt(null);
+
+        UserResponseDTO response = assertDoesNotThrow(() -> userMapper.toResponseDTO(user));
+
+        assertNull(response.createdAt(), "No stored value means no reported value, not a fabricated one");
     }
 
     private static Map<String, String> queryOf(String url) {

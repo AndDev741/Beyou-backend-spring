@@ -48,6 +48,27 @@ public record UserResponseDTO(
          * rule itself in one place.
          */
         TimezoneSource timezoneSource,
-        XpDecayStrategy xpDecayStrategy
+        XpDecayStrategy xpDecayStrategy,
+        /**
+         * The day the account was created, as an ISO-8601 local date ({@code 2026-03-14}).
+         *
+         * <p>Sent for the same reason {@code id} is: the clients report it to product
+         * analytics, as the person property that answers "how old is this account".
+         * Nothing else can answer it — the analytics provider's own first-seen timestamp
+         * is when it first <em>saw</em> the account, which for every account older than
+         * the instrumentation is a different date entirely.
+         *
+         * <p>A date and not an instant because that is all there is to send: the column
+         * behind it is a Postgres {@code date}, stamped by {@code User.onUserCreate} from
+         * {@code LocalDate.now()} on the server's clock. So it is the server's calendar
+         * day, not the user's, and it is precise to the day and no further — enough to
+         * bucket an account by age, not enough to reason about signup <em>time</em>.
+         *
+         * <p>A {@code String} rather than a date type on purpose: the value is formatted
+         * once, here, so the wire format cannot be moved by a Jackson date-serialization
+         * setting somewhere else in the app, and both clients read an ISO-8601 date
+         * without having to agree on anything further.
+         */
+        String createdAt
 ) {
 }
