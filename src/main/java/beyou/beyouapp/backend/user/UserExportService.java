@@ -18,6 +18,8 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.task.TaskRepository;
+import beyou.beyouapp.backend.notification.preferences.NotificationPreferences;
+import beyou.beyouapp.backend.notification.preferences.NotificationPreferencesRepository;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,6 +55,7 @@ public class UserExportService {
     private final DiaryRoutineRepository diaryRoutineRepository;
     private final ChatService chatService;
     private final PhotoStorageService photoStorageService;
+    private final NotificationPreferencesRepository notificationPreferencesRepository;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -82,6 +85,14 @@ public class UserExportService {
         profile.put("assistantNotesAboutYou", user.getUserContext());
         profile.put("progress", xp(user.getXpProgress()));
         profile.put("streak", streak(user.getCheckProgress()));
+        // A setting the account owns, and one that lives outside the users table, so it
+        // would be silently missing from a download that claims to be the whole account.
+        // The default is what an account with no row gets; see V24 on why absence means
+        // opted in. The unsubscribe token deliberately does NOT travel: it is a
+        // capability that works without a session, and this file gets mailed around.
+        profile.put("engagementEmails", notificationPreferencesRepository.findById(userId)
+                .map(NotificationPreferences::isEngagementEmail)
+                .orElse(true));
         export.put("profile", profile);
 
         // Categories

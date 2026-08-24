@@ -100,6 +100,35 @@ public class SecurityConfigIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(content().string("{\"success\":\"User registered successfully\"}"));
     }
 
+    /**
+     * The unsubscribe link has to work for somebody who cannot log in — an account that
+     * has stopped opening the app is exactly the population these mails go to, and asking
+     * them to sign in to stop receiving mail is how a product earns a spam report.
+     *
+     * <p>Asserting on "not 401/403" rather than on 200: the token in this request matches
+     * nothing, so the endpoint's own answer is a refusal. What this pins is that the
+     * refusal comes from the endpoint rather than from the security filter.
+     */
+    @Test
+    @Transactional
+    public void shouldAllowUnsubscribingWithoutAuthentication() throws Exception {
+        mockMvc.perform(post("/notification/unsubscribe")
+                        .content("{\"token\": \"a-token-that-matches-no-row\"}")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * The settings screen is the opposite posture: no session, no answer. 401 rather than
+     * 403 because SecurityFilter refuses a request with no Authorization header before
+     * authorization is consulted at all.
+     */
+    @Test
+    public void shouldRefuseNotificationPreferencesWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/notification/preferences"))
+                .andExpect(status().isUnauthorized());
+    }
+
     @Test
     public void shouldAllowAccessToProtectedEndpointIfAuthenticated() throws Exception {
         mockMvc.perform(get("/category")

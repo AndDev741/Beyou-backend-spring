@@ -55,7 +55,15 @@ public class SecurityConfig {
                             "/auth/forgot-password",
                             "/auth/reset-password/**",
                             "/auth/verify-email",
-                            "/auth/resend-verification"
+                            "/auth/resend-verification",
+                            // An unsubscribe link has to work for someone who cannot log
+                            // in — that is what makes it an unsubscribe link rather than a
+                            // settings screen. The token in the request body is the whole
+                            // proof of ownership, and RateLimitFilter bounds this path per
+                            // address because an unauthenticated write is otherwise
+                            // unthrottled: every other branch of that filter needs a user
+                            // id and lets the request through when there is none.
+                            "/notification/unsubscribe"
                         ).permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/docs/admin/**").authenticated()

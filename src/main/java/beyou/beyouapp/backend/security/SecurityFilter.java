@@ -41,6 +41,15 @@ public class SecurityFilter extends OncePerRequestFilter {
         // Strip the servlet context-path (e.g. /api/v1) so the bypass list works
         // regardless of versioning. Done manually because getServletPath() returns
         // an empty string under MockMvc, breaking integration tests.
+        //
+        // WARNING: this bypass list and SecurityConfig's permitAll list are two separate
+        // lists of the same thing, and nothing checks that they agree. This one runs
+        // first, so a path that is permitAll'd there but missing here is NOT public: the
+        // filter answers 401 before authorization is ever consulted, and the endpoint
+        // looks broken rather than protected. Adding a public endpoint means editing
+        // both. They are not merged because the matching differs per entry — some are
+        // exact, some are prefixes — and quietly widening one of those while refactoring
+        // is how an endpoint stops being protected.
         String requestURI = stripContextPath(request);
 
         if(
@@ -53,6 +62,10 @@ public class SecurityFilter extends OncePerRequestFilter {
             requestURI.startsWith("/auth/reset-password") ||
             requestURI.equals("/auth/verify-email") ||
             requestURI.equals("/auth/resend-verification") ||
+            // The unsubscribe link's endpoint. It carries its own proof of ownership in
+            // the request body, and its whole purpose is to work for someone who cannot
+            // sign in.
+            requestURI.equals("/notification/unsubscribe") ||
             (requestURI.startsWith("/docs") && !requestURI.startsWith("/docs/admin")) ||
             requestURI.startsWith("/actuator") ||
             (requestURI.startsWith("/user/photo") && request.getMethod().equals("GET"))
