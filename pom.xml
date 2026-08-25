@@ -11,7 +11,7 @@
 	</parent>
 	<groupId>beyou.beyouapp</groupId>
 	<artifactId>backend</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.1.0</version>
 	<name>backend</name>
 	<description>Backend code for the web app Be you</description>
 	<url />
