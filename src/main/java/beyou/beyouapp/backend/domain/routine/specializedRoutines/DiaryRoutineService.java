@@ -6,6 +6,7 @@ import beyou.beyouapp.backend.domain.xpday.XpDayRecorder;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
+import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
@@ -14,6 +15,7 @@ import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.HabitGroupDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineItemRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
@@ -141,10 +143,25 @@ public class DiaryRoutineService {
                     "The user trying to get its different of the one in the object");
         }
 
+        // A routine does not change shape. Going DAILY -> LIST would have to throw away every
+        // section boundary and time window the user set, and LIST -> DAILY would have to
+        // invent times nobody chose. Both are destructive in a way an edit should not be, so
+        // they are refused rather than guessed at; deleting and recreating says the same
+        // thing out loud.
+        if (existing.getRoutineType() != dto.type()) {
+            throw new BusinessException(ErrorKey.ROUTINE_SHAPE_MISMATCH,
+                    "A routine cannot change type: it is " + existing.getRoutineType()
+                            + " and the request says " + dto.type());
+        }
+
         existing.setName(dto.name());
         existing.setIconId(dto.iconId());
 
-        mergeSections(existing, dto.routineSections(), userId);
+        if (existing.isList()) {
+            mergeListItems(existing, dto.items(), userId);
+        } else {
+            mergeSections(existing, dto.routineSections(), userId);
+        }
 
         /*
          * JPA manage the entity inside the transaction, after commit will be persisted.
@@ -190,6 +207,72 @@ public class DiaryRoutineService {
                 routine.getRoutineSections().add(newSection);
             }
             index++;
+        }
+    }
+
+    /**
+     * Rewrites a LIST routine's single section to match the request, in the request's order.
+     *
+     * <p>Shaped like {@code mergeHabitGroups} / {@code mergeTaskGroups} and for the same
+     * reason: an entry the client sends back with its id keeps its row, and with it every
+     * check ever recorded against it. Dropping and recreating the groups instead would erase
+     * the user's history on every edit, which the sectioned path learned not to do.
+     *
+     * <p>Position in the list IS {@code orderIndex}, counting across habits and tasks
+     * together — the user drags one flat list and a habit can sit between two tasks.
+     *
+     * <p>The section's own name and icon follow the routine's, so renaming a list renames
+     * what its future snapshots record.
+     */
+    private void mergeListItems(DiaryRoutine routine, List<RoutineItemRequestDTO> items, UUID userId) {
+        RoutineSection section = routine.listSection();
+        section.setName(routine.getName());
+        section.setIconId(routine.getIconId());
+
+        Set<UUID> incomingIds = items.stream()
+                .map(RoutineItemRequestDTO::id)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        section.getHabitGroups().removeIf(g -> !incomingIds.contains(g.getId()));
+        section.getTaskGroups().removeIf(g -> !incomingIds.contains(g.getId()));
+
+        Map<UUID, HabitGroup> existingHabits = section.getHabitGroups().stream()
+                .collect(Collectors.toMap(HabitGroup::getId, g -> g));
+        Map<UUID, TaskGroup> existingTasks = section.getTaskGroups().stream()
+                .collect(Collectors.toMap(TaskGroup::getId, g -> g));
+
+        int position = 0;
+        for (RoutineItemRequestDTO item : items) {
+            if (item.isHabit()) {
+                HabitGroup existing = item.id() == null ? null : existingHabits.get(item.id());
+                if (existing != null) {
+                    if (!existing.getHabit().getId().equals(item.habitId())) {
+                        existing.setHabit(getOwnedHabit(item.habitId(), userId));
+                    }
+                    existing.setOrderIndex(position++);
+                } else {
+                    HabitGroup group = new HabitGroup();
+                    group.setHabit(getOwnedHabit(item.habitId(), userId));
+                    group.setRoutineSection(section);
+                    group.setOrderIndex(position++);
+                    section.getHabitGroups().add(group);
+                }
+            } else {
+                TaskGroup existing = item.id() == null ? null : existingTasks.get(item.id());
+                if (existing != null) {
+                    if (!existing.getTask().getId().equals(item.taskId())) {
+                        existing.setTask(getOwnedTask(item.taskId(), userId));
+                    }
+                    existing.setOrderIndex(position++);
+                } else {
+                    TaskGroup group = new TaskGroup();
+                    group.setTask(getOwnedTask(item.taskId(), userId));
+                    group.setRoutineSection(section);
+                    group.setOrderIndex(position++);
+                    section.getTaskGroups().add(group);
+                }
+            }
         }
     }
 
@@ -419,6 +502,17 @@ public class DiaryRoutineService {
         if (dto.name() == null || dto.name().trim().isEmpty()) {
             throw new BusinessException(ErrorKey.ROUTINE_NAME_REQUIRED, "DiaryRoutine name cannot be null or empty");
         }
+        if (dto.isList()) {
+            validateListRequest(dto);
+            return;
+        }
+        // A DAILY routine sending items means a client that thinks it built a list. Rejecting
+        // is the honest answer: the items would otherwise be silently dropped and the user
+        // would get an empty routine back with no idea why.
+        if (dto.items() != null && !dto.items().isEmpty()) {
+            throw new BusinessException(ErrorKey.ROUTINE_SHAPE_MISMATCH,
+                    "A DAILY routine carries its items inside sections, not in an items list");
+        }
         if (dto.routineSections() == null) {
             throw new BusinessException(ErrorKey.ROUTINE_SECTION_REQUIRED, "Routine sections cannot be null");
         }
@@ -435,6 +529,31 @@ public class DiaryRoutineService {
                         "Routine section start time cannot be null");
             }
             validateItemTimes(section);
+        }
+    }
+
+    /**
+     * What a LIST routine has to satisfy: a non-empty item list, no sections, and every entry
+     * naming exactly one thing.
+     *
+     * <p>Notice what is absent. There are no time checks at all, because there are no times —
+     * the whole {@code validateItemTimeBounds} apparatus below exists to keep an item inside
+     * its section's window, and a list has neither.
+     */
+    private void validateListRequest(DiaryRoutineRequestDTO dto) {
+        if (dto.routineSections() != null && !dto.routineSections().isEmpty()) {
+            throw new BusinessException(ErrorKey.ROUTINE_SHAPE_MISMATCH,
+                    "A LIST routine has no sections; send its items in the items list");
+        }
+        if (dto.items() == null || dto.items().isEmpty()) {
+            throw new BusinessException(ErrorKey.ROUTINE_ITEMS_REQUIRED,
+                    "A LIST routine needs at least one habit or task");
+        }
+        for (RoutineItemRequestDTO item : dto.items()) {
+            if (item.isHabit() == item.isTask()) {
+                throw new BusinessException(ErrorKey.ROUTINE_ITEM_AMBIGUOUS,
+                        "Each list item names exactly one habit or one task, never neither and never both");
+            }
         }
     }
 

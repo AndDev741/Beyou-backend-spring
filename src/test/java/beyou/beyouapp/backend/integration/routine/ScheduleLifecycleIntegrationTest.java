@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.integration.routine;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import java.sql.Date;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -123,10 +125,10 @@ class ScheduleLifecycleIntegrationTest extends AbstractIntegrationTest {
 
     private UUID seedRoutine(String name) {
         diaryRoutineService.createDiaryRoutine(new DiaryRoutineRequestDTO(
-                name, "lucide:sun", List.of(new RoutineSectionRequestDTO(
+                name, "lucide:sun", RoutineType.DAILY, List.of(new RoutineSectionRequestDTO(
                         null, "A section", "lucide:sunrise",
                         LocalTime.of(7, 0), LocalTime.of(8, 0),
-                        List.of(), List.of(), false))), user.getId());
+                        List.of(), List.of(), false)), List.of()), user.getId());
         return diaryRoutineService.getAllDiaryRoutines(user.getId()).stream()
                 .filter(routine -> routine.name().equals(name))
                 .findFirst()

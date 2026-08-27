@@ -32,6 +32,12 @@ public enum ErrorKey {
     ROUTINE_ITEM_NOT_FOUND,
     ROUTINE_SECTION_NAME_REQUIRED,
     ROUTINE_SECTION_START_REQUIRED,
+    // LIST routines: the item list is what ROUTINE_SECTION_REQUIRED is to a DAILY one.
+    ROUTINE_ITEMS_REQUIRED,
+    // An entry naming neither a habit nor a task, or naming both.
+    ROUTINE_ITEM_AMBIGUOUS,
+    // Sections sent for a LIST routine, or items sent for a DAILY one.
+    ROUTINE_SHAPE_MISMATCH,
     ITEM_END_BEFORE_START,
     ITEM_START_OUT_OF_SECTION,
     ITEM_END_OUT_OF_SECTION,

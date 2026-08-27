@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.integration.routine;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
@@ -82,7 +84,7 @@ class DiaryRoutineUpdateOrphanIT extends AbstractIntegrationTest {
                 null, "B", "ic", LocalTime.of(8, 0), LocalTime.of(9, 0), List.of(), List.of(), false);
 
         DiaryRoutineResponseDTO created = diaryRoutineService.createDiaryRoutine(
-                new DiaryRoutineRequestDTO("R", "", List.of(sectionA, sectionB)), user);
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(sectionA, sectionB), List.of()), user);
         assertEquals(2, created.routineSections().size());
         UUID routineId = created.id();
         UUID sectionBId = created.routineSections().stream()
@@ -91,7 +93,7 @@ class DiaryRoutineUpdateOrphanIT extends AbstractIntegrationTest {
         RoutineSectionRequestDTO keepB = new RoutineSectionRequestDTO(
                 sectionBId, "B", "ic", LocalTime.of(8, 0), LocalTime.of(9, 0), List.of(), List.of(), false);
         diaryRoutineService.updateDiaryRoutine(routineId,
-                new DiaryRoutineRequestDTO("R", "", List.of(keepB)), user.getId());
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(keepB), List.of()), user.getId());
 
         transactionTemplate.executeWithoutResult(tx -> {
             DiaryRoutine routine = diaryRoutineRepository.findById(routineId).orElseThrow();
@@ -116,7 +118,7 @@ class DiaryRoutineUpdateOrphanIT extends AbstractIntegrationTest {
         RoutineSectionRequestDTO section = new RoutineSectionRequestDTO(
                 null, "A", "ic", LocalTime.of(6, 0), LocalTime.of(7, 0), List.of(), List.of(), false);
         DiaryRoutineResponseDTO created = diaryRoutineService.createDiaryRoutine(
-                new DiaryRoutineRequestDTO("R", "", List.of(section)), user);
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(section), List.of()), user);
         UUID routineId = created.id();
         UUID sectionId = created.routineSections().get(0).id();
 
@@ -130,7 +132,7 @@ class DiaryRoutineUpdateOrphanIT extends AbstractIntegrationTest {
                 List.of(), false);
 
         DiaryRoutineResponseDTO updated = diaryRoutineService.updateDiaryRoutine(routineId,
-                new DiaryRoutineRequestDTO("R", "", List.of(withTask)), user.getId());
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(withTask), List.of()), user.getId());
 
         var taskGroups = updated.routineSections().get(0).taskGroup();
         assertEquals(1, taskGroups.size());

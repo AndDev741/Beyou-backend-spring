@@ -34,6 +34,8 @@ public final class AgentToolDomains {
             // Routines
             Map.entry("createUserRoutine", List.of("routines")),
             Map.entry("editUserRoutine", List.of("routines")),
+            Map.entry("createUserListRoutine", List.of("routines")),
+            Map.entry("editUserListRoutine", List.of("routines")),
             Map.entry("deleteUserRoutine", List.of("routines")),
             Map.entry("addTaskToRoutineSection", List.of("routines")),
             Map.entry("addHabitToRoutineSection", List.of("routines")),

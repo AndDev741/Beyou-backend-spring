@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.unit.routine;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.xpday.XpDayRecorder;
 import beyou.beyouapp.backend.domain.habit.Habit;
@@ -100,7 +102,7 @@ class DiaryRoutineServiceUnitTest {
 
         validRequestDTO = new DiaryRoutineRequestDTO(
                 "Rotina Diária",
-                "routine-icon-123",
+                "routine-icon-123", RoutineType.DAILY,
                 new ArrayList<>(
                         List.of(
                                 new RoutineSectionRequestDTO(
@@ -123,7 +125,7 @@ class DiaryRoutineServiceUnitTest {
                                                 LocalTime.of(6, 45),
                                                 null)),
                                         false
-                                        ))));
+                                        ))), List.of());
 
         diaryRoutine = new DiaryRoutine();
         diaryRoutine.setId(routineId);
@@ -193,8 +195,8 @@ class DiaryRoutineServiceUnitTest {
     void shouldThrowExceptionWhenCreatingWithEmptyName() {
         DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(
                 "",
-                "routine-icon-123",
-                validRequestDTO.routineSections());
+                "routine-icon-123", RoutineType.DAILY,
+                validRequestDTO.routineSections(), List.of());
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -209,7 +211,7 @@ class DiaryRoutineServiceUnitTest {
     void shouldAllowOvernightSectionTimeRange() {
         DiaryRoutineRequestDTO overnightDTO = new DiaryRoutineRequestDTO(
                 "Rotina Diária",
-                "routine-icon-123",
+                "routine-icon-123", RoutineType.DAILY,
                 List.of(
                         new RoutineSectionRequestDTO(
                                 null,
@@ -220,7 +222,7 @@ class DiaryRoutineServiceUnitTest {
                                 List.of(),
                                 List.of(),
                                 false
-                                )));
+                                )), List.of());
 
         when(diaryRoutineRepository.save(any(DiaryRoutine.class))).thenReturn(diaryRoutine);
 
@@ -233,7 +235,7 @@ class DiaryRoutineServiceUnitTest {
     void shouldThrowExceptionWhenItemEndTimeBeforeStartTime() {
         DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(
                 "Rotina Diária",
-                "routine-icon-123",
+                "routine-icon-123", RoutineType.DAILY,
                 List.of(
                         new RoutineSectionRequestDTO(
                                 null,
@@ -249,7 +251,7 @@ class DiaryRoutineServiceUnitTest {
                                         null)),
                                 List.of(),
                                 false
-                        )));
+                        )), List.of());
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -265,7 +267,7 @@ class DiaryRoutineServiceUnitTest {
     void shouldThrowExceptionWhenItemEndTimeOutsideSectionBounds() {
         DiaryRoutineRequestDTO invalidDTO = new DiaryRoutineRequestDTO(
                 "Rotina Diária",
-                "routine-icon-123",
+                "routine-icon-123", RoutineType.DAILY,
                 List.of(
                         new RoutineSectionRequestDTO(
                                 null,
@@ -281,7 +283,7 @@ class DiaryRoutineServiceUnitTest {
                                         LocalTime.of(13, 0),
                                         null)),
                                 false
-                        )));
+                        )), List.of());
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -335,7 +337,7 @@ class DiaryRoutineServiceUnitTest {
     void shouldUpdateDiaryRoutineSuccessfully() {
         DiaryRoutineRequestDTO updatedDTO = new DiaryRoutineRequestDTO(
                 "New routine updated",
-                "routine-icon-updated",
+                "routine-icon-updated", RoutineType.DAILY,
                 new ArrayList<>(
                         List.of(
                                 new RoutineSectionRequestDTO(
@@ -358,7 +360,7 @@ class DiaryRoutineServiceUnitTest {
                                                 LocalTime.of(6, 45),
                                                 null)),
                                         false
-                ))));
+                ))), List.of());
 
         User user = new User();
         user.setId(userId);
@@ -577,7 +579,7 @@ class DiaryRoutineServiceUnitTest {
         // Send update with existing section ID but empty habitGroup list (keep taskGroup)
         DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
                 "Updated",
-                "icon",
+                "icon", RoutineType.DAILY,
                 List.of(new RoutineSectionRequestDTO(
                         sectionId,
                         "Morning",
@@ -588,7 +590,7 @@ class DiaryRoutineServiceUnitTest {
                                 existingSection.getTaskGroups().get(0).getTask().getId(),
                                 LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
                         List.of(), // empty habitGroup — should remove the existing one
-                        false)));
+                        false)), List.of());
 
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
 
@@ -610,7 +612,7 @@ class DiaryRoutineServiceUnitTest {
 
         DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
                 "Updated",
-                "icon",
+                "icon", RoutineType.DAILY,
                 List.of(new RoutineSectionRequestDTO(
                         sectionId,
                         "Morning",
@@ -621,7 +623,7 @@ class DiaryRoutineServiceUnitTest {
                         List.of(new HabitGroupDTO(habitGroupId,
                                 existingSection.getHabitGroups().get(0).getHabit().getId(),
                                 LocalTime.of(6, 15), LocalTime.of(6, 45), null)),
-                        false)));
+                        false)), List.of());
 
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
 
@@ -652,7 +654,7 @@ class DiaryRoutineServiceUnitTest {
 
         DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
                 "Updated",
-                "icon",
+                "icon", RoutineType.DAILY,
                 List.of(new RoutineSectionRequestDTO(
                         sectionId,
                         "Morning",
@@ -669,7 +671,7 @@ class DiaryRoutineServiceUnitTest {
                                 new HabitGroupDTO(null, // new group — no ID
                                         newHabitId,
                                         LocalTime.of(7, 0), LocalTime.of(7, 30), null)),
-                        false)));
+                        false)), List.of());
 
         DiaryRoutineResponseDTO response = diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId);
 
@@ -693,7 +695,7 @@ class DiaryRoutineServiceUnitTest {
 
         DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
                 "Updated",
-                "icon",
+                "icon", RoutineType.DAILY,
                 List.of(new RoutineSectionRequestDTO(
                         sectionId,
                         "Morning",
@@ -706,7 +708,7 @@ class DiaryRoutineServiceUnitTest {
                         List.of(new HabitGroupDTO(habitGroupId,
                                 existingSection.getHabitGroups().get(0).getHabit().getId(),
                                 newStart, newEnd, null)),
-                        false)));
+                        false)), List.of());
 
         diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId);
 
@@ -729,7 +731,7 @@ class DiaryRoutineServiceUnitTest {
 
         DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
                 "Updated",
-                "icon",
+                "icon", RoutineType.DAILY,
                 List.of(new RoutineSectionRequestDTO(
                         sectionId,
                         "Morning",
@@ -738,7 +740,7 @@ class DiaryRoutineServiceUnitTest {
                         LocalTime.of(12, 0),
                         List.of(), // empty tasks
                         List.of(), // empty habits
-                        false)));
+                        false)), List.of());
 
         diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId);
 
@@ -765,7 +767,7 @@ class DiaryRoutineServiceUnitTest {
 
         DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
                 "Updated",
-                "icon",
+                "icon", RoutineType.DAILY,
                 List.of(new RoutineSectionRequestDTO(
                         sectionId,
                         "Morning",
@@ -778,7 +780,7 @@ class DiaryRoutineServiceUnitTest {
                         List.of(new HabitGroupDTO(null, // new group with foreign habit
                                 foreignHabitId,
                                 LocalTime.of(7, 0), LocalTime.of(7, 30), null)),
-                        false)));
+                        false)), List.of());
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -805,7 +807,7 @@ class DiaryRoutineServiceUnitTest {
 
         DiaryRoutineRequestDTO updateDTO = new DiaryRoutineRequestDTO(
                 "Updated",
-                "icon",
+                "icon", RoutineType.DAILY,
                 List.of(new RoutineSectionRequestDTO(
                         sectionId,
                         "Morning",
@@ -818,7 +820,7 @@ class DiaryRoutineServiceUnitTest {
                         List.of(new HabitGroupDTO(existingHabitGroupId,
                                 existingSection.getHabitGroups().get(0).getHabit().getId(),
                                 LocalTime.of(6, 15), LocalTime.of(6, 45), null)),
-                        false)));
+                        false)), List.of());
 
         BusinessException exception = assertThrows(
                 BusinessException.class,

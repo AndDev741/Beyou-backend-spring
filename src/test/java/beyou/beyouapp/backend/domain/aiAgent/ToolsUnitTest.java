@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.domain.aiAgent;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -185,11 +187,11 @@ public class ToolsUnitTest {
      */
     @Test
     void routineAndSectionsAlwaysReachTheServiceWithAnIcon() {
-        DiaryRoutineRequestDTO routine = new DiaryRoutineRequestDTO("Dia produtivo", null, List.of(
+        DiaryRoutineRequestDTO routine = new DiaryRoutineRequestDTO("Dia produtivo", null, RoutineType.DAILY, List.of(
                 new RoutineSectionRequestDTO(null, "Manhã", null, LocalTime.of(8, 0), LocalTime.of(12, 0),
                         List.of(), List.of(), false),
                 new RoutineSectionRequestDTO(null, "Tarde", "lucide:not-in-the-catalog",
-                        LocalTime.of(13, 0), LocalTime.of(18, 0), List.of(), List.of(), false)));
+                        LocalTime.of(13, 0), LocalTime.of(18, 0), List.of(), List.of(), false)), List.of());
 
         tools.createUserRoutine(routine, toolContext);
 
@@ -207,9 +209,9 @@ public class ToolsUnitTest {
     @Test
     void routineKeepsAnIconTheCatalogKnows() {
         String known = AiIconCatalog.ICONS.get(0).id();
-        DiaryRoutineRequestDTO routine = new DiaryRoutineRequestDTO("Dia", known, List.of(
+        DiaryRoutineRequestDTO routine = new DiaryRoutineRequestDTO("Dia", known, RoutineType.DAILY, List.of(
                 new RoutineSectionRequestDTO(null, "Manhã", known, LocalTime.of(8, 0), LocalTime.of(12, 0),
-                        List.of(), List.of(), false)));
+                        List.of(), List.of(), false)), List.of());
 
         tools.createUserRoutine(routine, toolContext);
 

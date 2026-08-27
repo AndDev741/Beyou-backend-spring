@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.integration.routine;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import java.sql.Date;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -110,9 +112,9 @@ class RoutineOwnershipIntegrationTest extends AbstractIntegrationTest {
         UUID routineId = diaryRoutineService.getAllDiaryRoutines(attacker.getId()).get(0).id();
 
         DiaryRoutineRequestDTO edited = new DiaryRoutineRequestDTO(
-                "Mine", "lucide:sun", List.of(
+                "Mine", "lucide:sun", RoutineType.DAILY, List.of(
                         section("Wake up", ownHabit, null),
-                        section("Smuggled", victimHabit, null)));
+                        section("Smuggled", victimHabit, null)), List.of());
 
         assertThatThrownBy(() -> diaryRoutineService.updateDiaryRoutine(routineId, edited, attacker.getId()))
                 .isInstanceOf(BusinessException.class)
@@ -177,6 +179,6 @@ class RoutineOwnershipIntegrationTest extends AbstractIntegrationTest {
     }
 
     private DiaryRoutineRequestDTO routineWith(String name, UUID habitId, UUID taskId) {
-        return new DiaryRoutineRequestDTO(name, "lucide:sun", List.of(section("Wake up", habitId, taskId)));
+        return new DiaryRoutineRequestDTO(name, "lucide:sun", RoutineType.DAILY, List.of(section("Wake up", habitId, taskId)), List.of());
     }
 }

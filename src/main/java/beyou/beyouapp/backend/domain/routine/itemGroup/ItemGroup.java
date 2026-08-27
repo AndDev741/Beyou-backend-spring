@@ -4,6 +4,7 @@ import java.time.LocalTime;
 import java.util.UUID;
 
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -37,4 +38,19 @@ public abstract class ItemGroup {
     @ManyToOne
     @JoinColumn(name = "routine_section_id")
     private RoutineSection routineSection;
+
+    /**
+     * Where this item sits in its section's list, counting from zero.
+     *
+     * <p>Only a LIST routine reads it. A DAILY one orders its items by {@link #startTime}
+     * in both clients ({@code routineSection.tsx}, {@code sectionItems.ts}), which is the
+     * ordering a timed routine wants and the one a list has no way to produce. The column is
+     * still written for DAILY items, so the two shapes share one merge path instead of two.
+     *
+     * <p>{@code NOT NULL DEFAULT 0} in {@code V26}: rows predating the column all collapse to
+     * position zero, which for a DAILY routine is read by nobody and for a LIST routine
+     * cannot happen, since no LIST routine existed before that migration.
+     */
+    @Column(name = "order_index", nullable = false)
+    private int orderIndex;
 }

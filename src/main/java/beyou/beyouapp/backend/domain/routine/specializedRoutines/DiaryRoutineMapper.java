@@ -6,8 +6,12 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutin
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.HabitGroupDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineItemRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.TaskGroupDTO;
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+import beyou.beyouapp.backend.domain.routine.checks.BaseCheck;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
+import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.task.Task;
@@ -60,8 +64,57 @@ public class DiaryRoutineMapper {
         DiaryRoutine diaryRoutine = new DiaryRoutine();
         diaryRoutine.setName(dto.name());
         diaryRoutine.setIconId(dto.iconId());
-        diaryRoutine.setRoutineSections(mapToRoutineSections(dto.routineSections(), diaryRoutine, userId));
+        diaryRoutine.setRoutineType(dto.type());
+        if (dto.isList()) {
+            diaryRoutine.setRoutineSections(new ArrayList<>(
+                    List.of(buildListSection(dto.items(), diaryRoutine, userId))));
+        } else {
+            diaryRoutine.setRoutineSections(mapToRoutineSections(dto.routineSections(), diaryRoutine, userId));
+        }
         return diaryRoutine;
+    }
+
+    /**
+     * The one section a LIST routine stores its items in.
+     *
+     * <p>Named and iconed after the routine itself because {@code routine_sections.name} is
+     * NOT NULL and something has to go there, and because that name is what
+     * {@code SnapshotStructureSerializer} copies onto every {@code SnapshotCheck.sectionName}
+     * — a history row reading "Errands" is at least true, where a placeholder would be noise
+     * in the one place these rows are read by a person.
+     *
+     * <p>Null start and end times, which the schema has always allowed and
+     * {@code formatTime} has always rendered as null. That is what makes a list a list.
+     */
+    public RoutineSection buildListSection(List<RoutineItemRequestDTO> items, DiaryRoutine routine, UUID userId) {
+        RoutineSection section = new RoutineSection();
+        section.setName(routine.getName());
+        section.setIconId(routine.getIconId());
+        section.setOrderIndex(0);
+        section.setFavorite(false);
+        section.setRoutine(routine);
+        section.setTaskGroups(new ArrayList<>());
+        section.setHabitGroups(new ArrayList<>());
+
+        int position = 0;
+        for (RoutineItemRequestDTO item : items == null ? List.<RoutineItemRequestDTO>of() : items) {
+            if (item.isHabit()) {
+                HabitGroup group = new HabitGroup();
+                group.setHabit(habitService.getOwnedHabit(item.habitId(), userId));
+                group.setRoutineSection(section);
+                group.setOrderIndex(position++);
+                group.setHabitGroupChecks(new ArrayList<>());
+                section.getHabitGroups().add(group);
+            } else {
+                TaskGroup group = new TaskGroup();
+                group.setTask(taskService.getOwnedTask(item.taskId(), userId));
+                group.setRoutineSection(section);
+                group.setOrderIndex(position++);
+                group.setTaskGroupChecks(new ArrayList<>());
+                section.getTaskGroups().add(group);
+            }
+        }
+        return section;
     }
 
     public DiaryRoutineResponseDTO toResponse(DiaryRoutine entity) {
@@ -74,12 +127,49 @@ public class DiaryRoutineMapper {
                 entity.getId(),
                 entity.getName(),
                 entity.getIconId(),
+                entity.getRoutineType(),
                 sectionDTOs,
+                entity.isList() ? mapListItems(entity) : List.of(),
                 mapSchedule(entity.getSchedule()),
                 entity.getXpProgress().getXp(),
                 entity.getXpProgress().getActualLevelXp(),
                 entity.getXpProgress().getNextLevelXp(),
                 entity.getXpProgress().getLevel());
+    }
+
+    /**
+     * A LIST routine's items flattened into the order the user arranged, habits and tasks
+     * interleaved.
+     *
+     * <p>The same rows the section DTOs above already carry, in the shape its clients render.
+     * See the note on {@code DiaryRoutineResponseDTO} for why both go out together.
+     */
+    private List<DiaryRoutineResponseDTO.RoutineItemResponseDTO> mapListItems(DiaryRoutine entity) {
+        return entity.listItems().stream().map(group -> {
+            boolean habitSide = group instanceof HabitGroup;
+            List<BaseCheck> checks = new ArrayList<>(habitSide
+                    ? nullSafe(((HabitGroup) group).getHabitGroupChecks())
+                    : nullSafe(((TaskGroup) group).getTaskGroupChecks()));
+            return new DiaryRoutineResponseDTO.RoutineItemResponseDTO(
+                    group.getId(),
+                    habitSide
+                            ? DiaryRoutineResponseDTO.RoutineItemType.HABIT
+                            : DiaryRoutineResponseDTO.RoutineItemType.TASK,
+                    habitSide ? ((HabitGroup) group).getHabit().getId() : null,
+                    habitSide ? null : ((TaskGroup) group).getTask().getId(),
+                    group.getOrderIndex(),
+                    checks);
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * Copies a lazy check collection into a plain list INSIDE the transaction.
+     *
+     * <p>Same reason the section mapper does it: handing Jackson the Hibernate proxy is how
+     * {@code LazyInitializationException} got thrown during serialization once already.
+     */
+    private <T extends BaseCheck> List<T> nullSafe(List<T> checks) {
+        return checks == null ? List.of() : checks;
     }
 
     private DiaryRoutineResponseDTO.ScheduleResponseDTO mapSchedule(Schedule schedule) {

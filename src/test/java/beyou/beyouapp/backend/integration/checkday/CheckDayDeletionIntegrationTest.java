@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.integration.checkday;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -249,9 +251,9 @@ class CheckDayDeletionIntegrationTest extends AbstractIntegrationTest {
 
     private Routine createRoutineWith(UUID habitId, UUID taskId) {
         DiaryRoutineResponseDTO created = diaryRoutineService.createDiaryRoutine(
-                new DiaryRoutineRequestDTO("R", "", List.of(new RoutineSectionRequestDTO(
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(new RoutineSectionRequestDTO(
                         null, "Morning", "ic", LocalTime.of(6, 0), LocalTime.of(9, 0),
-                        List.of(), List.of(), false))),
+                        List.of(), List.of(), false)), List.of()),
                 user);
         UUID routineId = created.id();
         UUID sectionId = created.routineSections().get(0).id();
