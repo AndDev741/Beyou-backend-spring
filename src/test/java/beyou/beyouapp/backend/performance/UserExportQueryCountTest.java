@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.performance;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.HibernateStatistics;
 import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessageService;
@@ -168,9 +170,9 @@ class UserExportQueryCountTest extends AbstractIntegrationTest {
         // the six per-element reads.
         for (int i = 0; i < n; i++) {
             diaryRoutineService.createDiaryRoutine(new DiaryRoutineRequestDTO(
-                    "routine-" + i, "lucide:sun",
+                    "routine-" + i, "lucide:sun", RoutineType.DAILY,
                     List.of(new RoutineSectionRequestDTO(null, "section", "lucide:sunrise",
-                            LocalTime.of(7, 0), LocalTime.of(8, 0), List.of(), List.of(), false))),
+                            LocalTime.of(7, 0), LocalTime.of(8, 0), List.of(), List.of(), false)), List.of()),
                     userId);
         }
         List<UUID> routineIds = diaryRoutineService.getAllDiaryRoutines(userId).stream()

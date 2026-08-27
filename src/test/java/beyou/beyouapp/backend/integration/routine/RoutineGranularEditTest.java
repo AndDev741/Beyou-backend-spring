@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.integration.routine;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
@@ -75,9 +77,9 @@ class RoutineGranularEditTest extends AbstractIntegrationTest {
                 user.getId()).getId();
 
         DiaryRoutineResponseDTO created = diaryRoutineService.createDiaryRoutine(
-                new DiaryRoutineRequestDTO("R", "", List.of(new RoutineSectionRequestDTO(
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(new RoutineSectionRequestDTO(
                         null, "Morning", "ic", LocalTime.of(6, 0), LocalTime.of(9, 0),
-                        List.of(), List.of(), false))),
+                        List.of(), List.of(), false)), List.of()),
                 user);
         routineId = created.id();
         sectionId = created.routineSections().get(0).id();

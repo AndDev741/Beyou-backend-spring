@@ -59,6 +59,23 @@ public abstract class Routine {
     @JoinColumn(name = "schedule_id", nullable = true)
     private Schedule schedule;
 
+    /**
+     * Whether this routine is the timed, sectioned kind or the plain checkable list.
+     *
+     * <p>Never null: {@code V26} gives the column a {@code 'DAILY'} default so every routine
+     * that predates the List type, and every client that has never heard of the field, keeps
+     * exactly the behaviour it had. The field initialiser says the same thing for entities
+     * built in memory.
+     *
+     * <p>Read it through {@link #isList()} / {@link #isDaily()} rather than comparing the
+     * enum at call sites. Those two are the seam: they are what a reader greps for to find
+     * everywhere the two shapes actually diverge, and today that is a short list confined to
+     * validation, mapping and the clients' rendering.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "routine_type", nullable = false, length = 20)
+    private RoutineType routineType = RoutineType.DAILY;
+
     @Embedded
     private XpProgress xpProgress = new XpProgress();
 
@@ -70,6 +87,16 @@ public abstract class Routine {
      */
     @Embedded
     private CheckProgress checkProgress = new CheckProgress();
+
+    /** A flat list of checkable items, with no sections and no times. */
+    public boolean isList() {
+        return routineType == RoutineType.LIST;
+    }
+
+    /** The original shape: sections with time windows, items with their own. */
+    public boolean isDaily() {
+        return !isList();
+    }
 
     @PrePersist
     protected void onUserCreate(){

@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.controller;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -116,8 +118,8 @@ class RoutineControllerTest extends AbstractIntegrationTest {
     void shouldCreateDiaryRoutine() throws Exception {
         DiaryRoutineRequestDTO requestDTO = new DiaryRoutineRequestDTO(
                 "My routine",
-                "icon",
-                List.of(new RoutineSectionRequestDTO(null, "Morning", "sun", null, null, List.of(), List.of(), false)));
+                "icon", RoutineType.DAILY,
+                List.of(new RoutineSectionRequestDTO(null, "Morning", "sun", null, null, List.of(), List.of(), false)), List.of());
 
         when(diaryRoutineService.createDiaryRoutine(requestDTO, user)).thenReturn(responseDto);
 
@@ -161,8 +163,8 @@ class RoutineControllerTest extends AbstractIntegrationTest {
     void shouldUpdateDiaryRoutine() throws Exception {
         DiaryRoutineRequestDTO requestDTO = new DiaryRoutineRequestDTO(
                 "Updated routine",
-                "icon-2",
-                List.of(new RoutineSectionRequestDTO(null, "Evening", "moon", null, null, List.of(), List.of(), true)));
+                "icon-2", RoutineType.DAILY,
+                List.of(new RoutineSectionRequestDTO(null, "Evening", "moon", null, null, List.of(), List.of(), true)), List.of());
 
         DiaryRoutineResponseDTO updatedResponse = new DiaryRoutineResponseDTO(
                 routineId,

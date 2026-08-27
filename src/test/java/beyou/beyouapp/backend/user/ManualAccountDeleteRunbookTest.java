@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
@@ -100,11 +102,11 @@ class ManualAccountDeleteRunbookTest extends AbstractIntegrationTest {
         UUID taskId = taskService.getAllTasks(userId).get(0).id();
 
         diaryRoutineService.createDiaryRoutine(new DiaryRoutineRequestDTO(
-                "Morning", "lucide:sun", List.of(new RoutineSectionRequestDTO(
+                "Morning", "lucide:sun", RoutineType.DAILY, List.of(new RoutineSectionRequestDTO(
                         null, "Wake up", "lucide:sunrise", LocalTime.of(7, 0), LocalTime.of(8, 0),
                         List.of(new TaskGroupDTO(null, taskId, LocalTime.of(7, 30), LocalTime.of(7, 40), null)),
                         List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null)),
-                        false))), userId);
+                        false)), List.of()), userId);
         UUID routineId = diaryRoutineService.getAllDiaryRoutines(userId).get(0).id();
 
         scheduleService.create(new CreateScheduleDTO(Set.of(WeekDay.Monday), routineId), userId);

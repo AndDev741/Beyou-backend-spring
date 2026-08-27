@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.integration.routine;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.category.CategoryService;
@@ -82,9 +84,9 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
         UUID habitGroupId = created.routineSections().get(0).habitGroup().get(0).id();
 
         DiaryRoutineResponseDTO moved = diaryRoutineService.updateDiaryRoutine(routineId,
-                new DiaryRoutineRequestDTO("R", "", List.of(
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(
                         emptyMorning(sectionId),
-                        newEveningHolding(habitGroupId, null))),
+                        newEveningHolding(habitGroupId, null)), List.of()),
                 user.getId());
 
         assertEquals(0, section(moved, "Morning").habitGroup().size());
@@ -126,9 +128,9 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
         });
 
         diaryRoutineService.updateDiaryRoutine(routineId,
-                new DiaryRoutineRequestDTO("R", "", List.of(
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(
                         emptyMorning(sectionId),
-                        newEveningHolding(habitGroupId, null))),
+                        newEveningHolding(habitGroupId, null)), List.of()),
                 user.getId());
 
         transactionTemplate.executeWithoutResult(tx -> {
@@ -157,9 +159,9 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
         fabricated.setXpGenerated(9999);
 
         DiaryRoutineResponseDTO updated = diaryRoutineService.updateDiaryRoutine(routineId,
-                new DiaryRoutineRequestDTO("R", "", List.of(
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(
                         emptyMorning(sectionId),
-                        newEveningHolding(null, List.of(fabricated)))),
+                        newEveningHolding(null, List.of(fabricated))), List.of()),
                 user.getId());
 
         int returned = section(updated, "Evening").habitGroup().get(0).habitGroupChecks().size();
@@ -190,7 +192,7 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
                 false);
 
         DiaryRoutineResponseDTO copy = diaryRoutineService.createDiaryRoutine(
-                new DiaryRoutineRequestDTO("Copy of R", "", List.of(echoed)), user.getId());
+                new DiaryRoutineRequestDTO("Copy of R", "", RoutineType.DAILY, List.of(echoed), List.of()), user.getId());
 
         assertNotEquals(sourceRoutineId, copy.id(), "a copy, not the original");
         assertNotEquals(sectionId, copy.routineSections().get(0).id(),
@@ -230,7 +232,7 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
                 false);
 
         DiaryRoutineResponseDTO copy = diaryRoutineService.createDiaryRoutine(
-                new DiaryRoutineRequestDTO("Copia", "", List.of(echoed)), user.getId());
+                new DiaryRoutineRequestDTO("Copia", "", RoutineType.DAILY, List.of(echoed), List.of()), user.getId());
 
         assertEquals(1, copy.routineSections().get(0).habitGroup().size());
         assertNotEquals(habitGroupId, copy.routineSections().get(0).habitGroup().get(0).id(),
@@ -263,8 +265,8 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
                 false);
 
         DiaryRoutineResponseDTO updated = diaryRoutineService.updateDiaryRoutine(routineId,
-                new DiaryRoutineRequestDTO("R", "", List.of(
-                        emptyMorning(sectionId), clientNewSection)),
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(
+                        emptyMorning(sectionId), clientNewSection), List.of()),
                 user.getId());
 
         assertEquals(1, section(updated, "Evening").habitGroup().size());
@@ -299,7 +301,7 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
                 false);
 
         diaryRoutineService.updateDiaryRoutine(routineId,
-                new DiaryRoutineRequestDTO("R", "", List.of(garbled)), user.getId());
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(garbled), List.of()), user.getId());
 
         transactionTemplate.executeWithoutResult(tx -> {
             DiaryRoutine routine = diaryRoutineRepository.findById(routineId).orElseThrow();
@@ -314,12 +316,12 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
 
     private DiaryRoutineResponseDTO created() {
         return diaryRoutineService.createDiaryRoutine(
-                new DiaryRoutineRequestDTO("R", "", List.of(new RoutineSectionRequestDTO(
+                new DiaryRoutineRequestDTO("R", "", RoutineType.DAILY, List.of(new RoutineSectionRequestDTO(
                         null, "Morning", "ic", LocalTime.of(6, 0), LocalTime.of(9, 0),
                         List.of(),
                         List.of(new HabitGroupDTO(null, habitId,
                                 LocalTime.of(6, 0), LocalTime.of(6, 30), null)),
-                        false))),
+                        false)), List.of()),
                 user);
     }
 

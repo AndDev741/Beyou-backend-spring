@@ -31,7 +31,9 @@ import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
+import beyou.beyouapp.backend.domain.routine.RoutineType;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import jakarta.validation.Validation;
 
 /**
@@ -168,5 +170,97 @@ public class ToolsJsonBindingTest {
         String chain = messageChain(error);
         assertTrue(chain.contains("startTime") && chain.contains("HH:mm"), chain);
         verify(diaryRoutineService, never()).addHabitToSection(any(), any(), any(), any(), any(), any());
+    }
+
+    // ── LIST routines ────────────────────────────────────────────────────
+
+    /**
+     * The list tool's own bind: a flat items array with no times anywhere.
+     *
+     * <p>Worth testing here rather than only in ToolsUnitTest because the shape the model
+     * sends is the whole risk. A typed Java call proves nothing about whether Spring AI can
+     * turn {@code {"items":[{"habitId":"..."}]}} into a {@code List<RoutineItemRequestDTO>}
+     * with the other side of each entry left null.
+     */
+    @Test
+    void listRoutineBindsAFlatItemsArray() {
+        UUID habitId = UUID.randomUUID();
+        UUID taskId = UUID.randomUUID();
+
+        callback("createUserListRoutine").call("""
+                {"name":"Errands","iconId":"list","items":[
+                  {"habitId":"%s"},
+                  {"taskId":"%s"}
+                ]}""".formatted(habitId, taskId), toolContext);
+
+        ArgumentCaptor<DiaryRoutineRequestDTO> captor = ArgumentCaptor.forClass(DiaryRoutineRequestDTO.class);
+        verify(diaryRoutineService).createDiaryRoutine(captor.capture(), eq(userId));
+        DiaryRoutineRequestDTO sent = captor.getValue();
+
+        assertEquals(RoutineType.LIST, sent.type(), "the tool sets the shape, not the model");
+        assertEquals(2, sent.items().size());
+        assertEquals(habitId, sent.items().get(0).habitId());
+        assertEquals(null, sent.items().get(0).taskId(), "a habit entry names no task");
+        assertEquals(taskId, sent.items().get(1).taskId());
+        assertEquals(null, sent.items().get(1).habitId());
+    }
+
+    /**
+     * A model that drops iconId still gets one. Same rule the sectioned path already
+     * enforces, and the reason a list with a hole where every other row has an icon never
+     * reaches a real account.
+     */
+    @Test
+    void listRoutineWithoutAnIconGetsTheDefault() {
+        callback("createUserListRoutine").call("""
+                {"name":"Errands","items":[{"habitId":"%s"}]}""".formatted(UUID.randomUUID()), toolContext);
+
+        ArgumentCaptor<DiaryRoutineRequestDTO> captor = ArgumentCaptor.forClass(DiaryRoutineRequestDTO.class);
+        verify(diaryRoutineService).createDiaryRoutine(captor.capture(), eq(userId));
+        assertTrue(captor.getValue().iconId() != null && !captor.getValue().iconId().isBlank());
+    }
+
+    /** The edit tool carries the item ids through, which is what saves the check history. */
+    @Test
+    void listRoutineEditKeepsItemIds() {
+        UUID routineId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        UUID habitId = UUID.randomUUID();
+
+        callback("editUserListRoutine").call("""
+                {"routineId":"%s","name":"Errands","iconId":"list","items":[
+                  {"id":"%s","habitId":"%s"}
+                ]}""".formatted(routineId, itemId, habitId), toolContext);
+
+        ArgumentCaptor<DiaryRoutineRequestDTO> captor = ArgumentCaptor.forClass(DiaryRoutineRequestDTO.class);
+        verify(diaryRoutineService).updateDiaryRoutine(eq(routineId), captor.capture(), eq(userId));
+        assertEquals(itemId, captor.getValue().items().get(0).id(),
+                "an id the model echoed back must survive the bind, or the edit erases history");
+    }
+
+    /**
+     * A daily routine sent through the sectioned tool stays DAILY.
+     *
+     * <p>The guard on a real bug: {@code withIcons} rebuilds the request, and while it was
+     * being taught about list routines it briefly hardcoded the type, which would have turned
+     * every agent-created routine into whatever that constant said.
+     */
+    /**
+     * Zero-padded on purpose. The lenient TOOL_TIME parser only covers tools that take a time
+     * as a String parameter; a section time rides inside the request DTO as a LocalTime and
+     * goes through Jackson, which rejects "6:00" outright. Worth knowing before writing
+     * another fixture here.
+     */
+    @Test
+    void sectionedToolStillProducesADailyRoutine() {
+        callback("createUserRoutine").call("""
+                {"routine":{"name":"Morning","iconId":"sun","routineSections":[
+                  {"name":"Wake up","iconId":"sun","startTime":"06:00","endTime":"08:00"}
+                ]}}""", toolContext);
+
+        ArgumentCaptor<DiaryRoutineRequestDTO> captor = ArgumentCaptor.forClass(DiaryRoutineRequestDTO.class);
+        verify(diaryRoutineService).createDiaryRoutine(captor.capture(), eq(userId));
+        assertEquals(RoutineType.DAILY, captor.getValue().type());
+        assertEquals(1, captor.getValue().routineSections().size());
     }
 }

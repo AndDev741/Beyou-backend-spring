@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.domain.aiAgent;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -42,6 +44,7 @@ import beyou.beyouapp.backend.domain.routine.schedule.dto.ScheduleResponseDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineItemRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineResponseDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
@@ -385,7 +388,9 @@ public class Tools {
         return diaryRoutineService.getTodayRoutineScheduled(userId(toolContext));
     }
 
-    @Tool(description = "Create a new routine. Sections need name, iconId and HH:mm start/end times; "
+    @Tool(description = "Create a new DAILY routine: sections with HH:mm windows. For a plain "
+            + "checklist with no times use createUserListRoutine instead. Sections need name, "
+            + "iconId and HH:mm start/end times; "
             + "habitGroup/taskGroup items reference existing habitId/taskId and their times must be "
             + "inside the section time window. Send NO id anywhere in this payload — not for the "
             + "routine, the sections or the items; the server assigns them and ignores any id you "
@@ -404,6 +409,35 @@ public class Tools {
     DiaryRoutineResponseDTO editUserRoutine(UUID routineId, DiaryRoutineRequestDTO routine, ToolContext toolContext) {
         log.info("AI agent is editing routine {} for user: {}", routineId, userId(toolContext));
         return diaryRoutineService.updateDiaryRoutine(routineId, valid(withIcons(routine)), userId(toolContext));
+    }
+
+    @Tool(description = "Create a LIST routine: a flat checklist with NO sections and NO times, "
+            + "which the user ticks off whenever they like during the day. Send only name, iconId "
+            + "and items; each item names EXACTLY ONE of habitId or taskId, never both and never "
+            + "neither, and the order you send them is the order the user sees. Send NO id on any "
+            + "item — the server assigns them. Do NOT send routineSections; a list has none. If the "
+            + "user does not have the habit or task yet, create it first with "
+            + "createUserHabit/createUserTask. A list routine still has to be scheduled with "
+            + "createSchedule before it shows on the dashboard, exactly like a daily one")
+    DiaryRoutineResponseDTO createUserListRoutine(String name, String iconId,
+            List<RoutineItemRequestDTO> items, ToolContext toolContext) {
+        log.info("AI agent is creating a list routine for user: {}", userId(toolContext));
+        DiaryRoutineRequestDTO routine = new DiaryRoutineRequestDTO(
+                name, AiIconCatalog.orDefault(iconId), RoutineType.LIST, null, items);
+        return diaryRoutineService.createDiaryRoutine(valid(routine), userId(toolContext));
+    }
+
+    @Tool(description = "FULL REPLACE of a LIST routine's items: the list you send REPLACES the "
+            + "current one, and any item you omit is DELETED along with its check history. Fetch the "
+            + "routine first with getUserRoutines and echo back the id of every item you are keeping, "
+            + "otherwise the user loses the record of every day they ticked it. Each item names "
+            + "EXACTLY ONE of habitId or taskId. Order is the order you send")
+    DiaryRoutineResponseDTO editUserListRoutine(UUID routineId, String name, String iconId,
+            List<RoutineItemRequestDTO> items, ToolContext toolContext) {
+        log.info("AI agent is editing list routine {} for user: {}", routineId, userId(toolContext));
+        DiaryRoutineRequestDTO routine = new DiaryRoutineRequestDTO(
+                name, AiIconCatalog.orDefault(iconId), RoutineType.LIST, null, items);
+        return diaryRoutineService.updateDiaryRoutine(routineId, valid(routine), userId(toolContext));
     }
 
     /**
@@ -427,7 +461,12 @@ public class Tools {
                                 section.startTime(), section.endTime(),
                                 section.taskGroup(), section.habitGroup(), section.favorite()))
                         .toList();
-        return new DiaryRoutineRequestDTO(routine.name(), AiIconCatalog.orDefault(routine.iconId()), sections);
+        // routine.type(), NOT a hardcoded DAILY: this helper is on the path of every routine
+        // the agent creates or edits, and forcing the type here would silently turn a list
+        // back into a daily routine with no sections, which validation then rejects with a
+        // message about sections the model never sent.
+        return new DiaryRoutineRequestDTO(routine.name(), AiIconCatalog.orDefault(routine.iconId()),
+                routine.type(), sections, routine.items());
     }
 
     @Tool(description = "Add ONE existing task to a routine section. Times are HH:mm inside the "

@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.user;
 
+import beyou.beyouapp.backend.domain.routine.RoutineType;
+
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.DriverManager;
@@ -123,11 +125,11 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
         // A routine holding both, which is what makes tasks and habits reachable
         // from a second direction (task_groups / habit_groups).
         diaryRoutineService.createDiaryRoutine(new DiaryRoutineRequestDTO(
-                "Morning", "lucide:sun", List.of(new RoutineSectionRequestDTO(
+                "Morning", "lucide:sun", RoutineType.DAILY, List.of(new RoutineSectionRequestDTO(
                         null, "Wake up", "lucide:sunrise", LocalTime.of(7, 0), LocalTime.of(8, 0),
                         List.of(new TaskGroupDTO(null, taskId, LocalTime.of(7, 30), LocalTime.of(7, 40), null)),
                         List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null)),
-                        false))), userId);
+                        false)), List.of()), userId);
 
         // Scheduled, because an unscheduled routine cannot leave a schedule behind.
         UUID routineId = diaryRoutineService.getAllDiaryRoutines(userId).get(0).id();
