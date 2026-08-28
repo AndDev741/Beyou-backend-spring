@@ -27,6 +27,8 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import beyou.beyouapp.backend.domain.focus.FocusCycleRepository;
+import beyou.beyouapp.backend.domain.focus.FocusMicroTaskRepository;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -49,6 +51,14 @@ class SnapshotServiceTest {
 
     @Mock
     private SnapshotStructureSerializer structureSerializer;
+
+    // Only read while shaping the response; Mockito's empty-list default is exactly the
+    // "nothing focused that day" case these tests already describe.
+    @Mock
+    private FocusCycleRepository focusCycleRepository;
+
+    @Mock
+    private FocusMicroTaskRepository focusMicroTaskRepository;
 
     @InjectMocks
     private SnapshotService snapshotService;
