@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -42,7 +43,7 @@ public interface FocusMicroTaskRepository extends JpaRepository<FocusMicroTask, 
     List<FocusMicroTask> findDay(@Param("userId") UUID userId, @Param("date") LocalDate date);
 
     /**
-     * The distinct names this user has pinned, most recently created first.
+     * The distinct names this user has pinned, most recently created first, capped by the caller.
      *
      * <p>The pinned TEMPLATE set. Derived from the rows rather than kept in a second table, so
      * pinning is one flag on one row and there is no separate thing to keep in step. Server-side is
@@ -54,7 +55,7 @@ public interface FocusMicroTaskRepository extends JpaRepository<FocusMicroTask, 
         GROUP BY t.name
         ORDER BY MAX(t.createdAt) DESC
         """)
-    List<String> findPinnedNames(@Param("userId") UUID userId);
+    List<String> findPinnedNames(@Param("userId") UUID userId, Pageable page);
 
     /** Every row of this user carrying one name, across all days and items. What pinning walks. */
     List<FocusMicroTask> findAllByUserIdAndName(UUID userId, String name);

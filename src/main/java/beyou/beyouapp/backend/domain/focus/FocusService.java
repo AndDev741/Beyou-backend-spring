@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +51,9 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class FocusService {
+
+    /** How many pinned names one list read may materialise. See {@link #materialisePinned}. */
+    static final int MAX_PINNED_TEMPLATES = 50;
 
     private final FocusCycleRepository cycleRepository;
     private final FocusMicroTaskRepository microTaskRepository;
@@ -195,9 +199,23 @@ public class FocusService {
         return ordered.stream().map(FocusMicroTaskResponseDTO::from).toList();
     }
 
+    /**
+     * Remove the row — and, if it was pinned, stop keeping the name.
+     *
+     * <p>Without the second half a deleted pinned row came straight back on the next list read,
+     * because the name was still a template everywhere else and {@link #listMicroTasks}
+     * materialised it again. It vanished, then reappeared, with nothing to explain why. Deleting a
+     * kept thing is the clearest "stop keeping this" a person can express, so it is read as that.
+     * Rows already materialised on other items stay: they are real rows on real items, they just
+     * stop being pinned.
+     */
     @Transactional
     public void deleteMicroTask(User user, UUID id) {
-        microTaskRepository.delete(ownedTask(user, id));
+        FocusMicroTask task = ownedTask(user, id);
+        if (task.isPinned()) {
+            setPinnedByName(user, task.getName(), false);
+        }
+        microTaskRepository.delete(task);
     }
 
     // ------------------------------------------------------------------- day
@@ -226,7 +244,10 @@ public class FocusService {
      * constraint violation on the ordinary path.
      */
     private void materialisePinned(User user, LocalDate today, ItemGroup item) {
-        List<String> pinned = microTaskRepository.findPinnedNames(user.getId());
+        // Bounded: this runs on a GET, under the read tier, and inserts one row per name. Fifty
+        // most-recently pinned names is well past what anybody keeps on purpose, and it caps what a
+        // single read can write. Mirrors the @Max(100) on docs search.
+        List<String> pinned = microTaskRepository.findPinnedNames(user.getId(), PageRequest.of(0, MAX_PINNED_TEMPLATES));
         if (pinned.isEmpty()) return;
 
         List<FocusMicroTask> current = microTaskRepository.findForItem(user.getId(), today, item.getId());

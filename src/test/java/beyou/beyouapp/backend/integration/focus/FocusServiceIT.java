@@ -392,7 +392,84 @@ class FocusServiceIT extends AbstractIntegrationTest {
         assertThat(dto.focusCycles()).hasSize(3);
     }
 
+    @Test
+    void anotherRoutinesCyclesStayOutOfThisRoutinesSnapshot() {
+        // The javadoc on toResponseDTO promises it; until now no test had a second routine to
+        // prove it, so half the filter ran against nothing.
+        UUID elsewhere = newRoutineWithOneHabit(user, "Evening", 20);
+        Instant start = Instant.now().minusSeconds(1500);
+        focusService.recordCycle(user, new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, Instant.now(), 25));
+        focusService.recordCycle(user, new RecordCycleRequestDTO(elsewhere, CycleKind.POMODORO, start, Instant.now(), 25));
+        focusService.recordCycle(user, new RecordCycleRequestDTO(null, CycleKind.POMODORO, start, Instant.now(), 25));
+
+        SnapshotResponseDTO morning = snapshotService.toResponseDTO(
+            snapshotService.createSnapshot(routine, user, LocalDate.now()));
+
+        // This routine's own item, plus the cycle on no item, which has nowhere else to appear.
+        // The Evening routine's pomodoro is left to the Evening routine's snapshot.
+        assertThat(morning.focusCycles()).extracting(FocusCycleResponseDTO::itemGroupId)
+            .containsExactlyInAnyOrder(itemA, null);
+    }
+
+    @Test
+    void theDaysSnapshotsShareOneReadOfTheFocusRows() {
+        // Two routines snapshotted on the same day come back with the same focus rows each, from a
+        // single read per table rather than one per routine. The behaviour is asserted; the query
+        // count is what the hoist in getSnapshotsForDay is for.
+        UUID elsewhere = newRoutineWithOneHabit(user, "Evening", 20);
+        Instant start = Instant.now().minusSeconds(1500);
+        focusService.recordCycle(user, new RecordCycleRequestDTO(null, CycleKind.POMODORO, start, Instant.now(), 25));
+        focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(elsewhere, "Tea", false));
+        snapshotService.createSnapshot(routine, user, LocalDate.now());
+        snapshotService.createSnapshot(eveningRoutine, user, LocalDate.now());
+
+        List<SnapshotResponseDTO> day = snapshotService.getSnapshotsForDay(LocalDate.now(), user.getId());
+
+        assertThat(day).hasSize(2);
+        assertThat(day).allSatisfy(dto -> assertThat(dto.focusCycles()).hasSize(1));
+        SnapshotResponseDTO evening = day.stream().filter(d -> d.routineName().equals("Evening")).findFirst().orElseThrow();
+        assertThat(evening.checks()).flatExtracting(SnapshotCheckResponseDTO::microTasks)
+            .extracting(FocusMicroTaskResponseDTO::name).containsExactly("Tea");
+    }
+
     // -------------------------------------------------------------- helpers
+
+    private DiaryRoutine eveningRoutine;
+
+    /** A second scheduled routine with one habit, so cross-routine rules have something to cross. */
+    private UUID newRoutineWithOneHabit(User owner, String name, int hour) {
+        Habit habit = newHabit(owner, name + " habit");
+        Schedule schedule = new Schedule();
+        schedule.setDays(new HashSet<>(Arrays.asList(WeekDay.values())));
+        schedule = scheduleRepository.saveAndFlush(schedule);
+
+        DiaryRoutine other = new DiaryRoutine();
+        other.setName(name);
+        other.setIconId("icon");
+        other.setUser(owner);
+        other.setSchedule(schedule);
+        other.setXpProgress(new XpProgress(0D, 0, 0D, 50D));
+
+        RoutineSection section = new RoutineSection();
+        section.setName(name);
+        section.setIconId("icon");
+        section.setStartTime(LocalTime.of(hour, 0));
+        section.setEndTime(LocalTime.of(hour + 2, 0));
+        section.setOrderIndex(0);
+        section.setFavorite(false);
+        section.setRoutine(other);
+        section.setHabitGroups(List.of(group(habit, section, hour)));
+        section.setTaskGroups(new ArrayList<>());
+        other.setRoutineSections(List.of(section));
+
+        other = diaryRoutineRepository.saveAndFlush(other);
+        entityManager.flush();
+        entityManager.clear();
+        eveningRoutine = diaryRoutineRepository.findById(other.getId()).orElseThrow();
+        user = userRepository.findById(user.getId()).orElseThrow();
+        routine = diaryRoutineRepository.findById(routine.getId()).orElseThrow();
+        return eveningRoutine.getRoutineSections().get(0).getHabitGroups().get(0).getId();
+    }
 
     private User newUser(String tag) {
         User u = new User();

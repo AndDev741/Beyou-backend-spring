@@ -14,6 +14,6 @@ import jakarta.validation.constraints.Size;
  */
 public record CreateMicroTaskRequestDTO(
     @NotNull UUID itemGroupId,
-    @NotBlank @Size(max = 80) String name,
+    @NotBlank @Size(min = 1, max = 80) String name,
     boolean pinned
 ) {}

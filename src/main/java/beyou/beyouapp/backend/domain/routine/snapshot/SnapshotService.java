@@ -82,8 +82,14 @@ public class SnapshotService {
 
     @Transactional(readOnly = true)
     public List<SnapshotResponseDTO> getSnapshotsForDay(LocalDate date, UUID userId) {
-        return snapshotRepository.findAllByUserIdAndSnapshotDate(userId, date).stream()
-                .map(this::toResponseDTO)
+        List<RoutineSnapshot> snapshots = snapshotRepository.findAllByUserIdAndSnapshotDate(userId, date);
+        if (snapshots.isEmpty()) return List.of();
+        // The focus rows are keyed by (user, day), the same pair for every snapshot in this list,
+        // so they are read ONCE here and handed down. Mapping through the single-snapshot overload
+        // re-read them per routine, which put a 2N back on the very endpoint built to remove an N+1.
+        FocusDay focus = readFocusDay(userId, date);
+        return snapshots.stream()
+                .map(snapshot -> toResponseDTO(snapshot, focus))
                 .collect(Collectors.toList());
     }
 
@@ -121,9 +127,17 @@ public class SnapshotService {
      * show. A cycle on some OTHER routine's item is left to that routine's snapshot.
      */
     public SnapshotResponseDTO toResponseDTO(RoutineSnapshot snapshot) {
-        UUID userId = snapshot.getUser().getId();
-        LocalDate day = snapshot.getSnapshotDate();
+        return toResponseDTO(snapshot, readFocusDay(snapshot.getUser().getId(), snapshot.getSnapshotDate()));
+    }
 
+    /** The Focus Mode's rows for one (user, day), read once and shared by every snapshot of that day. */
+    private record FocusDay(
+            Map<UUID, List<FocusMicroTaskResponseDTO>> microTasksByGroup,
+            Map<UUID, Long> pomodorosByGroup,
+            List<FocusCycle> cycles) {
+    }
+
+    private FocusDay readFocusDay(UUID userId, LocalDate day) {
         Map<UUID, List<FocusMicroTaskResponseDTO>> microTasksByGroup =
                 focusMicroTaskRepository.findDay(userId, day).stream()
                         .collect(Collectors.groupingBy(
@@ -134,6 +148,13 @@ public class SnapshotService {
         Map<UUID, Long> pomodorosByGroup = dayCycles.stream()
                 .filter(c -> c.getItemGroup() != null && c.getKind() == CycleKind.POMODORO)
                 .collect(Collectors.groupingBy(c -> c.getItemGroup().getId(), Collectors.counting()));
+        return new FocusDay(microTasksByGroup, pomodorosByGroup, dayCycles);
+    }
+
+    private SnapshotResponseDTO toResponseDTO(RoutineSnapshot snapshot, FocusDay focus) {
+        Map<UUID, List<FocusMicroTaskResponseDTO>> microTasksByGroup = focus.microTasksByGroup();
+        Map<UUID, Long> pomodorosByGroup = focus.pomodorosByGroup();
+        List<FocusCycle> dayCycles = focus.cycles();
 
         Set<UUID> groupsInThisRoutine = new HashSet<>();
         List<SnapshotCheckResponseDTO> checkDTOs = snapshot.getChecks().stream()
