@@ -2,8 +2,11 @@ package beyou.beyouapp.backend.domain.focus;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -16,6 +19,7 @@ import beyou.beyouapp.backend.domain.focus.dto.FocusCycleResponseDTO;
 import beyou.beyouapp.backend.domain.focus.dto.FocusDayResponseDTO;
 import beyou.beyouapp.backend.domain.focus.dto.FocusMicroTaskResponseDTO;
 import beyou.beyouapp.backend.domain.focus.dto.RecordCycleRequestDTO;
+import beyou.beyouapp.backend.domain.focus.dto.ReorderMicroTasksRequestDTO;
 import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroupRepository;
 import beyou.beyouapp.backend.exceptions.BusinessException;
@@ -109,8 +113,10 @@ public class FocusService {
         LocalDate today = UserDateResolver.today(user);
         String name = normalise(request.name());
 
-        FocusMicroTask existing = microTaskRepository
-            .findForItem(user.getId(), today, item.getId()).stream()
+        // One read serves both questions: is the name already here, and where does the end of the
+        // list sit.
+        List<FocusMicroTask> current = microTaskRepository.findForItem(user.getId(), today, item.getId());
+        FocusMicroTask existing = current.stream()
             .filter(t -> t.getName().equals(name))
             .findFirst()
             .orElse(null);
@@ -122,7 +128,7 @@ public class FocusService {
             return FocusMicroTaskResponseDTO.from(existing);
         }
 
-        FocusMicroTask task = newTask(user, today, item, name, request.pinned());
+        FocusMicroTask task = newTask(user, today, item, name, request.pinned(), endOf(current));
         FocusMicroTask saved = microTaskRepository.save(task);
         if (request.pinned()) {
             // A name pinned on creation is a template from this moment, so the rows that already
@@ -152,6 +158,41 @@ public class FocusService {
         setPinnedByName(user, task.getName(), pinned);
         task.setPinned(pinned);
         return FocusMicroTaskResponseDTO.from(task);
+    }
+
+    /**
+     * The item's list, in the order the person dropped it into.
+     *
+     * <p>Takes the whole list rather than one move, and rewrites every position from it. Ids that
+     * do not belong to this item are dropped, and rows the payload never mentions keep their
+     * relative order AFTER the ones it does — a list that grew in another tab between the read and
+     * the drop should not lose rows or turn a drag into an error.
+     *
+     * <p>Ownership is checked once on the item, not once per id: every row of this (user, day, item)
+     * is by definition the user's, and the ids are only used to sort what the query already returned.
+     */
+    @Transactional
+    public List<FocusMicroTaskResponseDTO> reorderMicroTasks(User user, ReorderMicroTasksRequestDTO request) {
+        ItemGroup item = ownedItem(user, request.itemGroupId());
+        LocalDate today = UserDateResolver.today(user);
+
+        Map<UUID, FocusMicroTask> byId = new LinkedHashMap<>();
+        for (FocusMicroTask task : microTaskRepository.findForItem(user.getId(), today, item.getId())) {
+            byId.put(task.getId(), task);
+        }
+
+        List<FocusMicroTask> ordered = new ArrayList<>();
+        for (UUID id : request.ids()) {
+            FocusMicroTask task = byId.remove(id);
+            if (task != null) ordered.add(task);
+        }
+        // Whatever the client did not name, in the order the query returned it.
+        ordered.addAll(byId.values());
+
+        for (int index = 0; index < ordered.size(); index++) {
+            ordered.get(index).setOrderIndex(index);
+        }
+        return ordered.stream().map(FocusMicroTaskResponseDTO::from).toList();
     }
 
     @Transactional
@@ -188,13 +229,17 @@ public class FocusService {
         List<String> pinned = microTaskRepository.findPinnedNames(user.getId());
         if (pinned.isEmpty()) return;
 
+        List<FocusMicroTask> current = microTaskRepository.findForItem(user.getId(), today, item.getId());
         Set<String> present = new HashSet<>();
-        for (FocusMicroTask t : microTaskRepository.findForItem(user.getId(), today, item.getId())) {
+        for (FocusMicroTask t : current) {
             present.add(t.getName());
         }
+        // Materialised templates land after whatever is already on the item, in the order the
+        // pinned set comes back in.
+        int next = endOf(current);
         for (String name : pinned) {
             if (!present.contains(name)) {
-                microTaskRepository.save(newTask(user, today, item, name, true));
+                microTaskRepository.save(newTask(user, today, item, name, true, next++));
             }
         }
     }
@@ -205,13 +250,24 @@ public class FocusService {
         }
     }
 
-    private static FocusMicroTask newTask(User user, LocalDate day, ItemGroup item, String name, boolean pinned) {
+    /** One past the highest position in a list, so a new row lands at the end of it. */
+    private static int endOf(List<FocusMicroTask> list) {
+        int next = 0;
+        for (FocusMicroTask t : list) {
+            next = Math.max(next, t.getOrderIndex() + 1);
+        }
+        return next;
+    }
+
+    private static FocusMicroTask newTask(
+            User user, LocalDate day, ItemGroup item, String name, boolean pinned, int orderIndex) {
         FocusMicroTask task = new FocusMicroTask();
         task.setUser(user);
         task.setTaskDate(day);
         task.setItemGroup(item);
         task.setName(name);
         task.setPinned(pinned);
+        task.setOrderIndex(orderIndex);
         task.setCreatedAt(Instant.now());
         return task;
     }

@@ -80,4 +80,14 @@ public class FocusMicroTask {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    /**
+     * Position in this item's list, from zero.
+     *
+     * <p>Scoped to (user, day, item): each item's list is its own sequence. Rows written before
+     * ordering existed all carry 0, which is why {@code created_at} stays the tiebreaker in the
+     * queries — a list nobody has dragged still comes back in the order it was written.
+     */
+    @Column(name = "order_index", nullable = false)
+    private int orderIndex;
 }

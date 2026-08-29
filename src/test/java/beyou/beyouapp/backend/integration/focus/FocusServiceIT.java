@@ -26,6 +26,7 @@ import beyou.beyouapp.backend.domain.focus.dto.FocusCycleResponseDTO;
 import beyou.beyouapp.backend.domain.focus.dto.FocusDayResponseDTO;
 import beyou.beyouapp.backend.domain.focus.dto.FocusMicroTaskResponseDTO;
 import beyou.beyouapp.backend.domain.focus.dto.RecordCycleRequestDTO;
+import beyou.beyouapp.backend.domain.focus.dto.ReorderMicroTasksRequestDTO;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
@@ -277,6 +278,88 @@ class FocusServiceIT extends AbstractIntegrationTest {
         // Only the row on A: the history view must not invent a row on B for an item the person
         // never arrived at.
         assertThat(day.microTasks()).singleElement().extracting(FocusMicroTaskResponseDTO::itemGroupId).isEqualTo(itemA);
+    }
+
+    // --------------------------------------------------------------- order
+
+    @Test
+    void aNewMicroTaskLandsAtTheEndOfTheItemsList() {
+        focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "First", false));
+        focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "Second", false));
+        focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "Third", false));
+
+        assertThat(focusService.listMicroTasks(user, itemA)).extracting(FocusMicroTaskResponseDTO::name)
+            .containsExactly("First", "Second", "Third");
+    }
+
+    @Test
+    void reorderingRewritesTheListAndSurvivesTheNextRead() {
+        UUID first = focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "First", false)).id();
+        UUID second = focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "Second", false)).id();
+        UUID third = focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "Third", false)).id();
+
+        focusService.reorderMicroTasks(user, new ReorderMicroTasksRequestDTO(itemA, List.of(third, first, second)));
+
+        // Read back through the ordinary list path, not the reorder's own return value: the point
+        // is that the order was WRITTEN, not that the method can sort a list in memory.
+        assertThat(focusService.listMicroTasks(user, itemA)).extracting(FocusMicroTaskResponseDTO::name)
+            .containsExactly("Third", "First", "Second");
+    }
+
+    @Test
+    void aRowThePayloadNeverMentionsKeepsItsPlaceAtTheEnd() {
+        // The list grew in another tab between the read and the drop. Losing that row, or refusing
+        // the whole drag over it, are both worse than putting it last.
+        UUID first = focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "First", false)).id();
+        UUID second = focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "Second", false)).id();
+        focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "Latecomer", false));
+
+        focusService.reorderMicroTasks(user, new ReorderMicroTasksRequestDTO(itemA, List.of(second, first)));
+
+        assertThat(focusService.listMicroTasks(user, itemA)).extracting(FocusMicroTaskResponseDTO::name)
+            .containsExactly("Second", "First", "Latecomer");
+    }
+
+    @Test
+    void anIdFromAnotherItemIsIgnoredRatherThanMoved() {
+        UUID onA = focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "Water", false)).id();
+        UUID onB = focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemB, "Elsewhere", false)).id();
+
+        focusService.reorderMicroTasks(user, new ReorderMicroTasksRequestDTO(itemA, List.of(onB, onA)));
+
+        assertThat(focusService.listMicroTasks(user, itemA)).extracting(FocusMicroTaskResponseDTO::name)
+            .containsExactly("Water");
+        assertThat(focusService.listMicroTasks(user, itemB)).extracting(FocusMicroTaskResponseDTO::name)
+            .containsExactly("Elsewhere");
+    }
+
+    @Test
+    void oneItemsOrderSaysNothingAboutAnothers() {
+        UUID a1 = focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "A one", false)).id();
+        UUID a2 = focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "A two", false)).id();
+        focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemB, "B one", false));
+        focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemB, "B two", false));
+
+        focusService.reorderMicroTasks(user, new ReorderMicroTasksRequestDTO(itemA, List.of(a2, a1)));
+
+        assertThat(focusService.listMicroTasks(user, itemB)).extracting(FocusMicroTaskResponseDTO::name)
+            .containsExactly("B one", "B two");
+    }
+
+    @Test
+    void aPinnedNameMaterialisedOnAnotherItemLandsAtTheEndThere() {
+        focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemB, "Already here", false));
+        focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "Stretch", true));
+
+        assertThat(focusService.listMicroTasks(user, itemB)).extracting(FocusMicroTaskResponseDTO::name)
+            .containsExactly("Already here", "Stretch");
+    }
+
+    @Test
+    void reorderingSomebodyElsesItemIsRefused() {
+        assertThatThrownBy(() -> focusService.reorderMicroTasks(
+                stranger, new ReorderMicroTasksRequestDTO(itemA, List.of(UUID.randomUUID()))))
+            .isInstanceOf(BusinessException.class);
     }
 
     // -------------------------------------------------------------- snapshot

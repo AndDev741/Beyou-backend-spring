@@ -128,6 +128,29 @@ class FocusControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void reordersAnItemsList_andRefusesAnEmptyOne() throws Exception {
+        UUID item = UUID.randomUUID();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        when(focusService.reorderMicroTasks(eq(user), any())).thenReturn(List.of(
+            new FocusMicroTaskResponseDTO(second, LocalDate.of(2026, 8, 28), item, "Second", false, null),
+            new FocusMicroTaskResponseDTO(first, LocalDate.of(2026, 8, 28), item, "First", false, null)));
+
+        mockMvc.perform(patch("/focus/micro-tasks/reorder")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"itemGroupId\":\"%s\",\"ids\":[\"%s\",\"%s\"]}".formatted(item, second, first)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].name").value("Second"))
+            .andExpect(jsonPath("$[1].name").value("First"));
+
+        // An empty list is a client bug, not a request to clear the order.
+        mockMvc.perform(patch("/focus/micro-tasks/reorder")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"itemGroupId\":\"%s\",\"ids\":[]}".formatted(item)))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void readsADay() throws Exception {
         when(focusService.getDay(user, LocalDate.of(2026, 8, 28)))
             .thenReturn(new FocusDayResponseDTO(LocalDate.of(2026, 8, 28), List.of(), List.of()));

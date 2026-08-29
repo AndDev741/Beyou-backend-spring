@@ -10,11 +10,17 @@ import org.springframework.data.repository.query.Param;
 
 public interface FocusMicroTaskRepository extends JpaRepository<FocusMicroTask, UUID> {
 
-    /** One item's list for one day, in the order it was written. */
+    /**
+     * One item's list for one day, in the order the person put it in.
+     *
+     * <p>{@code createdAt} is the tiebreaker, not decoration: every row written before ordering
+     * existed carries index 0, so without it a list nobody has dragged would come back in whatever
+     * order the planner felt like.
+     */
     @Query("""
         SELECT t FROM FocusMicroTask t
         WHERE t.user.id = :userId AND t.taskDate = :date AND t.itemGroup.id = :itemGroupId
-        ORDER BY t.createdAt ASC
+        ORDER BY t.orderIndex ASC, t.createdAt ASC
         """)
     List<FocusMicroTask> findForItem(
         @Param("userId") UUID userId,
@@ -31,7 +37,7 @@ public interface FocusMicroTaskRepository extends JpaRepository<FocusMicroTask, 
         SELECT t FROM FocusMicroTask t
         LEFT JOIN FETCH t.itemGroup
         WHERE t.user.id = :userId AND t.taskDate = :date
-        ORDER BY t.createdAt ASC
+        ORDER BY t.orderIndex ASC, t.createdAt ASC
         """)
     List<FocusMicroTask> findDay(@Param("userId") UUID userId, @Param("date") LocalDate date);
 

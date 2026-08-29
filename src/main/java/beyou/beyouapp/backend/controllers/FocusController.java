@@ -23,6 +23,7 @@ import beyou.beyouapp.backend.domain.focus.dto.FocusCycleResponseDTO;
 import beyou.beyouapp.backend.domain.focus.dto.FocusDayResponseDTO;
 import beyou.beyouapp.backend.domain.focus.dto.FocusMicroTaskResponseDTO;
 import beyou.beyouapp.backend.domain.focus.dto.RecordCycleRequestDTO;
+import beyou.beyouapp.backend.domain.focus.dto.ReorderMicroTasksRequestDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -71,6 +72,16 @@ public class FocusController {
     @PatchMapping("/micro-tasks/{id}/pin")
     public ResponseEntity<FocusMicroTaskResponseDTO> pin(@PathVariable UUID id, @RequestParam boolean pinned) {
         return ResponseEntity.ok(focusService.setPinned(authenticatedUser.getAuthenticatedUser(), id, pinned));
+    }
+
+    /**
+     * The item's list, in the order it should now be in. Returns the list, so a client that lost
+     * track of what it sent has the server's answer rather than its own guess.
+     */
+    @PatchMapping("/micro-tasks/reorder")
+    public ResponseEntity<List<FocusMicroTaskResponseDTO>> reorder(
+            @RequestBody @Valid ReorderMicroTasksRequestDTO request) {
+        return ResponseEntity.ok(focusService.reorderMicroTasks(authenticatedUser.getAuthenticatedUser(), request));
     }
 
     @DeleteMapping("/micro-tasks/{id}")
