@@ -48,7 +48,16 @@ public final class AgentToolDomains {
             Map.entry("updateUserSchedule", List.of("routines")),
             Map.entry("deleteUserSchedule", List.of("routines")),
             // Configuration
-            Map.entry("updateUserConfiguration", List.of("perfil")));
+            Map.entry("updateUserConfiguration", List.of("perfil")),
+            // Focus Mode micro-tasks. getItemMicroTasks is in here despite reading like a get:
+            // it materialises the user's pinned names onto the entry, so it can create rows, and
+            // a client that did not refetch would be showing a list the server no longer has.
+            Map.entry("getItemMicroTasks", List.of("focus")),
+            Map.entry("addMicroTask", List.of("focus")),
+            Map.entry("toggleMicroTask", List.of("focus")),
+            Map.entry("pinMicroTask", List.of("focus")),
+            Map.entry("deleteMicroTask", List.of("focus")),
+            Map.entry("reorderMicroTasks", List.of("focus")));
 
     private AgentToolDomains() {}
 

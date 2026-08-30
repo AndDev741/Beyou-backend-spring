@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.aiAgent;
 
 import beyou.beyouapp.backend.domain.routine.RoutineType;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -24,10 +25,16 @@ import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
 import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackRequestDTO;
 import beyou.beyouapp.backend.domain.feedback.dto.FeedbackContextDTO;
+import beyou.beyouapp.backend.domain.focus.FocusService;
+import beyou.beyouapp.backend.domain.focus.dto.CreateMicroTaskRequestDTO;
+import beyou.beyouapp.backend.domain.focus.dto.FocusDayResponseDTO;
+import beyou.beyouapp.backend.domain.focus.dto.FocusMicroTaskResponseDTO;
+import beyou.beyouapp.backend.domain.focus.dto.ReorderMicroTasksRequestDTO;
 import beyou.beyouapp.backend.domain.goal.GoalService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
@@ -85,6 +92,8 @@ public class Tools {
     @Autowired
     private FeedbackService feedbackService;
     @Autowired
+    private FocusService focusService;
+    @Autowired
     private Validator validator;
 
     private UUID userId(ToolContext toolContext) {
@@ -97,6 +106,28 @@ public class Tools {
 
     private String currentPage(ToolContext toolContext) {
         return (String) toolContext.getContext().get("currentPage");
+    }
+
+    /**
+     * The routine entry the person has open in Focus Mode, or null when they are not in it.
+     *
+     * <p>Never used to fill in an omitted argument. It is here so that a tool refusing a missing
+     * itemGroupId can name the one the person is actually looking at, which is the difference
+     * between the model asking a useful question and the model guessing.
+     */
+    private UUID selectedFocusItem(ToolContext toolContext) {
+        return (UUID) toolContext.getContext().get("selectedItemGroupId");
+    }
+
+    /**
+     * The whole User, for the services that take one.
+     *
+     * <p>Everything else in here passes a userId, but FocusService needs the entity: the day a
+     * micro-task or a cycle is filed under comes from the owner's own timezone via
+     * {@link UserDateResolver}, not from the server's clock.
+     */
+    private User loadUser(ToolContext toolContext) {
+        return userService.findUserById(userId(toolContext));
     }
 
     /**
@@ -143,6 +174,43 @@ public class Tools {
             throw new IllegalArgumentException("Invalid " + field + " \"" + value
                     + "\": send a time as HH:mm between 00:00 and 23:59, e.g. 07:30");
         }
+    }
+
+    /**
+     * Same contract as {@link #parseTime}, for a day. Null and blank come back as null rather than
+     * as a refusal: the tools that take a date all mean "today" when it is left out, and today is
+     * the user's own day, which only the caller can resolve.
+     */
+    private LocalDate parseDate(String value, String field) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Invalid " + field + " \"" + value
+                    + "\": send a date as YYYY-MM-DD, e.g. 2026-08-30");
+        }
+    }
+
+    /**
+     * The routine entry a micro-task hangs off, refused rather than guessed when it is missing.
+     *
+     * <p>Writing to the wrong entry is silent: the row lands on a list the person is not looking
+     * at, and they find it later without a way to explain it. So a missing id is an error, and the
+     * message says where the real one lives — naming the entry open in Focus Mode when there is
+     * one, which is the id the model most likely meant.
+     */
+    private UUID requireItemGroup(UUID itemGroupId, ToolContext toolContext) {
+        if (itemGroupId != null) {
+            return itemGroupId;
+        }
+        UUID selected = selectedFocusItem(toolContext);
+        throw new IllegalArgumentException("Missing itemGroupId: it is a routine ENTRY id "
+                + "(habitGroupId or taskGroupId from getUserRoutines), never a habit or task id"
+                + (selected == null
+                        ? ""
+                        : ". The user has entry " + selected + " open in Focus Mode right now"));
     }
 
     // Habits
@@ -549,6 +617,121 @@ public class Tools {
         log.info("AI agent is skipping a routine item on routine {} for user: {}",
                 skipRequest.routineId(), userId(toolContext));
         return diaryRoutineService.skipOrUnskipGroup(valid(skipRequest), userId(toolContext));
+    }
+
+    // Focus Mode
+    //
+    // Micro-tasks hang off a routine ENTRY (habitGroup/taskGroup), the same id check and skip
+    // take, and they are always "today" — the server files them under the owner's own day, so no
+    // tool here accepts a date for a write.
+    //
+    // Cycles are deliberately read-only. A cycle is the record that somebody actually sat through
+    // a timer, and the client only reports one that ran out; a tool that writes them would let the
+    // agent invent history the person never lived. Same reasoning as the XP rule on check-in.
+
+    @Tool(description = "Get the micro-tasks on ONE routine entry for today. itemGroupId is the "
+            + "entry id (habitGroupId or taskGroupId from getUserRoutines), NOT a habit or task id. "
+            + "Note this read also materialises the user's pinned micro-tasks onto that entry, so "
+            + "it can create rows: call it because the user asked about the list, not to peek")
+    List<FocusMicroTaskResponseDTO> getItemMicroTasks(
+            @ToolParam(description = "The routine entry: its habitGroupId or taskGroupId from getUserRoutines")
+            UUID itemGroupId,
+            ToolContext toolContext) {
+        UUID item = requireItemGroup(itemGroupId, toolContext);
+        log.info("AI agent is reading micro-tasks of item {} for user: {}", item, userId(toolContext));
+        return focusService.listMicroTasks(loadUser(toolContext), item);
+    }
+
+    @Tool(description = "Get everything Focus Mode recorded on one day: the timer cycles that "
+            + "completed, and every micro-task with whether it was done. Read-only — unlike "
+            + "getItemMicroTasks it creates nothing. Use it for questions about how a day went")
+    FocusDayResponseDTO getFocusDay(
+            @ToolParam(description = "The day as YYYY-MM-DD. Omit for today", required = false)
+            String date,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        LocalDate day = parseDate(date, "date");
+        if (day == null) {
+            day = UserDateResolver.today(user);
+        }
+        log.info("AI agent is reading the focus day {} for user: {}", day, userId(toolContext));
+        return focusService.getDay(user, day);
+    }
+
+    @Tool(description = "Add a micro-task to ONE routine entry, for today. Asking twice for the "
+            + "same name returns the existing one instead of duplicating it. pinned=true makes the "
+            + "NAME a template that is re-created on every entry the user moves to until it is "
+            + "unpinned — only pin when the user asks for something they want kept")
+    FocusMicroTaskResponseDTO addMicroTask(
+            @ToolParam(description = "The routine entry: its habitGroupId or taskGroupId from getUserRoutines")
+            UUID itemGroupId,
+            @ToolParam(description = "What to do, in the user's own words. Max 80 characters")
+            String name,
+            @ToolParam(description = "Keep this name for every entry from now on. Defaults to false", required = false)
+            Boolean pinned,
+            ToolContext toolContext) {
+        UUID item = requireItemGroup(itemGroupId, toolContext);
+        log.info("AI agent is adding a micro-task to item {} for user: {}", item, userId(toolContext));
+        return focusService.addMicroTask(loadUser(toolContext),
+                valid(new CreateMicroTaskRequestDTO(item, name, Boolean.TRUE.equals(pinned))));
+    }
+
+    @Tool(description = "Tick or untick ONE micro-task — it toggles, so calling it on a done "
+            + "micro-task marks it not done. The id comes from getItemMicroTasks or getFocusDay. "
+            + "No XP is involved, unlike checking a routine item")
+    FocusMicroTaskResponseDTO toggleMicroTask(
+            @ToolParam(description = "The micro-task id from getItemMicroTasks or getFocusDay")
+            UUID microTaskId,
+            ToolContext toolContext) {
+        log.info("AI agent is toggling micro-task {} for user: {}", microTaskId, userId(toolContext));
+        return focusService.toggleMicroTask(loadUser(toolContext), microTaskId);
+    }
+
+    @Tool(description = "Keep a micro-task for next time, or stop keeping it. Pinning applies to "
+            + "the NAME and not to this one row: pinning \"stretch\" pins it on every entry and "
+            + "every day, and unpinning it anywhere unpins it everywhere. Tell the user that is "
+            + "what will happen before calling this")
+    FocusMicroTaskResponseDTO pinMicroTask(
+            @ToolParam(description = "The micro-task id from getItemMicroTasks or getFocusDay")
+            UUID microTaskId,
+            @ToolParam(description = "true to keep the name from now on, false to stop keeping it")
+            Boolean pinned,
+            ToolContext toolContext) {
+        if (pinned == null) {
+            throw new IllegalArgumentException(
+                    "Missing pinned: send true to keep this micro-task's name, false to stop keeping it");
+        }
+        log.info("AI agent is setting pinned={} on micro-task {} for user: {}",
+                pinned, microTaskId, userId(toolContext));
+        return focusService.setPinned(loadUser(toolContext), microTaskId, pinned);
+    }
+
+    @Tool(description = "Delete ONE micro-task from today. If it was pinned this ALSO stops "
+            + "keeping the name everywhere, because a pinned row that was merely deleted comes "
+            + "straight back on the next read. Confirm with the user first")
+    Map<String, String> deleteMicroTask(
+            @ToolParam(description = "The micro-task id from getItemMicroTasks or getFocusDay")
+            UUID microTaskId,
+            ToolContext toolContext) {
+        log.info("AI agent is deleting micro-task {} for user: {}", microTaskId, userId(toolContext));
+        focusService.deleteMicroTask(loadUser(toolContext), microTaskId);
+        return Map.of("success", "Micro-task deleted successfully");
+    }
+
+    @Tool(description = "Reorder the micro-tasks on ONE routine entry. Send the entry's micro-task "
+            + "ids in the order they should now be in, the WHOLE list as getItemMicroTasks "
+            + "returned it. Ids that do not belong to the entry are ignored, and anything left out "
+            + "keeps its relative order after the ones you sent")
+    List<FocusMicroTaskResponseDTO> reorderMicroTasks(
+            @ToolParam(description = "The routine entry: its habitGroupId or taskGroupId from getUserRoutines")
+            UUID itemGroupId,
+            @ToolParam(description = "Every micro-task id of that entry, in the order they should be in")
+            List<UUID> ids,
+            ToolContext toolContext) {
+        UUID item = requireItemGroup(itemGroupId, toolContext);
+        log.info("AI agent is reordering the micro-tasks of item {} for user: {}", item, userId(toolContext));
+        return focusService.reorderMicroTasks(loadUser(toolContext),
+                valid(new ReorderMicroTasksRequestDTO(item, ids)));
     }
 
     // User configuration

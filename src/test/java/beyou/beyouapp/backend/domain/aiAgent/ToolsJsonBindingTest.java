@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.LocalTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -27,6 +28,9 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import beyou.beyouapp.backend.domain.focus.FocusService;
+import beyou.beyouapp.backend.domain.focus.dto.CreateMicroTaskRequestDTO;
+import beyou.beyouapp.backend.domain.focus.dto.ReorderMicroTasksRequestDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
@@ -34,6 +38,8 @@ import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.RoutineType;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
+import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserService;
 import jakarta.validation.Validation;
 
 /**
@@ -54,6 +60,12 @@ public class ToolsJsonBindingTest {
 
     @Mock
     private DiaryRoutineService diaryRoutineService;
+
+    @Mock
+    private FocusService focusService;
+
+    @Mock
+    private UserService userService;
 
     @InjectMocks
     private Tools tools;
@@ -262,5 +274,65 @@ public class ToolsJsonBindingTest {
         verify(diaryRoutineService).createDiaryRoutine(captor.capture(), eq(userId));
         assertEquals(RoutineType.DAILY, captor.getValue().type());
         assertEquals(1, captor.getValue().routineSections().size());
+    }
+
+    // ------------------------------------------------------- Focus Mode tools
+
+    /**
+     * The list arrives as JSON strings and has to land as UUIDs. A model that got this wrong would
+     * be told nothing useful by a raw bind failure, and the whole list is one argument, so a single
+     * bad element costs the entire reorder.
+     */
+    @Test
+    void reorderBindsAListOfIdStrings() {
+        User user = new User();
+        when(userService.findUserById(userId)).thenReturn(user);
+        UUID item = UUID.randomUUID();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+
+        String json = """
+                {"itemGroupId": "%s", "ids": ["%s", "%s"]}
+                """.formatted(item, first, second);
+        callback("reorderMicroTasks").call(json, toolContext);
+
+        ArgumentCaptor<ReorderMicroTasksRequestDTO> captor =
+                ArgumentCaptor.forClass(ReorderMicroTasksRequestDTO.class);
+        verify(focusService).reorderMicroTasks(eq(user), captor.capture());
+        assertEquals(List.of(first, second), captor.getValue().ids());
+    }
+
+    /** "true" as a string is what a model sends when it is being careless with a boolean. */
+    @Test
+    void pinnedBindsFromAStringBoolean() {
+        User user = new User();
+        when(userService.findUserById(userId)).thenReturn(user);
+        UUID item = UUID.randomUUID();
+
+        String json = """
+                {"itemGroupId": "%s", "name": "stretch", "pinned": "true"}
+                """.formatted(item);
+        callback("addMicroTask").call(json, toolContext);
+
+        ArgumentCaptor<CreateMicroTaskRequestDTO> captor =
+                ArgumentCaptor.forClass(CreateMicroTaskRequestDTO.class);
+        verify(focusService).addMicroTask(eq(user), captor.capture());
+        assertTrue(captor.getValue().pinned());
+    }
+
+    /**
+     * The commonest miss on these tools: reaching for the habit id, which is the id the model has
+     * seen most. It is a valid UUID, so nothing upstream catches it — what has to be true is that
+     * an OMITTED id comes back as a sentence naming where the right one lives.
+     */
+    @Test
+    void anOmittedEntryIdSaysWhereTheRealOneComesFrom() {
+        Exception thrown = assertThrows(Exception.class,
+                () -> callback("addMicroTask").call("{\"name\": \"stretch\"}", toolContext));
+
+        String messages = messageChain(thrown);
+        assertTrue(messages.contains("itemGroupId"), messages);
+        assertTrue(messages.contains("getUserRoutines"), messages);
+        verify(focusService, never()).addMicroTask(any(), any());
     }
 }

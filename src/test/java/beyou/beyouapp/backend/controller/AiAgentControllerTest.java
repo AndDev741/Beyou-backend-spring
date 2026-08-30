@@ -107,13 +107,34 @@ public class AiAgentControllerTest extends AbstractIntegrationTest {
     void shouldForwardCurrentPageToTheStream() throws Exception {
         SseEmitter emitter = new SseEmitter();
         emitter.complete();
-        when(agentService.streamMessage(chatId, "create one", userId, "/habits")).thenReturn(emitter);
+        when(agentService.streamMessage(chatId, "create one", userId, "/habits", null)).thenReturn(emitter);
 
         mockMvc.perform(post("/ai/agent/chats/" + chatId + "/stream")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"userInput\": \"create one\", \"currentPage\": \"/habits\"}"));
 
-        verify(agentService).streamMessage(chatId, "create one", userId, "/habits");
+        verify(agentService).streamMessage(chatId, "create one", userId, "/habits", null);
+    }
+
+    /**
+     * The Focus Mode entry travels with the message, so a tool can be told which entry "this"
+     * means. It is client-filled, so the point of the test is that it arrives verbatim and that
+     * the endpoint does not start caring whether it parses.
+     */
+    @Test
+    void shouldForwardTheSelectedFocusItemToTheStream() throws Exception {
+        SseEmitter emitter = new SseEmitter();
+        emitter.complete();
+        String itemGroupId = UUID.randomUUID().toString();
+        when(agentService.streamMessage(chatId, "add a step here", userId, "/focus", itemGroupId))
+                .thenReturn(emitter);
+
+        mockMvc.perform(post("/ai/agent/chats/" + chatId + "/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"userInput\": \"add a step here\", \"currentPage\": \"/focus\", "
+                        + "\"selectedItemGroupId\": \"" + itemGroupId + "\"}"));
+
+        verify(agentService).streamMessage(chatId, "add a step here", userId, "/focus", itemGroupId);
     }
 
     @Test
@@ -123,7 +144,7 @@ public class AiAgentControllerTest extends AbstractIntegrationTest {
                 .content("{\"userInput\": \"   \"}"))
                 .andExpect(status().isBadRequest());
 
-        verify(agentService, never()).streamMessage(any(), any(), any(), any());
+        verify(agentService, never()).streamMessage(any(), any(), any(), any(), any());
     }
 
     @Test
