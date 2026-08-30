@@ -59,7 +59,8 @@ public class AiAgentController {
         // so tokens flush to the client immediately instead of in one blob.
         response.setHeader("X-Accel-Buffering", "no");
         response.setHeader("Cache-Control", "no-cache");
-        return agentService.streamMessage(chatId, request.userInput(), userId, request.currentPage());
+        return agentService.streamMessage(chatId, request.userInput(), userId, request.currentPage(),
+                request.selectedItemGroupId());
     }
 
     @GetMapping("/chats/{chatId}/messages")

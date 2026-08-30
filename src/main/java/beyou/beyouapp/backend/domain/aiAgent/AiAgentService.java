@@ -86,7 +86,7 @@ public class AiAgentService {
      * the write. {@code required} removes that move.
      *
      * <p>Off by default because {@code required} forces a tool call on *every* message,
-     * including "thanks", and the model picks which tool. With 42 registered tools the
+     * including "thanks", and the model picks which tool. With 47 registered tools the
      * likely pick for an ambiguous message is a read, but it is the model's choice, not
      * ours. Enable it deliberately and watch what the agent reaches for.
      */
@@ -127,7 +127,8 @@ public class AiAgentService {
                 .build();
     }
 
-    public SseEmitter streamMessage(UUID chatId, String userInput, UUID userId, String currentPage) {
+    public SseEmitter streamMessage(UUID chatId, String userInput, UUID userId, String currentPage,
+            String selectedItemGroupId) {
         Chat chat = chatService.getChat(chatId, userId);
 
         // Per-user concurrency cap: reject a new stream cleanly (one parseable
@@ -169,7 +170,8 @@ public class AiAgentService {
             }
         };
 
-        Map<String, Object> toolContext = toolContext(userId, chatId, currentPage);
+        UUID focusItem = parseFocusItem(selectedItemGroupId);
+        Map<String, Object> toolContext = toolContext(userId, chatId, currentPage, focusItem);
         toolContext.put(MeteredToolCallback.EVENTS_KEY, send);
         // The chain reports which provider it attempted, so the persisted turn can name
         // the model that produced it. Read after the stream ends, on whichever thread
@@ -180,7 +182,7 @@ public class AiAgentService {
         if (toolChoice != null && !toolChoice.isBlank()) {
             toolContext.put(FallbackChatModel.TOOL_CHOICE_KEY, toolChoice);
         }
-        Flux<String> tokens = buildPrompt(chat, userInput, currentPage, toolContext)
+        Flux<String> tokens = buildPrompt(chat, userInput, currentPage, focusItem, toolContext)
                 .stream()
                 .content();
 
@@ -250,14 +252,36 @@ public class AiAgentService {
     }
 
     /** What every tool sees. currentPage is optional client info (Map.of rejects nulls). */
-    private Map<String, Object> toolContext(UUID userId, UUID chatId, String currentPage) {
+    private Map<String, Object> toolContext(UUID userId, UUID chatId, String currentPage, UUID selectedItemGroupId) {
         Map<String, Object> context = new HashMap<>();
         context.put("userId", userId);
         context.put("chatId", chatId);
         if (currentPage != null && !currentPage.isBlank()) {
             context.put("currentPage", currentPage);
         }
+        if (selectedItemGroupId != null) {
+            context.put("selectedItemGroupId", selectedItemGroupId);
+        }
         return context;
+    }
+
+    /**
+     * The Focus Mode entry the client says is open, or null.
+     *
+     * <p>Dropped rather than refused when it is not an id: the field is filled from whatever the
+     * client is rendering, and an empty or stale value must not stop the message being sent. See
+     * {@code AiAgentRequest}.
+     */
+    private UUID parseFocusItem(String selectedItemGroupId) {
+        if (selectedItemGroupId == null || selectedItemGroupId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(selectedItemGroupId.trim());
+        } catch (IllegalArgumentException e) {
+            log.warn("Ignoring a selectedItemGroupId that is not a UUID");
+            return null;
+        }
     }
 
     /** Persist a turn without letting a DB failure escape; returns whether it stuck.
@@ -274,7 +298,8 @@ public class AiAgentService {
         }
     }
 
-    private ChatClient.ChatClientRequestSpec buildPrompt(Chat chat, String userInput, String currentPage, Map<String, Object> toolContext) {
+    private ChatClient.ChatClientRequestSpec buildPrompt(Chat chat, String userInput, String currentPage,
+            UUID selectedItemGroupId, Map<String, Object> toolContext) {
         User user = chat.getUser();
         return this.chatClient.prompt()
             .system(s -> s.text(systemTemplate)
@@ -283,6 +308,7 @@ public class AiAgentService {
                 .param("userContext", orNone(user.getUserContext()))
                 .param("userChatContext", orNone(chat.getUserContextInChat()))
                 .param("currentPage", orNone(currentPage))
+                .param("focusItem", orNone(selectedItemGroupId == null ? null : selectedItemGroupId.toString()))
                 .param("today", LocalDate.now().toString()))
             .user(userInput)
             .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chat.getId().toString()))
