@@ -30,6 +30,7 @@ import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserMapper;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserServiceGoogleOAuth;
+import beyou.beyouapp.backend.user.federation.FederatedIdentityService;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 
@@ -42,6 +43,7 @@ class UserServiceGoogleMobileAuthUnitTest {
     @Mock private UserRepository userRepository;
     @Mock private UserMapper userMapper;
     @Mock private GoogleIdTokenVerifierService googleIdTokenVerifierService;
+    @Mock private FederatedIdentityService federatedIdentityService;
 
     private UserServiceGoogleOAuth service;
     private MockHttpServletResponse response;
@@ -59,8 +61,10 @@ class UserServiceGoogleMobileAuthUnitTest {
 
     @BeforeEach
     void setUp() {
+        // See the sibling test: the federated row is bookkeeping written after the
+        // decision, and its failures are deliberately swallowed.
         service = new UserServiceGoogleOAuth(tokenService, refreshTokenService, userRepository, userMapper,
-                googleIdTokenVerifierService);
+                googleIdTokenVerifierService, federatedIdentityService);
         response = new MockHttpServletResponse();
     }
 

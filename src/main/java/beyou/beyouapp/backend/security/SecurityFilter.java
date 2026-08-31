@@ -62,6 +62,7 @@ public class SecurityFilter extends OncePerRequestFilter {
             requestURI.startsWith("/auth/reset-password") ||
             requestURI.equals("/auth/verify-email") ||
             requestURI.equals("/auth/resend-verification") ||
+            isPublicOidcPath(requestURI) ||
             // The unsubscribe link's endpoint. It carries its own proof of ownership in
             // the request body, and its whole purpose is to work for someone who cannot
             // sign in.
@@ -135,4 +136,35 @@ public class SecurityFilter extends OncePerRequestFilter {
             .orElseThrow(() -> new JwtNotFoundException("JWT not Found in authorization header"));
     }
 
+    /**
+     * Whether a federated sign-in path is one of the public ones.
+     *
+     * <p>Written as a positive allowlist of exact shapes rather than
+     * {@code startsWith("/auth/oidc")}, because {@code /auth/oidc/<slug>/link} must stay
+     * authenticated: the session is the whole proof that whoever is attaching a second
+     * external identity to an account is already inside it. A prefix check here would
+     * make it public, and the SecurityConfig side would never notice — it has its own
+     * single-star pattern for the same reason.
+     *
+     * <p>Default-deny, so a path added under /auth/oidc/ later is protected until
+     * somebody deliberately lists it. Only three shapes pass:
+     * {@code /auth/oidc/providers}, {@code /auth/oidc/<slug>} and
+     * {@code /auth/oidc/<slug>/mobile}.
+     */
+    static boolean isPublicOidcPath(String requestURI) {
+        String prefix = "/auth/oidc/";
+        if (!requestURI.startsWith(prefix)) {
+            return false;
+        }
+        String rest = requestURI.substring(prefix.length());
+        if (rest.isEmpty()) {
+            return false;
+        }
+        int slash = rest.indexOf('/');
+        if (slash < 0) {
+            // /auth/oidc/providers, and /auth/oidc/<slug> for the web login.
+            return true;
+        }
+        return rest.substring(slash + 1).equals("mobile");
+    }
 }

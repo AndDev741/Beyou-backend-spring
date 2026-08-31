@@ -5,6 +5,8 @@ import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.security.TokenService;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
+import beyou.beyouapp.backend.user.federation.FederatedIdentityService;
+import beyou.beyouapp.backend.user.federation.FederatedPrincipal;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,6 +33,14 @@ public class UserServiceGoogleOAuth {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final GoogleIdTokenVerifierService googleIdTokenVerifierService;
+    private final FederatedIdentityService federatedIdentityService;
+
+    /**
+     * Google's {@code iss}, as it appears in an ID token. Hard-coded rather than
+     * configured: it is not a deployment choice, and a configurable value here would be a
+     * way to make our own rows collide with a different provider's subjects.
+     */
+    private static final String GOOGLE_ISSUER = "https://accounts.google.com";
 
     @Value("${google.secrets.clientId}")
     String GOOGLE_CLIENT_ID;
@@ -58,7 +68,9 @@ public class UserServiceGoogleOAuth {
         String email = profileDetails.get("email");
         String perfilPhoto = profileDetails.get("picture");
 
-        GoogleUserDTO googleUser = new GoogleUserDTO(email, name, perfilPhoto, claimedTimezone);
+        // v2 userinfo calls it "id"; it is the same value the ID token calls "sub".
+        String subject = profileDetails.get("id");
+        GoogleUserDTO googleUser = new GoogleUserDTO(email, name, perfilPhoto, claimedTimezone, subject);
         Optional<User> optionalUser = userRepository.findByEmail(googleUser.email());
 
         if(optionalUser.isPresent()){
@@ -67,6 +79,8 @@ public class UserServiceGoogleOAuth {
             if (isUnverifiedLocalAccount(user)) {
                 return unverifiedRefusal();
             }
+
+            recordGoogleIdentity(user, googleUser);
 
             String jwtToken = tokenService.generateJwtToken(user);
             String refreshToken = refreshTokenService.createRefreshToken(user);
@@ -77,6 +91,8 @@ public class UserServiceGoogleOAuth {
         }else{
             User newUser = new User(googleUser);
             User user = userRepository.save(newUser);
+
+            recordGoogleIdentity(user, googleUser);
 
             String jwtToken = tokenService.generateJwtToken(user);
             String refreshToken = refreshTokenService.createRefreshToken(user);
@@ -106,6 +122,8 @@ public class UserServiceGoogleOAuth {
         if (isUnverifiedLocalAccount(user)) {
             return unverifiedRefusal();
         }
+
+        recordGoogleIdentity(user, googleUser);
 
         String jwtToken = tokenService.generateJwtToken(user);
         String refreshToken = refreshTokenService.createRefreshToken(user);
@@ -198,5 +216,29 @@ public class UserServiceGoogleOAuth {
     /** Byte-for-byte what {@code UserService.doLogin} returns, so both clients need one branch, not two. */
     private ResponseEntity<Map<String, Object>> unverifiedRefusal() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "EMAIL_NOT_VERIFIED"));
+    }
+
+    /**
+     * Writes the {@code (accounts.google.com, sub)} row for an account that just signed in
+     * through the address path.
+     *
+     * <p>This is the backfill, spread over time. Google predates
+     * {@code federated_identities} and we never stored its subject, so there is no batch
+     * to run — each account records itself on its next sign-in and resolves by the pair
+     * from then on.
+     *
+     * <p>Never fatal. A row that fails to write costs a future lookup, not this login: the
+     * address path that has always worked is still there, and it is still safe for Google
+     * specifically because Google proves the addresses it asserts. Failing the sign-in
+     * over bookkeeping would be a worse trade.
+     */
+    private void recordGoogleIdentity(User user, GoogleUserDTO googleUser) {
+        try {
+            federatedIdentityService.recordSeenIdentity(user, new FederatedPrincipal(
+                    GOOGLE_ISSUER, googleUser.subject(), googleUser.email(),
+                    true, googleUser.name(), googleUser.perfilPhoto(), null));
+        } catch (Exception e) {
+            System.err.println("Could not record Google federated identity: " + e.getMessage());
+        }
     }
 }

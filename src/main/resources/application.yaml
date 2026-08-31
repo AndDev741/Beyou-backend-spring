@@ -116,6 +116,26 @@ google:
     oauth: ${OAUTH_GOOGLE_URL}
     userInfo: ${USER_INFO_GOOGLE_URL}
 
+# Federated sign-in providers, beyond Google.
+#
+# A block with no issuer or no client id is treated as absent: /auth/oidc/providers
+# omits it and /auth/oidc/<slug> answers 404. That is the off switch, and it is the
+# default — an environment that sets none of these ships the feature dark.
+#
+# trustEmailVerified is the important one, and false is the safe default. See
+# OidcProviderProperties.Provider for what turning it on actually asserts: it is a
+# statement about the operator of that issuer, not about their code. While it is false
+# the provider can only ever be LINKED from an account that already authenticated some
+# other way — it can never create an account and never claim one by matching an address.
+beyou:
+  oidc:
+    providers:
+      omelhorsite:
+        issuer: ${OIDC_OMELHORSITE_ISSUER:}
+        clientId: ${OIDC_OMELHORSITE_CLIENT_ID:}
+        displayName: ${OIDC_OMELHORSITE_DISPLAY_NAME:O Melhor Site}
+        trustEmailVerified: ${OIDC_OMELHORSITE_TRUST_EMAIL_VERIFIED:false}
+
 frontend:
     url: ${FRONTEND_URL}
 
