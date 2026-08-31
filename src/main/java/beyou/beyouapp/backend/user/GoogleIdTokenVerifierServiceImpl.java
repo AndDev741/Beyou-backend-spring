@@ -60,6 +60,8 @@ public class GoogleIdTokenVerifierServiceImpl implements GoogleIdTokenVerifierSe
         String email = payload.getEmail();
         String name = (String) payload.get("name");
         String picture = (String) payload.get("picture");
-        return new GoogleUserDTO(email, name, picture);
+        // The stable per-user id. Carried so FederatedIdentityService can record the
+        // (issuer, subject) row on this sign-in; nothing authenticates on it here.
+        return new GoogleUserDTO(email, name, picture, null, payload.getSubject());
     }
 }

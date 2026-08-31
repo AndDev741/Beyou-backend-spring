@@ -50,6 +50,13 @@ public class SecurityConfig {
                             "/auth/register",
                             "/auth/google",
                             "/auth/google/mobile",
+                            // Federated sign-in. Single-star on purpose: it matches
+                            // /auth/oidc/providers and /auth/oidc/<slug>, and does NOT
+                            // match /auth/oidc/<slug>/link, which must stay authenticated
+                            // because the session is the whole proof that the person
+                            // adding a second door to an account is already inside it.
+                            "/auth/oidc/*",
+                            "/auth/oidc/*/mobile",
                             "/auth/refresh",
                             "/auth/logout",
                             "/auth/forgot-password",

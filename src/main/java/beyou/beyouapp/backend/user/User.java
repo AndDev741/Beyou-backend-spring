@@ -22,6 +22,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
+import beyou.beyouapp.backend.user.federation.FederatedPrincipal;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import beyou.beyouapp.backend.user.enums.TimezoneSource;
 import beyou.beyouapp.backend.user.enums.UserRole;
@@ -213,6 +214,32 @@ public class User implements UserDetails {
         setPerfilPhoto(googleUser.perfilPhoto());
         setEmailVerified(true);
         adoptClaimedTimezone(googleUser.timezone());
+    }
+
+    /**
+     * An account created from a verified external identity that is not Google.
+     *
+     * <p>Only ever reached from {@code FederatedIdentityService.resolve}, and only on the
+     * branch where the issuer is trusted on addresses AND the address is not already in
+     * use. Everything that decides whether creating an account is allowed at all lives
+     * there; this constructor only builds the row.
+     *
+     * <p>{@code emailVerified} is true because that branch is unreachable otherwise, and
+     * {@code isGoogleAccount} is false because it means Google specifically — the flag
+     * predates federation and is still read by the unverified-password-account guard.
+     */
+    public static User fromFederatedPrincipal(FederatedPrincipal principal) {
+        User user = new User();
+        user.setName(principal.name() != null ? principal.name() : principal.email());
+        user.setEmail(principal.email());
+        // Not a hash, so it can never match a bcrypt comparison — same device as
+        // "GOOGLE_USER" above. The password door stays shut for this account.
+        user.setPassword("FEDERATED_USER");
+        user.setGoogleAccount(false);
+        user.setPerfilPhoto(principal.picture());
+        user.setEmailVerified(true);
+        user.adoptClaimedTimezone(principal.timezone());
+        return user;
     }
 
     /**

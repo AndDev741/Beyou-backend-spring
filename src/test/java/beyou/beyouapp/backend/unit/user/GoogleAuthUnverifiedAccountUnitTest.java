@@ -8,6 +8,7 @@ import beyou.beyouapp.backend.user.UserMapper;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserServiceGoogleOAuth;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
+import beyou.beyouapp.backend.user.federation.FederatedIdentityService;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import jakarta.servlet.http.HttpServletResponse;
@@ -68,8 +69,11 @@ class GoogleAuthUnverifiedAccountUnitTest {
                         false, List.of(), null, 0, 0, 0, 0, null, false, 0, false, null, "UTC", null, null, null));
         response = new MockHttpServletResponse();
 
+        // Bookkeeping only: the federated row is written after the decision this test is
+        // about, and recordGoogleIdentity swallows its own failures on purpose. A mock
+        // that does nothing is the honest stand-in.
         service = new UserServiceGoogleOAuth(tokenService, refreshTokenService, userRepository,
-                userMapper, verifier);
+                userMapper, verifier, mock(FederatedIdentityService.class));
 
         when(verifier.verify(ID_TOKEN))
                 .thenReturn(new GoogleUserDTO(EMAIL, "Victim", null));
