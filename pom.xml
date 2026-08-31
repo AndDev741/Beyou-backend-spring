@@ -32,7 +32,7 @@
 		<postgresql.version>42.7.11</postgresql.version>
 		<log4j2.version>2.25.4</log4j2.version>
 		<spring-ai.version>2.0.1</spring-ai.version>
-		<sentry.version>8.53.0</sentry.version>
+		<sentry.version>8.54.0</sentry.version>
 	</properties>
 	<dependencies>
 		<dependency>
