@@ -86,7 +86,8 @@ public class GoalMapper {
                 goal.getXpReward(),
                 goal.getStatus(),
                 goal.getTerm(),
-                goal.getCompleteDate()
+                goal.getCompleteDate(),
+                goal.getParentId()
         );
     }
 }

@@ -35,6 +35,12 @@ public record CreateGoalRequestDTO(
     @NotNull
     GoalStatus status,
     @NotNull
-    GoalTerm term
+    GoalTerm term,
+    /**
+     * Optional parent goal. Must belong to the same user, must not create a cycle,
+     * and the resulting chain may be at most three goals deep. All three checks run
+     * in GoalService.resolveParent; clients only pre-filter the picker.
+     */
+    UUID parentId
 ) {
 }

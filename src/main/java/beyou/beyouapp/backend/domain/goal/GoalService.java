@@ -3,6 +3,8 @@ package beyou.beyouapp.backend.domain.goal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.cache.annotation.Cacheable;
@@ -69,6 +71,7 @@ public class GoalService {
                 .toList();
 
         Goal goal = goalMapper.toEntity(dto, categories, user);
+        goal.setParent(resolveParent(null, dto.parentId(), userId));
         try {
             goalRepository.save(goal);
             userCacheEvictService.evictAllUserCaches(userId);
@@ -87,6 +90,7 @@ public class GoalService {
                 .map(catId -> categoryService.getCategory(catId, userId))
                 .toList();
         goalMapper.updateEntity(goal, dto, categories);
+        goal.setParent(resolveParent(goal, dto.parentId(), userId));
         try {
             goalRepository.save(goal);
             userCacheEvictService.evictAllUserCaches(userId);
@@ -179,6 +183,7 @@ public class GoalService {
         if (goal.getStatus() == GoalStatus.NOT_STARTED) {
             goal.setStatus(GoalStatus.IN_PROGRESS);
         }
+        startParentIfNotStarted(goal);
         try {
             goalRepository.save(goal);
             userCacheEvictService.evictAllUserCaches(userId);
@@ -215,6 +220,116 @@ public class GoalService {
 
     public GoalResponseDTO decreaseCurrentValue(UUID goalId, UUID userId) {
         return decreaseCurrentValue(goalId, 1.0, userId);
+    }
+
+    /**
+     * How deep a chain of goals may go: a big goal, a medium one under it, a small one
+     * under that. Three is what the roadmap card describes, and it is enforced here
+     * once rather than in each client, so the mobile picker and the web picker can
+     * only ever pre-filter what this method would refuse anyway.
+     */
+    public static final int MAX_DEPTH = 3;
+
+    /**
+     * Resolve and validate the parent a goal is being placed under.
+     *
+     * <p>{@code null} means top level and always passes. Otherwise the parent must
+     * exist, belong to the same user ({@link ErrorKey#GOAL_NOT_OWNED}), must not be the
+     * goal itself or one of its descendants ({@link ErrorKey#GOAL_PARENT_CYCLE}), and
+     * the resulting chain must fit in {@link #MAX_DEPTH} levels
+     * ({@link ErrorKey#GOAL_DEPTH_EXCEEDED}). Depth is measured both ways: the
+     * ancestors above the new parent plus the tallest subtree already hanging under
+     * {@code goal}, because moving a goal that has children can overflow from below
+     * while looking fine from above.
+     *
+     * <p>{@code goal} is null on create (nothing hangs under a goal that does not exist
+     * yet). Nothing here is duplicated in the clients on purpose: the rule lives once.
+     */
+    public Goal resolveParent(Goal goal, UUID parentId, UUID userId) {
+        if (parentId == null) {
+            return null;
+        }
+        if (goal != null && parentId.equals(goal.getId())) {
+            throw new BusinessException(ErrorKey.GOAL_PARENT_CYCLE, "A goal cannot be its own parent");
+        }
+        Goal parent = getGoal(parentId);
+        checkIfGoalIsFromTheUserInContext(parent, userId);
+
+        List<Goal> all = goalRepository.findAllByUserId(userId).orElse(List.of());
+
+        // Walk up from the parent. Meeting `goal` on the way means the parent is one of
+        // its descendants, which is the cycle. The visited set guards against a chain
+        // already broken in the database looping forever.
+        int ancestors = 0;
+        Set<UUID> visited = new HashSet<>();
+        Goal cursor = parent;
+        while (cursor != null) {
+            if (goal != null && cursor.getId().equals(goal.getId())) {
+                throw new BusinessException(ErrorKey.GOAL_PARENT_CYCLE,
+                        "The chosen parent is a sub-goal of this goal");
+            }
+            if (!visited.add(cursor.getId())) {
+                break;
+            }
+            ancestors++;
+            cursor = findById(all, cursor.getParentId());
+        }
+
+        int below = goal == null ? 0 : subtreeHeight(goal.getId(), all, new HashSet<>());
+        // ancestors counts the parent and everything above it; +1 is the goal itself.
+        if (ancestors + 1 + below > MAX_DEPTH) {
+            throw new BusinessException(ErrorKey.GOAL_DEPTH_EXCEEDED,
+                    "Goals can be nested at most " + MAX_DEPTH + " levels deep");
+        }
+        return parent;
+    }
+
+    private static Goal findById(List<Goal> all, UUID id) {
+        if (id == null) return null;
+        for (Goal g : all) {
+            if (id.equals(g.getId())) return g;
+        }
+        return null;
+    }
+
+    /** Longest chain of descendants under {@code id}: 0 for a leaf, 1 for one level of children. */
+    private static int subtreeHeight(UUID id, List<Goal> all, Set<UUID> visited) {
+        if (!visited.add(id)) return 0;
+        int deepest = 0;
+        for (Goal g : all) {
+            if (id.equals(g.getParentId())) {
+                deepest = Math.max(deepest, 1 + subtreeHeight(g.getId(), all, visited));
+            }
+        }
+        return deepest;
+    }
+
+    /**
+     * Progress in a sub-goal is what says the parent has started, the same way the
+     * goal's own first increment moves it out of NOT_STARTED. Only that transition:
+     * completion still belongs to PUT /goal/complete and its XP.
+     */
+    private void startParentIfNotStarted(Goal goal) {
+        Goal parent = goal.getParent();
+        if (parent != null && parent.getStatus() == GoalStatus.NOT_STARTED) {
+            parent.setStatus(GoalStatus.IN_PROGRESS);
+            goalRepository.save(parent);
+        }
+    }
+
+    /**
+     * Re-parent a goal without touching anything else. Exists for the agent, which
+     * otherwise has to resend all fifteen fields of an edit to link two goals.
+     * {@code parentId} null moves the goal to the top level.
+     */
+    @Transactional
+    public GoalResponseDTO moveUnder(UUID goalId, UUID parentId, UUID userId) {
+        Goal goal = getGoal(goalId);
+        checkIfGoalIsFromTheUserInContext(goal, userId);
+        goal.setParent(resolveParent(goal, parentId, userId));
+        goalRepository.save(goal);
+        userCacheEvictService.evictAllUserCaches(userId);
+        return goalMapper.toResponseDTO(goal);
     }
 
     public void checkIfGoalIsFromTheUserInContext(Goal goal, UUID userId) {

@@ -24,6 +24,10 @@ public enum ErrorKey {
     GOAL_CREATE_FAILED,
     GOAL_EDIT_FAILED,
     GOAL_DELETE_FAILED,
+    // Nested goals: the parent would make the goal its own ancestor
+    GOAL_PARENT_CYCLE,
+    // Nested goals: the chain would be deeper than GoalService.MAX_DEPTH levels
+    GOAL_DEPTH_EXCEEDED,
     ROUTINE_NOT_FOUND,
     ROUTINE_NOT_OWNED,
     ROUTINE_NAME_REQUIRED,

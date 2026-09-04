@@ -39,6 +39,8 @@ public record EditGoalRequestDTO(
     @NotNull
     GoalStatus status,
     @NotNull
-    GoalTerm term
+    GoalTerm term,
+    /** Optional parent goal; null detaches the goal to the top level. Same rules as on create. */
+    UUID parentId
 ) {
 }

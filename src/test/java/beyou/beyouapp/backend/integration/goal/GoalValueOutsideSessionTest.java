@@ -66,7 +66,7 @@ class GoalValueOutsideSessionTest extends AbstractIntegrationTest {
                         "Ler 12 livros", null, "ic", 12.0, "livros", 0.0,
                         List.of(category.getId()), null,
                         LocalDate.now(), LocalDate.now().plusMonths(6),
-                        GoalStatus.NOT_STARTED, GoalTerm.LONG_TERM),
+                        GoalStatus.NOT_STARTED, GoalTerm.LONG_TERM, null),
                 user.getId());
 
         goalId = goalRepository.findAll().stream()

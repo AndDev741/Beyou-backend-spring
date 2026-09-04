@@ -11,6 +11,7 @@ import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.user.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -95,6 +96,27 @@ public class Goal {
     private GoalTerm term;
 
     private LocalDate completeDate;
+
+    /**
+     * The goal this one sits under, or null for a top-level goal. Lazy on purpose:
+     * getAllGoals already returns every goal of the user, so the tree is assembled
+     * client-side from {@link #parentId} and the relation itself is never walked on
+     * the read path. The rules that keep this safe (same owner, no cycle, three
+     * levels at most) are enforced once, in GoalService.resolveParent.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnore
+    @JoinColumn(name = "parent_id")
+    @ToString.Exclude
+    private Goal parent;
+
+    /**
+     * Read-only mirror of the foreign key, so the mapper can expose the parent id
+     * without initializing the lazy proxy (and without a second query per goal,
+     * which GoalGetAllQueryCountTest would catch).
+     */
+    @Column(name = "parent_id", insertable = false, updatable = false)
+    private UUID parentId;
 
     public Goal(CreateGoalRequestDTO dto, List<Category> categories, User user) {
         this.name = dto.name();

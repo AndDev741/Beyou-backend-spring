@@ -85,7 +85,7 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 GoalStatus.NOT_STARTED,
                 GoalTerm.SHORT_TERM,
                 null
-        );
+        , null);
         when(goalService.getAllGoals(userId)).thenReturn(List.of(goal));
 
         mockMvc.perform(get("/goal"))
@@ -99,7 +99,7 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 "Name", "icon", "desc", 100.0, "unit", 0.0,
                 List.of(UUID.randomUUID()), "motivation",
                 LocalDate.now(), LocalDate.now().plusDays(1),
-                GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
+                GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM, null);
         ResponseEntity<Map<String, String>> response = ResponseEntity.ok(Map.of("success", "Goal created"));
         when(goalService.createGoal(dto, userId)).thenReturn(response);
 
@@ -116,7 +116,7 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 UUID.randomUUID(), "NewName", "icon", "desc", 200.0, "unit", 10.0,
                 false, List.of(UUID.randomUUID()), "motivation",
                 LocalDate.now(), LocalDate.now().plusDays(2),
-                GoalStatus.IN_PROGRESS, GoalTerm.MEDIUM_TERM);
+                GoalStatus.IN_PROGRESS, GoalTerm.MEDIUM_TERM, null);
         ResponseEntity<Map<String, String>> response = ResponseEntity.ok(Map.of("success", "Goal edited"));
         when(goalService.editGoal(dto, userId)).thenReturn(response);
 
@@ -191,7 +191,7 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 GoalStatus.IN_PROGRESS,
                 GoalTerm.SHORT_TERM,
                 null
-        );
+        , null);
         when(goalService.increaseCurrentValue(goalId, value, userId)).thenReturn(responseDTO);
 
         mockMvc.perform(put("/goal/increase")
@@ -224,7 +224,7 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 GoalStatus.IN_PROGRESS,
                 GoalTerm.SHORT_TERM,
                 null
-        );
+        , null);
         when(goalService.decreaseCurrentValue(goalId, value, userId)).thenReturn(responseDTO);
 
         mockMvc.perform(put("/goal/decrease")
