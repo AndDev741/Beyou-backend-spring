@@ -68,6 +68,7 @@ class CheckDayDeletionIntegrationTest extends AbstractIntegrationTest {
     @Autowired private SnapshotCheckRepository snapshotCheckRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private XpByLevelRepository xpByLevelRepository;
+    @Autowired private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     private static final LocalDate DAY = LocalDate.of(2026, 3, 10);
 
@@ -101,11 +102,17 @@ class CheckDayDeletionIntegrationTest extends AbstractIntegrationTest {
         UUID userId = user.getId();
         diaryRoutineService.getAllDiaryRoutinesModels(userId)
                 .forEach(routine -> diaryRoutineService.deleteDiaryRoutine(routine.getId(), userId));
-        snapshotCheckRepository.deleteAll(snapshotCheckRepository.findAll().stream()
-                .filter(check -> check.getSnapshot() != null
-                        && check.getSnapshot().getUser() != null
-                        && userId.equals(check.getSnapshot().getUser().getId()))
-                .toList());
+        // Inside a transaction on purpose. `findAll` returns every snapshot check in the shared
+        // Testcontainers database, including rows other test classes left behind, and
+        // `getSnapshot().getUser()` walks a LAZY proxy: outside a session that is a
+        // LazyInitializationException on whichever foreign row comes first, which is why this
+        // teardown passed locally and failed in CI, where the class order differs.
+        transactionTemplate.executeWithoutResult(status ->
+                snapshotCheckRepository.deleteAll(snapshotCheckRepository.findAll().stream()
+                        .filter(check -> check.getSnapshot() != null
+                                && check.getSnapshot().getUser() != null
+                                && userId.equals(check.getSnapshot().getUser().getId()))
+                        .toList()));
         taskService.getAllTasks(userId).forEach(task -> taskService.deleteTask(task.id(), userId));
         habitService.getHabits(userId).forEach(habit -> habitService.deleteHabit(habit.id(), userId));
         userRepository.deleteById(userId);

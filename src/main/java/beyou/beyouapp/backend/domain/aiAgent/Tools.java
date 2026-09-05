@@ -303,16 +303,30 @@ public class Tools {
                 .toList();
     }
 
-    @Tool(description = "Create a new user goal. A goal cannot be created already completed: a COMPLETED status starts as IN_PROGRESS")
+    @Tool(description = "Create a new user goal. A goal cannot be created already completed: a COMPLETED status starts as IN_PROGRESS. "
+            + "Goals can be nested up to 3 levels (big goal > medium > small): set parentId to the id of an existing goal from getUserGoals to create it as a sub-goal, or leave it null for a top-level goal")
     Map<String, String> createUserGoal(CreateGoalRequestDTO goal, ToolContext toolContext) {
         log.info("AI agent is creating a goal for user: {}", userId(toolContext));
         return goalService.createGoal(valid(goal), userId(toolContext)).getBody();
     }
 
-    @Tool(description = "Edit an existing user goal. All fields are required, send the current values for fields that should not change. Completion is not editable here: 'complete' is ignored and a COMPLETED status is refused — use the goal completion tool, which is what moves the XP")
+    @Tool(description = "Edit an existing user goal. All fields are required, send the current values for fields that should not change (including parentId, or the goal is detached to the top level). Completion is not editable here: 'complete' is ignored and a COMPLETED status is refused — use the goal completion tool, which is what moves the XP. To only change the parent, prefer moveUserGoalUnder")
     Map<String, String> editUserGoal(EditGoalRequestDTO goal, ToolContext toolContext) {
         log.info("AI agent is editing goal {} for user: {}", goal.goalId(), userId(toolContext));
         return goalService.editGoal(valid(goal), userId(toolContext)).getBody();
+    }
+
+    @Tool(description = "Make a goal a sub-goal of another goal (by id or by name for both), or move it to the top level by sending no parent. "
+            + "The parent must be the user's own goal, must not be a sub-goal of the goal being moved, and the chain can be at most 3 levels deep")
+    GoalResponseDTO moveUserGoalUnder(
+            @ToolParam(description = "The goal to move: its id from getUserGoals, or its name as the user said it") String goal,
+            @ToolParam(description = "The new parent goal: id or name. Optional; omit to make the goal top-level", required = false) String parent,
+            ToolContext toolContext) {
+        UUID userId = userId(toolContext);
+        UUID goalId = resolveGoalId(goal, userId);
+        UUID parentId = (parent == null || parent.isBlank()) ? null : resolveGoalId(parent, userId);
+        log.info("AI agent is moving goal {} under {} for user: {}", goalId, parentId, userId);
+        return goalService.moveUnder(goalId, parentId, userId);
     }
 
     @Tool(description = "Delete a user goal, by id or by name")

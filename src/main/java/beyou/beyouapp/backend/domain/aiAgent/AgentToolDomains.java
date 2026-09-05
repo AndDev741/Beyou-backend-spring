@@ -28,6 +28,7 @@ public final class AgentToolDomains {
             Map.entry("createUserGoal", List.of("goals")),
             Map.entry("editUserGoal", List.of("goals")),
             Map.entry("deleteUserGoal", List.of("goals")),
+            Map.entry("moveUserGoalUnder", List.of("goals")),
             Map.entry("completeUserGoal", List.of("goals", "perfil")),
             Map.entry("increaseUserGoalValue", List.of("goals")),
             Map.entry("decreaseUserGoalValue", List.of("goals")),

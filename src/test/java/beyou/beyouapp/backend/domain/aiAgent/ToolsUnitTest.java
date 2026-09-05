@@ -237,7 +237,29 @@ public class ToolsUnitTest {
 
     private GoalResponseDTO goal(UUID id, String name) {
         return new GoalResponseDTO(id, name, "icon", null, 208.0, "pages", 21.0, false,
-                Map.of(), null, null, null, 0, null, null, null);
+                Map.of(), null, null, null, 0, null, null, null, null);
+    }
+
+    @Test
+    void moveGoalUnderResolvesBothByName() {
+        UUID childId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        when(goalService.getAllGoals(userId)).thenReturn(List.of(
+                goal(childId, "Correr 10 km"), goal(parentId, "Correr uma maratona")));
+
+        tools.moveUserGoalUnder("Correr 10 km", "maratona", toolContext);
+
+        verify(goalService).moveUnder(childId, parentId, userId);
+    }
+
+    @Test
+    void moveGoalUnderWithNoParentDetaches() {
+        UUID childId = UUID.randomUUID();
+        when(goalService.getAllGoals(userId)).thenReturn(List.of(goal(childId, "Correr 10 km")));
+
+        tools.moveUserGoalUnder("Correr 10 km", null, toolContext);
+
+        verify(goalService).moveUnder(childId, null, userId);
     }
 
     @Test

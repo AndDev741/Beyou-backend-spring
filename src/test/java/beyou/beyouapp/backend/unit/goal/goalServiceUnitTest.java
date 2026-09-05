@@ -140,7 +140,7 @@ public class goalServiceUnitTest {
                 "Name", "icon", "desc", 100.0, "unit", 0.0,
                 List.of(UUID.randomUUID()), "motivation",
                 LocalDate.now(), LocalDate.now().plusDays(1),
-                GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
+                GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM, null);
         Category cat = new Category();
         cat.setId(dto.categoriesId().get(0));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -161,7 +161,7 @@ public class goalServiceUnitTest {
                 "Name", "icon", "desc", 100.0, "unit", 0.0,
                 List.of(UUID.randomUUID()), "motivation",
                 LocalDate.now(), LocalDate.now().plusDays(1),
-                GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM);
+                GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM, null);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(categoryService.getCategory(any(UUID.class), any(UUID.class))).thenReturn(new Category());
         doThrow(new RuntimeException()).when(goalRepository).save(any(Goal.class));
@@ -178,7 +178,7 @@ public class goalServiceUnitTest {
                 goalId, "NewName", "icon", "desc", 200.0, "unit", 10.0,
                 false, List.of(UUID.randomUUID()), "motivation",
                 LocalDate.now(), LocalDate.now().plusDays(2),
-                GoalStatus.IN_PROGRESS, GoalTerm.MEDIUM_TERM);
+                GoalStatus.IN_PROGRESS, GoalTerm.MEDIUM_TERM, null);
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
         when(categoryService.getCategory(any(UUID.class), any(UUID.class))).thenReturn(new Category());
         when(goalRepository.save(goal)).thenReturn(goal);
@@ -196,7 +196,7 @@ public class goalServiceUnitTest {
         EditGoalRequestDTO dto = new EditGoalRequestDTO(
                 UUID.randomUUID(), "name", "icon", "desc", 0.0, "u", 0.0,
                 false, List.of(), "", LocalDate.now(), LocalDate.now(),
-                GoalStatus.NOT_STARTED, GoalTerm.LONG_TERM);
+                GoalStatus.NOT_STARTED, GoalTerm.LONG_TERM, null);
         when(goalRepository.findById(dto.goalId())).thenReturn(Optional.empty());
 
         assertThrows(GoalNotFound.class, () -> goalService.editGoal(dto, userId));
@@ -207,7 +207,7 @@ public class goalServiceUnitTest {
         EditGoalRequestDTO dto = new EditGoalRequestDTO(
                 goalId, "n", "i", "d", 0.0, "u", 0.0,
                 false, List.of(), "", LocalDate.now(), LocalDate.now(),
-                GoalStatus.NOT_STARTED, GoalTerm.LONG_TERM);
+                GoalStatus.NOT_STARTED, GoalTerm.LONG_TERM, null);
         User other = new User();
         other.setId(UUID.randomUUID());
         goal.setUser(other);
@@ -223,7 +223,7 @@ public class goalServiceUnitTest {
         EditGoalRequestDTO dto = new EditGoalRequestDTO(
                 goalId, "n", "i", "d", 0.0, "u", 0.0,
                 false, List.of(UUID.randomUUID()), "", LocalDate.now(), LocalDate.now(),
-                GoalStatus.NOT_STARTED, GoalTerm.LONG_TERM);
+                GoalStatus.NOT_STARTED, GoalTerm.LONG_TERM, null);
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
         when(categoryService.getCategory(any(UUID.class), any(UUID.class))).thenReturn(new Category());
         doThrow(new RuntimeException()).when(goalRepository).save(goal);
@@ -429,6 +429,165 @@ public class goalServiceUnitTest {
 
         assertEquals(0.0, response.currentValue());
         assertEquals(GoalStatus.IN_PROGRESS, response.status());
+    }
+
+
+    // --- Nested goals -----------------------------------------------------------------
+    // The tree rules live in GoalService.resolveParent and nowhere else: both clients only
+    // pre-filter their parent picker. Each test here would pass a client that skipped
+    // the check straight through, which is the point.
+
+    private Goal ownedGoal(UUID id, Goal parent) {
+        Goal g = new Goal();
+        g.setId(id);
+        g.setName("g-" + id.toString().substring(0, 4));
+        g.setUser(user);
+        g.setStatus(GoalStatus.NOT_STARTED);
+        g.setCategories(new java.util.ArrayList<>());
+        g.setParent(parent);
+        g.setParentId(parent == null ? null : parent.getId());
+        return g;
+    }
+
+    private void userGoalsAre(Goal... goals) {
+        // lenient: which of these a given rule consults depends on where it short-circuits.
+        org.mockito.Mockito.lenient().when(goalRepository.findAllByUserId(userId))
+                .thenReturn(Optional.of(List.of(goals)));
+        for (Goal g : goals) {
+            org.mockito.Mockito.lenient().when(goalRepository.findById(g.getId())).thenReturn(Optional.of(g));
+        }
+    }
+
+    @Test
+    void resolveParent_nullMeansTopLevel() {
+        assertEquals(null, goalService.resolveParent(goal, null, userId));
+    }
+
+    @Test
+    void resolveParent_refusesAParentOfAnotherUser() {
+        Goal foreign = ownedGoal(UUID.randomUUID(), null);
+        User someoneElse = new User();
+        someoneElse.setId(UUID.randomUUID());
+        foreign.setUser(someoneElse);
+        when(goalRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> goalService.resolveParent(null, foreign.getId(), userId));
+        assertEquals(ErrorKey.GOAL_NOT_OWNED, ex.getErrorKey());
+    }
+
+    @Test
+    void resolveParent_refusesTheGoalItself() {
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> goalService.resolveParent(goal, goal.getId(), userId));
+        assertEquals(ErrorKey.GOAL_PARENT_CYCLE, ex.getErrorKey());
+    }
+
+    @Test
+    void resolveParent_refusesADescendantAsParent() {
+        Goal root = ownedGoal(UUID.randomUUID(), null);
+        Goal child = ownedGoal(UUID.randomUUID(), root);
+        userGoalsAre(root, child);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> goalService.resolveParent(root, child.getId(), userId));
+        assertEquals(ErrorKey.GOAL_PARENT_CYCLE, ex.getErrorKey());
+    }
+
+    @Test
+    void resolveParent_allowsTheThirdLevel() {
+        Goal big = ownedGoal(UUID.randomUUID(), null);
+        Goal medium = ownedGoal(UUID.randomUUID(), big);
+        userGoalsAre(big, medium);
+
+        Goal parent = goalService.resolveParent(null, medium.getId(), userId);
+
+        assertEquals(medium.getId(), parent.getId());
+    }
+
+    @Test
+    void resolveParent_refusesAFourthLevelFromAbove() {
+        Goal big = ownedGoal(UUID.randomUUID(), null);
+        Goal medium = ownedGoal(UUID.randomUUID(), big);
+        Goal small = ownedGoal(UUID.randomUUID(), medium);
+        userGoalsAre(big, medium, small);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> goalService.resolveParent(null, small.getId(), userId));
+        assertEquals(ErrorKey.GOAL_DEPTH_EXCEEDED, ex.getErrorKey());
+    }
+
+    @Test
+    void resolveParent_refusesAFourthLevelFromBelow() {
+        // Moving a goal that already has a child under a goal that already has a parent:
+        // fine looking up (2 ancestors), fine looking down (1 child), four levels in total.
+        Goal big = ownedGoal(UUID.randomUUID(), null);
+        Goal medium = ownedGoal(UUID.randomUUID(), big);
+        Goal moving = ownedGoal(UUID.randomUUID(), null);
+        Goal movingChild = ownedGoal(UUID.randomUUID(), moving);
+        userGoalsAre(big, medium, moving, movingChild);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> goalService.resolveParent(moving, medium.getId(), userId));
+        assertEquals(ErrorKey.GOAL_DEPTH_EXCEEDED, ex.getErrorKey());
+    }
+
+    @Test
+    void createGoal_attachesTheResolvedParent() {
+        Goal parent = ownedGoal(UUID.randomUUID(), null);
+        userGoalsAre(parent);
+        CreateGoalRequestDTO dto = new CreateGoalRequestDTO(
+                "Sub", "icon", "desc", 10.0, "unit", 0.0,
+                List.of(), "motivation",
+                LocalDate.now(), LocalDate.now().plusDays(1),
+                GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM, parent.getId());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        org.mockito.ArgumentCaptor<Goal> saved = org.mockito.ArgumentCaptor.forClass(Goal.class);
+        when(goalRepository.save(saved.capture())).thenReturn(goal);
+
+        goalService.createGoal(dto, userId);
+
+        assertEquals(parent.getId(), saved.getValue().getParent().getId());
+    }
+
+    @Test
+    void increasingASubGoalStartsItsParent() {
+        Goal parent = ownedGoal(UUID.randomUUID(), null);
+        goal.setParent(parent);
+        goal.setStatus(GoalStatus.NOT_STARTED);
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(any(Goal.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        goalService.increaseCurrentValue(goalId, 2.0, userId);
+
+        assertEquals(GoalStatus.IN_PROGRESS, parent.getStatus());
+        verify(goalRepository).save(parent);
+    }
+
+    @Test
+    void increasingASubGoalLeavesACompletedParentAlone() {
+        Goal parent = ownedGoal(UUID.randomUUID(), null);
+        parent.setStatus(GoalStatus.COMPLETED);
+        goal.setParent(parent);
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(any(Goal.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        goalService.increaseCurrentValue(goalId, 2.0, userId);
+
+        assertEquals(GoalStatus.COMPLETED, parent.getStatus());
+        verify(goalRepository, times(0)).save(parent);
+    }
+
+    @Test
+    void moveUnder_nullDetachesToTopLevel() {
+        Goal parent = ownedGoal(UUID.randomUUID(), null);
+        goal.setParent(parent);
+        when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        goalService.moveUnder(goalId, null, userId);
+
+        assertEquals(null, goal.getParent());
     }
 
 }

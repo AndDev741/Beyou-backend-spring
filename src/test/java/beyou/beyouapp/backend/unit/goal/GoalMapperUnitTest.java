@@ -68,14 +68,14 @@ public class GoalMapperUnitTest {
         return new CreateGoalRequestDTO(
                 "Read seven chapters", "one a day", "lucide:book", 7.0, "chapters", 0.0,
                 List.of(), "learn", LocalDate.now(), LocalDate.now().plusDays(7),
-                status, GoalTerm.SHORT_TERM);
+                status, GoalTerm.SHORT_TERM, null);
     }
 
     private EditGoalRequestDTO editDTO(boolean complete, GoalStatus status) {
         return new EditGoalRequestDTO(
                 UUID.randomUUID(), "Read seven chapters", "lucide:book", "one a day", 7.0,
                 "chapters", 3.0, complete, List.of(), "learn", LocalDate.now(),
-                LocalDate.now().plusDays(7), status, GoalTerm.SHORT_TERM);
+                LocalDate.now().plusDays(7), status, GoalTerm.SHORT_TERM, null);
     }
 
     @Test
@@ -119,5 +119,19 @@ public class GoalMapperUnitTest {
         new GoalMapper().updateEntity(goal, editDTO(false, GoalStatus.NOT_STARTED), List.of());
 
         assertEquals(GoalStatus.NOT_STARTED, goal.getStatus());
+    }
+
+    @Test
+    void toResponseDTO_exposesTheParentIdWithoutTouchingTheRelation() {
+        Goal goal = new Goal();
+        goal.setId(UUID.randomUUID());
+        UUID parentId = UUID.randomUUID();
+        goal.setParentId(parentId);
+        // `parent` deliberately left null: the mapper must read the mirrored column, which
+        // is what keeps GET /goal at one query whatever the tree looks like.
+
+        GoalResponseDTO dto = new GoalMapper().toResponseDTO(goal);
+
+        assertEquals(parentId, dto.parentId());
     }
 }

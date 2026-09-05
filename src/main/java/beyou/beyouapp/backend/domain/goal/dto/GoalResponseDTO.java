@@ -24,6 +24,7 @@ public record GoalResponseDTO(
         double xpReward,
         GoalStatus status,
         GoalTerm term,
-        LocalDate completeDate
+        LocalDate completeDate,
+        UUID parentId
 ) {
 }
