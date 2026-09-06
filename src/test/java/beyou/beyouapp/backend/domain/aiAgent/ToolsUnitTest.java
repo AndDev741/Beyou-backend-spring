@@ -127,10 +127,28 @@ public class ToolsUnitTest {
         verify(habitService).createHabit(dto, userId);
     }
 
+    /**
+     * A task's importance and difficulty are optional (unlike a habit's): the agent may
+     * leave either out and the service stores null, which the XP path counts as 1. This
+     * used to assert the opposite, back when the DTO carried {@code @NotNull}.
+     */
     @Test
-    void createTaskWithoutDifficultyIsRejectedBeforeTheService() {
+    void createTaskWithoutDifficultyReachesTheService() {
         CreateTaskRequestDTO dto = new CreateTaskRequestDTO(
                 "Clean the desk", null, "broom", 3, null, List.of(), false);
+        when(taskService.createTask(dto, userId))
+                .thenReturn(ResponseEntity.ok(Map.of("success", "Task created successfully")));
+
+        tools.createUserTask(dto, toolContext);
+
+        verify(taskService).createTask(dto, userId);
+    }
+
+    /** Optional is not unbounded: a difficulty outside 1..5 still stops at the tool. */
+    @Test
+    void createTaskWithDifficultyOutOfRangeIsRejectedBeforeTheService() {
+        CreateTaskRequestDTO dto = new CreateTaskRequestDTO(
+                "Clean the desk", null, "broom", 3, 6, List.of(), false);
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> tools.createUserTask(dto, toolContext));
