@@ -1,6 +1,11 @@
 package beyou.beyouapp.backend.controller;
 
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -217,9 +222,53 @@ public class TaskControllerTest extends AbstractIntegrationTest {
                .andExpect(jsonPath("$.details.iconId").exists());
     }
 
+    /**
+     * Importance and difficulty are optional on a task. The column is nullable, the
+     * entity null-checks them and the XP path falls back to 1 when they are missing
+     * (CheckItemService); the {@code @NotNull} on the DTO was the only thing in the
+     * way. Both clients seed their forms with "unset" and used to be blocked here.
+     */
     @Test
-    void shouldReturn400WhenCreatingTaskWithNullImportance() throws Exception {
-        String json = "{\"name\": \"Task\", \"description\": \"\", \"iconId\": \"icon1\", \"importance\": null, \"difficulty\": 2, \"categoriesId\": [], \"oneTimeTask\": false}";
+    void shouldCreateTaskWithoutImportanceAndDifficulty() throws Exception {
+        String json = "{\"name\": \"Task\", \"description\": \"\", \"iconId\": \"icon1\", \"importance\": null, \"categoriesId\": [], \"oneTimeTask\": false}";
+        ResponseEntity<Map<String, String>> successResponse = ResponseEntity.ok()
+            .body(Map.of("success", "Task created successfully"));
+        when(taskService.createTask(any(CreateTaskRequestDTO.class), eq(userId))).thenReturn(successResponse);
+
+        mockMvc.perform(post("/task")
+               .contentType(MediaType.APPLICATION_JSON)
+               .content(json))
+               .andExpect(status().isOk());
+
+        ArgumentCaptor<CreateTaskRequestDTO> captor = ArgumentCaptor.forClass(CreateTaskRequestDTO.class);
+        verify(taskService).createTask(captor.capture(), eq(userId));
+        assertNull(captor.getValue().importance());
+        assertNull(captor.getValue().difficulty());
+    }
+
+    /** Editing with both absent clears them: the edit overwrites every scalar it carries. */
+    @Test
+    void shouldEditTaskClearingImportanceAndDifficulty() throws Exception {
+        UUID taskId = UUID.randomUUID();
+        String json = "{\"taskId\": \"" + taskId + "\", \"name\": \"Task\", \"iconId\": \"icon1\", \"categoriesId\": [], \"oneTimeTask\": false}";
+        when(taskService.editTask(any(EditTaskRequestDTO.class), eq(userId)))
+            .thenReturn(ResponseEntity.ok().body(Map.of("success", "Task edited successfully")));
+
+        mockMvc.perform(put("/task")
+               .contentType(MediaType.APPLICATION_JSON)
+               .content(json))
+               .andExpect(status().isOk());
+
+        ArgumentCaptor<EditTaskRequestDTO> captor = ArgumentCaptor.forClass(EditTaskRequestDTO.class);
+        verify(taskService).editTask(captor.capture(), eq(userId));
+        assertNull(captor.getValue().importance());
+        assertNull(captor.getValue().difficulty());
+    }
+
+    /** Optional does not mean unbounded: a value that IS sent still has to sit in 1..5. */
+    @Test
+    void shouldReturn400WhenCreatingTaskWithImportanceOutOfRange() throws Exception {
+        String json = "{\"name\": \"Task\", \"description\": \"\", \"iconId\": \"icon1\", \"importance\": 6, \"difficulty\": 2, \"categoriesId\": [], \"oneTimeTask\": false}";
 
         mockMvc.perform(post("/task")
                .contentType(MediaType.APPLICATION_JSON)

@@ -9,7 +9,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record CreateTaskRequestDTO(
@@ -19,8 +18,8 @@ public record CreateTaskRequestDTO(
     String description,
     @NotBlank
     String iconId,
-    @NotNull @Min(1) @Max(5) Integer importance,
-    @JsonAlias("dificulty") @NotNull @Min(1) @Max(5) Integer difficulty,
+    @Min(1) @Max(5) Integer importance,
+    @JsonAlias("dificulty") @Min(1) @Max(5) Integer difficulty,
     List<UUID> categoriesId,
     boolean oneTimeTask
 ) {
