@@ -58,7 +58,9 @@ public final class AgentToolDomains {
             Map.entry("toggleMicroTask", List.of("focus")),
             Map.entry("pinMicroTask", List.of("focus")),
             Map.entry("deleteMicroTask", List.of("focus")),
-            Map.entry("reorderMicroTasks", List.of("focus")));
+            Map.entry("reorderMicroTasks", List.of("focus")),
+            // Mood. getUserMoodHistory only reads, so it stays out of this map.
+            Map.entry("logUserMood", List.of("mood")));
 
     private AgentToolDomains() {}
 

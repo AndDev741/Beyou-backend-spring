@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,6 +46,8 @@ import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
+import beyou.beyouapp.backend.domain.mood.MoodService;
+import beyou.beyouapp.backend.domain.mood.dto.SetMoodLevelDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.ScheduleResponseDTO;
@@ -93,6 +96,8 @@ public class Tools {
     private FeedbackService feedbackService;
     @Autowired
     private FocusService focusService;
+    @Autowired
+    private MoodService moodService;
     @Autowired
     private Validator validator;
 
@@ -789,6 +794,54 @@ public class Tools {
         log.info("AI agent is updating configuration for user: {}", userId(toolContext));
         userService.editUser(valid(configUpdate), userId(toolContext));
         return Map.of("success", "Configuration updated");
+    }
+
+    // Mood and journaling
+    @Tool(description = "Record how the user is feeling on a given day, on a 1 to 5 scale where "
+            + "1 is awful, 2 bad, 3 okay, 4 good and 5 great. Only call this when the user has "
+            + "actually told you how they feel — never infer a number from the tone of the "
+            + "conversation, and never record a mood they did not state. Writing a mood leaves "
+            + "any journal text for that day untouched")
+    Map<String, String> logUserMood(
+            @ToolParam(description = "1 to 5, where 1 is awful and 5 is great") Integer mood,
+            @ToolParam(description = "The day as yyyy-MM-dd. Omit for today. Future days are refused",
+                    required = false) String date,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        // parseDate answers null for an omitted value, which is exactly "they meant today",
+        // and today is the user's own day so only we can resolve it.
+        LocalDate parsed = parseDate(date, "date");
+        LocalDate day = parsed != null ? parsed : UserDateResolver.today(user);
+        log.info("AI agent is recording a mood for user: {} on {}", user.getId(), day);
+        moodService.setLevel(user, day, valid(new SetMoodLevelDTO(mood)));
+        return Map.of("success", "Mood recorded for " + day);
+    }
+
+    @Tool(description = "Read back the levels the user has recorded over a range of days, to "
+            + "answer questions like how this week went. Returns the date and the 1 to 5 level "
+            + "only. It deliberately does NOT return what they wrote in their journal: that text "
+            + "is private to them, and if they want you to read a day's entry they will paste it")
+    List<Map<String, Object>> getUserMoodHistory(
+            @ToolParam(description = "First day as yyyy-MM-dd. Omit for six days before the last day",
+                    required = false) String from,
+            @ToolParam(description = "Last day as yyyy-MM-dd. Omit for the user's today",
+                    required = false) String to,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is reading mood history for user: {}", user.getId());
+        LocalDate start = parseDate(from, "from");
+        LocalDate end = parseDate(to, "to");
+        return moodService.getRange(user, start, end).stream()
+                .map(entry -> {
+                    Map<String, Object> row = new LinkedHashMap<String, Object>();
+                    row.put("date", entry.date().toString());
+                    row.put("mood", entry.mood());
+                    // Whether they wrote something, never what. Enough for the assistant to
+                    // say "you journaled on four days this week" without reading a word of it.
+                    row.put("hasNote", entry.note() != null && !entry.note().isBlank());
+                    return row;
+                })
+                .toList();
     }
 
     // Feedback

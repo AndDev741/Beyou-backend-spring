@@ -28,6 +28,11 @@ public enum ErrorKey {
     GOAL_PARENT_CYCLE,
     // Nested goals: the chain would be deeper than GoalService.MAX_DEPTH levels
     GOAL_DEPTH_EXCEEDED,
+    MOOD_NOT_FOUND,
+    // A mood is a report, not a plan: MoodService refuses days after the owner's today.
+    MOOD_FUTURE_DATE,
+    MOOD_SAVE_FAILED,
+    MOOD_DELETE_FAILED,
     ROUTINE_NOT_FOUND,
     ROUTINE_NOT_OWNED,
     ROUTINE_NAME_REQUIRED,

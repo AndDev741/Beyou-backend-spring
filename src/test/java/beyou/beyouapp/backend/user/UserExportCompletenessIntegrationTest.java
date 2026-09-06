@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.sql.Date;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.List;
@@ -27,6 +28,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import beyou.beyouapp.backend.AbstractIntegrationTest;
+import beyou.beyouapp.backend.domain.mood.MoodService;
+import beyou.beyouapp.backend.domain.mood.dto.SetMoodLevelDTO;
+import beyou.beyouapp.backend.domain.mood.dto.UpsertMoodEntryDTO;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.common.ExperienceLevel;
@@ -80,6 +84,7 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
     @Autowired ChatService chatService;
     @Autowired AgentMessageService agentMessageService;
     @Autowired PhotoStorageService photoStorageService;
+    @Autowired MoodService moodService;
 
     private User user;
 
@@ -310,5 +315,34 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
                 .containsEntry("assistantNotesAboutYou", "Training for a half marathon");
 
         userService.deleteUser(user);
+    }
+
+    /**
+     * The journal is the most personal thing the account holds, and deleting the account destroys
+     * it. So an export that carried the level but not the words would be exactly the failure this
+     * class exists for: the person keeps a file, deletes the account, and what they actually wrote
+     * is gone.
+     */
+    @Test
+    @DisplayName("the export carries every mood entry with the words the person wrote, not just the level")
+    @SuppressWarnings("unchecked")
+    void exportsTheJournalInFull() {
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        moodService.upsert(user, today, new UpsertMoodEntryDTO(4, "Slept badly but the talk went well."));
+        moodService.setLevel(user, today.minusDays(1), new SetMoodLevelDTO(2));
+
+        Map<String, Object> export = exportService.exportUserData();
+
+        List<Map<String, Object>> entries = (List<Map<String, Object>>) export.get("moodEntries");
+        assertThat(entries).as("a journalled account must have its entries in the file").hasSize(2);
+
+        Map<String, Object> written = entries.get(0);
+        assertThat(written.get("date")).isEqualTo(today);
+        assertThat(written.get("mood")).isEqualTo(4);
+        assertThat(written.get("note"))
+                .as("the words themselves, not a summary and not a flag that words existed")
+                .isEqualTo("Slept badly but the talk went well.");
+
+        assertThat(entries.get(1).get("note")).as("a day with only a level is still a day").isNull();
     }
 }
