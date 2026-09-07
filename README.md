@@ -16,7 +16,8 @@ Beyou helps people build better days: track habits, set goals, plan daily routin
 - **Domain model for productivity** — categories, habits, tasks, goals, and a polymorphic routine system with daily routines, sections, and item groups.
 - **Gamification engine** — XP and leveling for the user, each category, and each habit, coordinated transactionally so a single check-in updates every affected entity in one response.
 - **Daily routines & check-ins** — schedule routines, check/uncheck/skip items, track streaks ("constance"), and persist per-day snapshots.
-- **AI routine generation** — describe a routine in natural language and get a structured draft (Spring AI, provider-agnostic), then confirm it to atomically create categories, habits, tasks, and the routine.
+- **Daily mood and journaling** — one entry per day on a five-point scale with an optional free-text note. Two write verbs on purpose: `PUT` replaces the day, `PATCH` sets only the level and cannot touch the note, so a client that never loaded somebody's diary cannot delete it.
+- **AI assistant** — a streaming chat (Spring AI, provider-agnostic with a fallback chain) whose tools call the same domain services as the REST API, so every action it takes passes the same ownership checks and validation as a button click. Plus stateless onboarding suggestions.
 - **Authentication** — email/password and Google OAuth, JWT access tokens, refresh-token rotation, email verification, and password reset.
 - **Production hardening** — per-endpoint rate limiting (Bucket4j), Caffeine caching, security headers/CSP, ownership checks (IDOR-safe), and structured i18n-friendly error keys.
 - **Observability** — Actuator + Prometheus metrics on a separate, localhost-bound management port.
@@ -120,8 +121,15 @@ The Actuator/management server runs separately on port `9091` and is **not** ver
 | `/habit` | Habits linked to categories |
 | `/task` | Tasks linked to categories |
 | `/goal` | Goals (increase / decrease / complete — only `complete` awards XP) |
-| `/routine`, `/schedule`, `/snapshot` | Daily routines, scheduling, and per-day snapshots |
-| `/ai/routine` | `POST /generate` (stateless draft) and `POST /confirm` (transactional create) |
+| `/routine`, `/schedule` | Daily and list routines, scheduling, and per-day snapshots (`/routine/snapshot`) |
+| `/mood` | One entry per day: `PUT` replaces it, `PATCH` sets the level only, `GET` reads a date range |
+| `/focus` | Focus Mode history: completed timer cycles and per-item micro-tasks |
+| `/check-history` | The day-by-day record behind every streak strip, for any checkable owner |
+| `/xp` | XP history per owner, for the dashboard charts |
+| `/feedback` | Feedback submissions and replies (`/feedback/admin` requires ADMIN) |
+| `/ai/agent` | The assistant: chats, messages, and the SSE stream |
+| `/onboarding` | Stateless AI onboarding suggestions |
+| `/user/photo` | Profile photo upload, fetch and removal |
 | `/docs/**` | Architecture, API, blog, project docs, and search (admin import behind a secret header) |
 
 ### Authentication flow
@@ -143,21 +151,22 @@ Unit/controller tests run under the `test` profile against a Testcontainers Post
 End-to-end tests (Playwright) live in the sibling `Beyou-e2e-tests` repository and drive the full stack against a dedicated `beyou_e2e` database.
 
 > [!CAUTION]
-> The `e2e` profile uses `ddl-auto: create-drop`. `E2eSafetyCheck` refuses to start unless the JDBC URL contains `e2e` or `test`, so a misconfigured override can't wipe development data.
+> The `e2e` profile runs against a dedicated `beyou_e2e` database. `E2eSafetyCheck` refuses to start unless the JDBC URL contains `e2e` or `test`, so a misconfigured override can't wipe development data.
 
 ## Project structure
 
 ```
 src/main/java/beyou/beyouapp/backend/
 ├── controllers/        REST controllers (domain + docs/)
-├── domain/             category, habit, task, goal, routine, ai, common
+├── domain/             category, habit, task, goal, routine, mood, focus,
+│                       checkday, xpday, feedback, aiAgent, common
 ├── security/           JWT, refresh tokens, password reset, rate limiting
 ├── user/               User entity (UserDetails), service, Google OAuth
 ├── docs/               GitHub-backed docs import (architecture, api, blog, project, search)
 ├── exceptions/         GlobalExceptionHandler + BusinessException / ErrorKey
 ├── notification/       EmailService
 ├── AOP/                Controller & service logging aspects
-├── seed/               Startup data seeders
+├── monitoring/         User-id MDC filter, activity tracking
 └── config/             Cross-cutting configuration
 ```
 
@@ -165,10 +174,15 @@ src/main/java/beyou/beyouapp/backend/
 
 | Profile | Database | `ddl-auto` | Notes |
 |---------|----------|-----------|-------|
-| `dev` | PostgreSQL `beyou` | `update` | Local development |
+| `dev` | PostgreSQL `beyou` | `validate` | Local development |
 | `prod` | PostgreSQL | `validate` | CORS wildcard rejected, Swagger off, actuator localhost-only |
-| `test` | Testcontainers PostgreSQL | managed | Unit/integration tests |
-| `e2e` | PostgreSQL `beyou_e2e` | `create-drop` | Auto-verifies emails, rate limiting off |
+| `test` | Testcontainers PostgreSQL | `validate` | Unit/integration tests |
+| `e2e` | PostgreSQL `beyou_e2e` | `validate` | Playwright suite; auto-verifies e-mails, rate limiting off |
+
+Flyway owns the schema in every profile: migrations under `db/migration/` create and evolve every
+table, `ddl-auto` is `validate` everywhere, and `SchemaOwnershipGuard` refuses to boot if a
+mutating `ddl-auto` is set while Flyway is enabled. An entity field with no matching column fails
+startup rather than silently rewriting the database.
 
 ## Related repositories
 

@@ -11,6 +11,7 @@ import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.goal.GoalRepository;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
+import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
@@ -56,6 +57,7 @@ public class UserExportService {
     private final ChatService chatService;
     private final PhotoStorageService photoStorageService;
     private final NotificationPreferencesRepository notificationPreferencesRepository;
+    private final MoodService moodService;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -168,6 +170,18 @@ public class UserExportService {
 
         // Check-in history (R10)
         export.put("checkHistory", checkHistory(user));
+
+        // Mood entries and the journal written alongside them. The most personal thing the
+        // product stores, so an export that left it out would not be an export — and the
+        // note is included in full, because a summary of someone's diary is not their diary.
+        export.put("moodEntries", moodService.findAllForExport(userId).stream().map(m -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("date", m.getEntryDate());
+            map.put("mood", m.getMood());
+            map.put("note", m.getNote());
+            map.put("updatedAt", m.getUpdatedAt());
+            return map;
+        }).toList());
 
         // Say out loud what a reader will not find here, so the file can be trusted
         // as a whole rather than spot-checked. Deletion takes these too.
