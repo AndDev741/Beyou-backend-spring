@@ -9,7 +9,7 @@
 [![Spring Boot 4](https://img.shields.io/badge/Spring%20Boot-4.0-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-Beyou helps people build better days: track habits, set goals, plan daily routines, and earn XP as they make progress. This repository is the **Spring Boot backend** that powers the web and mobile clients.
+Beyou helps people build better days: track habits, set goals, plan daily routines, and earn XP as they make progress. This repository is the **Spring Boot backend** that powers the web and mobile clients: the web app at [app.beyouweb.com](https://app.beyouweb.com) and the Android app on [Google Play](https://play.google.com/store/apps/details?id=com.beyou.mobile).
 
 ## Features
 
