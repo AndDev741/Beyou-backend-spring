@@ -21,7 +21,7 @@ public class ApiControllerService {
     private final ApiControllerTopicRepository topicRepository;
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "apiTopics", key = "T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
+    @Cacheable(cacheNames = "apiTopics", key = "@docsLocale.normalize(#locale)")
     public List<ApiControllerListItemDTO> getTopics(String locale) {
         String normalizedLocale = DocsLocale.normalize(locale);
 
@@ -32,7 +32,7 @@ public class ApiControllerService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "apiTopic", key = "#key + '_' + T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
+    @Cacheable(cacheNames = "apiTopic", key = "#key + '_' + @docsLocale.normalize(#locale)")
     public ApiControllerDetailDTO getTopic(String key, String locale) {
         String normalizedLocale = DocsLocale.normalize(locale);
 

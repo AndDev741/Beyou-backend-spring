@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.unit.docs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.lang.reflect.Method;
@@ -52,6 +53,15 @@ public class DocsLocaleTest {
         String keyExpression = method.getAnnotation(Cacheable.class).key();
 
         StandardEvaluationContext context = new StandardEvaluationContext();
+        // The keys reach the helper as the bean `@docsLocale`, never as a T(...) type
+        // reference (see the DocsLocale javadoc for the outage that rule comes from).
+        // Stand in for the BeanFactory here, so the expression is evaluated for real.
+        context.setBeanResolver((ctx, beanName) -> {
+            if ("docsLocale".equals(beanName)) {
+                return new DocsLocale();
+            }
+            throw new IllegalStateException("unexpected bean in a docs cache key: " + beanName);
+        });
         for (java.lang.reflect.Parameter parameter : method.getParameters()) {
             context.setVariable(parameter.getName(), null);
         }
@@ -59,6 +69,10 @@ public class DocsLocaleTest {
         Object key = new SpelExpressionParser().parseExpression(keyExpression).getValue(context);
 
         assertNotNull(key, "Spring rejects a null cache key: " + className + "#" + methodName);
+        assertFalse(keyExpression.contains("T("),
+            className + "#" + methodName + " uses a T(...) type reference in its cache key; "
+                + "that lookup is pinned to the class loader of the first cache operation after boot "
+                + "and took the docs site down in prod. Use @docsLocale instead.");
     }
 
     private static Stream<Arguments> cacheableDocsMethods() {
