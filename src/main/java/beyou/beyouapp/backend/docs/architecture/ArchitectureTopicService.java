@@ -21,7 +21,7 @@ public class ArchitectureTopicService {
     private final ArchitectureTopicRepository topicRepository;
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "architectureTopics", key = "T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
+    @Cacheable(cacheNames = "architectureTopics", key = "@docsLocale.normalize(#locale)")
     public List<ArchitectureTopicListItemDTO> getTopics(String locale) {
         String normalizedLocale = DocsLocale.normalize(locale);
 
@@ -32,7 +32,7 @@ public class ArchitectureTopicService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "architectureTopic", key = "#key + '_' + T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
+    @Cacheable(cacheNames = "architectureTopic", key = "#key + '_' + @docsLocale.normalize(#locale)")
     public ArchitectureTopicDetailDTO getTopic(String key, String locale) {
         String normalizedLocale = DocsLocale.normalize(locale);
 

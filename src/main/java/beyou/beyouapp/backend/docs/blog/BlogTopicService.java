@@ -26,7 +26,7 @@ public class BlogTopicService {
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "blogTopics", key = "T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale) + '_' + #category + '_' + #tag")
+    @Cacheable(cacheNames = "blogTopics", key = "@docsLocale.normalize(#locale) + '_' + #category + '_' + #tag")
     public List<BlogTopicListItemDTO> getTopics(String locale, String category, String tag) {
         String normalizedLocale = DocsLocale.normalize(locale);
         BlogTopicCategory parsedCategory = parseCategory(category);
@@ -40,7 +40,7 @@ public class BlogTopicService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "blogTopic", key = "#key + '_' + T(beyou.beyouapp.backend.docs.DocsLocale).normalize(#locale)")
+    @Cacheable(cacheNames = "blogTopic", key = "#key + '_' + @docsLocale.normalize(#locale)")
     public BlogTopicDetailDTO getTopic(String key, String locale) {
         String normalizedLocale = DocsLocale.normalize(locale);
 
