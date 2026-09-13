@@ -140,6 +140,35 @@ public class RateLimitConfig {
                 .build();
     }
 
+    /** Daily Briefing reads allowed per user per hour — see {@link #createBriefingBucket()}. */
+    public static final int BRIEFING_READS_PER_HOUR = 10;
+
+    /**
+     * {@code GET /daily-briefing} — one dashboard open's worth of morning panel.
+     *
+     * <p>Ahead of the generic read branch, and for the same reason {@code /user/export} is:
+     * it is a GET that costs nothing like a list read. On the first call of a user's day it
+     * creates a row and may hold the request for up to eight seconds waiting on an LLM,
+     * which the 60-a-minute read budget is not sized for.
+     *
+     * <p>Ten an hour, because of what the endpoint is for. It is asked once per day per
+     * device in normal use, and the answer is cached on the row for the rest of that day —
+     * so the allowance exists for two clients, a reload or two, and the retry a flaky
+     * connection needs. Nobody has an honest eleventh use inside an hour.
+     *
+     * <p>{@code POST /daily-briefing/seen} deliberately does NOT come here. It is a
+     * single-column update with no model behind it, and it belongs in the generic write
+     * budget with every other cheap mutation.
+     */
+    public static Bucket createBriefingBucket() {
+        return Bucket.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(BRIEFING_READS_PER_HOUR)
+                        .refillGreedy(BRIEFING_READS_PER_HOUR, Duration.ofHours(1))
+                        .build())
+                .build();
+    }
+
     /** Header-less GET /user/photo/** (signed URL, no JWT) — per-IP so callers can't flood disk reads. */
     public static Bucket createPhotoBucket() {
         return Bucket.builder()

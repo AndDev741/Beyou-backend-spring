@@ -157,3 +157,11 @@ monitoring:
 # throwaway stack wants anyway.
 app:
   upload-dir: ${UPLOAD_DIR:/tmp/beyou-e2e-uploads}
+
+# The Daily Briefing's prose is OFF for the suite, and that is what makes the feature
+# testable at all. A spec that waited on a live LLM would be slow, would depend on an
+# upstream free tier being awake, and would assert against text nobody wrote. With this
+# off the endpoint still answers in full — the facts half is computed from the database —
+# and the clients render their translated fallback copy, which IS what the spec asserts.
+briefing:
+  narration-enabled: false

@@ -212,6 +212,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
             bucketKey = "export:" + userId;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createUserExportBucket());
+        } else if ("GET".equals(method) && path.equals("/daily-briefing")) {
+            // Ahead of the generic read branch. The first call of a user's day creates a
+            // row and may hold the request for up to eight seconds waiting on the LLM
+            // chain; the 60-a-minute read budget is sized for list reads, not for that.
+            String userId = getUserIdFromRequest(request);
+            if (userId == null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            bucketKey = "briefing:" + userId;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createBriefingBucket());
         } else if (WRITE_METHODS.contains(method)) {
             String userId = getUserIdFromRequest(request);
             if (userId == null) {

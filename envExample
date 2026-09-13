@@ -117,3 +117,12 @@ ENGAGEMENT_NUDGES_ENABLED=false
 
 # Spring Profile (dev or prod)
 SPRING_PROFILES_ACTIVE=dev
+
+# --- Daily Briefing ---
+# The morning dialog's generated prose. Leave unset (true) in normal operation: the facts
+# half is computed from the database and never depends on this. Set false to serve the
+# dialog with the clients' own translated copy instead — an incident switch, not a launch
+# gate.
+BRIEFING_NARRATION_ENABLED=true
+# Days of briefings the nightly sweep keeps.
+BRIEFING_RETENTION_DAYS=30

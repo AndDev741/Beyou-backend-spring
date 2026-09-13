@@ -168,6 +168,22 @@ account-deletion:
 # Engagement nudges (phase 1). Thresholds rather than constants because every one of
 # them was picked without a baseline to pick it from: the product analytics that would
 # justify a number only started collecting the day this was written. Expect to move them.
+briefing:
+  # Whether the Daily Briefing's prose is generated at all.
+  #
+  # ON by default, unlike engagement.enabled, because this one needs no privacy-policy
+  # ordering: the briefing is shown to the account it describes, in the app, from data
+  # that account already sees. It is a switch for an incident, not a gate on a launch.
+  #
+  # Turning it off leaves a fully working dialog — the facts are computed from the
+  # database, and the clients render translated copy where the generated lines would be.
+  # That is also how the e2e profile runs the feature with no model behind it.
+  narration-enabled: ${BRIEFING_NARRATION_ENABLED:true}
+  # How many days of briefings to keep before the nightly sweep drops them. Nothing reads
+  # a briefing after its own day; a month is kept so a support question about what someone
+  # was shown last week can be answered.
+  retention-days: ${BRIEFING_RETENTION_DAYS:30}
+
 engagement:
   # OFF by default, and that is load-bearing rather than cautious. The privacy policy has
   # to describe a new use of somebody's data BEFORE it starts, so the ordering is: policy
