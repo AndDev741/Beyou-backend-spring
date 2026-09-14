@@ -19,6 +19,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.TestPropertySource;
 
 import beyou.beyouapp.backend.AbstractIntegrationTest;
+import beyou.beyouapp.backend.HibernateStatistics;
 import beyou.beyouapp.backend.domain.briefing.DailyBriefingRepository;
 import beyou.beyouapp.backend.domain.briefing.DailyBriefingService;
 import beyou.beyouapp.backend.domain.briefing.NarrativeStatus;
@@ -84,6 +85,7 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
     @Autowired private HabitRepository habitRepository;
     @Autowired private GoalRepository goalRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private jakarta.persistence.EntityManagerFactory entityManagerFactory;
 
     /**
      * A Wednesday, so the seeded Mon/Wed/Fri schedule covers both it and the day before is a
@@ -325,21 +327,76 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
         assertThat(briefing.today().scheduledToday()).isTrue();
     }
 
+    // ---- cost ----
+
+    /**
+     * The endpoint's query count must not grow with the size of the routine.
+     *
+     * <p>It runs on the dashboard's first load of every day, and the pool is at Hikari's
+     * default of ten connections — a documented gap this feature must not make worse. The
+     * shape being guarded is a slope, not a ceiling: the same account is measured with a
+     * one-section routine and then with a five-section one, and the second must not cost
+     * meaningfully more. A lazy walk over each section's habit and task groups would show up
+     * here as a count that climbs with the sections, which is exactly the N+1
+     * {@code UserExportQueryCountTest} guards on its own endpoint.
+     */
+    @Test
+    void queryCount_doesNotGrowWithTheRoutine() {
+        seedOpenYesterday();
+        HibernateStatistics small = new HibernateStatistics(entityManagerFactory);
+        briefingService.briefingFor(user, TODAY);
+        long withOneSection = small.statementCount();
+
+        // A second account, identical but for the size of its routine. Measured on its own
+        // account rather than by growing the first, because reading a routine's sections back
+        // to extend them is itself a query and would land inside the measurement.
+        User heavy = newUser();
+        DiaryRoutine heavyRoutine = newRoutine(heavy, Set.of(WeekDay.Monday, WeekDay.Wednesday,
+                WeekDay.Friday), 5);
+        seedOpenYesterdayFor(heavy, heavyRoutine);
+        authenticateAs(heavy);
+
+        HibernateStatistics large = new HibernateStatistics(entityManagerFactory);
+        briefingService.briefingFor(heavy, TODAY);
+        long withFiveSections = large.statementCount();
+
+        // A floor first, so this cannot pass by measuring nothing: if the statistics were not
+        // wired up, or the service short-circuited, both numbers would be zero and the slope
+        // assertion below would hold vacuously.
+        assertThat(withOneSection)
+                .as("the briefing should actually hit the database")
+                .isGreaterThan(3);
+
+        assertThat(withFiveSections)
+                .as("four more sections cost %d extra statements (%d -> %d)",
+                        withFiveSections - withOneSection, withOneSection, withFiveSections)
+                .isLessThanOrEqualTo(withOneSection + 1);
+    }
+
     // ---- seeding ----
 
     private void seedOpenYesterday() {
-        RoutineSnapshot snapshot = snapshotFor(YESTERDAY, false);
+        seedOpenYesterdayFor(user, routine);
+    }
+
+    private void seedOpenYesterdayFor(User owner, DiaryRoutine ownerRoutine) {
+        RoutineSnapshot snapshot = snapshotFor(YESTERDAY, false, owner, ownerRoutine);
         addCheck(snapshot, "Something", check -> {});
         persist(snapshot);
     }
 
     private RoutineSnapshot snapshotFor(LocalDate date, boolean completed) {
+        return snapshotFor(date, completed, user, routine);
+    }
+
+    private RoutineSnapshot snapshotFor(LocalDate date, boolean completed, User owner,
+                                        DiaryRoutine ownerRoutine) {
         RoutineSnapshot snapshot = new RoutineSnapshot();
-        snapshot.setRoutine(routine);
-        snapshot.setUser(user);
+        snapshot.setRoutine(ownerRoutine);
+        snapshot.setUser(owner);
         snapshot.setSnapshotDate(date);
-        snapshot.setRoutineName(routine.getName());
-        snapshot.setRoutineIconId(routine.getIconId());
+        snapshot.setRoutineName(ownerRoutine.getName());
+        snapshot.setRoutineIconId(ownerRoutine.getIconId());
         snapshot.setStructureJson("{\"sections\":[]}");
         snapshot.setCompleted(completed);
         snapshot.setChecks(new ArrayList<>());
@@ -399,6 +456,10 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
     }
 
     private DiaryRoutine newRoutine(User owner, Set<WeekDay> days) {
+        return newRoutine(owner, days, 1);
+    }
+
+    private DiaryRoutine newRoutine(User owner, Set<WeekDay> days, int sectionCount) {
         Schedule schedule = new Schedule();
         schedule.setDays(days);
         schedule = scheduleRepository.saveAndFlush(schedule);
@@ -422,25 +483,29 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
         created.setSchedule(schedule);
         created.setXpProgress(new XpProgress(0D, 0, 0D, 50D));
 
-        RoutineSection section = new RoutineSection();
-        section.setName("Warm-up");
-        section.setIconId("icon");
-        section.setStartTime(LocalTime.of(6, 0));
-        section.setEndTime(LocalTime.of(7, 0));
-        section.setOrderIndex(0);
-        section.setFavorite(false);
-        section.setRoutine(created);
+        List<RoutineSection> sections = new ArrayList<>();
+        for (int index = 0; index < sectionCount; index++) {
+            RoutineSection section = new RoutineSection();
+            section.setName("Warm-up " + index);
+            section.setIconId("icon");
+            section.setStartTime(LocalTime.of(6 + index, 0));
+            section.setEndTime(LocalTime.of(7 + index, 0));
+            section.setOrderIndex(index);
+            section.setFavorite(false);
+            section.setRoutine(created);
 
-        HabitGroup group = new HabitGroup();
-        group.setHabit(habit);
-        group.setRoutineSection(section);
-        group.setStartTime(LocalTime.of(6, 0));
-        group.setEndTime(LocalTime.of(6, 30));
-        group.setHabitGroupChecks(new ArrayList<>());
+            HabitGroup group = new HabitGroup();
+            group.setHabit(habit);
+            group.setRoutineSection(section);
+            group.setStartTime(LocalTime.of(6 + index, 0));
+            group.setEndTime(LocalTime.of(6 + index, 30));
+            group.setHabitGroupChecks(new ArrayList<>());
 
-        section.setHabitGroups(List.of(group));
-        section.setTaskGroups(new ArrayList<>());
-        created.setRoutineSections(List.of(section));
+            section.setHabitGroups(new ArrayList<>(List.of(group)));
+            section.setTaskGroups(new ArrayList<>());
+            sections.add(section);
+        }
+        created.setRoutineSections(sections);
 
         DiaryRoutine saved = diaryRoutineRepository.saveAndFlush(created);
         return diaryRoutineRepository.findById(saved.getId()).orElseThrow();
