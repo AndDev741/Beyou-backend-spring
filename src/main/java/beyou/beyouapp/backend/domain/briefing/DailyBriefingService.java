@@ -27,9 +27,9 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Assembles one morning's briefing: facts every time, prose once a day.
  *
- * <p>The shape of this class is one decision. The facts are three or four indexed queries
- * and the user can change them from inside the dialog, so they are recomputed on every call
- * and never cached. The prose costs an LLM call against a free-tier chain, and nothing the
+ * <p>The shape of this class is one decision. The facts cost about ten indexed queries, flat
+ * in the size of the routine (pinned by DailyBriefingServiceIT), and the user can change them
+ * from inside the dialog, so they are recomputed on every call and never cached. The prose costs an LLM call against a free-tier chain, and nothing the
  * user does during the day makes yesterday's recap wrong enough to pay for again, so it is
  * generated once and read from the row afterwards.
  *
