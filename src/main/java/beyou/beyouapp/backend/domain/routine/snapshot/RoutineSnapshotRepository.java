@@ -18,6 +18,18 @@ public interface RoutineSnapshotRepository extends JpaRepository<RoutineSnapshot
     @EntityGraph(attributePaths = "checks")
     List<RoutineSnapshot> findAllByUserIdAndSnapshotDate(UUID userId, LocalDate snapshotDate);
 
+    /**
+     * Every snapshot of a user across a range of days, checks loaded.
+     *
+     * <p>Exists for the Daily Briefing, which asks about the whole retroactive window at
+     * once ({@code RoutineSnapshotScheduler.MAX_BACKFILL_DAYS}). Calling the single-day
+     * method seven times would be seven round trips to answer one question, on the request
+     * that opens the dashboard.
+     */
+    @EntityGraph(attributePaths = "checks")
+    List<RoutineSnapshot> findAllByUserIdAndSnapshotDateBetweenOrderBySnapshotDateAsc(
+            UUID userId, LocalDate from, LocalDate to);
+
     @Query("SELECT rs.snapshotDate FROM RoutineSnapshot rs WHERE rs.routine.id = :routineId AND rs.snapshotDate BETWEEN :startDate AND :endDate ORDER BY rs.snapshotDate")
     List<LocalDate> findSnapshotDatesByRoutineIdAndMonth(@Param("routineId") UUID routineId, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 

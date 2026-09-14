@@ -122,6 +122,7 @@ The Actuator/management server runs separately on port `9091` and is **not** ver
 | `/task` | Tasks linked to categories |
 | `/goal` | Goals (increase / decrease / complete — only `complete` awards XP) |
 | `/routine`, `/schedule` | Daily and list routines, scheduling, and per-day snapshots (`/routine/snapshot`) |
+| `/daily-briefing` | The new-day dialog: yesterday's unresolved items plus what is coming today. `POST /seen` acknowledges it |
 | `/mood` | One entry per day: `PUT` replaces it, `PATCH` sets the level only, `GET` reads a date range |
 | `/focus` | Focus Mode history: completed timer cycles and per-item micro-tasks |
 | `/check-history` | The day-by-day record behind every streak strip, for any checkable owner |
@@ -129,6 +130,7 @@ The Actuator/management server runs separately on port `9091` and is **not** ver
 | `/feedback` | Feedback submissions and replies (`/feedback/admin` requires ADMIN) |
 | `/ai/agent` | The assistant: chats, messages, and the SSE stream |
 | `/onboarding` | Stateless AI onboarding suggestions |
+| `/notification` | E-mail preferences (`/notification/preferences`) and the unauthenticated unsubscribe link |
 | `/user/photo` | Profile photo upload, fetch and removal |
 | `/docs/**` | Architecture, API, blog, project docs, and search (admin import behind a secret header) |
 
@@ -159,7 +161,7 @@ End-to-end tests (Playwright) live in the sibling `Beyou-e2e-tests` repository a
 src/main/java/beyou/beyouapp/backend/
 ├── controllers/        REST controllers (domain + docs/)
 ├── domain/             category, habit, task, goal, routine, mood, focus,
-│                       checkday, xpday, feedback, aiAgent, common
+│                       checkday, xpday, briefing, feedback, aiAgent, common
 ├── security/           JWT, refresh tokens, password reset, rate limiting
 ├── user/               User entity (UserDetails), service, Google OAuth
 ├── docs/               GitHub-backed docs import (architecture, api, blog, project, search)
