@@ -1,6 +1,9 @@
 package beyou.beyouapp.backend.domain.routine.snapshot;
 
+import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
 import beyou.beyouapp.backend.domain.checkday.DayCloseService;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
@@ -13,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.core.annotation.Order;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +26,8 @@ import org.springframework.context.event.EventListener;
 
 import java.time.*;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -49,6 +55,7 @@ public class RoutineSnapshotScheduler {
     private final SnapshotCheckMigrator checkMigrator;
     private final SnapshotJobHeartbeat heartbeat;
     private final DayCloseService dayCloseService;
+    private final EntityCheckDayRepository entityCheckDayRepository;
     private final UserCacheEvictService userCacheEvictService;
 
     /**
@@ -88,6 +95,7 @@ public class RoutineSnapshotScheduler {
      * and steps over. Missing history is honest; fabricated history is not.
      */
     @EventListener(ApplicationReadyEvent.class)
+    @Order(1)
     public void backfillMissedSnapshots() {
         log.info("Starting startup backfill for missed snapshots");
 
@@ -116,6 +124,101 @@ public class RoutineSnapshotScheduler {
         }
 
         log.info("Startup backfill completed");
+    }
+
+
+    /**
+     * Closes the days whose grace hour passed while this service was not running.
+     *
+     * <p>{@link #backfillMissedSnapshots()} rebuilds the snapshots a downtime cost, but a
+     * snapshot is only half of a day. The outcome rows and the streak recompute come from
+     * {@link DayCloseService#closeDay}, fired from a two-hour window in
+     * {@link #processSnapshots()} that comes round once per local day. Miss that window and
+     * the day stays half closed for good: the live check-ins sit there, the account-level
+     * row never arrives, and the streak stops at the day before. A thirteen-hour host
+     * shutdown on 2026-09-14 did precisely that to every user in Europe/Lisbon,
+     * Europe/London and UTC, while America/Sao_Paulo came through intact because its window
+     * happened to fall after the machine was back.
+     *
+     * <p>Until this existed there was no way back. Nothing outside the scheduler calls
+     * {@code closeDay}, the backfill deliberately does not close anything, and the window is
+     * a single shot per local day.
+     *
+     * <p>Safe on every boot. {@code closeDay} inserts with ON CONFLICT DO NOTHING and diffs
+     * against what is already recorded, so a day that is already closed costs one read and
+     * writes nothing. It also floors each owner at its own {@code createdAt}, so a habit
+     * created after the day being closed is never stamped MISSED for it.
+     *
+     * <p>The window is the seven days the snapshot backfill walks, for the sake of the two
+     * agreeing. That pass already accepts that a rebuilt day is judged by the CURRENT
+     * routine structure, the historical one being unrecoverable; closing those same days
+     * against the current schedule is that same accepted trade-off. Two passes disagreeing
+     * about which days exist would be worse than either one's rough edges.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    @Order(2)
+    public void closeDaysMissedWhileDown() {
+        log.info("Starting startup close for days missed while the service was down");
+
+        int daysClosed = 0;
+        for (User user : userRepository.findAll()) {
+            try {
+                ZoneId zoneId = ZoneId.of(user.getTimezone());
+                ZonedDateTime nowInZone = ZonedDateTime.now(clock.withZone(zoneId));
+
+                LocalDate latestClosable = latestClosableDay(nowInZone);
+                LocalDate earliest = latestClosable.minusDays(MAX_BACKFILL_DAYS - 1L);
+
+                Set<LocalDate> alreadyClosed = entityCheckDayRepository
+                        .findByUserIdAndDayBetweenOrderByDayAsc(user.getId(), earliest, latestClosable)
+                        .stream()
+                        .filter(row -> row.getOwnerType() == CheckDayOwnerType.USER)
+                        .map(EntityCheckDay::getDay)
+                        .collect(Collectors.toSet());
+
+                for (LocalDate day = earliest; !day.isAfter(latestClosable); day = day.plusDays(1)) {
+                    // The account-level row is the marker: closeDay writes one for every day
+                    // it closes, so its absence is what "this day never closed" looks like.
+                    if (alreadyClosed.contains(day)) {
+                        continue;
+                    }
+                    try {
+                        if (dayCloseService.closeDay(user, day) > 0) {
+                            daysClosed++;
+                            log.info("Closed day {} for user {}, missed while the service was down",
+                                    day, user.getId());
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to close missed day {} for user {}", day, user.getId(), e);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to close missed days for user {}", user.getId(), e);
+            }
+        }
+
+        // Once for the whole sweep, for the same reason closeYesterdayForTimezone does it
+        // once per batch: the routine cache is keyed userId_routineId and clears wholesale.
+        if (daysClosed > 0) {
+            userCacheEvictService.clearSharedRoutineCache();
+        }
+
+        log.info("Startup close completed, {} days closed", daysClosed);
+    }
+
+    /**
+     * The most recent day whose close is already due in this zone.
+     *
+     * <p>A day is closed at {@link #DAY_CLOSE_GRACE_HOUR} of the day AFTER it, so before
+     * that hour strikes, yesterday's close is not late, it is merely not due. Stamping it
+     * early would cut short a day the user can still be checking into, which is the one
+     * thing this pass must never do.
+     */
+    private static LocalDate latestClosableDay(ZonedDateTime nowInZone) {
+        LocalDate today = nowInZone.toLocalDate();
+        return nowInZone.getHour() >= DAY_CLOSE_GRACE_HOUR
+                ? today.minusDays(1)
+                : today.minusDays(2);
     }
 
     /**
