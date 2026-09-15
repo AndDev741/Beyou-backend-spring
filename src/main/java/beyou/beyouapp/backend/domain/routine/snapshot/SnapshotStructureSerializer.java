@@ -108,8 +108,11 @@ public class SnapshotStructureSerializer {
                         check.setSectionName(section.getName());
                         check.setOriginalItemId(tg.getTask().getId());
                         check.setOriginalGroupId(tg.getId());
-                        check.setDifficulty(tg.getTask().getDificulty());
-                        check.setImportance(tg.getTask().getImportance());
+                        // A task's priority is optional; SnapshotCheck stores it as a
+                        // non-null int. Going through the entity's accessors keeps the
+                        // default in one place instead of two that can drift.
+                        check.setDifficulty(tg.getTask().effectiveDificulty());
+                        check.setImportance(tg.getTask().effectiveImportance());
                         check.setChecked(false);
                         check.setSkipped(false);
                         check.setXpGenerated(0.0);

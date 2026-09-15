@@ -278,6 +278,75 @@ class SnapshotStructureSerializerTest {
         assertTrue(checks.isEmpty());
     }
 
+    /**
+     * The bug this guards: a task's importance and difficulty are optional, SnapshotCheck
+     * stores them as primitive ints, and the serializer used to hand the raw Integer
+     * straight to the setter. One unrated task in a routine and the whole nightly snapshot
+     * job died on the unboxing — taking that user's day-close, briefing and streak with it.
+     */
+    @Test
+    void createSnapshotChecks_taskWithoutPriority_doesNotThrowAndFallsBackToOne() {
+        Task unrated = new Task();
+        unrated.setId(taskId);
+        unrated.setName("Call the dentist");
+        unrated.setIconId("icon-phone");
+        unrated.setDificulty(null);
+        unrated.setImportance(null);
+
+        TaskGroup group = new TaskGroup();
+        group.setId(taskGroupId);
+        group.setTask(unrated);
+
+        RoutineSection section = new RoutineSection();
+        section.setId(sectionId);
+        section.setName("Errands");
+        section.setOrderIndex(0);
+        section.setHabitGroups(List.of());
+        section.setTaskGroups(List.of(group));
+
+        routine.setRoutineSections(List.of(section));
+
+        List<SnapshotCheck> checks = assertDoesNotThrow(
+            () -> serializer.createSnapshotChecks(routine, snapshot));
+
+        assertEquals(1, checks.size());
+        SnapshotCheck check = checks.get(0);
+        assertEquals(SnapshotItemType.TASK, check.getItemType());
+        assertEquals(1, check.getDifficulty());
+        assertEquals(1, check.getImportance());
+    }
+
+    /**
+     * Half a priority is still a null at the unboxing site, and a task rated only for
+     * difficulty is a shape the segmented controls produce.
+     */
+    @Test
+    void createSnapshotChecks_taskWithOnlyDifficulty_keepsItAndDefaultsTheOther() {
+        Task halfRated = new Task();
+        halfRated.setId(taskId);
+        halfRated.setName("Draft the invoice");
+        halfRated.setDificulty(4);
+        halfRated.setImportance(null);
+
+        TaskGroup group = new TaskGroup();
+        group.setId(taskGroupId);
+        group.setTask(halfRated);
+
+        RoutineSection section = new RoutineSection();
+        section.setId(sectionId);
+        section.setName("Work");
+        section.setOrderIndex(0);
+        section.setHabitGroups(List.of());
+        section.setTaskGroups(List.of(group));
+
+        routine.setRoutineSections(List.of(section));
+
+        List<SnapshotCheck> checks = serializer.createSnapshotChecks(routine, snapshot);
+
+        assertEquals(4, checks.get(0).getDifficulty());
+        assertEquals(1, checks.get(0).getImportance());
+    }
+
     private JsonNode findItemByType(JsonNode items, String type) {
         for (JsonNode item : items) {
             if (type.equals(item.get("type").asText())) {
