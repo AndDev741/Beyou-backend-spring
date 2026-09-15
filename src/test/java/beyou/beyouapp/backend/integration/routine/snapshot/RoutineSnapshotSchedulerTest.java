@@ -1,6 +1,10 @@
 package beyou.beyouapp.backend.integration.routine.snapshot;
 
+import beyou.beyouapp.backend.domain.checkday.CheckDayOutcome;
+import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
 import beyou.beyouapp.backend.domain.checkday.DayCloseService;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
+import beyou.beyouapp.backend.domain.checkday.EntityCheckDayRepository;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
@@ -65,6 +69,9 @@ class RoutineSnapshotSchedulerTest {
 
     @Mock
     private UserCacheEvictService userCacheEvictService;
+
+    @Mock
+    private EntityCheckDayRepository entityCheckDayRepository;
 
     @InjectMocks
     private RoutineSnapshotScheduler scheduler;
@@ -174,6 +181,152 @@ class RoutineSnapshotSchedulerTest {
         verify(snapshotService, never()).createSnapshot(any(), any(), any());
         verify(checkMigrator, never()).migrateChecks(any(), any(), any());
         verify(snapshotRepository, never()).findByRoutineIdAndSnapshotDate(any(), any());
+    }
+
+
+    // ---------------------------------------------------------------
+    // closeDaysMissedWhileDown tests
+    //
+    // The regression these lock in: a host shutdown that spans the local
+    // grace window used to cost the day permanently. The snapshot came
+    // back on the next boot, the outcome rows never did, and the streak
+    // stopped at the day before.
+    // ---------------------------------------------------------------
+
+    /** 05:00 UTC on 2026-09-15: past hour 2, so yesterday's close is due. */
+    private void clockAt(String instant) {
+        ReflectionTestUtils.setField(scheduler, "clock",
+                Clock.fixed(Instant.parse(instant), ZoneOffset.UTC));
+    }
+
+    private EntityCheckDay userRowFor(LocalDate day) {
+        return new EntityCheckDay(UUID.randomUUID(), user, CheckDayOwnerType.USER,
+                userId, day, CheckDayOutcome.DONE);
+    }
+
+    @Test
+    void closeDaysMissedWhileDown_closesADayWhoseGraceHourPassedWhileDown() {
+        clockAt("2026-09-15T05:00:00Z");
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(entityCheckDayRepository.findByUserIdAndDayBetweenOrderByDayAsc(
+                eq(userId), any(), any())).thenReturn(List.of());
+        when(dayCloseService.closeDay(eq(user), any())).thenReturn(1);
+
+        scheduler.closeDaysMissedWhileDown();
+
+        // Yesterday is the day the outage cost, and it is due because hour 5 > grace hour 2.
+        verify(dayCloseService).closeDay(user, LocalDate.of(2026, 9, 14));
+        // Never today: the user can still be checking into it.
+        verify(dayCloseService, never()).closeDay(user, LocalDate.of(2026, 9, 15));
+        // The window is the same seven days the snapshot backfill walks.
+        verify(dayCloseService, times(7)).closeDay(eq(user), any());
+        verify(dayCloseService).closeDay(user, LocalDate.of(2026, 9, 8));
+        verify(dayCloseService, never()).closeDay(user, LocalDate.of(2026, 9, 7));
+    }
+
+    @Test
+    void closeDaysMissedWhileDown_leavesADayThatAlreadyClosedAlone() {
+        clockAt("2026-09-15T05:00:00Z");
+        when(userRepository.findAll()).thenReturn(List.of(user));
+
+        List<EntityCheckDay> closed = new ArrayList<>();
+        for (int i = 8; i <= 14; i++) {
+            closed.add(userRowFor(LocalDate.of(2026, 9, i)));
+        }
+        when(entityCheckDayRepository.findByUserIdAndDayBetweenOrderByDayAsc(
+                eq(userId), any(), any())).thenReturn(closed);
+
+        scheduler.closeDaysMissedWhileDown();
+
+        // The account-level row is the marker that a day closed. Every day has one, so this
+        // pass must be a no-op — on an ordinary boot it costs one read and writes nothing.
+        verify(dayCloseService, never()).closeDay(any(), any());
+        verify(userCacheEvictService, never()).clearSharedRoutineCache();
+    }
+
+    @Test
+    void closeDaysMissedWhileDown_ignoresRowsThatAreNotTheAccountLevelOne() {
+        clockAt("2026-09-15T05:00:00Z");
+        when(userRepository.findAll()).thenReturn(List.of(user));
+
+        // Exactly the shape the outage left behind: live check-ins recorded during the day,
+        // no USER row, because the close never ran.
+        EntityCheckDay habitRow = new EntityCheckDay(UUID.randomUUID(), user,
+                CheckDayOwnerType.HABIT, UUID.randomUUID(),
+                LocalDate.of(2026, 9, 14), CheckDayOutcome.DONE);
+        when(entityCheckDayRepository.findByUserIdAndDayBetweenOrderByDayAsc(
+                eq(userId), any(), any())).thenReturn(List.of(habitRow));
+        when(dayCloseService.closeDay(eq(user), any())).thenReturn(1);
+
+        scheduler.closeDaysMissedWhileDown();
+
+        verify(dayCloseService).closeDay(user, LocalDate.of(2026, 9, 14));
+    }
+
+    @Test
+    void closeDaysMissedWhileDown_doesNotCloseYesterdayBeforeItsGraceHour() {
+        // 01:00 UTC, an hour short of the grace hour. Yesterday's close is not late here,
+        // it is not due — and stamping it now would cut a day the user can still check into.
+        clockAt("2026-09-15T01:00:00Z");
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(entityCheckDayRepository.findByUserIdAndDayBetweenOrderByDayAsc(
+                eq(userId), any(), any())).thenReturn(List.of());
+        when(dayCloseService.closeDay(eq(user), any())).thenReturn(1);
+
+        scheduler.closeDaysMissedWhileDown();
+
+        verify(dayCloseService, never()).closeDay(user, LocalDate.of(2026, 9, 14));
+        verify(dayCloseService, never()).closeDay(user, LocalDate.of(2026, 9, 15));
+        verify(dayCloseService).closeDay(user, LocalDate.of(2026, 9, 13));
+    }
+
+    @Test
+    void closeDaysMissedWhileDown_readsTheWindowInEachUsersOwnZone() {
+        // 2026-09-15T05:00Z is still 22:00 on the 14th in Los Angeles, so the 14th is the
+        // day in progress there and the last closable day is the 13th. A pass that resolved
+        // the window in the server's zone would close a day the user is still living.
+        user.setTimezone("America/Los_Angeles");
+        clockAt("2026-09-15T05:00:00Z");
+        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(entityCheckDayRepository.findByUserIdAndDayBetweenOrderByDayAsc(
+                eq(userId), any(), any())).thenReturn(List.of());
+        when(dayCloseService.closeDay(eq(user), any())).thenReturn(1);
+
+        scheduler.closeDaysMissedWhileDown();
+
+        verify(dayCloseService, never()).closeDay(user, LocalDate.of(2026, 9, 14));
+        verify(dayCloseService).closeDay(user, LocalDate.of(2026, 9, 13));
+    }
+
+    @Test
+    void closeDaysMissedWhileDown_isolatesOneUsersFailureFromTheRest() {
+        clockAt("2026-09-15T05:00:00Z");
+
+        User other = new User();
+        other.setId(UUID.randomUUID());
+        other.setTimezone("UTC");
+
+        when(userRepository.findAll()).thenReturn(List.of(user, other));
+        when(entityCheckDayRepository.findByUserIdAndDayBetweenOrderByDayAsc(
+                any(), any(), any())).thenReturn(List.of());
+        when(dayCloseService.closeDay(eq(user), any()))
+                .thenThrow(new RuntimeException("one user's day blew up"));
+        when(dayCloseService.closeDay(eq(other), any())).thenReturn(1);
+
+        assertThatCode(() -> scheduler.closeDaysMissedWhileDown()).doesNotThrowAnyException();
+
+        verify(dayCloseService, times(7)).closeDay(eq(other), any());
+    }
+
+    @Test
+    void closeDaysMissedWhileDown_survivesAnUnparseableTimezone() {
+        clockAt("2026-09-15T05:00:00Z");
+        user.setTimezone("Mars/Olympus");
+        when(userRepository.findAll()).thenReturn(List.of(user));
+
+        assertThatCode(() -> scheduler.closeDaysMissedWhileDown()).doesNotThrowAnyException();
+
+        verify(dayCloseService, never()).closeDay(any(), any());
     }
 
     // ---------------------------------------------------------------
