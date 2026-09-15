@@ -52,6 +52,16 @@ public class Task {
 
     Integer dificulty;
 
+    /**
+     * What an unset importance or difficulty is worth to anything that scores or stores a
+     * check. Priority is optional on a task — the segmented control can be left empty and
+     * both columns are nullable — but {@code SnapshotCheck} keeps them as non-null
+     * {@code int} and {@code CheckXpCalculator} takes primitives, so somewhere a null has
+     * to become a number. One is the gentlest rung on the 1..5 scale: a task the user never
+     * rated pays the smallest reward rather than an invented middling one.
+     */
+    public static final int PRIORITY_WHEN_UNSET = 1;
+
     private boolean oneTimeTask = false;
 
     /**
@@ -93,6 +103,22 @@ public class Task {
     @PreUpdate
     public void preUpdate(){
         setUpdatedAt(Date.valueOf(LocalDate.now()));
+    }
+
+    /**
+     * Read priority through these two, never through the raw field, or a null slips into an
+     * unboxing site and takes the whole nightly snapshot job down with it — which is exactly
+     * what happened once {@code dificulty} became nullable.
+     *
+     * <p>Deliberately not named {@code getEffectiveDificulty}: Jackson picks up bean getters,
+     * and a phantom pair of fields on every task payload is not what this is for.
+     */
+    public int effectiveDificulty() {
+        return dificulty != null ? dificulty : PRIORITY_WHEN_UNSET;
+    }
+
+    public int effectiveImportance() {
+        return importance != null ? importance : PRIORITY_WHEN_UNSET;
     }
 
     public Task(CreateTaskRequestDTO createTaskDTO, Optional<List<Category>> categories, User user){

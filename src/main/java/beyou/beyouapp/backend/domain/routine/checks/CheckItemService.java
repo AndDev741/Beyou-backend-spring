@@ -538,8 +538,8 @@ public class CheckItemService {
 
         check = checkIfTaskGroupIsAlreadyCheckedAndOverrideCheck(taskGroupToCheck, date);
 
-        int dificulty = taskChecked.getDificulty() != null ? taskChecked.getDificulty() : 1;
-        int importance = taskChecked.getImportance() != null ? taskChecked.getImportance() : 1;
+        int dificulty = taskChecked.effectiveDificulty();
+        int importance = taskChecked.effectiveImportance();
 
         //Set check object
         check.setCheckDate(date);
