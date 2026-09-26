@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.goal;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -117,6 +118,15 @@ public class Goal {
      */
     @Column(name = "parent_id", insertable = false, updatable = false)
     private UUID parentId;
+
+    /**
+     * When the goal was put away, or null while it is active. Orthogonal to {@link #status}:
+     * a finished goal and an abandoned one can both be archived, and neither changes how far
+     * it got or the XP it paid. Written only by GoalService.setArchived, which also stamps the
+     * sub-goals with the same instant; see V33 for why the instant, not a flag.
+     */
+    @Column(name = "archived_at")
+    private Instant archivedAt;
 
     public Goal(CreateGoalRequestDTO dto, List<Category> categories, User user) {
         this.name = dto.name();

@@ -87,7 +87,8 @@ public class GoalMapper {
                 goal.getStatus(),
                 goal.getTerm(),
                 goal.getCompleteDate(),
-                goal.getParentId()
+                goal.getParentId(),
+                goal.getArchivedAt()
         );
     }
 }

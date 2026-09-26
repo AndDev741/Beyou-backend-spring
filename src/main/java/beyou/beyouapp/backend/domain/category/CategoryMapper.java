@@ -47,8 +47,13 @@ public class CategoryMapper {
                 ? category.getTasks().stream().collect(Collectors.toMap(Task::getId, Task::getName))
                 : Map.of();
 
+        // Archived goals stay linked to the category (restoring one must bring its categories
+        // back with it) but are not listed on the card, which shows what the category is working
+        // towards now.
         Map<UUID, String> goals = category.getGoals() != null
-                ? category.getGoals().stream().collect(Collectors.toMap(Goal::getId, Goal::getName))
+                ? category.getGoals().stream()
+                        .filter(goal -> goal.getArchivedAt() == null)
+                        .collect(Collectors.toMap(Goal::getId, Goal::getName))
                 : Map.of();
 
         XpProgress xpProgress = category.getXpProgress() != null ? category.getXpProgress() : new XpProgress();

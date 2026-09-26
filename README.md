@@ -120,7 +120,7 @@ The Actuator/management server runs separately on port `9091` and is **not** ver
 | `/category` | Categories with XP/leveling |
 | `/habit` | Habits linked to categories |
 | `/task` | Tasks linked to categories |
-| `/goal` | Goals (increase / decrease / complete — only `complete` awards XP) |
+| `/goal` | Goals (increase / decrease / complete — only `complete` awards XP; archive / restore, sub-goals included, moves no XP) |
 | `/routine`, `/schedule` | Daily and list routines, scheduling, and per-day snapshots (`/routine/snapshot`) |
 | `/daily-briefing` | The new-day dialog: yesterday's unresolved items plus what is coming today. `POST /seen` acknowledges it |
 | `/mood` | One entry per day: `PUT` replaces it, `PATCH` sets the level only, `GET` reads a date range |

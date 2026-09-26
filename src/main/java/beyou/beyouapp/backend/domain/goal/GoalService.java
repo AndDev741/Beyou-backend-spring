@@ -1,6 +1,9 @@
 package beyou.beyouapp.backend.domain.goal;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.HashSet;
@@ -254,6 +257,15 @@ public class GoalService {
         }
         Goal parent = getGoal(parentId);
         checkIfGoalIsFromTheUserInContext(parent, userId);
+        // Nothing new goes under a goal that has been put away: it would disappear from the
+        // goals page together with the parent, which reads as a lost save. Keeping a link that
+        // already exists is fine, because an edit always sends the parent back: a sub-goal
+        // archived along with its parent, or one restored on its own, must stay editable.
+        boolean parentChanges = goal == null || !parentId.equals(goal.getParentId());
+        if (parent.getArchivedAt() != null && parentChanges) {
+            throw new BusinessException(ErrorKey.GOAL_PARENT_ARCHIVED,
+                    "An archived goal cannot take new sub-goals");
+        }
 
         List<Goal> all = goalRepository.findAllByUserId(userId).orElse(List.of());
 
@@ -330,6 +342,85 @@ public class GoalService {
         goalRepository.save(goal);
         userCacheEvictService.evictAllUserCaches(userId);
         return goalMapper.toResponseDTO(goal);
+    }
+
+    /**
+     * Puts a goal away, or brings it back, and its sub-goals with it.
+     *
+     * <p>Archiving is not an outcome. It moves no XP, leaves {@code status} and
+     * {@code complete} alone, and a finished goal and an abandoned one archive the same way.
+     * What it changes is where the goal shows: the clients leave archived goals out of the
+     * goals page, the viewer, the dashboard and the parent pickers, and the briefing, the
+     * category card and the agent skip them here on the server.
+     *
+     * <p>The sub-goals go too, because a big goal put away with its steps still on the page
+     * would leave orphans that no longer lead anywhere. They are stamped with the SAME instant
+     * as the goal, and that instant is how restoring tells them apart: bringing the goal back
+     * restores exactly the rows archived with it, while a sub-goal that was archived on its own
+     * earlier keeps its own, older stamp and stays put away. A sub-goal can also be restored
+     * by itself while its parent stays archived; with the parent missing from the page it
+     * shows as a top-level goal, the same way a deleted parent's children do.
+     *
+     * <p>Idempotent: asking for the state a goal is already in changes nothing, and in
+     * particular re-archiving does not re-stamp, which would cut the link to the sub-goals
+     * archived with it.
+     *
+     * @return every goal whose state changed, the goal itself first
+     */
+    @Transactional
+    public List<GoalResponseDTO> setArchived(UUID goalId, boolean archived, UUID userId) {
+        Goal goal = getGoal(goalId);
+        checkIfGoalIsFromTheUserInContext(goal, userId);
+        List<Goal> all = goalRepository.findAllByUserId(userId).orElse(List.of());
+        List<Goal> subtree = descendantsOf(goal.getId(), all, new HashSet<>());
+
+        List<Goal> changed = new ArrayList<>();
+        if (archived) {
+            if (goal.getArchivedAt() != null) {
+                return List.of(goalMapper.toResponseDTO(goal));
+            }
+            // Microseconds, because that is what timestamptz keeps. An instant with nanoseconds
+            // would come back from the database unequal to the one held here, and restoring
+            // compares them.
+            Instant stamp = Instant.now().truncatedTo(ChronoUnit.MICROS);
+            goal.setArchivedAt(stamp);
+            changed.add(goal);
+            for (Goal child : subtree) {
+                if (child.getArchivedAt() == null) {
+                    child.setArchivedAt(stamp);
+                    changed.add(child);
+                }
+            }
+        } else {
+            Instant stamp = goal.getArchivedAt();
+            if (stamp == null) {
+                return List.of(goalMapper.toResponseDTO(goal));
+            }
+            goal.setArchivedAt(null);
+            changed.add(goal);
+            for (Goal child : subtree) {
+                if (stamp.equals(child.getArchivedAt())) {
+                    child.setArchivedAt(null);
+                    changed.add(child);
+                }
+            }
+        }
+        goalRepository.saveAll(changed);
+        userCacheEvictService.evictAllUserCaches(userId);
+        return changed.stream().map(goalMapper::toResponseDTO).toList();
+    }
+
+    /** Every goal under {@code id}, at any depth. The visited set guards a chain already broken in the data. */
+    private static List<Goal> descendantsOf(UUID id, List<Goal> all, Set<UUID> visited) {
+        List<Goal> out = new ArrayList<>();
+        if (!visited.add(id)) return out;
+        for (Goal g : all) {
+            if (id.equals(g.getParentId())) {
+                out.add(g);
+                out.addAll(descendantsOf(g.getId(), all, visited));
+            }
+        }
+        return out;
     }
 
     public void checkIfGoalIsFromTheUserInContext(Goal goal, UUID userId) {

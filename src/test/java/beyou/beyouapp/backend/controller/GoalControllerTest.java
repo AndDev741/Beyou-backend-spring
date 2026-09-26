@@ -234,4 +234,36 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentValue").value(500.0));
     }
+
+    @Test
+    void archivesByStateAndReturnsEveryGoalItChanged() throws Exception {
+        UUID goalId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        java.time.Instant stamp = java.time.Instant.parse("2026-09-26T10:00:00Z");
+        GoalResponseDTO parent = new GoalResponseDTO(goalId, "Big", "icon", "desc", 10.0, "u", 3.0, false,
+                Map.<UUID, CategoryMiniDTO>of(), "mot", LocalDate.now(), LocalDate.now().plusDays(1), 0.0,
+                GoalStatus.IN_PROGRESS, GoalTerm.LONG_TERM, null, null, stamp);
+        GoalResponseDTO child = new GoalResponseDTO(childId, "Small", "icon", "desc", 1.0, "u", 0.0, false,
+                Map.<UUID, CategoryMiniDTO>of(), "mot", LocalDate.now(), LocalDate.now().plusDays(1), 0.0,
+                GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM, null, goalId, stamp);
+        when(goalService.setArchived(goalId, true, userId)).thenReturn(List.of(parent, child));
+
+        mockMvc.perform(put("/goal/archive")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"goalId\":\"" + goalId + "\",\"archived\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].archivedAt").value("2026-09-26T10:00:00Z"))
+                .andExpect(jsonPath("$[1].parentId").value(goalId.toString()));
+    }
+
+    @Test
+    void archiveWithoutTheStateIsRefusedBeforeReachingTheService() throws Exception {
+        // A toggle would be the service's guess; the client has to say which state it wants.
+        mockMvc.perform(put("/goal/archive")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"goalId\":\"" + UUID.randomUUID() + "\"}"))
+                .andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(goalService);
+    }
 }

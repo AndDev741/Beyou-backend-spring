@@ -590,4 +590,128 @@ public class goalServiceUnitTest {
         assertEquals(null, goal.getParent());
     }
 
+    // ------------------------------------------------------------------ archiving
+    // Archiving is a place, not an outcome: it hides a goal and its steps, moves no XP and
+    // leaves status alone. The one rule with teeth is the stamp, which is how restoring knows
+    // which sub-goals came along.
+
+    @Test
+    void setArchived_putsTheGoalAndItsWholeSubtreeAwayUnderOneStamp() {
+        Goal big = ownedGoal(UUID.randomUUID(), null);
+        Goal mid = ownedGoal(UUID.randomUUID(), big);
+        Goal small = ownedGoal(UUID.randomUUID(), mid);
+        Goal unrelated = ownedGoal(UUID.randomUUID(), null);
+        userGoalsAre(big, mid, small, unrelated);
+
+        List<GoalResponseDTO> changed = goalService.setArchived(big.getId(), true, userId);
+
+        assertNotNull(big.getArchivedAt());
+        assertEquals(big.getArchivedAt(), mid.getArchivedAt());
+        assertEquals(big.getArchivedAt(), small.getArchivedAt());
+        assertEquals(null, unrelated.getArchivedAt());
+        assertEquals(List.of(big.getId(), mid.getId(), small.getId()),
+                changed.stream().map(GoalResponseDTO::id).toList());
+        verify(userCacheEvictService).evictAllUserCaches(userId);
+    }
+
+    @Test
+    void setArchived_restoresExactlyTheSubGoalsArchivedWithIt() {
+        Goal big = ownedGoal(UUID.randomUUID(), null);
+        Goal together = ownedGoal(UUID.randomUUID(), big);
+        Goal onItsOwn = ownedGoal(UUID.randomUUID(), big);
+        java.time.Instant earlier = java.time.Instant.parse("2026-09-01T10:00:00Z");
+        onItsOwn.setArchivedAt(earlier);
+        userGoalsAre(big, together, onItsOwn);
+
+        goalService.setArchived(big.getId(), true, userId);
+        // Archived separately, before: keeps its own stamp rather than joining the parent's.
+        assertEquals(earlier, onItsOwn.getArchivedAt());
+
+        List<GoalResponseDTO> changed = goalService.setArchived(big.getId(), false, userId);
+
+        assertEquals(null, big.getArchivedAt());
+        assertEquals(null, together.getArchivedAt());
+        assertEquals(earlier, onItsOwn.getArchivedAt());
+        assertEquals(List.of(big.getId(), together.getId()),
+                changed.stream().map(GoalResponseDTO::id).toList());
+    }
+
+    @Test
+    void setArchived_twiceIsANoOpAndKeepsTheFirstStamp() {
+        // Re-stamping would cut the link to the sub-goals archived the first time.
+        Goal big = ownedGoal(UUID.randomUUID(), null);
+        Goal child = ownedGoal(UUID.randomUUID(), big);
+        userGoalsAre(big, child);
+
+        goalService.setArchived(big.getId(), true, userId);
+        java.time.Instant first = big.getArchivedAt();
+        List<GoalResponseDTO> again = goalService.setArchived(big.getId(), true, userId);
+
+        assertEquals(first, big.getArchivedAt());
+        assertEquals(first, child.getArchivedAt());
+        assertEquals(1, again.size());
+        // Restoring an active goal changes nothing either.
+        Goal active = ownedGoal(UUID.randomUUID(), null);
+        userGoalsAre(big, child, active);
+        assertEquals(null, goalService.setArchived(active.getId(), false, userId).get(0).archivedAt());
+    }
+
+    @Test
+    void setArchived_movesNoXpAndLeavesACompletedGoalCompleted() {
+        Goal done = ownedGoal(UUID.randomUUID(), null);
+        done.setComplete(true);
+        done.setStatus(GoalStatus.COMPLETED);
+        done.setXpReward(40);
+        userGoalsAre(done);
+
+        goalService.setArchived(done.getId(), true, userId);
+
+        assertEquals(true, done.getComplete());
+        assertEquals(GoalStatus.COMPLETED, done.getStatus());
+        assertEquals(40, done.getXpReward());
+        org.mockito.Mockito.verifyNoInteractions(xpCalculatorService);
+    }
+
+    @Test
+    void setArchived_refusesAGoalOfAnotherUser() {
+        Goal foreign = ownedGoal(UUID.randomUUID(), null);
+        User someoneElse = new User();
+        someoneElse.setId(UUID.randomUUID());
+        foreign.setUser(someoneElse);
+        when(goalRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> goalService.setArchived(foreign.getId(), true, userId));
+        assertEquals(ErrorKey.GOAL_NOT_OWNED, e.getErrorKey());
+        assertEquals(null, foreign.getArchivedAt());
+    }
+
+    @Test
+    void resolveParent_refusesANewSubGoalUnderAnArchivedGoal() {
+        Goal archived = ownedGoal(UUID.randomUUID(), null);
+        archived.setArchivedAt(java.time.Instant.now());
+        userGoalsAre(archived);
+
+        BusinessException onCreate = assertThrows(BusinessException.class,
+                () -> goalService.resolveParent(null, archived.getId(), userId));
+        assertEquals(ErrorKey.GOAL_PARENT_ARCHIVED, onCreate.getErrorKey());
+
+        Goal elsewhere = ownedGoal(UUID.randomUUID(), null);
+        userGoalsAre(archived, elsewhere);
+        BusinessException onMove = assertThrows(BusinessException.class,
+                () -> goalService.resolveParent(elsewhere, archived.getId(), userId));
+        assertEquals(ErrorKey.GOAL_PARENT_ARCHIVED, onMove.getErrorKey());
+    }
+
+    @Test
+    void resolveParent_keepsALinkToAnArchivedParentThatAlreadyExists() {
+        // Every edit sends the parent back. A sub-goal archived with its parent, or restored on
+        // its own, must stay editable.
+        Goal archived = ownedGoal(UUID.randomUUID(), null);
+        archived.setArchivedAt(java.time.Instant.now());
+        Goal child = ownedGoal(UUID.randomUUID(), archived);
+        userGoalsAre(archived, child);
+
+        assertEquals(archived, goalService.resolveParent(child, archived.getId(), userId));
+    }
 }

@@ -240,6 +240,26 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
         assertThat(briefing.today().goalsApproaching().get(1).percentComplete()).isEqualTo(50);
     }
 
+    @Test
+    void goalsApproaching_leavesArchivedGoalsOut() {
+        // Put away means off today's mind, even with a deadline in two days.
+        newGoal("Due soon", TODAY.plusDays(5), 5d, 10d, GoalStatus.IN_PROGRESS, false);
+        newGoal("Put away", TODAY.plusDays(2), 1d, 10d, GoalStatus.IN_PROGRESS, false);
+        goalRepository.findAllByUserId(user.getId()).orElseThrow().stream()
+                .filter(goal -> goal.getName().equals("Put away"))
+                .forEach(goal -> {
+                    goal.setArchivedAt(java.time.Instant.now());
+                    goalRepository.saveAndFlush(goal);
+                });
+        seedOpenYesterday();
+
+        DailyBriefingResponseDTO briefing = briefingService.briefingFor(user, TODAY);
+
+        assertThat(briefing.today().goalsApproaching())
+                .extracting(goal -> goal.name())
+                .containsExactly("Due soon");
+    }
+
     /** The division that shipped as a bug in goalBox.tsx. On the server it would be a 500. */
     @Test
     void goalsApproaching_survivesAZeroTarget() {
