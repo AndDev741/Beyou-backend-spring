@@ -5,6 +5,7 @@ import beyou.beyouapp.backend.exceptions.security.RefreshTokenDontMatchRaw;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenExpiredException;
 import beyou.beyouapp.backend.exceptions.security.RefreshTokenNotFoundException;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -161,6 +162,21 @@ class GlobalExceptionHandlerTest {
         assertNotNull(response.getBody());
         assertEquals(ErrorKey.GOOGLE_OAUTH_FAILED.name(), response.getBody().errorKey());
         assertEquals("Error trying login with Google, try again", response.getBody().message());
+        assertNull(response.getBody().details());
+    }
+
+    @Test
+    void handleDataIntegrityViolation_isANeutralConflictNotAHabitCheck() {
+        // The prod case: a micro-task added twice at once, which used to come back telling the
+        // user they had already checked something that day.
+        ResponseEntity<ApiErrorResponse> response = handler.handleDataIntegrityViolationException(
+                new DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint \"focus_micro_tasks_unique_per_item\""));
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(ErrorKey.DATA_CONFLICT.name(), response.getBody().errorKey());
+        assertFalse(response.getBody().message().toLowerCase().contains("checked"));
         assertNull(response.getBody().details());
     }
 }

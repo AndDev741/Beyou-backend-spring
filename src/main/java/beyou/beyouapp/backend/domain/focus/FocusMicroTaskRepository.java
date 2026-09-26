@@ -59,4 +59,23 @@ public interface FocusMicroTaskRepository extends JpaRepository<FocusMicroTask, 
 
     /** Every row of this user carrying one name, across all days and items. What pinning walks. */
     List<FocusMicroTask> findAllByUserIdAndName(UUID userId, String name);
+
+    /**
+     * Serialises the writers of one person's list for one item.
+     *
+     * <p>Every insert into that list is a read of the list followed by a write the read decided
+     * on (is the name there yet, where does the end sit), and under read committed two of those
+     * running at once both read the list before either commits. Both then insert, and the
+     * second one dies on {@code focus_micro_tasks_unique_per_item}. The input fires on Enter
+     * and again on blur, so this happened on an ordinary add, not only across two tabs.
+     *
+     * <p>Advisory rather than a row lock: the row that would decide the race does not exist yet,
+     * so there is nothing to {@code SELECT FOR UPDATE}. Released by the transaction ending, and
+     * once it is held the next statement sees whatever the previous holder committed. Keyed on
+     * the user and the item, not the day, because the day is derived from the user's timezone
+     * inside the transaction. {@code hashtext} can collide; two unrelated lists sharing a key
+     * wait on each other for one insert, which costs a few milliseconds and nothing else.
+     */
+    @Query(value = "SELECT pg_advisory_xact_lock(hashtext(:key))", nativeQuery = true)
+    void lockItemList(@Param("key") String key);
 }
