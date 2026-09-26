@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.validation.Valid;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.goal.GoalService;
+import beyou.beyouapp.backend.domain.goal.dto.ArchiveGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
@@ -57,6 +58,17 @@ public class GoalController {
     public ResponseEntity<Map<String, String>> deleteGoal(@PathVariable UUID goalId) {
         User user = authenticatedUser.getAuthenticatedUser();
         return goalService.deleteGoal(goalId, user.getId());
+    }
+
+    /**
+     * Archive or restore a goal, with its sub-goals. Returns every goal whose state changed, so
+     * a client can patch its list without a refetch. Not wrapped in a RuntimeException like the
+     * handlers below: a refused archive has to reach the client as its error key.
+     */
+    @PutMapping("/archive")
+    public List<GoalResponseDTO> setArchived(@RequestBody @Valid ArchiveGoalRequestDTO dto) {
+        User user = authenticatedUser.getAuthenticatedUser();
+        return goalService.setArchived(dto.goalId(), dto.archived(), user.getId());
     }
 
     @PutMapping("/complete")

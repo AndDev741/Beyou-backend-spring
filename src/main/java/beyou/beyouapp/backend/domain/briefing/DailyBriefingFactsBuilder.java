@@ -225,8 +225,8 @@ public class DailyBriefingFactsBuilder {
     /**
      * Goals near their end date, soonest first.
      *
-     * <p>Completed goals are left out, and so are goals whose end date is further off than
-     * {@link #GOAL_HORIZON_DAYS}. Overdue goals are kept: a goal whose date has passed with
+     * <p>Completed goals are left out, archived ones too (put away means not on today's mind),
+     * and so are goals whose end date is further off than {@link #GOAL_HORIZON_DAYS}. Overdue goals are kept: a goal whose date has passed with
      * the target unmet is the single most useful thing this panel can say, and hiding it
      * because the number went negative would be the panel lying by omission.
      */
@@ -236,6 +236,7 @@ public class DailyBriefingFactsBuilder {
         return goals.stream()
                 .filter(goal -> goal.getStatus() != GoalStatus.COMPLETED)
                 .filter(goal -> !Boolean.TRUE.equals(goal.getComplete()))
+                .filter(goal -> goal.getArchivedAt() == null)
                 .filter(goal -> goal.getEndDate() != null)
                 .filter(goal -> ChronoUnit.DAYS.between(today, goal.getEndDate()) <= GOAL_HORIZON_DAYS)
                 .sorted(Comparator.comparing(Goal::getEndDate))

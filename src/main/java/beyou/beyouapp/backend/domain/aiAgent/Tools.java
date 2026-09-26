@@ -300,10 +300,14 @@ public class Tools {
     }
 
     // Goals
-    @Tool(description = "Get all user goals (Max items 100)")
+    @Tool(description = "Get all user goals (Max items 100). A goal with archivedAt set has been archived by the user: "
+            + "put away, not deleted. Leave archived goals out of plans, progress summaries and suggestions unless the user asks about them")
     List<GoalResponseDTO> getUserGoals(ToolContext toolContext) {
         log.info("AI agent is using goals tool for user: {}", userId(toolContext));
+        // Active goals first, so the cap never trades one the user is working on for one they
+        // put away. The sort is stable, so each group keeps the order it came in.
         return goalService.getAllGoals(userId(toolContext)).stream()
+                .sorted(java.util.Comparator.comparing((GoalResponseDTO g) -> g.archivedAt() != null))
                 .limit(MAX_ITEMS_PER_TYPE)
                 .toList();
     }
@@ -340,6 +344,20 @@ public class Tools {
         UUID goalId = resolveGoalId(goal, userId);
         log.info("AI agent is deleting goal {} for user: {}", goalId, userId);
         return goalService.deleteGoal(goalId, userId).getBody();
+    }
+
+    @Tool(description = "Archive a goal (put it away without deleting it) or restore an archived one, by id or by name. "
+            + "Its sub-goals are archived with it, and restoring brings back the ones archived together. "
+            + "Archiving moves no XP and does not change the goal's status; an archived goal cannot take new sub-goals")
+    List<GoalResponseDTO> archiveUserGoal(
+            @ToolParam(description = "The goal: its id from getUserGoals, or the goal name as the user said it") String goal,
+            @ToolParam(description = "true to archive, false to restore. Optional; defaults to true", required = false) Boolean archived,
+            ToolContext toolContext) {
+        UUID userId = userId(toolContext);
+        UUID goalId = resolveGoalId(goal, userId);
+        boolean archive = archived == null || archived;
+        log.info("AI agent is {} goal {} for user: {}", archive ? "archiving" : "restoring", goalId, userId);
+        return goalService.setArchived(goalId, archive, userId);
     }
 
     @Tool(description = "Toggle a goal completion, by id or by name. Completing awards XP, un-completing removes it")

@@ -136,6 +136,9 @@ public class UserExportService {
             map.put("status", g.getStatus());
             map.put("startDate", g.getStartDate());
             map.put("endDate", g.getEndDate());
+            // Null for an active goal. An export that dropped this would hand back archived
+            // goals looking like live ones.
+            map.put("archivedAt", g.getArchivedAt());
             return map;
         }).toList());
 

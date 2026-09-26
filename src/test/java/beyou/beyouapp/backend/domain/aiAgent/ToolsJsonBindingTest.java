@@ -67,6 +67,9 @@ public class ToolsJsonBindingTest {
     @Mock
     private UserService userService;
 
+    @Mock
+    private beyou.beyouapp.backend.domain.goal.GoalService goalService;
+
     @InjectMocks
     private Tools tools;
 
@@ -334,5 +337,40 @@ public class ToolsJsonBindingTest {
         assertTrue(messages.contains("itemGroupId"), messages);
         assertTrue(messages.contains("getUserRoutines"), messages);
         verify(focusService, never()).addMicroTask(any(), any());
+    }
+
+    /** The goal by name, and a careless string boolean: what a model actually sends to restore one. */
+    @Test
+    void archiveGoalBindsByNameAndAStringBoolean() {
+        UUID goal = UUID.randomUUID();
+        when(goalService.getAllGoals(userId)).thenReturn(List.of(new beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO(
+                goal, "Learn the ukulele", "icon", null, 10.0, "songs", 2.0, false, Map.of(), null,
+                java.time.LocalDate.now(), java.time.LocalDate.now().plusDays(30), 0.0,
+                beyou.beyouapp.backend.domain.goal.GoalStatus.IN_PROGRESS,
+                beyou.beyouapp.backend.domain.goal.GoalTerm.SHORT_TERM, null, null,
+                java.time.Instant.parse("2026-09-20T08:00:00Z"))));
+
+        callback("archiveUserGoal").call("""
+                {"goal": "Learn the ukulele", "archived": "false"}
+                """, toolContext);
+
+        verify(goalService).setArchived(goal, false, userId);
+    }
+
+    /** Asked to "archive my ukulele goal", the model may leave the flag out: that means archive. */
+    @Test
+    void archiveGoalWithoutTheFlagArchives() {
+        UUID goal = UUID.randomUUID();
+        when(goalService.getAllGoals(userId)).thenReturn(List.of(new beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO(
+                goal, "Learn the ukulele", "icon", null, 10.0, "songs", 2.0, false, Map.of(), null,
+                java.time.LocalDate.now(), java.time.LocalDate.now().plusDays(30), 0.0,
+                beyou.beyouapp.backend.domain.goal.GoalStatus.IN_PROGRESS,
+                beyou.beyouapp.backend.domain.goal.GoalTerm.SHORT_TERM, null, null)));
+
+        callback("archiveUserGoal").call("""
+                {"goal": "%s"}
+                """.formatted(goal), toolContext);
+
+        verify(goalService).setArchived(goal, true, userId);
     }
 }
