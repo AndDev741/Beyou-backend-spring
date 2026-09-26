@@ -108,8 +108,10 @@ public class FocusService {
      * A new micro-task on one item, today.
      *
      * <p>Idempotent on the name: asking twice for "stretch" on the same item returns the existing
-     * row rather than tripping the unique constraint into a 500. That is also what lets a client
-     * retry a request whose response it lost.
+     * row rather than tripping the unique constraint into a 409. That is also what lets a client
+     * retry a request whose response it lost. It holds for two requests that arrive together as
+     * well, because both take the list's lock before reading it: the second reads after the
+     * first commits and finds the row.
      */
     @Transactional
     public FocusMicroTaskResponseDTO addMicroTask(User user, CreateMicroTaskRequestDTO request) {
@@ -117,6 +119,7 @@ public class FocusService {
         LocalDate today = UserDateResolver.today(user);
         String name = normalise(request.name());
 
+        lockItemList(user, item);
         // One read serves both questions: is the name already here, and where does the end of the
         // list sit.
         List<FocusMicroTask> current = microTaskRepository.findForItem(user.getId(), today, item.getId());
@@ -240,8 +243,10 @@ public class FocusService {
      * Every pinned name with no row for (today, item) gets one.
      *
      * <p>Reads the pinned set once and the item's existing names once, then inserts the difference.
-     * The unique constraint would catch a race between two tabs, but the check avoids paying for the
-     * constraint violation on the ordinary path.
+     * The ordinary GET finds nothing missing and returns without locking anything. Only when there
+     * is something to insert does it take the list's lock and read again, since two tabs (or this
+     * read and an add) opening the same item together would otherwise both insert the same
+     * template and one of them would fail on the unique constraint.
      */
     private void materialisePinned(User user, LocalDate today, ItemGroup item) {
         // Bounded: this runs on a GET, under the read tier, and inserts one row per name. Fifty
@@ -251,10 +256,11 @@ public class FocusService {
         if (pinned.isEmpty()) return;
 
         List<FocusMicroTask> current = microTaskRepository.findForItem(user.getId(), today, item.getId());
-        Set<String> present = new HashSet<>();
-        for (FocusMicroTask t : current) {
-            present.add(t.getName());
-        }
+        if (namesPresent(current).containsAll(pinned)) return;
+
+        lockItemList(user, item);
+        current = microTaskRepository.findForItem(user.getId(), today, item.getId());
+        Set<String> present = namesPresent(current);
         // Materialised templates land after whatever is already on the item, in the order the
         // pinned set comes back in.
         int next = endOf(current);
@@ -263,6 +269,24 @@ public class FocusService {
                 microTaskRepository.save(newTask(user, today, item, name, true, next++));
             }
         }
+    }
+
+    private static Set<String> namesPresent(List<FocusMicroTask> tasks) {
+        Set<String> present = new HashSet<>();
+        for (FocusMicroTask t : tasks) {
+            present.add(t.getName());
+        }
+        return present;
+    }
+
+    /**
+     * Takes the lock every insert into one item's list goes through. See
+     * {@link FocusMicroTaskRepository#lockItemList} for why it exists. Both writers call this
+     * method rather than building the key themselves, because two writers taking different keys
+     * for the same list would be a lock that protects nothing.
+     */
+    private void lockItemList(User user, ItemGroup item) {
+        microTaskRepository.lockItemList("focus-micro-tasks:" + user.getId() + ":" + item.getId());
     }
 
     private void setPinnedByName(User user, String name, boolean pinned) {

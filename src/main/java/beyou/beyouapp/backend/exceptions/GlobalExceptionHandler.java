@@ -180,9 +180,20 @@ public class GlobalExceptionHandler {
         return lastDot >= 0 && lastDot < rendered.length() - 1 ? rendered.substring(lastDot + 1) : rendered;
     }
 
+    /**
+     * The fallback for a constraint violation nobody caught closer to it.
+     *
+     * <p>Deliberately generic. This used to answer DUPLICATE_CHECK, "this item has already been
+     * checked for the given date", written for a habit-check unique constraint that was dropped
+     * long ago, so every other collision (a micro-task added twice, a snapshot saved twice) told
+     * the user they had checked something. No client ever read that key. A service that expects
+     * a particular constraint to fire should catch it and answer with a key of its own; what
+     * reaches this handler is by definition the unexpected kind, and the honest thing to say is
+     * that the write clashed with data already there.
+     */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorResponse> handleDataIntegrityViolationException(DataIntegrityViolationException ex){
-        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.DUPLICATE_CHECK.name(), "Duplicate check: this item has already been checked for the given date", null);
+        ApiErrorResponse response = new ApiErrorResponse(ErrorKey.DATA_CONFLICT.name(), "The change conflicts with data that already exists", null);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
 
