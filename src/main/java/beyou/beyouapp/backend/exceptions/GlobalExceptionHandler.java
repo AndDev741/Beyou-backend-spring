@@ -86,10 +86,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Container-level multipart limit exceeded — larger than either service's
-     * own 5MB check can report, because the request never reaches a controller.
+     * Container-level multipart limit exceeded: larger than any service's own
+     * check can report, because the request never reaches a controller.
      *
-     * That is also why the path is the only thing left to go on. Two endpoints
+     * That is also why the path is the only thing left to go on. Three endpoints
      * accept uploads and each publishes its own error key, which the clients
      * match on for i18n: a feedback screenshot rejected as
      * {@code PHOTO_UPLOAD_TOO_LARGE} tells the user their "photo" was too big
@@ -99,11 +99,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiErrorResponse> handleMaxUploadSizeExceededException(
             MaxUploadSizeExceededException ex, HttpServletRequest request){
-        ApiErrorResponse response = isFeedbackAttachmentUpload(request)
-                ? new ApiErrorResponse(ErrorKey.FEEDBACK_ATTACHMENT_TOO_LARGE.name(),
-                        "Attachment must be under 5MB", null)
-                : new ApiErrorResponse(ErrorKey.PHOTO_UPLOAD_TOO_LARGE.name(),
-                        "Photo must be under 5MB", null);
+        ApiErrorResponse response;
+        if (isFeedbackAttachmentUpload(request)) {
+            response = new ApiErrorResponse(ErrorKey.FEEDBACK_ATTACHMENT_TOO_LARGE.name(),
+                    "Attachment must be under 5MB", null);
+        } else if (isNotebookSourceUpload(request)) {
+            response = new ApiErrorResponse(ErrorKey.NOTEBOOK_SOURCE_TOO_LARGE.name(),
+                    "The PDF must be under 15MB", null);
+        } else {
+            response = new ApiErrorResponse(ErrorKey.PHOTO_UPLOAD_TOO_LARGE.name(),
+                    "Photo must be under 5MB", null);
+        }
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
     }
 
@@ -114,18 +120,29 @@ public class GlobalExceptionHandler {
      * The profile-photo route and everything else fall through to the photo key.
      */
     private static boolean isFeedbackAttachmentUpload(HttpServletRequest request){
+        String path = pathOf(request);
+        return path != null && path.startsWith("/feedback/") && path.endsWith("/attachments");
+    }
+
+    /** {@code POST /notebook/pages/{pageId}/sources/pdf}, the study notebook's PDF upload. */
+    private static boolean isNotebookSourceUpload(HttpServletRequest request){
+        String path = pathOf(request);
+        return path != null && path.startsWith("/notebook/pages/") && path.endsWith("/sources/pdf");
+    }
+
+    /** The request path with the servlet context-path stripped, or null when there is none. */
+    private static String pathOf(HttpServletRequest request){
         if (request == null) {
-            return false;
+            return null;
         }
         String uri = request.getRequestURI();
         if (uri == null) {
-            return false;
+            return null;
         }
         String contextPath = request.getContextPath();
-        String path = (contextPath != null && !contextPath.isEmpty() && uri.startsWith(contextPath))
+        return (contextPath != null && !contextPath.isEmpty() && uri.startsWith(contextPath))
                 ? uri.substring(contextPath.length())
                 : uri;
-        return path.startsWith("/feedback/") && path.endsWith("/attachments");
     }
 
     /**

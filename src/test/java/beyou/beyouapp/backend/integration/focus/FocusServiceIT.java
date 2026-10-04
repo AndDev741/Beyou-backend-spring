@@ -128,7 +128,7 @@ class FocusServiceIT extends AbstractIntegrationTest {
     void aCompletedCycleIsFiledUnderTheOwnersDay() {
         Instant start = Instant.parse("2026-08-28T10:00:00Z");
         FocusCycleResponseDTO saved = focusService.recordCycle(user,
-            new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, start.plusSeconds(25 * 60), 25));
+            new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, start.plusSeconds(25 * 60), 25, null));
 
         assertThat(saved.itemGroupId()).isEqualTo(itemA);
         assertThat(saved.kind()).isEqualTo(CycleKind.POMODORO);
@@ -139,7 +139,7 @@ class FocusServiceIT extends AbstractIntegrationTest {
     void aCycleMayRunOnNoItemAtAll() {
         Instant start = Instant.now().minusSeconds(300);
         FocusCycleResponseDTO saved = focusService.recordCycle(user,
-            new RecordCycleRequestDTO(null, CycleKind.SHORT_BREAK, start, Instant.now(), 5));
+            new RecordCycleRequestDTO(null, CycleKind.SHORT_BREAK, start, Instant.now(), 5, null));
 
         assertThat(saved.itemGroupId()).isNull();
     }
@@ -148,7 +148,7 @@ class FocusServiceIT extends AbstractIntegrationTest {
     void aCycleThatEndsBeforeItStartsIsRefused() {
         Instant start = Instant.now();
         assertThatThrownBy(() -> focusService.recordCycle(user,
-            new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, start.minusSeconds(1), 25)))
+            new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, start.minusSeconds(1), 25, null)))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorKey())
             .isEqualTo(ErrorKey.INVALID_REQUEST);
@@ -158,7 +158,7 @@ class FocusServiceIT extends AbstractIntegrationTest {
     void aCycleOnSomebodyElsesItemIsRefused() {
         Instant start = Instant.now().minusSeconds(60);
         assertThatThrownBy(() -> focusService.recordCycle(stranger,
-            new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, Instant.now(), 1)))
+            new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, Instant.now(), 1, null)))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorKey())
             .isEqualTo(ErrorKey.ROUTINE_NOT_OWNED);
@@ -270,7 +270,7 @@ class FocusServiceIT extends AbstractIntegrationTest {
     void theDayViewReadsWithoutMaterialisingAnything() {
         focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "Stretch", true));
         Instant start = Instant.now().minusSeconds(1500);
-        focusService.recordCycle(user, new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, Instant.now(), 25));
+        focusService.recordCycle(user, new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, Instant.now(), 25, null));
 
         FocusDayResponseDTO day = focusService.getDay(user, LocalDate.now());
 
@@ -370,9 +370,9 @@ class FocusServiceIT extends AbstractIntegrationTest {
         focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "Stretch", false));
         focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemB, "Breathe", false));
         Instant start = Instant.now().minusSeconds(1500);
-        focusService.recordCycle(user, new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, Instant.now(), 25));
-        focusService.recordCycle(user, new RecordCycleRequestDTO(itemA, CycleKind.SHORT_BREAK, start, Instant.now(), 5));
-        focusService.recordCycle(user, new RecordCycleRequestDTO(null, CycleKind.POMODORO, start, Instant.now(), 25));
+        focusService.recordCycle(user, new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, Instant.now(), 25, null));
+        focusService.recordCycle(user, new RecordCycleRequestDTO(itemA, CycleKind.SHORT_BREAK, start, Instant.now(), 5, null));
+        focusService.recordCycle(user, new RecordCycleRequestDTO(null, CycleKind.POMODORO, start, Instant.now(), 25, null));
 
         RoutineSnapshot snapshot = snapshotService.createSnapshot(routine, user, LocalDate.now());
         SnapshotResponseDTO dto = snapshotService.toResponseDTO(snapshot);
@@ -398,9 +398,9 @@ class FocusServiceIT extends AbstractIntegrationTest {
         // prove it, so half the filter ran against nothing.
         UUID elsewhere = newRoutineWithOneHabit(user, "Evening", 20);
         Instant start = Instant.now().minusSeconds(1500);
-        focusService.recordCycle(user, new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, Instant.now(), 25));
-        focusService.recordCycle(user, new RecordCycleRequestDTO(elsewhere, CycleKind.POMODORO, start, Instant.now(), 25));
-        focusService.recordCycle(user, new RecordCycleRequestDTO(null, CycleKind.POMODORO, start, Instant.now(), 25));
+        focusService.recordCycle(user, new RecordCycleRequestDTO(itemA, CycleKind.POMODORO, start, Instant.now(), 25, null));
+        focusService.recordCycle(user, new RecordCycleRequestDTO(elsewhere, CycleKind.POMODORO, start, Instant.now(), 25, null));
+        focusService.recordCycle(user, new RecordCycleRequestDTO(null, CycleKind.POMODORO, start, Instant.now(), 25, null));
 
         SnapshotResponseDTO morning = snapshotService.toResponseDTO(
             snapshotService.createSnapshot(routine, user, LocalDate.now()));
@@ -418,7 +418,7 @@ class FocusServiceIT extends AbstractIntegrationTest {
         // count is what the hoist in getSnapshotsForDay is for.
         UUID elsewhere = newRoutineWithOneHabit(user, "Evening", 20);
         Instant start = Instant.now().minusSeconds(1500);
-        focusService.recordCycle(user, new RecordCycleRequestDTO(null, CycleKind.POMODORO, start, Instant.now(), 25));
+        focusService.recordCycle(user, new RecordCycleRequestDTO(null, CycleKind.POMODORO, start, Instant.now(), 25, null));
         focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(elsewhere, "Tea", false));
         snapshotService.createSnapshot(routine, user, LocalDate.now());
         snapshotService.createSnapshot(eveningRoutine, user, LocalDate.now());

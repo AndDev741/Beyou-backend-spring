@@ -169,6 +169,44 @@ public class RateLimitConfig {
                 .build();
     }
 
+    /** Study notebook AI calls allowed per user per hour — see {@link #createNotebookAiBucket()}. */
+    public static final int NOTEBOOK_AI_CALLS_PER_HOUR = 60;
+
+    /**
+     * {@code POST /notebook/ai/**}: the study room's chat, the studio outputs, the roadmap draft,
+     * "suggest nodes", "explain" and AI flashcards. Every one is a model call.
+     *
+     * <p>Its own bucket rather than the agent's 30 an hour, because a study session is a run of
+     * short questions against the same sources, and sharing the agent's budget would let an
+     * evening of studying lock the person out of the assistant. Sixty an hour is one question a
+     * minute for an hour, which is a long, honest session and still a hard cap on the bill.
+     */
+    public static Bucket createNotebookAiBucket() {
+        return Bucket.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(NOTEBOOK_AI_CALLS_PER_HOUR)
+                        .refillGreedy(NOTEBOOK_AI_CALLS_PER_HOUR, Duration.ofHours(1))
+                        .build())
+                .build();
+    }
+
+    /** Sources added per user per hour — see {@link #createNotebookSourceBucket()}. */
+    public static final int NOTEBOOK_SOURCES_PER_HOUR = 20;
+
+    /**
+     * {@code POST /notebook/pages/{id}/sources/*}: a PDF parsed in memory, a page fetched from the
+     * internet, or pasted text, each read in the background and embedded when a model is set.
+     * Twenty an hour is a whole reading list in one sitting.
+     */
+    public static Bucket createNotebookSourceBucket() {
+        return Bucket.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(NOTEBOOK_SOURCES_PER_HOUR)
+                        .refillGreedy(NOTEBOOK_SOURCES_PER_HOUR, Duration.ofHours(1))
+                        .build())
+                .build();
+    }
+
     /** Header-less GET /user/photo/** (signed URL, no JWT) — per-IP so callers can't flood disk reads. */
     public static Bucket createPhotoBucket() {
         return Bucket.builder()

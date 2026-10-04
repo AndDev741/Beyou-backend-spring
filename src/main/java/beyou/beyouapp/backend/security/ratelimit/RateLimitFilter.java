@@ -110,6 +110,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /** {@code POST /feedback/{feedbackId}/attachments} — see {@link RateLimitConfig#createFeedbackAttachmentBucket()}. */
+    /** {@code /notebook/pages/{id}/sources/pdf|link|text}: adding a study source. */
+    private static boolean isNotebookSourcePath(String path) {
+        return path.startsWith("/notebook/pages/") && path.contains("/sources/");
+    }
+
     private static boolean isFeedbackAttachmentPath(String path) {
         return path.startsWith("/feedback/") && path.endsWith("/attachments");
     }
@@ -223,6 +228,24 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
             bucketKey = "briefing:" + userId;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createBriefingBucket());
+        } else if ("POST".equals(method) && path.startsWith("/notebook/ai/")) {
+            // Ahead of the generic write branch: every route under here is a model call.
+            String userId = getUserIdFromRequest(request);
+            if (userId == null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            bucketKey = "notebook-ai:" + userId;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createNotebookAiBucket());
+        } else if ("POST".equals(method) && isNotebookSourcePath(path)) {
+            // Also ahead of the generic write branch: each one starts a background read.
+            String userId = getUserIdFromRequest(request);
+            if (userId == null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            bucketKey = "notebook-source:" + userId;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createNotebookSourceBucket());
         } else if (WRITE_METHODS.contains(method)) {
             String userId = getUserIdFromRequest(request);
             if (userId == null) {

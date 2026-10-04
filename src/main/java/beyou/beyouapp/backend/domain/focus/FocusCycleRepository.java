@@ -23,4 +23,16 @@ public interface FocusCycleRepository extends JpaRepository<FocusCycle, UUID> {
         ORDER BY c.startedAt ASC
         """)
     List<FocusCycle> findDay(@Param("userId") UUID userId, @Param("date") LocalDate date);
+
+    /**
+     * Completed pomodoro minutes run on any of these notebook pages. Breaks do not count: a node's
+     * "3h 20m focused" is time spent on it, not time spent resting from it.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(c.minutes), 0) FROM FocusCycle c
+        WHERE c.user.id = :userId AND c.notebookPageId IN :pageIds
+          AND c.kind = beyou.beyouapp.backend.domain.focus.CycleKind.POMODORO
+        """)
+    long sumPomodoroMinutes(@Param("userId") UUID userId,
+                            @Param("pageIds") java.util.Collection<UUID> pageIds);
 }

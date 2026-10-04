@@ -179,6 +179,21 @@
 			<version>3.14.0</version>
 		</dependency>
 
+		<!-- Study notebook sources. PDFBox reads the text of an uploaded PDF page by page,
+		     in memory; the file itself is never stored. jsoup turns a fetched web page into
+		     plain text. Neither touches the network on its own: the fetch is done by
+		     LinkFetcher, which owns the private-address refusal. -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>3.0.8</version>
+		</dependency>
+		<dependency>
+			<groupId>org.jsoup</groupId>
+			<artifactId>jsoup</artifactId>
+			<version>1.23.2</version>
+		</dependency>
+
 		<!-- Error telemetry. Reports unhandled exceptions to the self-hosted
 		     GlitchTip collector (Sentry-API compatible) — see Beyou-dev-env's
 		     docker-compose.monitoring.yml.

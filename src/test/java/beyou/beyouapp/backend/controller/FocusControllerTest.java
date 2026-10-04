@@ -55,7 +55,7 @@ class FocusControllerTest extends AbstractIntegrationTest {
         UUID item = UUID.randomUUID();
         when(focusService.recordCycle(eq(user), any())).thenReturn(new FocusCycleResponseDTO(
             UUID.randomUUID(), LocalDate.of(2026, 8, 28), item, CycleKind.POMODORO,
-            Instant.parse("2026-08-28T10:00:00Z"), Instant.parse("2026-08-28T10:25:00Z"), 25));
+            Instant.parse("2026-08-28T10:00:00Z"), Instant.parse("2026-08-28T10:25:00Z"), 25, null));
 
         mockMvc.perform(post("/focus/cycles")
                 .contentType(MediaType.APPLICATION_JSON)

@@ -165,3 +165,11 @@ app:
 # and the clients render their translated fallback copy, which IS what the spec asserts.
 briefing:
   narration-enabled: false
+
+# The study notebook's embeddings are OFF for the suite, pinned empty so a key in the shell
+# cannot turn them on. Sources are still read and chunked in the background exactly as in prod,
+# and retrieval runs on full-text search, which is deterministic. The LLM answers themselves are
+# intercepted in the specs with fixtures, like the AI onboarding.
+notebook:
+  embedding:
+    api-key: ""
