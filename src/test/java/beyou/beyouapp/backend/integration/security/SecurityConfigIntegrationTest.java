@@ -138,6 +138,19 @@ public class SecurityConfigIntegrationTest extends AbstractIntegrationTest {
 
 
 
+    /**
+     * Without a max age the browser keeps a preflight for about five seconds, and about one
+     * request in three in prod was an OPTIONS round-trip. The header is what lets it cache.
+     */
+    @Test
+    public void shouldLetTheBrowserCacheThePreflight() throws Exception {
+        mockMvc.perform(options("/habit")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:3000")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_MAX_AGE, "3600"));
+    }
+
     @Test
     @WithMockUser
     public void shouldAllowCorsFromConfiguredOrigin() throws Exception {

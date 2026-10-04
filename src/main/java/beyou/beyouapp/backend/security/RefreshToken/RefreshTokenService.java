@@ -1,11 +1,15 @@
 package beyou.beyouapp.backend.security.RefreshToken;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.List;
@@ -39,13 +43,26 @@ public class RefreshTokenService {
     private static final SecureRandom secureRandom = new SecureRandom();
     private static final Base64.Encoder base64Encoder = Base64.getUrlEncoder().withoutPadding();
 
+    /**
+     * Marks a token_hash written as SHA-256, as opposed to the BCrypt rows written before it.
+     *
+     * <p>Refresh tokens are 256 bits from {@link SecureRandom}, not something a person chose.
+     * BCrypt's cost factor exists to slow down guessing a low-entropy secret; there is nothing
+     * to guess here, so it only bought latency: two BCrypt(12) operations per refresh (verify
+     * the old token, hash the new one) held {@code /auth/refresh} at ~850 ms p50 on the prod
+     * box. A plain SHA-256 is the standard choice for high-entropy tokens.
+     *
+     * <p>Passwords stay on the shared {@link PasswordEncoder}. Do not "unify" the two.
+     */
+    static final String SHA256_PREFIX = "sha256:";
+
     public String createRefreshToken(User user) {
         var token = new RefreshToken();
         var opaqueToken = generateOpaqueToken();
         token.setUser(user);
         token.setCreatedAt(Timestamp.from(Instant.now()));
         token.setExpiresAt(Timestamp.from(Instant.now().plus(Duration.ofDays(15))));
-        token.setTokenHash(passwordEncoder.encode(opaqueToken));
+        token.setTokenHash(hashToken(opaqueToken));
 
         repository.save(token);
 
@@ -167,7 +184,7 @@ public class RefreshTokenService {
     }
 
     private boolean isNotMatchingOrExpired(RefreshToken refreshToken, String rawToken, boolean throwIfExpired){
-        if(!passwordEncoder.matches(rawToken, refreshToken.getTokenHash())) {
+        if(!tokenMatches(rawToken, refreshToken.getTokenHash())) {
             if(!throwIfExpired) return true;
             throw new RefreshTokenDontMatchRaw("Refresh token don't match with stored in database");
         }
@@ -177,6 +194,32 @@ public class RefreshTokenService {
             throw new RefreshTokenExpiredException("Refresh token expired or already revoked");
         }
         return false;
+    }
+
+    static String hashToken(String rawToken) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(rawToken.getBytes(StandardCharsets.UTF_8));
+            return SHA256_PREFIX + HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            // Every JRE is required to ship SHA-256.
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * Rows written before the switch hold a BCrypt hash, and they live up to 15 days. They
+     * are still verified with BCrypt so nobody is logged out by the deploy; each one is
+     * replaced by a SHA-256 row on its next rotation, so this branch empties itself out.
+     */
+    private boolean tokenMatches(String rawToken, String storedHash) {
+        if (storedHash == null) return false;
+        if (storedHash.startsWith(SHA256_PREFIX)) {
+            return MessageDigest.isEqual(
+                    hashToken(rawToken).getBytes(StandardCharsets.UTF_8),
+                    storedHash.getBytes(StandardCharsets.UTF_8));
+        }
+        return passwordEncoder.matches(rawToken, storedHash);
     }
 
     private static String generateOpaqueToken() {
