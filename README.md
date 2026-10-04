@@ -1,6 +1,6 @@
 # Beyou Backend
 
-> REST API for **Beyou** — a personal productivity app for habits, goals, routines, tasks, and categories, with built-in XP/leveling gamification and AI-assisted routine generation.
+> REST API for **Beyou** — a personal productivity app for habits, goals, routines, tasks, and categories, with built-in XP/leveling gamification, a study notebook, and an AI assistant.
 
 [![CI](https://github.com/AndDev741/Beyou-backend-spring/actions/workflows/ci.yml/badge.svg)](https://github.com/AndDev741/Beyou-backend-spring/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/AndDev741/Beyou-backend-spring/actions/workflows/codeql.yml/badge.svg)](https://github.com/AndDev741/Beyou-backend-spring/actions/workflows/codeql.yml)
@@ -17,6 +17,7 @@ Beyou helps people build better days: track habits, set goals, plan daily routin
 - **Gamification engine** — XP and leveling for the user, each category, and each habit, coordinated transactionally so a single check-in updates every affected entity in one response.
 - **Daily routines & check-ins** — schedule routines, check/uncheck/skip items, track streaks ("constance"), and persist per-day snapshots.
 - **Daily mood and journaling** — one entry per day on a five-point scale with an optional free-text note. Two write verbs on purpose: `PUT` replaces the day, `PATCH` sets only the level and cannot touch the note, so a client that never loaded somebody's diary cannot delete it.
+- **Study notebook** — topics laid out as roadmap boards whose nodes are pages of notes, flashcards scheduled by SM-2, and sources (PDF, web link, pasted text) read in the background into passages that a grounded study AI answers from with citations. PDFs are parsed in memory and never stored; link sources refuse private-network addresses (SSRF).
 - **AI assistant** — a streaming chat (Spring AI, provider-agnostic with a fallback chain) whose tools call the same domain services as the REST API, so every action it takes passes the same ownership checks and validation as a button click. Plus stateless onboarding suggestions.
 - **Authentication** — email/password and Google OAuth, JWT access tokens, refresh-token rotation, email verification, and password reset.
 - **Production hardening** — per-endpoint rate limiting (Bucket4j), Caffeine caching, security headers/CSP, ownership checks (IDOR-safe), and structured i18n-friendly error keys.
@@ -32,6 +33,7 @@ Beyou helps people build better days: track habits, set goals, plan daily routin
 | Persistence | Spring Data JPA / Hibernate, PostgreSQL |
 | Security | Spring Security, JWT (`java-jwt`), Google OAuth |
 | AI | Spring AI (`ChatClient`, OpenAI starter — provider-agnostic) |
+| Notebook sources | Apache PDFBox (PDF text), jsoup (HTML to text) |
 | Caching | Spring Cache + Caffeine |
 | Rate limiting | Bucket4j |
 | API docs | springdoc OpenAPI / Swagger UI |
@@ -66,7 +68,8 @@ Configuration lives in `application.yaml` and is driven entirely by environment 
 | `COOKIE_SECURE` / `COOKIE_SAME_SITE` | Refresh-cookie flags | `false` / `Lax` |
 | `CORS_ALLOWED_PATTERN` | Allowed CORS origin pattern (wildcard rejected in `prod`) | `*` |
 | `MAIL_*` | SMTP host/port/credentials for transactional email | — |
-| `AI_API_KEY` / `AI_ROUTINE_MODEL` / `AI_ROUTINE_ENABLED` | AI routine generation | — / `gpt-5-mini` / `true` |
+| `MISTRAL_API_KEY` / `GEMINI_API_KEY` | LLM fallback chain for the assistant, onboarding and the study notebook (`prod` needs at least one) | — |
+| `NOTEBOOK_EMBEDDING_BASE_URL` / `NOTEBOOK_EMBEDDING_API_KEY` / `NOTEBOOK_EMBEDDING_MODEL` | The study notebook's one embedding model; no key means full-text search only | Mistral's endpoint / `MISTRAL_API_KEY` / `mistral-embed` |
 | `DOCS_IMPORT_*` | GitHub repo + secret for docs import | see `envExample` |
 | `MANAGEMENT_PORT` / `ACTUATOR_ENDPOINTS` | Actuator server | `9091` / `health,metrics,prometheus` |
 
@@ -125,6 +128,7 @@ The Actuator/management server runs separately on port `9091` and is **not** ver
 | `/daily-briefing` | The new-day dialog: yesterday's unresolved items plus what is coming today. `POST /seen` acknowledges it |
 | `/mood` | One entry per day: `PUT` replaces it, `PATCH` sets the level only, `GET` reads a date range |
 | `/focus` | Focus Mode history: completed timer cycles and per-item micro-tasks |
+| `/notebook` | Study notebook: topics and pages, roadmap boards, flashcards and reviews, sources, the study room, and the notebook AI (`/notebook/ai/**`, its own rate-limit tier) |
 | `/check-history` | The day-by-day record behind every streak strip, for any checkable owner |
 | `/xp` | XP history per owner, for the dashboard charts |
 | `/feedback` | Feedback submissions and replies (`/feedback/admin` requires ADMIN) |
@@ -161,7 +165,7 @@ End-to-end tests (Playwright) live in the sibling `Beyou-e2e-tests` repository a
 src/main/java/beyou/beyouapp/backend/
 ├── controllers/        REST controllers (domain + docs/)
 ├── domain/             category, habit, task, goal, routine, mood, focus,
-│                       checkday, xpday, briefing, feedback, aiAgent, common
+│                       notebook, checkday, xpday, briefing, feedback, aiAgent, common
 ├── security/           JWT, refresh tokens, password reset, rate limiting
 ├── user/               User entity (UserDetails), service, Google OAuth
 ├── docs/               GitHub-backed docs import (architecture, api, blog, project, search)

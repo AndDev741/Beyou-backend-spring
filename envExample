@@ -54,6 +54,15 @@ NVIDIA_API_KEY=
 # Optional model overrides: MISTRAL_MODEL, GEMINI_MODEL, GLM_MODEL, NVIDIA_MODEL
 # Optional cooldowns (seconds): LLM_COOLDOWN_RATELIMIT=300, LLM_COOLDOWN_ERROR=30
 
+# Study notebook embeddings. They reuse MISTRAL_API_KEY with mistral-embed unless
+# overridden, and with no key at all the notebook falls back to full-text search.
+# Left as comments on purpose: an empty NOTEBOOK_EMBEDDING_API_KEY= line would
+# override that fallback with an empty key. Pick the model once. Stored vectors
+# only compare with vectors from the same model.
+# NOTEBOOK_EMBEDDING_API_KEY=
+# NOTEBOOK_EMBEDDING_BASE_URL=https://api.mistral.ai/v1
+# NOTEBOOK_EMBEDDING_MODEL=mistral-embed
+
 # How long a signed profile-photo URL stays loadable, in minutes. The URL is the
 # only proof GET /user/photo/{id} gets, so it expires.
 PHOTO_URL_TTL_MINUTES=720

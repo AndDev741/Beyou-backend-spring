@@ -109,12 +109,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return path.startsWith("/ai/agent/chats/");
     }
 
-    /** {@code POST /feedback/{feedbackId}/attachments} — see {@link RateLimitConfig#createFeedbackAttachmentBucket()}. */
     /** {@code /notebook/pages/{id}/sources/pdf|link|text}: adding a study source. */
     private static boolean isNotebookSourcePath(String path) {
         return path.startsWith("/notebook/pages/") && path.contains("/sources/");
     }
 
+    /** {@code POST /feedback/{feedbackId}/attachments} — see {@link RateLimitConfig#createFeedbackAttachmentBucket()}. */
     private static boolean isFeedbackAttachmentPath(String path) {
         return path.startsWith("/feedback/") && path.endsWith("/attachments");
     }
