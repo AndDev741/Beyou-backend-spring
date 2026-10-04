@@ -216,7 +216,9 @@ public class NotebookPageService {
     private PageResponseDTO page(User user, UUID pageId, boolean markOpened) {
         NotebookPage page = ownership.page(user.getId(), pageId);
         if (markOpened) {
-            page.setLastOpenedAt(Instant.now());
+            // A targeted UPDATE, not a setter on the loaded page: the setter would make this read
+            // a write of the whole page as it was loaded, racing the autosave it runs next to.
+            pageRepository.markOpened(page.getId(), Instant.now());
         }
         ProgressGraph graph = progressService.graphFor(user.getId());
         NotebookPage topic = page.isTopic() ? page : graph.page(page.getTopicId());

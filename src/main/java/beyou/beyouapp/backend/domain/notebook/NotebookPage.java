@@ -7,6 +7,8 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.user.User;
+import org.hibernate.annotations.DynamicUpdate;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -28,7 +30,7 @@ import lombok.ToString;
  *
  * <p>{@code parentId} and {@code topicId} are plain ids rather than associations. Every read
  * of the tree loads a topic's pages in one query and assembles them in memory
- * ({@link NotebookTree}), so a lazy parent proxy would only be a way to trigger one query per
+ * ({@link NotebookPageService#tree}), so a lazy parent proxy would only be a way to trigger one query per
  * page by accident.
  *
  * <p>{@code content} is the BlockNote document as JSON, and {@code contentText} is the plain
@@ -38,9 +40,17 @@ import lombok.ToString;
  *
  * <p>{@code status} is written only by {@link NotebookProgressService}. See there for why it is
  * stored rather than computed on every read.
+ *
+ * <p>{@code @DynamicUpdate} because a page row has writers that load it at different moments.
+ * Finishing a node below moves this page's status, and a full-row UPDATE from that request
+ * writes back every column as it was loaded. If the autosave committed in between, the old
+ * document comes back. With only the changed columns in the UPDATE, each writer touches what
+ * it changed. There is no {@code @Version} anywhere in the model, and the autosave should not
+ * start failing because a status moved underneath it.
  */
 @Entity
 @Table(name = "notebook_pages")
+@DynamicUpdate
 @Getter
 @Setter
 @NoArgsConstructor

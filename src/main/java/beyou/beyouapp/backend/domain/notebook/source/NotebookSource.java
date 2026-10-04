@@ -3,6 +3,8 @@ package beyou.beyouapp.backend.domain.notebook.source;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import beyou.beyouapp.backend.user.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -32,6 +34,10 @@ import lombok.ToString;
  */
 @Entity
 @Table(name = "notebook_sources")
+// Ingestion writes status and progress from its pool thread while the person can switch the
+// source on or off. Without this, a toggle that loaded the row mid-read would write the old
+// status back over READY. Same reasoning as NotebookPage.
+@DynamicUpdate
 @Getter
 @Setter
 @NoArgsConstructor

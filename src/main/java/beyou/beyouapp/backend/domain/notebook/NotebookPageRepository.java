@@ -1,10 +1,14 @@
 package beyou.beyouapp.backend.domain.notebook;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -29,4 +33,12 @@ public interface NotebookPageRepository extends JpaRepository<NotebookPage, UUID
             UUID userId, String title);
 
     long countByParentId(UUID parentId);
+
+    /**
+     * Records an open without loading the row as dirty. Opening a page is a read that the client
+     * repeats while the person writes, so it must never be the request that saves the page.
+     */
+    @Modifying
+    @Query("update NotebookPage p set p.lastOpenedAt = :at where p.id = :id")
+    int markOpened(@Param("id") UUID id, @Param("at") Instant at);
 }
