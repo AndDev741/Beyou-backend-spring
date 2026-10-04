@@ -123,6 +123,10 @@ public class SecurityConfig {
         config.addAllowedMethod("POST");
         config.addAllowedMethod("PUT");
         config.addAllowedMethod("DELETE");
+        // Without this no Access-Control-Max-Age is sent and browsers keep a preflight for
+        // ~5 s, so about one request in three was an OPTIONS round-trip through the tunnel.
+        // Chrome caps the value at 2 h; an hour keeps a CORS config change from lingering.
+        config.setMaxAge(3600L);
         source.registerCorsConfiguration("/**", config);
         return source;
     }
