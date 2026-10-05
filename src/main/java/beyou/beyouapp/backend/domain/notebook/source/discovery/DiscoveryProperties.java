@@ -4,12 +4,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * The web search behind "find sources for me". Two providers, and the keys pick one: Tavily when
- * {@code TAVILY_API_KEY} is set, otherwise Gemini with Google Search grounding when a Gemini key
- * is, otherwise none and the feature is off (the study room hides the button).
+ * {@code TAVILY_API_KEY} is set, otherwise Gemini with Google Search grounding when
+ * {@code NOTEBOOK_DISCOVERY_GEMINI_API_KEY} is, otherwise none and the feature is off (the study
+ * room hides the button).
  *
  * <p>Tavily wins because it answers with the pages themselves, while Gemini answers with Google's
- * redirect links that have to be followed first. Gemini's Google Search also needs a project with
- * billing: on a free key every grounded call answers 429, which is how this was found.
+ * redirect links that have to be followed first. Gemini's key is its own and does not fall back
+ * to the chat chain's {@code GEMINI_API_KEY}: Google Search needs a project with billing, and on
+ * a free key every grounded call answers 429, which is how this was found. A fallback would put a
+ * button in front of people that fails every time.
  */
 @ConfigurationProperties(prefix = "notebook.discovery")
 public record DiscoveryProperties(

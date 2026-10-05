@@ -232,10 +232,12 @@ notebook:
     # Off only in the integration-test profile, where tests run the draft's model call themselves.
     background: true
   # "Find sources for me" (DiscoveryProperties). Tavily when its key is set, otherwise Gemini
-  # with Google Search, which needs a billing-enabled project; neither key, and the feature is off.
+  # with Google Search when its own key is; neither key, and the feature is off. No fallback to
+  # GEMINI_API_KEY on purpose: Google Search needs a billing-enabled project, and a free chain
+  # key would show the button and fail every search with 429.
   discovery:
     tavily-api-key: ${TAVILY_API_KEY:}
-    gemini-api-key: ${NOTEBOOK_DISCOVERY_GEMINI_API_KEY:${GEMINI_API_KEY:}}
+    gemini-api-key: ${NOTEBOOK_DISCOVERY_GEMINI_API_KEY:}
     gemini-model: ${NOTEBOOK_DISCOVERY_GEMINI_MODEL:gemini-flash-latest}
     max-results: 8
 
