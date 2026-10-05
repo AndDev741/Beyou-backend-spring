@@ -127,6 +127,22 @@ class NotebookAiIT extends AbstractIntegrationTest {
         assertThat(created.progress().total()).isEqualTo(3); // Logic, Sets, and the linked OS leaf
     }
 
+    /** The grid the web board's "Tidy up" uses too: three to a row, each row after the last. */
+    @Test
+    void aDraftIsLaidOutThreeToARowInTheOrderItWasDrafted() {
+        PageResponseDTO created = aiService.createFromDraft(user, new CreateFromDraftRequestDTO(
+                "Software Engineering", null, null, null, null, null, List.of(
+                        new DraftNodeInputDTO("Fundamentals", null, null, 10, null),
+                        new DraftNodeInputDTO("Data Structures", null, null, 10, null),
+                        new DraftNodeInputDTO("Operating Systems", null, null, 10, null),
+                        new DraftNodeInputDTO("Networks", null, null, 10, null))));
+
+        BoardResponseDTO board = boardService.board(user, created.id());
+
+        assertThat(board.nodes()).extracting(n -> n.title() + "@" + (int) n.x() + "," + (int) n.y())
+                .containsExactly("Fundamentals@40,0", "Data Structures@280,0", "Operating Systems@520,0", "Networks@40,140");
+    }
+
     @Test
     void suggestionsNeverRepeatANodeAlreadyOnTheBoard() {
         UUID topic = topic("Software Engineering");

@@ -51,10 +51,15 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class NotebookBoardService {
 
-    /** Gap between nodes laid out by the server (drafts, chains), in board pixels. */
+    /**
+     * The board grid for nodes the server lays out (drafts, chains): three to a row, read left to
+     * right and top to bottom, from x 40. The web board's "Tidy up" lays nodes out on the same
+     * grid (boardLayout.ts in the web app), so tidying a fresh draft moves nothing. Change one
+     * and change the other.
+     */
     static final double COLUMN_STEP = 240;
     static final double ROW_STEP = 140;
-    static final int NODES_PER_ROW = 4;
+    static final int NODES_PER_ROW = 3;
 
     private final NotebookBoardNodeRepository nodeRepository;
     private final NotebookBoardEdgeRepository edgeRepository;
