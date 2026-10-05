@@ -26,6 +26,7 @@ import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
 import beyou.beyouapp.backend.domain.notebook.NotebookStatus;
 import beyou.beyouapp.backend.domain.notebook.ai.NotebookAiService;
+import beyou.beyouapp.backend.domain.notebook.ai.draft.RoadmapDraftService;
 import beyou.beyouapp.backend.domain.notebook.dto.HomeResponseDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.ReviewSummaryDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.SetStatusRequestDTO;
@@ -41,6 +42,7 @@ class NotebookControllerTest extends AbstractIntegrationTest {
     @Autowired private MockMvc mockMvc;
     @MockitoBean private NotebookPageService pageService;
     @MockitoBean private NotebookAiService aiService;
+    @MockitoBean private RoadmapDraftService draftService;
     @MockitoBean private AuthenticatedUser authenticatedUser;
 
     private User user;
@@ -85,9 +87,9 @@ class NotebookControllerTest extends AbstractIntegrationTest {
 
     @Test
     void aDraftRefusesAnImpossibleWeek() throws Exception {
-        mockMvc.perform(post("/notebook/ai/roadmap-draft").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/notebook/ai/drafts").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"CS\",\"hoursPerWeek\":0}"))
                 .andExpect(status().isBadRequest());
-        verify(aiService, never()).roadmapDraft(any(), any());
+        verify(draftService, never()).start(any(), any());
     }
 }

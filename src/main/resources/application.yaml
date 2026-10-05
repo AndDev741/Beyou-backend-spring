@@ -228,6 +228,9 @@ notebook:
   ingest:
     # Off only in the integration-test profile, where tests run ingestion on their own thread.
     background: true
+  drafts:
+    # Off only in the integration-test profile, where tests run the draft's model call themselves.
+    background: true
 
 ai:
   agent:

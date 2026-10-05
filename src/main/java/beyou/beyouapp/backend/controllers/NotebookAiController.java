@@ -5,20 +5,26 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import beyou.beyouapp.backend.domain.notebook.ai.NotebookAiService;
+import beyou.beyouapp.backend.domain.notebook.ai.draft.RoadmapDraftService;
+import beyou.beyouapp.backend.domain.notebook.ai.draft.dto.DraftChoicesRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.ai.draft.dto.RoadmapDraftRecordDTO;
+import beyou.beyouapp.backend.domain.notebook.ai.draft.dto.RoadmapDraftSummaryDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.AiCardsRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.AnswerDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.ChatRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.CreateFromDraftRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.ExplainRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.GenerateOutputRequestDTO;
-import beyou.beyouapp.backend.domain.notebook.ai.dto.RoadmapDraftDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.RoadmapDraftRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.SuggestNodesRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.SuggestedNodeDTO;
@@ -43,13 +49,52 @@ import lombok.RequiredArgsConstructor;
 public class NotebookAiController {
 
     private final NotebookAiService aiService;
+    private final RoadmapDraftService draftService;
     private final NotebookStudyService studyService;
     private final AuthenticatedUser authenticatedUser;
 
-    /** "New topic with AI": a draft to review. Nothing is stored. */
-    @PostMapping("/ai/roadmap-draft")
-    public ResponseEntity<RoadmapDraftDTO> roadmapDraft(@Valid @RequestBody RoadmapDraftRequestDTO request) {
-        return ResponseEntity.ok(aiService.roadmapDraft(authenticatedUser.getAuthenticatedUser(), request));
+    /**
+     * "New topic with AI": stores the draft and answers at once, DRAFTING. The model writes it in
+     * the background, and the client reads it back from {@code GET /notebook/drafts/{id}}.
+     */
+    @PostMapping("/ai/drafts")
+    public ResponseEntity<RoadmapDraftRecordDTO> startDraft(@Valid @RequestBody RoadmapDraftRequestDTO request) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(draftService.start(authenticatedUser.getAuthenticatedUser(), request));
+    }
+
+    /** Drafts again, from scratch or applying {@code changeRequest} to {@code previous}. */
+    @PostMapping("/ai/drafts/{draftId}/redraft")
+    public ResponseEntity<RoadmapDraftRecordDTO> redraft(@PathVariable UUID draftId,
+            @Valid @RequestBody RoadmapDraftRequestDTO request) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(draftService.redraft(authenticatedUser.getAuthenticatedUser(), draftId, request));
+    }
+
+    // The draft routes below call no model, so they live outside /notebook/ai and a client
+    // polling a draft spends the ordinary read budget, not the AI one.
+
+    @GetMapping("/drafts")
+    public ResponseEntity<List<RoadmapDraftSummaryDTO>> drafts() {
+        return ResponseEntity.ok(draftService.list(authenticatedUser.getAuthenticatedUser()));
+    }
+
+    @GetMapping("/drafts/{draftId}")
+    public ResponseEntity<RoadmapDraftRecordDTO> draft(@PathVariable UUID draftId) {
+        return ResponseEntity.ok(draftService.get(authenticatedUser.getAuthenticatedUser(), draftId));
+    }
+
+    /** The review dialog's ticks, saved as the person changes them. */
+    @PutMapping("/drafts/{draftId}/choices")
+    public ResponseEntity<RoadmapDraftRecordDTO> saveDraftChoices(@PathVariable UUID draftId,
+            @Valid @RequestBody DraftChoicesRequestDTO request) {
+        return ResponseEntity.ok(draftService.saveChoices(authenticatedUser.getAuthenticatedUser(), draftId, request.choices()));
+    }
+
+    @DeleteMapping("/drafts/{draftId}")
+    public ResponseEntity<Void> deleteDraft(@PathVariable UUID draftId) {
+        draftService.delete(authenticatedUser.getAuthenticatedUser(), draftId);
+        return ResponseEntity.noContent().build();
     }
 
     /**

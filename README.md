@@ -128,7 +128,7 @@ The Actuator/management server runs separately on port `9091` and is **not** ver
 | `/daily-briefing` | The new-day dialog: yesterday's unresolved items plus what is coming today. `POST /seen` acknowledges it |
 | `/mood` | One entry per day: `PUT` replaces it, `PATCH` sets the level only, `GET` reads a date range |
 | `/focus` | Focus Mode history: completed timer cycles and per-item micro-tasks |
-| `/notebook` | Study notebook: topics and pages, roadmap boards, flashcards and reviews, sources, the study room, and the notebook AI (`/notebook/ai/**`, its own rate-limit tier) |
+| `/notebook` | Study notebook: topics and pages, roadmap boards, flashcards and reviews, sources, the study room, roadmap drafts kept until a topic is made from them (`/notebook/drafts`), and the notebook AI (`/notebook/ai/**`, its own rate-limit tier) |
 | `/check-history` | The day-by-day record behind every streak strip, for any checkable owner |
 | `/xp` | XP history per owner, for the dashboard charts |
 | `/feedback` | Feedback submissions and replies (`/feedback/admin` requires ADMIN) |

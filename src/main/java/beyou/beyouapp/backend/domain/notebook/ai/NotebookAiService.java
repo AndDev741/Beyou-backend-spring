@@ -25,6 +25,7 @@ import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
 import beyou.beyouapp.backend.domain.notebook.NotebookProgressService;
 import beyou.beyouapp.backend.domain.notebook.ProgressGraph;
+import beyou.beyouapp.backend.domain.notebook.ai.draft.NotebookRoadmapDraftRepository;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.AiCardsRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.AnswerDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.CreateFromDraftRequestDTO;
@@ -77,6 +78,7 @@ public class NotebookAiService {
     private final NotebookProgressService progressService;
     private final NotebookCardService cardService;
     private final GoalRepository goalRepository;
+    private final NotebookRoadmapDraftRepository draftRepository;
 
     // ------------------------------------------------------------------ draft
 
@@ -195,6 +197,9 @@ public class NotebookAiService {
             }
         }
         progressService.boardChanged(user.getId(), topic.getId());
+        if (request.draftId() != null) {
+            draftRepository.deleteOwned(request.draftId(), user.getId());
+        }
         return pageService.open(user, topic.getId());
     }
 

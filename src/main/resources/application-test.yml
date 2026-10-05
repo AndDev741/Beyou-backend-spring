@@ -126,3 +126,6 @@ notebook:
     api-key: ""
   ingest:
     background: false
+  # Same for roadmap drafts: tests run the model call with RoadmapDraftService.run.
+  drafts:
+    background: false

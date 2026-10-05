@@ -12,6 +12,7 @@ import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.goal.GoalRepository;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
+import beyou.beyouapp.backend.domain.notebook.ai.draft.RoadmapDraftService;
 import beyou.beyouapp.backend.domain.notebook.card.NotebookCardRepository;
 import beyou.beyouapp.backend.domain.notebook.source.NotebookSourceRepository;
 import beyou.beyouapp.backend.domain.notebook.study.NotebookChatMessageRepository;
@@ -66,6 +67,7 @@ public class UserExportService {
     private final NotebookCardRepository notebookCardRepository;
     private final NotebookSourceRepository notebookSourceRepository;
     private final NotebookChatMessageRepository notebookChatMessageRepository;
+    private final RoadmapDraftService roadmapDraftService;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -490,6 +492,8 @@ public class UserExportService {
             map.put("at", m.getCreatedAt());
             return map;
         }).toList());
+        // What was asked for, what the model drafted and the ticks: all of it is the person's.
+        notebook.put("roadmapDrafts", roadmapDraftService.exportForUser(userId));
         return notebook;
     }
 }

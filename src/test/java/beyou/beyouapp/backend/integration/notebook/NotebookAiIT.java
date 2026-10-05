@@ -114,7 +114,7 @@ class NotebookAiIT extends AbstractIntegrationTest {
         PageResponseDTO created = aiService.createFromDraft(user, new CreateFromDraftRequestDTO(
                 "Fundamentals of CS", "The theory behind what I use.", null, null, null, null, List.of(
                         new DraftNodeInputDTO("Discrete Math", "Proofs and counting.", List.of("Logic", "Sets"), 18, null),
-                        new DraftNodeInputDTO("Operating Systems", null, null, null, os))));
+                        new DraftNodeInputDTO("Operating Systems", null, null, null, os)), null));
 
         BoardResponseDTO board = boardService.board(user, created.id());
         assertThat(board.nodes()).extracting(n -> n.title()).containsExactly("Discrete Math", "Operating Systems");
@@ -135,7 +135,7 @@ class NotebookAiIT extends AbstractIntegrationTest {
                         new DraftNodeInputDTO("Fundamentals", null, null, 10, null),
                         new DraftNodeInputDTO("Data Structures", null, null, 10, null),
                         new DraftNodeInputDTO("Operating Systems", null, null, 10, null),
-                        new DraftNodeInputDTO("Networks", null, null, 10, null))));
+                        new DraftNodeInputDTO("Networks", null, null, 10, null)), null));
 
         BoardResponseDTO board = boardService.board(user, created.id());
 

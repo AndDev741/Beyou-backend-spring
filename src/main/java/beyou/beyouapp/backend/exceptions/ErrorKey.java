@@ -139,4 +139,12 @@ public enum ErrorKey {
     NOTEBOOK_OUTPUT_NOT_FOUND,
     // An AI action on a page with no text of its own and no sources to read.
     NOTEBOOK_NOTHING_TO_STUDY,
+    // Roadmap drafts for "New topic with AI" (RoadmapDraftService).
+    NOTEBOOK_DRAFT_NOT_FOUND,
+    NOTEBOOK_DRAFT_NOT_OWNED,
+    // The model is still writing this draft; it takes no redraft and no ticks until it ends.
+    NOTEBOOK_DRAFT_BUSY,
+    NOTEBOOK_DRAFT_LIMIT_REACHED,
+    // The server restarted while the model was writing the draft. Drafting again works.
+    NOTEBOOK_DRAFT_INTERRUPTED,
 }
