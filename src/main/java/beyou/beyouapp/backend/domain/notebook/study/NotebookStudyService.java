@@ -32,6 +32,9 @@ import beyou.beyouapp.backend.domain.notebook.study.dto.QuizQuestionDTO;
 import beyou.beyouapp.backend.domain.notebook.study.dto.QuizResultDTO;
 import beyou.beyouapp.backend.domain.notebook.study.dto.StudyOutputDTO;
 import beyou.beyouapp.backend.domain.notebook.study.dto.StudyResponseDTO;
+import beyou.beyouapp.backend.domain.notebook.study.dto.StudySetupDTO;
+import beyou.beyouapp.backend.domain.notebook.study.dto.StudySetupRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.source.discovery.SourceDiscoveryService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.user.User;
@@ -67,6 +70,8 @@ public class NotebookStudyService {
     private final NotebookProgressService progressService;
     private final NotebookSourceService sourceService;
     private final NotebookCardRepository cardRepository;
+    private final StudyScopes studyScopes;
+    private final SourceDiscoveryService discoveryService;
     private final NotebookStudyOutputRepository outputRepository;
     private final NotebookChatMessageRepository messageRepository;
     private final StudyContextBuilder contextBuilder;
@@ -114,7 +119,28 @@ public class NotebookStudyService {
                 outputs,
                 sourceService.list(user, pageId),
                 (int) cardRepository.countByPageId(pageId),
-                (int) cardRepository.countByPageIdAndDueOnLessThanEqual(pageId, UserDateResolver.today(user)));
+                (int) cardRepository.countByPageIdAndDueOnLessThanEqual(pageId, UserDateResolver.today(user)),
+                setupOf(page),
+                studyScopes.options(page),
+                discoveryService.available());
+    }
+
+    /**
+     * The study room's setup screen: a goal for studying the page, and which notes the AI reads.
+     * Every answer on the page uses both from then on (StudyContextBuilder). A blank goal clears it.
+     */
+    @Transactional
+    public StudySetupDTO saveSetup(User user, UUID pageId, StudySetupRequestDTO request) {
+        NotebookPage page = ownership.page(user.getId(), pageId);
+        String goal = request.goal() == null ? null : request.goal().strip();
+        page.setStudyGoal(goal == null || goal.isEmpty() ? null : goal);
+        page.setStudyScope(request.scope());
+        page.setStudySetupAt(Instant.now());
+        return setupOf(page);
+    }
+
+    private static StudySetupDTO setupOf(NotebookPage page) {
+        return new StudySetupDTO(page.getStudyGoal(), page.getStudyScope(), page.getStudySetupAt());
     }
 
     @Transactional(readOnly = true)

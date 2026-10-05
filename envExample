@@ -63,6 +63,14 @@ NVIDIA_API_KEY=
 # NOTEBOOK_EMBEDDING_BASE_URL=https://api.mistral.ai/v1
 # NOTEBOOK_EMBEDDING_MODEL=mistral-embed
 
+# "Find sources for me" in the study room. Tavily answers when TAVILY_API_KEY is set
+# (1,000 free searches a month). Otherwise Gemini with Google Search answers, using
+# GEMINI_API_KEY unless overridden below; Google Search needs a billing-enabled Gemini
+# project, and a free key answers 429. With neither, the feature is hidden.
+TAVILY_API_KEY=
+# NOTEBOOK_DISCOVERY_GEMINI_API_KEY=
+# NOTEBOOK_DISCOVERY_GEMINI_MODEL=gemini-flash-latest
+
 # How long a signed profile-photo URL stays loadable, in minutes. The URL is the
 # only proof GET /user/photo/{id} gets, so it expires.
 PHOTO_URL_TTL_MINUTES=720

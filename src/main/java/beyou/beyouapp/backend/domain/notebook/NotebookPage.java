@@ -6,6 +6,7 @@ import java.util.UUID;
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.habit.Habit;
+import beyou.beyouapp.backend.domain.notebook.study.StudyScope;
 import beyou.beyouapp.backend.user.User;
 import org.hibernate.annotations.DynamicUpdate;
 
@@ -60,6 +61,7 @@ public class NotebookPage {
     public static final int MAX_TITLE_LENGTH = 255;
     public static final int MAX_DESCRIPTION_LENGTH = 512;
     public static final int MAX_ICON_LENGTH = 64;
+    public static final int MAX_STUDY_GOAL_LENGTH = 300;
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -128,6 +130,18 @@ public class NotebookPage {
 
     @Column(name = "last_opened_at")
     private Instant lastOpenedAt;
+
+    /** The study room's goal for this page, sent with every answer. See V36. */
+    @Column(name = "study_goal", length = MAX_STUDY_GOAL_LENGTH)
+    private String studyGoal;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "study_scope", nullable = false, length = 16)
+    private StudyScope studyScope = StudyScope.PAGE;
+
+    /** When the study room was last set up; null opens the room on its setup screen. */
+    @Column(name = "study_setup_at")
+    private Instant studySetupAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

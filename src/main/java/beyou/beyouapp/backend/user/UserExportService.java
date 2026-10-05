@@ -464,6 +464,10 @@ public class UserExportService {
             map.put("title", p.getTitle());
             map.put("status", p.getStatus());
             map.put("text", p.getContentText());
+            map.put("icon", p.getIcon());
+            // The study room's setup, which the person wrote or chose.
+            map.put("studyGoal", p.getStudyGoal());
+            map.put("studyScope", p.getStudyScope());
             map.put("updatedAt", p.getUpdatedAt());
             return map;
         }).toList());

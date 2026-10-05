@@ -129,3 +129,7 @@ notebook:
   # Same for roadmap drafts: tests run the model call with RoadmapDraftService.run.
   drafts:
     background: false
+  # No web search from the suite, whatever keys the shell holds; tests mock WebSearchClient.
+  discovery:
+    tavily-api-key: ""
+    gemini-api-key: ""

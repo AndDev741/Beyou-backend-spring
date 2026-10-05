@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,6 +17,8 @@ import beyou.beyouapp.backend.domain.notebook.study.dto.QuizAnswersRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.study.dto.QuizResultDTO;
 import beyou.beyouapp.backend.domain.notebook.study.dto.StudyOutputDTO;
 import beyou.beyouapp.backend.domain.notebook.study.dto.StudyResponseDTO;
+import beyou.beyouapp.backend.domain.notebook.study.dto.StudySetupDTO;
+import beyou.beyouapp.backend.domain.notebook.study.dto.StudySetupRequestDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +38,12 @@ public class NotebookStudyController {
     @GetMapping("/pages/{pageId}/study")
     public ResponseEntity<StudyResponseDTO> study(@PathVariable UUID pageId) {
         return ResponseEntity.ok(studyService.study(authenticatedUser.getAuthenticatedUser(), pageId));
+    }
+
+    /** The study room's setup: a goal and which notes the AI reads. */
+    @PutMapping("/pages/{pageId}/study/setup")
+    public ResponseEntity<StudySetupDTO> saveSetup(@PathVariable UUID pageId, @Valid @RequestBody StudySetupRequestDTO request) {
+        return ResponseEntity.ok(studyService.saveSetup(authenticatedUser.getAuthenticatedUser(), pageId, request));
     }
 
     @DeleteMapping("/pages/{pageId}/study/messages")

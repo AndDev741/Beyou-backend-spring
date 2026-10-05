@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import beyou.beyouapp.backend.domain.notebook.ai.NotebookAiService;
 import beyou.beyouapp.backend.domain.notebook.ai.draft.RoadmapDraftService;
+import beyou.beyouapp.backend.domain.notebook.source.discovery.SourceDiscoveryService;
+import beyou.beyouapp.backend.domain.notebook.source.discovery.dto.DiscoverSourcesRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.source.discovery.dto.DiscoveryResultDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.draft.dto.DraftChoicesRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.draft.dto.RoadmapDraftRecordDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.draft.dto.RoadmapDraftSummaryDTO;
@@ -50,6 +53,7 @@ public class NotebookAiController {
 
     private final NotebookAiService aiService;
     private final RoadmapDraftService draftService;
+    private final SourceDiscoveryService discoveryService;
     private final NotebookStudyService studyService;
     private final AuthenticatedUser authenticatedUser;
 
@@ -129,6 +133,16 @@ public class NotebookAiController {
     @PostMapping("/ai/pages/{pageId}/chat")
     public ResponseEntity<ChatTurnDTO> chat(@PathVariable UUID pageId, @Valid @RequestBody ChatRequestDTO request) {
         return ResponseEntity.ok(studyService.chat(authenticatedUser.getAuthenticatedUser(), pageId, request.message()));
+    }
+
+    /**
+     * "Find sources for me": a web search for what the person described, every result opened and
+     * checked. Nothing is stored; the client adds the ones the person picks as link sources.
+     */
+    @PostMapping("/ai/pages/{pageId}/discover-sources")
+    public ResponseEntity<DiscoveryResultDTO> discoverSources(@PathVariable UUID pageId,
+            @Valid @RequestBody DiscoverSourcesRequestDTO request) {
+        return ResponseEntity.ok(discoveryService.discover(authenticatedUser.getAuthenticatedUser(), pageId, request.description()));
     }
 
     /** A studio output: overview, summary, study guide or quiz. */

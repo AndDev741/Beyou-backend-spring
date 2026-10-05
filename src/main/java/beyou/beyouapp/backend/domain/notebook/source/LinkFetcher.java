@@ -121,6 +121,51 @@ public class LinkFetcher {
         throw new BusinessException(ErrorKey.NOTEBOOK_SOURCE_FETCH_FAILED, "Too many redirects");
     }
 
+    /** Where a link really leads, and the page's title when it has one. */
+    public record Resolved(URI uri, String title) {
+    }
+
+    /** Enough of an HTML page to find its title. */
+    static final int TITLE_BYTES = 256 * 1024;
+
+    /**
+     * Follows a link to the page it lands on, with the same refusals as {@link #fetch}: every hop
+     * is checked against the private network. Reads only enough of an HTML page for its title.
+     * Used by source discovery, where search results can be redirect links and a result is only
+     * worth offering if it opens.
+     */
+    public Resolved resolve(String url) {
+        URI uri = validate(url);
+        for (int hop = 0; hop <= MAX_REDIRECTS + 1; hop++) {
+            HttpResponse<InputStream> response = send(uri);
+            int status = response.statusCode();
+            if (status >= 300 && status < 400) {
+                closeQuietly(response.body());
+                Optional<String> location = response.headers().firstValue("location");
+                if (location.isEmpty()) break;
+                uri = validate(uri.resolve(location.get()).toString());
+                continue;
+            }
+            if (status < 200 || status >= 300) {
+                closeQuietly(response.body());
+                throw new BusinessException(ErrorKey.NOTEBOOK_SOURCE_FETCH_FAILED, "The page answered " + status);
+            }
+            String type = response.headers().firstValue("content-type").orElse("").toLowerCase(Locale.ROOT);
+            if (type.contains("application/pdf")) {
+                closeQuietly(response.body());
+                return new Resolved(uri, null);
+            }
+            if (!type.isEmpty() && !type.contains("html") && !type.startsWith("text/")) {
+                closeQuietly(response.body());
+                throw new BusinessException(ErrorKey.NOTEBOOK_SOURCE_UNREADABLE, "Unsupported content type " + type);
+            }
+            byte[] head = readUpTo(response.body(), TITLE_BYTES);
+            String title = Jsoup.parse(new String(head, charsetOf(type)), uri.toString()).title();
+            return new Resolved(uri, title == null || title.isBlank() ? null : title.strip());
+        }
+        throw new BusinessException(ErrorKey.NOTEBOOK_SOURCE_FETCH_FAILED, "Too many redirects");
+    }
+
     /** Readable text out of an HTML document, one block per line, without menus or scripts. */
     static Fetched htmlToText(String html, String baseUri) {
         Document doc = Jsoup.parse(html, baseUri);
@@ -174,6 +219,15 @@ public class LinkFetcher {
             return out.toByteArray();
         } catch (IOException failed) {
             throw new BusinessException(ErrorKey.NOTEBOOK_SOURCE_FETCH_FAILED, "The page stopped answering");
+        }
+    }
+
+    /** The first {@code limit} bytes, then stops reading; unlike {@link #read}, more is not an error. */
+    private static byte[] readUpTo(InputStream in, int limit) {
+        try (in) {
+            return in.readNBytes(limit);
+        } catch (IOException failed) {
+            throw new BusinessException(ErrorKey.NOTEBOOK_SOURCE_FETCH_FAILED, "Could not read the page");
         }
     }
 

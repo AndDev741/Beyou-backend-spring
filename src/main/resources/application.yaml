@@ -231,6 +231,13 @@ notebook:
   drafts:
     # Off only in the integration-test profile, where tests run the draft's model call themselves.
     background: true
+  # "Find sources for me" (DiscoveryProperties). Tavily when its key is set, otherwise Gemini
+  # with Google Search, which needs a billing-enabled project; neither key, and the feature is off.
+  discovery:
+    tavily-api-key: ${TAVILY_API_KEY:}
+    gemini-api-key: ${NOTEBOOK_DISCOVERY_GEMINI_API_KEY:${GEMINI_API_KEY:}}
+    gemini-model: ${NOTEBOOK_DISCOVERY_GEMINI_MODEL:gemini-flash-latest}
+    max-results: 8
 
 ai:
   agent:

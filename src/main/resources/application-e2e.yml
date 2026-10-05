@@ -173,3 +173,7 @@ briefing:
 notebook:
   embedding:
     api-key: ""
+  # Source discovery is off for the suite too; the spec stubs its answer in the browser.
+  discovery:
+    tavily-api-key: ""
+    gemini-api-key: ""

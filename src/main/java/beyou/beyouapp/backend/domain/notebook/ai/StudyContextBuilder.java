@@ -23,14 +23,17 @@ import beyou.beyouapp.backend.domain.notebook.source.NotebookSource;
 import beyou.beyouapp.backend.domain.notebook.source.NotebookSourceService;
 import beyou.beyouapp.backend.domain.notebook.source.SourceChunkStore;
 import beyou.beyouapp.backend.domain.notebook.source.TextChunker;
+import beyou.beyouapp.backend.domain.notebook.study.StudyScopes;
 import beyou.beyouapp.backend.user.User;
 import lombok.RequiredArgsConstructor;
 
 /**
  * The numbered passages an answer is allowed to stand on, and the citations that come back.
  *
- * <p>Two kinds of passage. The person's own notes come from the page and its ancestors, always
- * fresh because they are read from the page's current text, and the sources come from
+ * <p>Two kinds of passage. The person's own notes come from the pages the page's study scope
+ * covers ({@link StudyScopes}: the page and its ancestors by default, or everything under it, or
+ * the whole topic), always fresh because they are read from the pages' current text, and the
+ * sources come from
  * {@link NotebookRetriever} over the sources this page may read. Notes go first: they are what
  * the person wrote, and an answer that agrees with them is the one that sticks.
  *
@@ -48,8 +51,17 @@ public class StudyContextBuilder {
 
     private final NotebookSourceService sourceService;
     private final NotebookRetriever retriever;
+    private final StudyScopes scopes;
 
-    public record Context(List<Passage> passages) {
+    /**
+     * @param goal what the person set out to get from studying the page (the study room's setup),
+     *             or null. Not a passage: it steers the answer and is never cited.
+     */
+    public record Context(List<Passage> passages, String goal) {
+
+        public Context(List<Passage> passages) {
+            this(passages, null);
+        }
 
         public boolean isEmpty() {
             return passages.isEmpty();
@@ -57,7 +69,12 @@ public class StudyContextBuilder {
 
         /** The passages as the model reads them. */
         public String render() {
-            StringBuilder sb = new StringBuilder("Passages:\n");
+            StringBuilder sb = new StringBuilder();
+            if (goal != null && !goal.isBlank()) {
+                sb.append("The person's goal for studying this: ").append(goal.strip())
+                        .append("\nAim the answer at that goal.\n\n");
+            }
+            sb.append("Passages:\n");
             for (Passage p : passages) {
                 sb.append('[').append(p.number()).append("] ").append(p.label()).append('\n')
                         .append(p.text()).append("\n\n");
@@ -82,10 +99,9 @@ public class StudyContextBuilder {
         List<Passage> passages = new ArrayList<>();
         Set<String> tokens = tokens(query);
 
-        // The person's notes: the page itself first, then its ancestors, best matches only.
+        // The person's notes, from the pages the study scope covers, best matches only.
         List<ScoredText> notes = new ArrayList<>();
-        Map<UUID, NotebookPage> scope = sourceService.scope(page);
-        for (NotebookPage scoped : scope.values()) {
+        for (NotebookPage scoped : scopes.pagesFor(page, page.getStudyScope())) {
             String text = scoped.getContentText();
             if (text == null || text.isBlank()) continue;
             boolean self = scoped.getId().equals(page.getId());
@@ -114,7 +130,7 @@ public class StudyContextBuilder {
             passages.add(new Passage(passages.size() + 1, Passage.SOURCE, source.getId(), chunk.id(), null,
                     label, chunk.pageNumber(), cap(chunk.content())));
         }
-        return new Context(passages);
+        return new Context(passages, page.getStudyGoal());
     }
 
     /**

@@ -147,4 +147,7 @@ public enum ErrorKey {
     NOTEBOOK_DRAFT_LIMIT_REACHED,
     // The server restarted while the model was writing the draft. Drafting again works.
     NOTEBOOK_DRAFT_INTERRUPTED,
+    // "Find sources for me": no search provider is configured, or the search did not answer.
+    NOTEBOOK_DISCOVERY_UNAVAILABLE,
+    NOTEBOOK_DISCOVERY_FAILED,
 }

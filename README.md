@@ -70,6 +70,7 @@ Configuration lives in `application.yaml` and is driven entirely by environment 
 | `MAIL_*` | SMTP host/port/credentials for transactional email | — |
 | `MISTRAL_API_KEY` / `GEMINI_API_KEY` | LLM fallback chain for the assistant, onboarding and the study notebook (`prod` needs at least one) | — |
 | `NOTEBOOK_EMBEDDING_BASE_URL` / `NOTEBOOK_EMBEDDING_API_KEY` / `NOTEBOOK_EMBEDDING_MODEL` | The study notebook's one embedding model; no key means full-text search only | Mistral's endpoint / `MISTRAL_API_KEY` / `mistral-embed` |
+| `TAVILY_API_KEY` / `NOTEBOOK_DISCOVERY_GEMINI_API_KEY` / `NOTEBOOK_DISCOVERY_GEMINI_MODEL` | "Find sources for me": Tavily when its key is set, otherwise Gemini with Google Search (needs a billing-enabled key); neither turns the feature off | — / `GEMINI_API_KEY` / `gemini-flash-latest` |
 | `DOCS_IMPORT_*` | GitHub repo + secret for docs import | see `envExample` |
 | `MANAGEMENT_PORT` / `ACTUATOR_ENDPOINTS` | Actuator server | `9091` / `health,metrics,prometheus` |
 

@@ -14,7 +14,7 @@ import beyou.beyouapp.backend.domain.notebook.ai.dto.CitationDTO;
 /** A citation the reader cannot open is worse than none: invented numbers are dropped. */
 class StudyContextBuilderTest {
 
-    private final StudyContextBuilder builder = new StudyContextBuilder(null, null);
+    private final StudyContextBuilder builder = new StudyContextBuilder(null, null, null);
     private final StudyContextBuilder.Context context = new StudyContextBuilder.Context(List.of(
             new Passage(1, Passage.PAGE, null, null, UUID.randomUUID(), "Your page \"Trees\"", null, "Notes"),
             new Passage(2, Passage.SOURCE, UUID.randomUUID(), UUID.randomUUID(), null, "CLRS (pdf, page 296)", 296, "Text")));
