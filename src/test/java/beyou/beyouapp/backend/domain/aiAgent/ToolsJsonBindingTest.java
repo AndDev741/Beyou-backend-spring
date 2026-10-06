@@ -28,6 +28,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import beyou.beyouapp.backend.domain.aiAgent.notebook.StudyBoardEditor;
 import beyou.beyouapp.backend.domain.focus.FocusService;
 import beyou.beyouapp.backend.domain.focus.dto.CreateMicroTaskRequestDTO;
 import beyou.beyouapp.backend.domain.focus.dto.ReorderMicroTasksRequestDTO;
@@ -69,6 +70,9 @@ public class ToolsJsonBindingTest {
 
     @Mock
     private beyou.beyouapp.backend.domain.goal.GoalService goalService;
+
+    @Mock
+    private StudyBoardEditor studyBoardEditor;
 
     @InjectMocks
     private Tools tools;
@@ -372,5 +376,77 @@ public class ToolsJsonBindingTest {
                 """.formatted(goal), toolContext);
 
         verify(goalService).setArchived(goal, true, userId);
+    }
+
+    // ------------------------------------------------------------ study notebook
+
+    /** The order arrives as a JSON array of titles and reaches the editor as it was sent. */
+    @Test
+    void aBoardOrderBindsAsAListOfTitles() {
+        User user = new User();
+        when(userService.findUserById(userId)).thenReturn(user);
+
+        callback("reorderStudyBoard").call("""
+                {"board": "Fundamentos", "order": ["Redes", "Sistemas Operacionais", "Estruturas de Dados"]}
+                """, toolContext);
+
+        verify(studyBoardEditor).reorder(user, "Fundamentos",
+                List.of("Redes", "Sistemas Operacionais", "Estruturas de Dados"));
+    }
+
+    /**
+     * Deleting the page is the one irreversible thing these tools do, so a missing flag must mean
+     * "keep it", and a careless string "true" must still mean what it says.
+     */
+    @Test
+    void deletePageIsFalseUnlessSentAndBindsFromAString() {
+        User user = new User();
+        when(userService.findUserById(userId)).thenReturn(user);
+
+        callback("removeStudyNode").call("""
+                {"board": "Fundamentos", "node": "Redes"}
+                """, toolContext);
+        callback("removeStudyNode").call("""
+                {"board": "Fundamentos", "node": "Redes", "deletePage": "true"}
+                """, toolContext);
+
+        verify(studyBoardEditor).remove(user, "Fundamentos", "Redes", false);
+        verify(studyBoardEditor).remove(user, "Fundamentos", "Redes", true);
+    }
+
+    @Test
+    void aNodeWithoutAfterBindsTheOptionalAsNull() {
+        User user = new User();
+        when(userService.findUserById(userId)).thenReturn(user);
+
+        callback("addStudyNode").call("""
+                {"board": "Fundamentos", "nodeTitle": "Compiladores"}
+                """, toolContext);
+
+        verify(studyBoardEditor).addNode(user, "Fundamentos", "Compiladores", null);
+    }
+
+    /**
+     * A notebook tool that writes but is missing from AgentToolDomains leaves the board on screen
+     * showing what was there before the assistant changed it. Every tool with "Study" in its name
+     * is either one of the reads or tells the client to refresh the notebook.
+     */
+    @Test
+    void everyNotebookWriteToolTellsTheClientToRefreshTheNotebook() {
+        Set<String> reads = Set.of("listStudyTopics", "getStudyPlanForToday", "getStudyBoard");
+        List<String> studyTools = Arrays.stream(
+                        MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks())
+                .map(c -> c.getToolDefinition().name())
+                .filter(name -> name.contains("Study"))
+                .toList();
+
+        assertEquals(11, studyTools.size(), studyTools.toString());
+        for (String tool : studyTools) {
+            if (reads.contains(tool)) {
+                assertEquals(List.of(), AgentToolDomains.domainsOf(tool), tool);
+            } else {
+                assertTrue(AgentToolDomains.domainsOf(tool).contains("notebook"), tool);
+            }
+        }
     }
 }
