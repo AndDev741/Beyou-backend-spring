@@ -46,6 +46,12 @@ import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
+import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
+import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService;
+import beyou.beyouapp.backend.domain.notebook.board.NotebookNodeKind;
+import beyou.beyouapp.backend.domain.notebook.board.dto.CreateNodeRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.dto.HomeResponseDTO;
+import beyou.beyouapp.backend.domain.notebook.dto.PageSearchHitDTO;
 import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.mood.dto.SetMoodLevelDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
@@ -98,6 +104,10 @@ public class Tools {
     private FocusService focusService;
     @Autowired
     private MoodService moodService;
+    @Autowired
+    private NotebookPageService notebookPageService;
+    @Autowired
+    private NotebookBoardService notebookBoardService;
     @Autowired
     private Validator validator;
 
@@ -860,6 +870,74 @@ public class Tools {
                     return row;
                 })
                 .toList();
+    }
+
+    // Study notebook
+    @Tool(description = "List the user's study notebook topics: for each, its progress as subtopics "
+            + "done of total, the page to study next, and how many flashcards are due. Read only")
+    List<Map<String, Object>> listStudyTopics(ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is listing study topics for user: {}", user.getId());
+        return notebookPageService.home(user).topics().stream()
+                .map(topic -> {
+                    Map<String, Object> row = new LinkedHashMap<String, Object>();
+                    row.put("title", topic.title());
+                    row.put("done", topic.progress().done());
+                    row.put("total", topic.progress().total());
+                    row.put("next", topic.next() == null ? null : topic.next().title());
+                    row.put("cardsDue", topic.cardsDue());
+                    return row;
+                })
+                .toList();
+    }
+
+    @Tool(description = "Add a node to a roadmap board in the user's study notebook. The node becomes "
+            + "a new page under the board's page. boardPageTitle is the title of the topic or page whose "
+            + "board gets the node, exactly as the user named it or as listStudyTopics shows it. If more "
+            + "than one page has that title, the tool refuses and you must ask which one")
+    Map<String, String> addStudyNode(
+            @ToolParam(description = "Title of the topic or page that holds the board") String boardPageTitle,
+            @ToolParam(description = "Title of the new node, max 255 characters") String nodeTitle,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is adding a study node for user: {}", user.getId());
+        String wanted = boardPageTitle == null ? "" : boardPageTitle.strip();
+        List<PageSearchHitDTO> hits = notebookPageService.search(user, wanted).stream()
+                .filter(hit -> hit.title().equalsIgnoreCase(wanted))
+                .toList();
+        if (hits.isEmpty()) {
+            return Map.of("error", "No notebook page is titled \"" + wanted + "\"");
+        }
+        if (hits.size() > 1) {
+            return Map.of("error", "Several pages are titled \"" + wanted + "\". Ask which topic it is in: "
+                    + hits.stream().map(PageSearchHitDTO::topicTitle).distinct().toList());
+        }
+        UUID boardPageId = hits.get(0).id();
+        // To the right of what is already there, so the new node never lands on top of another.
+        double x = notebookBoardService.board(user, boardPageId).nodes().stream()
+                .mapToDouble(node -> node.x()).max().orElse(-200) + 240;
+        notebookBoardService.addNode(user, boardPageId, valid(new CreateNodeRequestDTO(
+                NotebookNodeKind.PAGE, nodeTitle, null, null, x, 80.0, null, null)));
+        return Map.of("success", "Added \"" + nodeTitle + "\" to the board of \"" + hits.get(0).title() + "\"");
+    }
+
+    @Tool(description = "What the user could study today in their notebook: the page they last opened "
+            + "and what is being studied in it, plus flashcards due per topic and their review streak. Read only")
+    Map<String, Object> getStudyPlanForToday(ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is reading the study plan for user: {}", user.getId());
+        HomeResponseDTO home = notebookPageService.home(user);
+        Map<String, Object> plan = new LinkedHashMap<String, Object>();
+        if (home.continueStudying() != null) {
+            plan.put("continuePage", home.continueStudying().title());
+            plan.put("continueTopic", home.continueStudying().topicTitle());
+            plan.put("studyingInside", home.continueStudying().studyingTitle());
+        }
+        plan.put("cardsDue", home.review().due());
+        plan.put("cardsDueByTopic", home.review().byTopic().stream()
+                .map(t -> Map.of("topic", t.title(), "due", t.due())).toList());
+        plan.put("reviewStreakDays", home.review().streak());
+        return plan;
     }
 
     // Feedback

@@ -14,7 +14,8 @@ public record FocusCycleResponseDTO(
     CycleKind kind,
     Instant startedAt,
     Instant endedAt,
-    int minutes
+    int minutes,
+    UUID notebookPageId
 ) {
     public static FocusCycleResponseDTO from(FocusCycle cycle) {
         return new FocusCycleResponseDTO(
@@ -24,6 +25,7 @@ public record FocusCycleResponseDTO(
             cycle.getKind(),
             cycle.getStartedAt(),
             cycle.getEndedAt(),
-            cycle.getMinutes());
+            cycle.getMinutes(),
+            cycle.getNotebookPageId());
     }
 }

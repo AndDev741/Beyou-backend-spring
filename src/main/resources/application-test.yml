@@ -116,3 +116,20 @@ sentry:
 monitoring:
   heartbeat:
     snapshot-url: ""
+
+# Study notebook. Embeddings pinned off for the same reason as the heartbeat above: a
+# MISTRAL_API_KEY exported in a developer's shell would otherwise bind through the default and
+# make the suite call a paid API. Ingestion runs on the test's own thread (see
+# SourceIngestionService), so assertions do not race a pool.
+notebook:
+  embedding:
+    api-key: ""
+  ingest:
+    background: false
+  # Same for roadmap drafts: tests run the model call with RoadmapDraftService.run.
+  drafts:
+    background: false
+  # No web search from the suite, whatever keys the shell holds; tests mock WebSearchClient.
+  discovery:
+    tavily-api-key: ""
+    gemini-api-key: ""

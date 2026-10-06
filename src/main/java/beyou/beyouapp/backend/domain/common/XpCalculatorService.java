@@ -98,6 +98,15 @@ public class XpCalculatorService {
         addUserXpAndPersist(user, newXp);
     }
 
+    /**
+     * The study notebook's XP: the person and the category their topic is filed under, with no
+     * habit, routine or goal in between. {@code categories} may be empty when the topic has none.
+     */
+    public void addXpToUserAndCategoriesAndPersist(User user, Double newXp, List<Category> categories) {
+        addUserXpAndPersist(user, newXp);
+        addCategoriesXpAndPersist(user, newXp, categories);
+    }
+
     public void removeXpFromUserOnly(User user, Double xpToRemove) {
         removeUserXpAndPersist(user, xpToRemove);
     }

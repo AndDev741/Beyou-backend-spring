@@ -111,4 +111,43 @@ public enum ErrorKey {
     FEDERATED_IDENTITY_ISSUER_ALREADY_LINKED,
     OIDC_PROVIDER_UNKNOWN,
     OIDC_TOKEN_INVALID,
+    // Study notebook. Not-owned and not-found stay separate keys like every other domain,
+    // even though both answer 400, because the client words them differently.
+    NOTEBOOK_PAGE_NOT_FOUND,
+    NOTEBOOK_PAGE_NOT_OWNED,
+    // The id named a page where only a topic (a root) makes sense, or the other way round.
+    NOTEBOOK_TOPIC_REQUIRED,
+    // Putting the page on this board would make it reachable from itself.
+    NOTEBOOK_BOARD_CYCLE,
+    NOTEBOOK_NODE_NOT_FOUND,
+    // The page is already a node on this board.
+    NOTEBOOK_NODE_DUPLICATE,
+    // An edge between nodes of different boards, or a section used as an endpoint.
+    NOTEBOOK_EDGE_INVALID,
+    NOTEBOOK_CARD_NOT_FOUND,
+    NOTEBOOK_SOURCE_NOT_FOUND,
+    NOTEBOOK_SOURCE_TOO_LARGE,
+    // The PDF could not be parsed, or held no text (a scan without OCR).
+    NOTEBOOK_SOURCE_UNREADABLE,
+    // A link the server refuses to fetch: not http(s), or pointing inside a private network.
+    NOTEBOOK_SOURCE_URL_REFUSED,
+    NOTEBOOK_SOURCE_FETCH_FAILED,
+    // The server restarted while the source was being read. PDFs are not kept, so it has to
+    // be added again.
+    NOTEBOOK_SOURCE_INTERRUPTED,
+    NOTEBOOK_SOURCE_LIMIT_REACHED,
+    NOTEBOOK_OUTPUT_NOT_FOUND,
+    // An AI action on a page with no text of its own and no sources to read.
+    NOTEBOOK_NOTHING_TO_STUDY,
+    // Roadmap drafts for "New topic with AI" (RoadmapDraftService).
+    NOTEBOOK_DRAFT_NOT_FOUND,
+    NOTEBOOK_DRAFT_NOT_OWNED,
+    // The model is still writing this draft; it takes no redraft and no ticks until it ends.
+    NOTEBOOK_DRAFT_BUSY,
+    NOTEBOOK_DRAFT_LIMIT_REACHED,
+    // The server restarted while the model was writing the draft. Drafting again works.
+    NOTEBOOK_DRAFT_INTERRUPTED,
+    // "Find sources for me": no search provider is configured, or the search did not answer.
+    NOTEBOOK_DISCOVERY_UNAVAILABLE,
+    NOTEBOOK_DISCOVERY_FAILED,
 }

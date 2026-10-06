@@ -79,6 +79,15 @@ public class FocusCycle {
     @Column(name = "ended_at", nullable = false)
     private Instant endedAt;
 
+    /**
+     * The study notebook page this cycle was run on, or null.
+     *
+     * <p>An id, not an association: nothing here reads the page, the notebook only sums minutes by
+     * page id. {@code ON DELETE SET NULL} for the same reason as the item group.
+     */
+    @Column(name = "notebook_page_id")
+    private UUID notebookPageId;
+
     /** What it was set to run for, bounded 1..180 by the column's own CHECK. */
     @Column(name = "minutes", nullable = false)
     private int minutes;

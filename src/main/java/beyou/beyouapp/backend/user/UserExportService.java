@@ -11,6 +11,11 @@ import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.goal.GoalRepository;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
+import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
+import beyou.beyouapp.backend.domain.notebook.ai.draft.RoadmapDraftService;
+import beyou.beyouapp.backend.domain.notebook.card.NotebookCardRepository;
+import beyou.beyouapp.backend.domain.notebook.source.NotebookSourceRepository;
+import beyou.beyouapp.backend.domain.notebook.study.NotebookChatMessageRepository;
 import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
@@ -58,6 +63,11 @@ public class UserExportService {
     private final PhotoStorageService photoStorageService;
     private final NotificationPreferencesRepository notificationPreferencesRepository;
     private final MoodService moodService;
+    private final NotebookPageRepository notebookPageRepository;
+    private final NotebookCardRepository notebookCardRepository;
+    private final NotebookSourceRepository notebookSourceRepository;
+    private final NotebookChatMessageRepository notebookChatMessageRepository;
+    private final RoadmapDraftService roadmapDraftService;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -186,6 +196,10 @@ public class UserExportService {
             return map;
         }).toList());
 
+        // The study notebook: one query per table, never per page, so the export stays flat in
+        // query count however big the notebook grows (UserExportQueryCountTest).
+        export.put("notebook", notebook(userId));
+
         // Say out loud what a reader will not find here, so the file can be trusted
         // as a whole rather than spot-checked. Deletion takes these too.
         Map<String, Object> omitted = new LinkedHashMap<>();
@@ -193,6 +207,10 @@ public class UserExportService {
                 + "routine per day, each carrying a full copy of that day's structure. The "
                 + "outcomes they record are in checkHistory, in bounded form; the copies "
                 + "themselves would grow this file without limit.");
+        omitted.put("notebookSourceText", "The text read out of the PDFs, links and pasted text "
+                + "you added as notebook sources. It is a copy of documents you already have, and a "
+                + "book's worth of it per source would bury the rest of this file; the sources "
+                + "themselves are listed under notebook.sources.");
         omitted.put("credentials", "Password hash, refresh tokens and any pending "
                 + "verification or reset tokens. Nothing here is useful to you and all of it "
                 + "is dangerous in a file.");
@@ -430,5 +448,56 @@ public class UserExportService {
                 + "check-history endpoint one window at a time.");
         history.put("owners", List.copyOf(byOwner.values()));
         return history;
+    }
+
+    /**
+     * Pages as plain text (the document format is the editor's business, the words are the
+     * person's), flashcards with their schedule, the sources' details, and the study-room chats.
+     */
+    private Map<String, Object> notebook(UUID userId) {
+        Map<String, Object> notebook = new LinkedHashMap<>();
+        notebook.put("pages", notebookPageRepository.findByUserId(userId).stream().map(p -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", p.getId());
+            map.put("kind", p.getKind());
+            map.put("parentId", p.getParentId());
+            map.put("title", p.getTitle());
+            map.put("status", p.getStatus());
+            map.put("text", p.getContentText());
+            map.put("icon", p.getIcon());
+            // The study room's setup, which the person wrote or chose.
+            map.put("studyGoal", p.getStudyGoal());
+            map.put("studyScope", p.getStudyScope());
+            map.put("updatedAt", p.getUpdatedAt());
+            return map;
+        }).toList());
+        notebook.put("flashcards", notebookCardRepository.findByUserIdOrderByCreatedAtAsc(userId).stream().map(c -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("pageId", c.getPageId());
+            map.put("front", c.getFront());
+            map.put("back", c.getBack());
+            map.put("dueOn", c.getDueOn());
+            return map;
+        }).toList());
+        notebook.put("sources", notebookSourceRepository.findByUserIdOrderByCreatedAtAsc(userId).stream().map(s -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("pageId", s.getPageId());
+            map.put("kind", s.getKind());
+            map.put("title", s.getTitle());
+            map.put("url", s.getUrl());
+            map.put("addedAt", s.getCreatedAt());
+            return map;
+        }).toList());
+        notebook.put("studyChats", notebookChatMessageRepository.findByUserIdOrderByCreatedAtAsc(userId).stream().map(m -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("pageId", m.getPageId());
+            map.put("role", m.getRole());
+            map.put("content", m.getContent());
+            map.put("at", m.getCreatedAt());
+            return map;
+        }).toList());
+        // What was asked for, what the model drafted and the ticks: all of it is the person's.
+        notebook.put("roadmapDrafts", roadmapDraftService.exportForUser(userId));
+        return notebook;
     }
 }
