@@ -2,7 +2,9 @@ package beyou.beyouapp.backend.domain.notebook.board;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -60,6 +62,18 @@ public class NotebookBoardService {
     static final double COLUMN_STEP = 240;
     static final double ROW_STEP = 140;
     static final int NODES_PER_ROW = 3;
+    /** The size the web draws a page node at (NODE_WIDTH and NODE_HEIGHT in boardLayout.ts). */
+    static final double NODE_WIDTH = 176;
+    static final double NODE_HEIGHT = 64;
+
+    /** A spot on the board grid. */
+    public record GridCell(double x, double y) {
+    }
+
+    /** The grid cell at {@code index}, in reading order, from x 40 and y 0. */
+    public static GridCell gridCell(int index) {
+        return new GridCell(40 + (index % NODES_PER_ROW) * COLUMN_STEP, (index / NODES_PER_ROW) * ROW_STEP);
+    }
 
     private final NotebookBoardNodeRepository nodeRepository;
     private final NotebookBoardEdgeRepository edgeRepository;
@@ -120,7 +134,7 @@ public class NotebookBoardService {
     }
 
     /**
-     * Lays out a row of nodes on a board, chained left to right with edges, wrapping every four.
+     * Lays out a row of nodes on a board, chained left to right with edges, wrapping every three.
      * Used by the AI draft so a model never picks coordinates.
      *
      * <p>Returns one entry per item, in order: the node made for it, or null when the item was a
@@ -174,6 +188,103 @@ public class NotebookBoardService {
 
     /** One entry of {@link #addChain}: a new page by title, or an existing page to link. */
     public record ChainItem(String title, UUID linkPageId) {
+    }
+
+    /**
+     * The page nodes in path order: every node after the nodes that point to it, and where the
+     * edges leave a choice, the node that comes first where the person put it (row, then left to
+     * right). A loop of edges is broken at its first node in that order, so every node still gets
+     * a place. The web's "Tidy up" reads a board the same way (pathOrder in boardLayout.ts).
+     */
+    public static List<BoardNodeDTO> pathOrder(BoardResponseDTO board) {
+        List<BoardNodeDTO> pages = board.nodes().stream()
+                .filter(n -> n.kind() == NotebookNodeKind.PAGE)
+                .sorted(Comparator.comparingLong((BoardNodeDTO n) -> Math.round(n.y() / ROW_STEP))
+                        .thenComparingDouble(BoardNodeDTO::x))
+                .toList();
+        Set<UUID> ids = pages.stream().map(BoardNodeDTO::id).collect(Collectors.toSet());
+        Map<UUID, Integer> incoming = new HashMap<>();
+        Map<UUID, List<UUID>> targets = new HashMap<>();
+        for (BoardEdgeDTO edge : board.edges()) {
+            if (!ids.contains(edge.source()) || !ids.contains(edge.target()) || edge.source().equals(edge.target())) {
+                continue;
+            }
+            incoming.merge(edge.target(), 1, Integer::sum);
+            targets.computeIfAbsent(edge.source(), k -> new ArrayList<>()).add(edge.target());
+        }
+        List<BoardNodeDTO> ordered = new ArrayList<>();
+        Set<UUID> placed = new HashSet<>();
+        while (ordered.size() < pages.size()) {
+            BoardNodeDTO next = pages.stream()
+                    .filter(n -> !placed.contains(n.id()) && incoming.getOrDefault(n.id(), 0) == 0)
+                    .findFirst()
+                    .orElseGet(() -> pages.stream().filter(n -> !placed.contains(n.id())).findFirst().orElseThrow());
+            placed.add(next.id());
+            ordered.add(next);
+            for (UUID target : targets.getOrDefault(next.id(), List.of())) {
+                incoming.merge(target, -1, Integer::sum);
+            }
+        }
+        return ordered;
+    }
+
+    /**
+     * Where a new node goes: the next grid cell after the ones already used, skipping any cell a
+     * page node has been dragged onto. The web picks the same cell for a node added by hand
+     * (nextNodePosition in boardLayout.ts), so a node never lands on top of another.
+     */
+    @Transactional(readOnly = true)
+    public GridCell nextFreeCell(UUID boardPageId) {
+        List<NotebookBoardNode> pages = nodeRepository.findByBoardPageIdOrderByCreatedAtAsc(boardPageId).stream()
+                .filter(n -> n.getKind() == NotebookNodeKind.PAGE)
+                .toList();
+        int index = pages.size();
+        while (taken(pages, gridCell(index))) index++;
+        return gridCell(index);
+    }
+
+    private static boolean taken(List<NotebookBoardNode> pages, GridCell cell) {
+        return pages.stream().anyMatch(n ->
+                Math.abs(n.getX() - cell.x()) < NODE_WIDTH && Math.abs(n.getY() - cell.y()) < NODE_HEIGHT);
+    }
+
+    /**
+     * Makes the board one path: the page nodes in the order given, one after the other, on the
+     * grid. Every edge on the board is replaced by the chain, so a branch the person drew is gone
+     * afterwards; that is what the order means. Sections stay where they are, as with "Tidy up".
+     *
+     * <p>{@code order} must name every page node on the board exactly once. A partial order would
+     * leave the nodes it skipped somewhere on the grid with no edge to them, which reads as a
+     * mistake on the board rather than a choice.
+     */
+    @Transactional
+    public void restructure(User user, UUID boardPageId, List<UUID> order) {
+        NotebookPage board = ownership.page(user.getId(), boardPageId);
+        Map<UUID, NotebookBoardNode> pages = nodeRepository.findByBoardPageIdOrderByCreatedAtAsc(boardPageId).stream()
+                .filter(n -> n.getKind() == NotebookNodeKind.PAGE)
+                .collect(Collectors.toMap(NotebookBoardNode::getId, n -> n));
+        if (order.size() != new HashSet<>(order).size() || !pages.keySet().equals(new HashSet<>(order))) {
+            throw new BusinessException(ErrorKey.INVALID_REQUEST,
+                    "The order must name every page node on the board exactly once");
+        }
+        edgeRepository.deleteAll(edgeRepository.findByBoardPageId(boardPageId));
+        edgeRepository.flush();
+        NotebookBoardNode previous = null;
+        for (int i = 0; i < order.size(); i++) {
+            NotebookBoardNode node = pages.get(order.get(i));
+            GridCell cell = gridCell(i);
+            node.setX(cell.x());
+            node.setY(cell.y());
+            if (previous != null) {
+                NotebookBoardEdge edge = new NotebookBoardEdge();
+                edge.setUser(board.getUser());
+                edge.setBoardPageId(boardPageId);
+                edge.setSourceNodeId(previous.getId());
+                edge.setTargetNodeId(node.getId());
+                edgeRepository.save(edge);
+            }
+            previous = node;
+        }
     }
 
     @Transactional

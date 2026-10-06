@@ -62,8 +62,17 @@ public final class AgentToolDomains {
             Map.entry("reorderMicroTasks", List.of("focus")),
             // Mood. getUserMoodHistory only reads, so it stays out of this map.
             Map.entry("logUserMood", List.of("mood")),
-            // Study notebook. listStudyTopics and getStudyPlanForToday only read.
-            Map.entry("addStudyNode", List.of("notebook")));
+            // Study notebook. listStudyTopics, getStudyPlanForToday and getStudyBoard only read.
+            // perfil rides along wherever a page's status can move: finishing a page pays XP, and
+            // adding or removing a node can finish or reopen the page that holds the board.
+            Map.entry("addStudyNode", List.of("notebook", "perfil")),
+            Map.entry("editStudyNode", List.of("notebook")),
+            Map.entry("setStudyNodeStatus", List.of("notebook", "perfil")),
+            Map.entry("connectStudyNodes", List.of("notebook")),
+            Map.entry("disconnectStudyNodes", List.of("notebook")),
+            Map.entry("removeStudyNode", List.of("notebook", "perfil")),
+            Map.entry("reorderStudyBoard", List.of("notebook")),
+            Map.entry("addStudyNotes", List.of("notebook")));
 
     private AgentToolDomains() {}
 

@@ -145,6 +145,30 @@ public final class MarkdownBlocks {
         return MAPPER.writeValueAsString(document);
     }
 
+    /**
+     * {@code existing} with a board block at the end, or unchanged when it already has one. A
+     * board whose page document has no board block is never drawn, so whatever adds nodes to a
+     * page from outside the board (the assistant) makes sure there is somewhere to draw them.
+     */
+    public static String withBoardBlock(String existingJson) {
+        ArrayNode document = MAPPER.createArrayNode();
+        if (existingJson != null && !existingJson.isBlank()) {
+            try {
+                JsonNode parsed = MAPPER.readTree(existingJson);
+                if (parsed.isArray()) {
+                    document = (ArrayNode) parsed;
+                }
+            } catch (RuntimeException unreadable) {
+                // Same as append: a document that does not parse has nothing worth keeping.
+            }
+        }
+        for (JsonNode block : document) {
+            if (BOARD_BLOCK_TYPE.equals(block.path("type").asString())) return existingJson;
+        }
+        document.add(block(BOARD_BLOCK_TYPE));
+        return MAPPER.writeValueAsString(document);
+    }
+
     private static void flush(List<String> paragraph, ArrayNode blocks) {
         if (paragraph.isEmpty()) return;
         ObjectNode block = block("paragraph");

@@ -354,6 +354,17 @@ public class NotebookPageService {
         page.setUpdatedAt(Instant.now());
     }
 
+    /** Puts a board block in the page's document when it has none. See MarkdownBlocks.withBoardBlock. */
+    @Transactional
+    public void ensureBoardBlock(User user, UUID pageId) {
+        NotebookPage page = ownership.page(user.getId(), pageId);
+        String content = MarkdownBlocks.withBoardBlock(page.getContent());
+        if (content.equals(page.getContent())) return;
+        page.setContent(content);
+        page.setContentText(BlockText.extract(content));
+        page.setUpdatedAt(Instant.now());
+    }
+
     @Transactional
     public StatusChangeResponseDTO setStatus(User user, UUID pageId, SetStatusRequestDTO request) {
         NotebookPage page = ownership.page(user.getId(), pageId);

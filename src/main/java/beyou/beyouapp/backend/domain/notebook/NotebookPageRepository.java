@@ -32,6 +32,9 @@ public interface NotebookPageRepository extends JpaRepository<NotebookPage, UUID
     List<NotebookPage> findTop20ByUserIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(
             UUID userId, String title);
 
+    /** Exact title, any case. The assistant names pages the way the person does. */
+    List<NotebookPage> findByUserIdAndTitleIgnoreCase(UUID userId, String title);
+
     long countByParentId(UUID parentId);
 
     /**

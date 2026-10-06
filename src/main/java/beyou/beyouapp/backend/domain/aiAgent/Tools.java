@@ -47,11 +47,8 @@ import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
-import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService;
-import beyou.beyouapp.backend.domain.notebook.board.NotebookNodeKind;
-import beyou.beyouapp.backend.domain.notebook.board.dto.CreateNodeRequestDTO;
+import beyou.beyouapp.backend.domain.aiAgent.notebook.StudyBoardEditor;
 import beyou.beyouapp.backend.domain.notebook.dto.HomeResponseDTO;
-import beyou.beyouapp.backend.domain.notebook.dto.PageSearchHitDTO;
 import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.mood.dto.SetMoodLevelDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
@@ -107,7 +104,7 @@ public class Tools {
     @Autowired
     private NotebookPageService notebookPageService;
     @Autowired
-    private NotebookBoardService notebookBoardService;
+    private StudyBoardEditor studyBoardEditor;
     @Autowired
     private Validator validator;
 
@@ -891,34 +888,117 @@ public class Tools {
                 .toList();
     }
 
-    @Tool(description = "Add a node to a roadmap board in the user's study notebook. The node becomes "
-            + "a new page under the board's page. boardPageTitle is the title of the topic or page whose "
-            + "board gets the node, exactly as the user named it or as listStudyTopics shows it. If more "
-            + "than one page has that title, the tool refuses and you must ask which one")
+    // Every board tool takes the board the same way: a page id (the route the user is on carries
+    // one) or the board page's exact title. StudyBoardEditor turns names into rows and refuses to
+    // guess between two pages or two nodes with the same name.
+    @Tool(description = "Read one roadmap board: its page nodes in path order (each with status, and progress when "
+            + "the node has a board of its own), the links between them by title, and its sections. Read only. "
+            + "Call it before changing a board, so you use the node titles that are really there")
+    Map<String, Object> getStudyBoard(
+            @ToolParam(description = "The board: the page id from the route the user is on (/notebook/<id>), or the exact title of the topic or page that holds the board") String board,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is reading a study board for user: {}", user.getId());
+        return studyBoardEditor.read(user, board);
+    }
+
+    @Tool(description = "Add a node to a roadmap board. The node becomes a new page under the board's page, on "
+            + "the board's next free spot. With after, it is also linked after that node (study after first)")
     Map<String, String> addStudyNode(
-            @ToolParam(description = "Title of the topic or page that holds the board") String boardPageTitle,
+            @ToolParam(description = "The board: the page id from the route the user is on (/notebook/<id>), or the exact title of the topic or page that holds the board") String board,
             @ToolParam(description = "Title of the new node, max 255 characters") String nodeTitle,
+            @ToolParam(description = "Optional: the node the new one comes after on the path", required = false) String after,
             ToolContext toolContext) {
         User user = loadUser(toolContext);
         log.info("AI agent is adding a study node for user: {}", user.getId());
-        String wanted = boardPageTitle == null ? "" : boardPageTitle.strip();
-        List<PageSearchHitDTO> hits = notebookPageService.search(user, wanted).stream()
-                .filter(hit -> hit.title().equalsIgnoreCase(wanted))
-                .toList();
-        if (hits.isEmpty()) {
-            return Map.of("error", "No notebook page is titled \"" + wanted + "\"");
-        }
-        if (hits.size() > 1) {
-            return Map.of("error", "Several pages are titled \"" + wanted + "\". Ask which topic it is in: "
-                    + hits.stream().map(PageSearchHitDTO::topicTitle).distinct().toList());
-        }
-        UUID boardPageId = hits.get(0).id();
-        // To the right of what is already there, so the new node never lands on top of another.
-        double x = notebookBoardService.board(user, boardPageId).nodes().stream()
-                .mapToDouble(node -> node.x()).max().orElse(-200) + 240;
-        notebookBoardService.addNode(user, boardPageId, valid(new CreateNodeRequestDTO(
-                NotebookNodeKind.PAGE, nodeTitle, null, null, x, 80.0, null, null)));
-        return Map.of("success", "Added \"" + nodeTitle + "\" to the board of \"" + hits.get(0).title() + "\"");
+        return studyBoardEditor.addNode(user, board, nodeTitle, after);
+    }
+
+    @Tool(description = "Rename a node or change its icon. A page node's title is its page's title, so the page is "
+            + "renamed everywhere it shows. A section can only be renamed")
+    Map<String, String> editStudyNode(
+            @ToolParam(description = "The board: the page id from the route the user is on (/notebook/<id>), or the exact title of the topic or page that holds the board") String board,
+            @ToolParam(description = "A node on that board: its title as getStudyBoard lists it, or its id") String node,
+            @ToolParam(description = "Optional: the new title, max 255 characters", required = false) String newTitle,
+            @ToolParam(description = "Optional: an icon id from the icon catalog, or \"none\" to remove the icon", required = false) String icon,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is editing a study node for user: {}", user.getId());
+        return studyBoardEditor.editNode(user, board, node, newTitle, icon);
+    }
+
+    @Tool(description = "Set the status of a node's page, or of the board page itself when node is left out. "
+            + "TO_STUDY, STUDYING or DONE hold it by hand; AUTO lets a page with its own board follow its nodes. "
+            + "A page reaching DONE for the first time awards XP, so only on the user's explicit request")
+    Map<String, Object> setStudyNodeStatus(
+            @ToolParam(description = "The board: the page id from the route the user is on (/notebook/<id>), or the exact title of the topic or page that holds the board") String board,
+            @ToolParam(description = "Optional: the node, by title or id. Leave out for the board page itself", required = false) String node,
+            @ToolParam(description = "TO_STUDY, STUDYING, DONE or AUTO") String status,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is setting a study status for user: {}", user.getId());
+        return studyBoardEditor.setStatus(user, board, node, status);
+    }
+
+    @Tool(description = "Link two page nodes on a board: study from before to. Links only order the path; "
+            + "they do not move nodes")
+    Map<String, String> connectStudyNodes(
+            @ToolParam(description = "The board: the page id from the route the user is on (/notebook/<id>), or the exact title of the topic or page that holds the board") String board,
+            @ToolParam(description = "The node studied first, by title or id") String from,
+            @ToolParam(description = "The node studied after it, by title or id") String to,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is linking study nodes for user: {}", user.getId());
+        return studyBoardEditor.connect(user, board, from, to);
+    }
+
+    @Tool(description = "Remove the link from one page node to another on a board. Both nodes stay")
+    Map<String, String> disconnectStudyNodes(
+            @ToolParam(description = "The board: the page id from the route the user is on (/notebook/<id>), or the exact title of the topic or page that holds the board") String board,
+            @ToolParam(description = "Where the link starts, by title or id") String from,
+            @ToolParam(description = "Where the link ends, by title or id") String to,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is unlinking study nodes for user: {}", user.getId());
+        return studyBoardEditor.disconnect(user, board, from, to);
+    }
+
+    @Tool(description = "Take a node off a board. By default its page and notes stay in the tree. deletePage true "
+            + "also deletes the page, its notes and every page under it: only when the user asked to delete the "
+            + "page, after confirming. A page linked from another topic is only unlinked, never deleted")
+    Map<String, String> removeStudyNode(
+            @ToolParam(description = "The board: the page id from the route the user is on (/notebook/<id>), or the exact title of the topic or page that holds the board") String board,
+            @ToolParam(description = "A node on that board: its title as getStudyBoard lists it, or its id") String node,
+            @ToolParam(description = "Optional: true to delete the page too. Defaults to false", required = false) Boolean deletePage,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is removing a study node for user: {}", user.getId());
+        return studyBoardEditor.remove(user, board, node, Boolean.TRUE.equals(deletePage));
+    }
+
+    @Tool(description = "FULL RESTRUCTURE of a board's path: the page nodes in the order given become one path, "
+            + "first to last, laid out three to a row. Every existing link is REPLACED by that path, so a branch "
+            + "disappears. Every page node of the board goes in the order exactly once. Confirm first")
+    Map<String, String> reorderStudyBoard(
+            @ToolParam(description = "The board: the page id from the route the user is on (/notebook/<id>), or the exact title of the topic or page that holds the board") String board,
+            @ToolParam(description = "Every page node of the board, by title or id, in the new order") List<String> order,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is reordering a study board for user: {}", user.getId());
+        return studyBoardEditor.reorder(user, board, order);
+    }
+
+    @Tool(description = "Add notes at the end of a node's page, or of the board page itself when node is left out. "
+            + "Markdown: paragraphs, headings, bullet and numbered lists, bold, italic, code. Appends only: "
+            + "nothing already written is changed")
+    Map<String, String> addStudyNotes(
+            @ToolParam(description = "The board: the page id from the route the user is on (/notebook/<id>), or the exact title of the topic or page that holds the board") String board,
+            @ToolParam(description = "Optional: the node whose page gets the notes. Leave out for the board page", required = false) String node,
+            @ToolParam(description = "The notes, in markdown, max 20000 characters") String markdown,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is adding study notes for user: {}", user.getId());
+        return studyBoardEditor.appendNotes(user, board, node, markdown);
     }
 
     @Tool(description = "What the user could study today in their notebook: the page they last opened "
