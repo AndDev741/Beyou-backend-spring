@@ -72,7 +72,8 @@ public final class AgentToolDomains {
             Map.entry("disconnectStudyNodes", List.of("notebook")),
             Map.entry("removeStudyNode", List.of("notebook", "perfil")),
             Map.entry("reorderStudyBoard", List.of("notebook")),
-            Map.entry("addStudyNotes", List.of("notebook")));
+            Map.entry("addStudyNotes", List.of("notebook")),
+            Map.entry("generateStudyCards", List.of("notebook")));
 
     private AgentToolDomains() {}
 

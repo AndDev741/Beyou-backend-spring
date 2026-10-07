@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.common.XpProgress;
+import beyou.beyouapp.backend.domain.aiAgent.notebook.StudyBoardEditor;
 import beyou.beyouapp.backend.domain.notebook.MarkdownBlocks;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
@@ -64,6 +66,7 @@ class NotebookAiIT extends AbstractIntegrationTest {
     @MockitoBean private NotebookLlm llm;
 
     @Autowired private NotebookAiService aiService;
+    @Autowired private StudyBoardEditor boardEditor;
     @Autowired private NotebookStudyService studyService;
     @Autowired private NotebookPageService pageService;
     @Autowired private NotebookBoardService boardService;
@@ -255,6 +258,31 @@ class NotebookAiIT extends AbstractIntegrationTest {
             assertThat(card.front()).isEqualTo("Where is the smallest key in a min-heap?");
             assertThat(card.sourceLabel()).isEqualTo("Your page \"Trees\"");
         });
+    }
+
+    /**
+     * The assistant's card tool is the same call as the button, found by the node's name, and the
+     * page gets a cards block once so the cards show where the person reads.
+     */
+    @Test
+    void theAssistantDraftsCardsOnANodesPageAndGivesItOneCardsBlock() {
+        UUID topic = topic("Data Structures");
+        UUID trees = node(topic, "Trees");
+        pageService.saveContent(user, trees, new UpdateContentRequestDTO(
+                "[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"A heap keeps the smallest key at the root.\",\"styles\":{}}]}]"));
+        when(llm.call(eq(LlmPayloads.CardsPayload.class), anyString(), any())).thenReturn(
+                new LlmPayloads.CardsPayload(List.of(
+                        new LlmPayloads.Card("Where is the smallest key in a min-heap?", "At the root.", 1))));
+
+        Map<String, Object> first = boardEditor.generateCards(user, topic.toString(), "trees", 4, null);
+        boardEditor.generateCards(user, topic.toString(), "Trees", null, "heaps");
+
+        assertThat(first.get("questions")).isEqualTo(List.of("Where is the smallest key in a min-heap?"));
+        String content = pageRepository.findById(trees).orElseThrow().getContent();
+        assertThat(content).contains("A heap keeps the smallest key at the root.");
+        assertThat(content.split("\"" + MarkdownBlocks.CARDS_BLOCK_TYPE + "\"", -1)).hasSize(2);
+        assertThatThrownBy(() -> boardEditor.generateCards(user, topic.toString(), "Trees", 13, null))
+                .hasMessageContaining("between 1 and 12");
     }
 
     // ---------------------------------------------------------------- helpers

@@ -145,12 +145,16 @@ public final class MarkdownBlocks {
         return MAPPER.writeValueAsString(document);
     }
 
+    /** The block type the editors register for a page's flashcards. */
+    public static final String CARDS_BLOCK_TYPE = "flashcards";
+
     /**
-     * {@code existing} with a board block at the end, or unchanged when it already has one. A
-     * board whose page document has no board block is never drawn, so whatever adds nodes to a
-     * page from outside the board (the assistant) makes sure there is somewhere to draw them.
+     * {@code existing} with a block of {@code type} at the end, or unchanged when it already has
+     * one. A board or a deck whose page document has no block for it is never drawn, so whatever
+     * adds nodes or cards to a page from outside the editor (the assistant) makes sure there is
+     * somewhere to draw them.
      */
-    public static String withBoardBlock(String existingJson) {
+    public static String withBlock(String existingJson, String type) {
         ArrayNode document = MAPPER.createArrayNode();
         if (existingJson != null && !existingJson.isBlank()) {
             try {
@@ -163,9 +167,9 @@ public final class MarkdownBlocks {
             }
         }
         for (JsonNode block : document) {
-            if (BOARD_BLOCK_TYPE.equals(block.path("type").asString())) return existingJson;
+            if (type.equals(block.path("type").asString())) return existingJson;
         }
-        document.add(block(BOARD_BLOCK_TYPE));
+        document.add(block(type));
         return MAPPER.writeValueAsString(document);
     }
 

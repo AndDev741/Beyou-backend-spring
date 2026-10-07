@@ -354,11 +354,11 @@ public class NotebookPageService {
         page.setUpdatedAt(Instant.now());
     }
 
-    /** Puts a board block in the page's document when it has none. See MarkdownBlocks.withBoardBlock. */
+    /** Puts a block of {@code type} in the page's document when it has none. See MarkdownBlocks.withBlock. */
     @Transactional
-    public void ensureBoardBlock(User user, UUID pageId) {
+    public void ensureBlock(User user, UUID pageId, String type) {
         NotebookPage page = ownership.page(user.getId(), pageId);
-        String content = MarkdownBlocks.withBoardBlock(page.getContent());
+        String content = MarkdownBlocks.withBlock(page.getContent(), type);
         if (content.equals(page.getContent())) return;
         page.setContent(content);
         page.setContentText(BlockText.extract(content));
