@@ -235,7 +235,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 filterChain.doFilter(request, response);
                 return;
             }
-            bucketKey = "notebook-ai:" + userId;
+            bucketKey = RateLimitConfig.notebookAiKey(userId);
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createNotebookAiBucket());
         } else if ("POST".equals(method) && isNotebookSourcePath(path)) {
             // Also ahead of the generic write branch: each one starts a background read.

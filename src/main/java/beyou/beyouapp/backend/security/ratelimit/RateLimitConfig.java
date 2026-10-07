@@ -181,6 +181,15 @@ public class RateLimitConfig {
      * evening of studying lock the person out of the assistant. Sixty an hour is one question a
      * minute for an hour, which is a long, honest session and still a hard cap on the bill.
      */
+    /**
+     * The notebook-ai bucket's key. The filter spends it for {@code /notebook/ai/**} and
+     * {@link NotebookAiQuota} for the assistant's card tool, which calls the same model without
+     * going through that route.
+     */
+    public static String notebookAiKey(Object userId) {
+        return "notebook-ai:" + userId;
+    }
+
     public static Bucket createNotebookAiBucket() {
         return Bucket.builder()
                 .addLimit(Bandwidth.builder()

@@ -1001,6 +1001,21 @@ public class Tools {
         return studyBoardEditor.appendNotes(user, board, node, markdown);
     }
 
+    @Tool(description = "Draft flashcards with the study AI and save them to a node's page, or to the board page when node "
+            + "is left out: the same as \"Draft with AI\" on the page's cards block. It reads the page's notes and sources, "
+            + "or only focus when given. Each call is a model call on the notebook's hourly AI quota, so only when the user "
+            + "asks for cards, and one page per request unless they named several. Returns the questions it wrote")
+    Map<String, Object> generateStudyCards(
+            @ToolParam(description = "The board: the page id from the route the user is on (/notebook/<id>), or the exact title of the topic or page that holds the board") String board,
+            @ToolParam(description = "Optional: the node whose page gets the cards, by title or id. Leave out for the board page", required = false) String node,
+            @ToolParam(description = "Optional: how many cards, 1 to 12. Defaults to 6", required = false) Integer count,
+            @ToolParam(description = "Optional: a passage or subject to draft from instead of the whole page, max 8000 characters", required = false) String focus,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is drafting study cards for user: {}", user.getId());
+        return studyBoardEditor.generateCards(user, board, node, count, focus);
+    }
+
     @Tool(description = "What the user could study today in their notebook: the page they last opened "
             + "and what is being studied in it, plus flashcards due per topic and their review streak. Read only")
     Map<String, Object> getStudyPlanForToday(ToolContext toolContext) {

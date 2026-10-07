@@ -16,10 +16,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.domain.aiAgent.AiIconCatalog;
+import beyou.beyouapp.backend.domain.notebook.MarkdownBlocks;
 import beyou.beyouapp.backend.domain.notebook.NotebookOwnership;
 import beyou.beyouapp.backend.domain.notebook.NotebookPage;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
+import beyou.beyouapp.backend.domain.notebook.ai.NotebookAiService;
+import beyou.beyouapp.backend.domain.notebook.ai.dto.AiCardsRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.card.dto.CardDTO;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService.GridCell;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookNodeKind;
@@ -35,12 +39,14 @@ import beyou.beyouapp.backend.domain.notebook.dto.SetStatusRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.StatusChangeResponseDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.StatusChoice;
 import beyou.beyouapp.backend.domain.notebook.dto.UpdatePageRequestDTO;
+import beyou.beyouapp.backend.security.ratelimit.NotebookAiQuota;
 import beyou.beyouapp.backend.user.User;
 import lombok.RequiredArgsConstructor;
 
 /**
- * What the assistant can do to a roadmap board, addressed the way a person talks about one: "the
- * board on Fundamentos", "the node Redes", "put Redes after Sistemas".
+ * What the assistant can do to a roadmap board and the pages on it, addressed the way a person
+ * talks about them: "the board on Fundamentos", "the node Redes", "put Redes after Sistemas",
+ * "make cards for Redes".
  *
  * <p>Every change goes through the same notebook services as the board on screen, so ownership,
  * the link rules and the status and XP that follow a change are the ones a click gets. What lives
@@ -59,11 +65,15 @@ public class StudyBoardEditor {
             "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
     private static final int TITLE_MAX = 255;
     private static final int NOTES_MAX = 20_000;
+    private static final int CARDS_MAX = 12;
+    private static final int FOCUS_MAX = 8_000;
 
     private final NotebookPageService pageService;
     private final NotebookBoardService boardService;
     private final NotebookPageRepository pageRepository;
     private final NotebookOwnership ownership;
+    private final NotebookAiService aiService;
+    private final NotebookAiQuota aiQuota;
 
     // ----------------------------------------------------------------- reads
 
@@ -124,7 +134,7 @@ public class StudyBoardEditor {
         if (previous != null) {
             boardService.addEdge(user, page.getId(), new CreateEdgeRequestDTO(previous.id(), added.node().id()));
         }
-        pageService.ensureBoardBlock(user, page.getId());
+        pageService.ensureBlock(user, page.getId(), MarkdownBlocks.BOARD_BLOCK_TYPE);
         return success("Added \"" + name + "\" to the board of \"" + page.getTitle() + "\""
                 + (previous == null ? "" : ", after \"" + previous.title() + "\""));
     }
@@ -283,6 +293,40 @@ public class StudyBoardEditor {
         }
         pageService.append(user, pageId, new AppendRequestDTO(notes));
         return success("Added the notes at the end of \"" + title + "\"");
+    }
+
+    /**
+     * Flashcards drafted by the study AI from a node's page, or the board page when {@code node} is
+     * blank, the same call as "Draft with AI" on the cards block. It reads the page's notes and its
+     * sources, or only {@code focus} when given, and saves what comes back. The page gets a cards
+     * block if it had none, so the cards show where the person reads. It spends the notebook-ai
+     * quota like the button does.
+     */
+    @Transactional
+    public Map<String, Object> generateCards(User user, String board, String node, Integer count, String focus) {
+        NotebookPage page = boardPage(user, board);
+        UUID pageId = page.getId();
+        String title = page.getTitle();
+        if (!isBlank(node)) {
+            BoardNodeDTO target = pageNode(user, page, node);
+            pageId = target.pageId();
+            title = target.title();
+        }
+        if (count != null && (count < 1 || count > CARDS_MAX)) {
+            throw new IllegalArgumentException("count is between 1 and " + CARDS_MAX);
+        }
+        String text = isBlank(focus) ? null : focus.strip();
+        if (text != null && text.length() > FOCUS_MAX) {
+            throw new IllegalArgumentException("focus is at most " + FOCUS_MAX + " characters");
+        }
+        aiQuota.spend(user.getId());
+        List<CardDTO> cards = aiService.cards(user, pageId, new AiCardsRequestDTO(text, count));
+        pageService.ensureBlock(user, pageId, MarkdownBlocks.CARDS_BLOCK_TYPE);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", "Added " + cards.size() + " flashcards to \"" + title + "\"");
+        result.put("questions", cards.stream().map(CardDTO::front).toList());
+        return result;
     }
 
     // ------------------------------------------------------------- resolving

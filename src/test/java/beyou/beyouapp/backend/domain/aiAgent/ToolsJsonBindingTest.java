@@ -415,6 +415,18 @@ public class ToolsJsonBindingTest {
     }
 
     @Test
+    void cardsBindWithOnlyTheBoardAndACount() {
+        User user = new User();
+        when(userService.findUserById(userId)).thenReturn(user);
+
+        callback("generateStudyCards").call("""
+                {"board": "Fundamentos", "node": "Redes", "count": "4"}
+                """, toolContext);
+
+        verify(studyBoardEditor).generateCards(user, "Fundamentos", "Redes", 4, null);
+    }
+
+    @Test
     void aNodeWithoutAfterBindsTheOptionalAsNull() {
         User user = new User();
         when(userService.findUserById(userId)).thenReturn(user);
@@ -440,7 +452,7 @@ public class ToolsJsonBindingTest {
                 .filter(name -> name.contains("Study"))
                 .toList();
 
-        assertEquals(11, studyTools.size(), studyTools.toString());
+        assertEquals(12, studyTools.size(), studyTools.toString());
         for (String tool : studyTools) {
             if (reads.contains(tool)) {
                 assertEquals(List.of(), AgentToolDomains.domainsOf(tool), tool);
