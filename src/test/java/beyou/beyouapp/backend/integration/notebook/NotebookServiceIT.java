@@ -360,7 +360,7 @@ class NotebookServiceIT extends AbstractIntegrationTest {
                  {"type":"roadmapBoard","props":{},"content":[]}]
                 """;
 
-        pageService.saveContent(user, page, new UpdateContentRequestDTO(doc));
+        pageService.saveContent(user, page, new UpdateContentRequestDTO(doc, null));
 
         String text = pageRepository.findById(page).orElseThrow().getContentText();
         assertThat(text).isEqualTo("BST deletion\nUse the in-order successor");

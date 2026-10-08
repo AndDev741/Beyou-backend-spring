@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.notebook;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -22,8 +23,10 @@ import tools.jackson.databind.node.ObjectNode;
  * Anything else arrives as a paragraph with its characters intact, which the person can tidy
  * by hand; nothing is dropped.
  *
- * <p>The blocks carry no ids. BlockNote assigns them when it loads the document, and an id made
- * up here could collide with one already on the page.
+ * <p>Every block gets an id here, a random UUID like the ones BlockNote makes. Editors merge a
+ * page block by block when two of them saved from the same revision (V37), and a block with no
+ * id can only be matched by its text. A random UUID colliding with one already on the page is
+ * not a case worth designing around.
  *
  * <p>Citation markers like {@code [2]} are removed. They point into a chat's list of sources,
  * and on the page there is no list for them to point at.
@@ -183,6 +186,7 @@ public final class MarkdownBlocks {
 
     private static ObjectNode block(String type) {
         ObjectNode block = MAPPER.createObjectNode();
+        block.put("id", UUID.randomUUID().toString());
         block.put("type", type);
         return block;
     }

@@ -44,4 +44,16 @@ public interface NotebookPageRepository extends JpaRepository<NotebookPage, UUID
     @Modifying
     @Query("update NotebookPage p set p.lastOpenedAt = :at where p.id = :id")
     int markOpened(@Param("id") UUID id, @Param("at") Instant at);
+
+    /**
+     * Writes the document only if it is still at revision {@code read}, and moves it to
+     * {@code read + 1}. Returns 0 when someone wrote it since: the caller read an old document.
+     * Clears the persistence context, so a page loaded earlier in the transaction is read again
+     * rather than served stale.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update NotebookPage p set p.content = :content, p.contentText = :text, p.updatedAt = :at, "
+            + "p.contentRevision = p.contentRevision + 1 where p.id = :id and p.contentRevision = :read")
+    int writeContentIfAt(@Param("id") UUID id, @Param("content") String content, @Param("text") String text,
+            @Param("at") Instant at, @Param("read") long read);
 }
