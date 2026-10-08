@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import beyou.beyouapp.backend.domain.briefing.DailyBriefingService;
+import beyou.beyouapp.backend.domain.briefing.dto.BriefingNarrative;
 import beyou.beyouapp.backend.domain.briefing.dto.DailyBriefingResponseDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
@@ -15,7 +16,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * The dialog a user meets on the first dashboard open of their new day.
  *
- * <p>Two routes and no parameters. The day is never a query parameter, deliberately: it is
+ * <p>Three routes and no parameters. The day is never a query parameter, deliberately: it is
  * always the caller's own today, resolved from the account's timezone by
  * {@code UserDateResolver} (R15). Letting a client name the date would mean a client's clock
  * deciding which day a briefing describes and which row {@code seen} marks, and the two
@@ -39,6 +40,20 @@ public class DailyBriefingController {
     public ResponseEntity<DailyBriefingResponseDTO> getBriefing() {
         User user = authenticatedUser.getAuthenticatedUser();
         return ResponseEntity.ok(dailyBriefingService.briefingFor(user));
+    }
+
+    /**
+     * Today's prose on its own, for a client that got {@code PENDING} and is polling for it.
+     *
+     * <p>Read only and cheap: it never starts a model call and never recomputes the facts,
+     * which is why it is a separate route rather than a second {@code GET /daily-briefing}.
+     * That one costs a briefing token and a dozen queries each time, and polling it would
+     * spend the ten-an-hour allowance inside a minute.
+     */
+    @GetMapping("/narrative")
+    public ResponseEntity<BriefingNarrative> getNarrative() {
+        User user = authenticatedUser.getAuthenticatedUser();
+        return ResponseEntity.ok(dailyBriefingService.narrativeFor(user));
     }
 
     /**

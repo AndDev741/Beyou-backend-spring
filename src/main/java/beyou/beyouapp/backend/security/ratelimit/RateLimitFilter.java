@@ -221,6 +221,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             // Ahead of the generic read branch. The first call of a user's day creates a
             // row and may hold the request for up to eight seconds waiting on the LLM
             // chain; the 60-a-minute read budget is sized for list reads, not for that.
+            // An exact match on purpose: GET /daily-briefing/narrative is the client polling
+            // for prose that landed after the deadline, a primary-key read that never calls
+            // the model, and it belongs in the generic read bucket below. Ten an hour would
+            // run out inside the first minute of polling.
             String userId = getUserIdFromRequest(request);
             if (userId == null) {
                 filterChain.doFilter(request, response);

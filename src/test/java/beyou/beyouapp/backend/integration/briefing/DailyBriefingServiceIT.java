@@ -20,10 +20,16 @@ import org.springframework.test.context.TestPropertySource;
 
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.HibernateStatistics;
+import beyou.beyouapp.backend.domain.briefing.DailyBriefingFactsBuilder;
+import beyou.beyouapp.backend.domain.briefing.DailyBriefingNarrator;
 import beyou.beyouapp.backend.domain.briefing.DailyBriefingRepository;
 import beyou.beyouapp.backend.domain.briefing.DailyBriefingService;
 import beyou.beyouapp.backend.domain.briefing.NarrativeStatus;
+import beyou.beyouapp.backend.domain.briefing.WeekSignals;
+import beyou.beyouapp.backend.domain.briefing.dto.BriefingNarrative;
 import beyou.beyouapp.backend.domain.briefing.dto.DailyBriefingResponseDTO;
+import beyou.beyouapp.backend.domain.briefing.dto.GoalAhead;
+import beyou.beyouapp.backend.domain.briefing.dto.GoalPace;
 import beyou.beyouapp.backend.domain.briefing.dto.OpenItem;
 import beyou.beyouapp.backend.domain.common.CheckXpCalculator;
 import beyou.beyouapp.backend.domain.common.XpProgress;
@@ -33,6 +39,8 @@ import beyou.beyouapp.backend.domain.goal.GoalStatus;
 import beyou.beyouapp.backend.domain.goal.GoalTerm;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
+import beyou.beyouapp.backend.domain.mood.MoodService;
+import beyou.beyouapp.backend.domain.mood.dto.UpsertMoodEntryDTO;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleRepository;
@@ -76,6 +84,8 @@ import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 class DailyBriefingServiceIT extends AbstractIntegrationTest {
 
     @Autowired private DailyBriefingService briefingService;
+    @Autowired private DailyBriefingFactsBuilder factsBuilder;
+    @Autowired private MoodService moodService;
     @Autowired private DailyBriefingRepository briefingRepository;
     @Autowired private SnapshotCheckService snapshotCheckService;
     @Autowired private RoutineSnapshotRepository snapshotRepository;
@@ -271,6 +281,186 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
         assertThat(briefing.today().goalsApproaching().get(0).percentComplete()).isZero();
     }
 
+    /**
+     * goalsAhead has no horizon, sorts by distance from today on either side, and sends
+     * goals left overdue for longer than the horizon to the back.
+     */
+    @Test
+    void goalsAhead_ranksByDistanceEitherSideWithStaleGoalsLast() {
+        newGoal("Far off", TODAY.plusDays(90), 1d, 10d, GoalStatus.IN_PROGRESS, false);
+        newGoal("Long abandoned", TODAY.minusDays(60), 1d, 10d, GoalStatus.IN_PROGRESS, false);
+        newGoal("Just missed", TODAY.minusDays(3), 4d, 10d, GoalStatus.IN_PROGRESS, false);
+        newGoal("Due in three", TODAY.plusDays(3), 5d, 10d, GoalStatus.IN_PROGRESS, false);
+        newGoal("Already done", TODAY.plusDays(1), 10d, 10d, GoalStatus.COMPLETED, true);
+        seedOpenYesterday();
+
+        DailyBriefingResponseDTO briefing = briefingService.briefingFor(user, TODAY);
+
+        // The tie at three days either side goes to the one that can still be made.
+        assertThat(briefing.today().goalsAhead())
+                .extracting(GoalAhead::name)
+                .containsExactly("Due in three", "Just missed", "Far off");
+        // The legacy list keeps its horizon for the builds already installed.
+        assertThat(briefing.today().goalsApproaching())
+                .extracting(GoalAhead::name)
+                .containsExactly("Long abandoned", "Just missed", "Due in three");
+    }
+
+    /**
+     * The pace verdict, on fixtures picked so the arithmetic is checkable by hand. Every goal
+     * starts 30 days before TODAY (see newGoal); one ending nine days after TODAY spans 40
+     * days counting both ends, 31 of them elapsed by TODAY, so the straight line says 78%.
+     */
+    @Test
+    void goalsAhead_carriesThePaceComputedOnTheServer() {
+        newGoal("Behind", TODAY.plusDays(9), 2d, 10d, GoalStatus.IN_PROGRESS, false);
+        newGoal("On track", TODAY.plusDays(9), 8d, 10d, GoalStatus.IN_PROGRESS, false);
+        newGoal("Reached", TODAY.plusDays(9), 10d, 10d, GoalStatus.IN_PROGRESS, false);
+        seedOpenYesterday();
+
+        List<GoalAhead> goals = briefingService.briefingFor(user, TODAY).today().goalsAhead();
+        GoalAhead behind = byName(goals, "Behind");
+        GoalAhead onTrack = byName(goals, "On track");
+        GoalAhead reached = byName(goals, "Reached");
+
+        assertThat(behind.expectedPercent()).isEqualTo(78);
+        assertThat(behind.pace()).isEqualTo(GoalPace.BEHIND);
+        assertThat(behind.remainingValue()).isEqualTo(8d);
+        // Eight left over ten days, today included.
+        assertThat(behind.requiredPerDay()).isEqualTo(0.8);
+
+        assertThat(onTrack.pace()).isEqualTo(GoalPace.ON_TRACK);
+        assertThat(onTrack.requiredPerDay()).isEqualTo(0.2);
+
+        // Met but not marked done: no daily rate to ask for, and a reward still to collect.
+        assertThat(reached.pace()).isEqualTo(GoalPace.REACHED);
+        assertThat(reached.requiredPerDay()).isNull();
+    }
+
+    @Test
+    void goalsAhead_marksAnOverdueGoalWithNoDailyRate() {
+        newGoal("Overdue", TODAY.minusDays(2), 5d, 10d, GoalStatus.IN_PROGRESS, false);
+        seedOpenYesterday();
+
+        GoalAhead overdue = briefingService.briefingFor(user, TODAY).today().goalsAhead().get(0);
+
+        assertThat(overdue.pace()).isEqualTo(GoalPace.OVERDUE);
+        assertThat(overdue.daysRemaining()).isEqualTo(-2);
+        assertThat(overdue.requiredPerDay()).isNull();
+    }
+
+    /** A goal months out is still where the user is heading, so it earns the dialog. */
+    @Test
+    void aDistantGoalAloneIsWorthShowing() {
+        User planner = newUser();
+        authenticateAs(planner);
+        newGoalFor(planner, "Next spring", TODAY.plusDays(120), 0d, 10d, GoalStatus.NOT_STARTED, false);
+
+        DailyBriefingResponseDTO briefing = briefingService.briefingFor(planner, TODAY);
+
+        assertThat(briefing.today().goalsApproaching()).isEmpty();
+        assertThat(briefing.today().goalsAhead()).extracting(GoalAhead::name)
+                .containsExactly("Next spring");
+        assertThat(briefing.worthShowing()).isTrue();
+    }
+
+    // ---- signals for the narrator ----
+
+    /**
+     * Two weeks read from one query, skips out of both sides of every fraction, and an item
+     * counted as one habit across days by the id the snapshot kept.
+     */
+    @Test
+    void signals_readTheWeekAgainstTheOneBefore() {
+        UUID reading = UUID.randomUUID();
+        UUID water = UUID.randomUUID();
+        UUID stretch = UUID.randomUUID();
+        for (int back = 0; back < 5; back++) {
+            LocalDate day = YESTERDAY.minusDays(back);
+            boolean readThatDay = back == 0;
+            RoutineSnapshot snapshot = snapshotFor(day, false);
+            addCheck(snapshot, "Reading", check -> {
+                check.setOriginalItemId(reading);
+                check.setChecked(readThatDay);
+            });
+            addCheck(snapshot, "Water", check -> {
+                check.setOriginalItemId(water);
+                check.setChecked(true);
+            });
+            boolean stretchedThatDay = back == 4;
+            addCheck(snapshot, "Stretch", check -> {
+                check.setOriginalItemId(stretch);
+                if (stretchedThatDay) {
+                    check.setChecked(true);
+                } else {
+                    check.setSkipped(true);
+                }
+            });
+            persist(snapshot);
+        }
+        // The week before: everything asked was done.
+        for (int back = 7; back < 10; back++) {
+            RoutineSnapshot snapshot = snapshotFor(YESTERDAY.minusDays(back), true);
+            addCheck(snapshot, "Reading", check -> {
+                check.setOriginalItemId(reading);
+                check.setChecked(true);
+            });
+            persist(snapshot);
+        }
+
+        WeekSignals signals = factsBuilder.build(user, TODAY).signals();
+
+        // Asked this week: Reading 5, Water 5, Stretch 1 (four skips left out). Checked: 1 + 5 + 1.
+        assertThat(signals.thisWeekPercent()).isEqualTo(64);
+        assertThat(signals.previousWeekPercent()).isEqualTo(100);
+        assertThat(signals.slipping()).extracting(WeekSignals.ItemPattern::name)
+                .containsExactly("Reading");
+        assertThat(signals.slipping().get(0).missed()).isEqualTo(4);
+        assertThat(signals.steady()).extracting(WeekSignals.ItemPattern::name)
+                .containsExactly("Water");
+    }
+
+    /** Widening the query to two weeks must not widen what the dialog offers to check. */
+    @Test
+    void signals_doNotLeakOlderDaysIntoTheRecoveryWindow() {
+        RoutineSnapshot old = snapshotFor(YESTERDAY.minusDays(9), false);
+        addCheck(old, "Long gone", check -> {});
+        persist(old);
+        seedOpenYesterday();
+
+        DailyBriefingResponseDTO briefing = briefingService.briefingFor(user, TODAY);
+
+        assertThat(briefing.today().recovery()).isNull();
+        assertThat(factsBuilder.build(user, TODAY).signals().thisWeekPercent()).isZero();
+    }
+
+    /**
+     * The privacy rule this feature keeps: the narrator sees mood levels and their trend,
+     * never what the user wrote. Seeded through the real service so the note is in the same
+     * row the builder reads, which is the only way a leak would actually happen.
+     */
+    @Test
+    void signals_carryMoodLevelsAndNeverTheJournal() {
+        String journal = "private-journal-" + UUID.randomUUID();
+        moodService.upsert(user, YESTERDAY, new UpsertMoodEntryDTO(4, journal));
+        moodService.upsert(user, YESTERDAY.minusDays(1), new UpsertMoodEntryDTO(2, journal));
+        moodService.upsert(user, YESTERDAY.minusDays(8), new UpsertMoodEntryDTO(1, journal));
+        seedOpenYesterday();
+
+        DailyBriefingFactsBuilder.Facts facts = factsBuilder.build(user, TODAY);
+
+        assertThat(facts.yesterday().moodLevel()).isEqualTo(4);
+        assertThat(facts.signals().moodAverage()).isEqualTo(3.0);
+        assertThat(facts.signals().moodDaysLogged()).isEqualTo(2);
+        assertThat(facts.signals().previousMoodAverage()).isEqualTo(1.0);
+        assertThat(DailyBriefingNarrator.factsMessage(facts)).doesNotContain(journal);
+        assertThat(facts.toString()).doesNotContain(journal);
+    }
+
+    private static GoalAhead byName(List<GoalAhead> goals, String name) {
+        return goals.stream().filter(goal -> goal.name().equals(name)).findFirst().orElseThrow();
+    }
+
     // ---- worth showing ----
 
     /**
@@ -345,6 +535,51 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
         assertThat(briefing.narrative().todayLines()).isEmpty();
         assertThat(briefing.yesterday().openItems()).isNotEmpty();
         assertThat(briefing.today().scheduledToday()).isTrue();
+    }
+
+    // ---- the narrative poll ----
+
+    /** Nothing was ever created, so there is nothing to wait for. */
+    @Test
+    void narrativeFor_withoutARowIsUnavailable() {
+        BriefingNarrative narrative = briefingService.narrativeFor(user, TODAY);
+
+        assertThat(narrative.status()).isEqualTo(NarrativeStatus.UNAVAILABLE);
+    }
+
+    /**
+     * A PENDING row with no call behind it, which is what narration-off leaves and what a
+     * restart mid-call leaves. The poll must say so instead of keeping a skeleton up forever,
+     * and must not write anything: the next full GET still gets to start the call again.
+     */
+    @Test
+    void narrativeFor_aPendingRowWithNothingRunningIsUnavailableAndUntouched() {
+        seedOpenYesterday();
+        briefingService.briefingFor(user, TODAY);
+
+        BriefingNarrative narrative = briefingService.narrativeFor(user, TODAY);
+
+        assertThat(narrative.status()).isEqualTo(NarrativeStatus.UNAVAILABLE);
+        assertThat(briefingRepository.findByUserIdAndBriefingDate(user.getId(), TODAY).orElseThrow()
+                .getNarrativeStatus()).isEqualTo(NarrativeStatus.PENDING);
+    }
+
+    /** What the poll is for: prose that landed after the first request stopped waiting. */
+    @Test
+    void narrativeFor_servesProseStoredAfterTheDeadline() {
+        seedOpenYesterday();
+        briefingService.briefingFor(user, TODAY);
+        var row = briefingRepository.findByUserIdAndBriefingDate(user.getId(), TODAY).orElseThrow();
+        row.setNarrativeStatus(NarrativeStatus.READY);
+        row.setNarrativeJson("{\"status\":\"READY\",\"todayLines\":[\"Ahead.\"],"
+                + "\"yesterdayLines\":[\"Behind.\"]}");
+        briefingRepository.saveAndFlush(row);
+
+        BriefingNarrative narrative = briefingService.narrativeFor(user, TODAY);
+
+        assertThat(narrative.status()).isEqualTo(NarrativeStatus.READY);
+        assertThat(narrative.todayLines()).containsExactly("Ahead.");
+        assertThat(narrative.yesterdayLines()).containsExactly("Behind.");
     }
 
     // ---- cost ----
@@ -444,6 +679,11 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
 
     private void newGoal(String name, LocalDate endDate, double current, double target,
                          GoalStatus status, boolean complete) {
+        newGoalFor(user, name, endDate, current, target, status, complete);
+    }
+
+    private void newGoalFor(User owner, String name, LocalDate endDate, double current,
+                            double target, GoalStatus status, boolean complete) {
         Goal goal = new Goal();
         goal.setName(name);
         goal.setIconId("icon");
@@ -454,7 +694,7 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
         goal.setStartDate(TODAY.minusDays(30));
         goal.setEndDate(endDate);
         goal.setXpReward(0);
-        goal.setUser(user);
+        goal.setUser(owner);
         goal.setStatus(status);
         goal.setTerm(GoalTerm.SHORT_TERM);
         goal.setCategories(new ArrayList<>());

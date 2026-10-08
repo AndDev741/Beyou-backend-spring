@@ -51,6 +51,9 @@ public class DailyBriefingService {
     /**
      * How long a request will hold for the model before answering without it.
      *
+     * <p>Past it the client keeps asking {@link #narrativeFor(User)} on its own schedule, so
+     * the prose still reaches the screen it was written for.
+     *
      * <p>Eight seconds is picked against what the user is doing, not against what the
      * providers manage. The dashboard is already on screen and the dialog is already open;
      * this is the shimmer on two lines of text inside it. Past about eight seconds a person
@@ -87,6 +90,7 @@ public class DailyBriefingService {
     private final DailyBriefingFactsBuilder factsBuilder;
     private final DailyBriefingNarrator narrator;
     private final DailyBriefingWrites writes;
+    private final DailyBriefingRepository repository;
 
     /**
      * Narrations currently running, keyed by briefing row.
@@ -117,10 +121,12 @@ public class DailyBriefingService {
     public DailyBriefingService(DailyBriefingFactsBuilder factsBuilder,
                                 DailyBriefingNarrator narrator,
                                 DailyBriefingWrites writes,
+                                DailyBriefingRepository repository,
                                 @Value("${briefing.narration-enabled:true}") boolean narrationEnabled) {
         this.factsBuilder = factsBuilder;
         this.narrator = narrator;
         this.writes = writes;
+        this.repository = repository;
         this.narrationEnabled = narrationEnabled;
     }
 
@@ -144,7 +150,7 @@ public class DailyBriefingService {
                 date, facts.yesterday(), facts.today(),
                 BriefingNarrative.absent(NarrativeStatus.UNAVAILABLE), null);
 
-        // Nothing open, nothing scheduled, no goal moving and no deadline. There is no row
+        // Nothing open, nothing scheduled, no open goal and no deadline. There is no row
         // to create and certainly no model call to pay for: a dialog that greets somebody
         // every morning with "nothing happened" is how you teach them to close it unread.
         if (!withoutNarrative.worthShowing()) {
@@ -156,6 +162,56 @@ public class DailyBriefingService {
 
         return new DailyBriefingResponseDTO(
                 date, facts.yesterday(), facts.today(), narrative, row.getSeenAt());
+    }
+
+    /**
+     * The prose alone, for a client that was told {@link NarrativeStatus#PENDING} and is
+     * waiting for it.
+     *
+     * <p>This is the other half of the deadline above, and without it the deadline was a
+     * trap. The first request stops waiting at eight seconds and the call carries on and
+     * stores itself, which was meant to be found "on the next open". There is no next open:
+     * the dialog shows once a day. In production every narration for weeks landed READY in
+     * the row and none of them reached a screen, because the free chain answers in more than
+     * eight seconds and the skeleton was never asked to look again.
+     *
+     * <p>Read only. It never starts a narration, never recomputes the facts, and so it sits in
+     * the generic read budget rather than the briefing's ten an hour; a client polling it a
+     * dozen times over a minute costs a dozen primary-key reads.
+     */
+    public BriefingNarrative narrativeFor(User user) {
+        return narrativeFor(user, UserDateResolver.today(user));
+    }
+
+    /** The same, against a named day. See {@link #briefingFor(User, LocalDate)}. */
+    public BriefingNarrative narrativeFor(User user, LocalDate date) {
+        DailyBriefing row = repository.findByUserIdAndBriefingDate(user.getId(), date).orElse(null);
+        if (row == null) {
+            // No row means GET /daily-briefing decided the day was not worth a dialog, or was
+            // never asked. Either way nothing is being written and nothing will be.
+            return BriefingNarrative.absent(NarrativeStatus.UNAVAILABLE);
+        }
+        if (isReady(row)) {
+            return readStored(row);
+        }
+        if (inFlight.containsKey(row.getId())) {
+            return BriefingNarrative.absent(NarrativeStatus.PENDING);
+        }
+        // Not running. Read once more before saying so: the narration stores the row and only
+        // then leaves the in-flight map, so a call that finished between the read above and
+        // the check is READY now and was never orphaned.
+        DailyBriefing settled = repository.findById(row.getId()).orElse(row);
+        if (isReady(settled)) {
+            return readStored(settled);
+        }
+        // PENDING with nothing behind it: the call died with a restart, or the pool turned it
+        // away. Reported as unavailable so the client stops asking. Nothing is written, so the
+        // next GET /daily-briefing still sees PENDING and starts it again.
+        return BriefingNarrative.absent(NarrativeStatus.UNAVAILABLE);
+    }
+
+    private static boolean isReady(DailyBriefing row) {
+        return row.getNarrativeStatus() == NarrativeStatus.READY && row.getNarrativeJson() != null;
     }
 
     /** Acknowledges this day's dialog for the caller. Cross-device by design. */
@@ -172,7 +228,7 @@ public class DailyBriefingService {
 
     private BriefingNarrative resolveNarrative(User user, DailyBriefing row,
                                                DailyBriefingFactsBuilder.Facts facts) {
-        if (row.getNarrativeStatus() == NarrativeStatus.READY && row.getNarrativeJson() != null) {
+        if (isReady(row)) {
             return readStored(row);
         }
         // UNAVAILABLE is not retried for the rest of the day. A chain in cooldown refuses

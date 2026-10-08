@@ -39,7 +39,7 @@ public record DailyBriefingResponseDTO(
      * <p>The rule lives here rather than in each client because there are two clients and
      * they would drift. A dialog that greets someone every morning with "nothing happened"
      * teaches them to dismiss it unread, and then it is dead on the mornings it matters —
-     * so a briefing with nothing open, nothing scheduled, no goal moving and no deadline
+     * so a briefing with nothing open, nothing scheduled, no open goal and no deadline
      * is not shown at all.
      *
      * <p>Yesterday being complete DOES count as worth showing: finishing a day is the
@@ -53,6 +53,7 @@ public record DailyBriefingResponseDTO(
         boolean somethingAboutToday = today != null
             && (today.scheduledItemCount() > 0
                 || !today.goalsApproaching().isEmpty()
+                || !today.goalsAhead().isEmpty()
                 || today.recovery() != null);
         return somethingAboutYesterday || somethingAboutToday;
     }
