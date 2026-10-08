@@ -241,6 +241,23 @@ class RateLimitFilterTest {
         }
     }
 
+    // The narrative poll is a cheap read the client repeats for about a minute while the
+    // model finishes. On the briefing tier's ten an hour the eleventh poll would 429 and the
+    // skeleton would hang exactly as it did before the poll existed, so it must spend the
+    // generic read budget and leave the briefing allowance alone.
+    @Test
+    void shouldKeepTheNarrativePollOffTheBriefingBudget() throws Exception {
+        authenticateUser();
+
+        for (int i = 0; i < RateLimitConfig.BRIEFING_READS_PER_HOUR * 2; i++) {
+            assertEquals(200, callFilter("GET", "/daily-briefing/narrative").getStatus(),
+                    "the narrative poll is being charged to the briefing tier");
+        }
+
+        assertEquals(200, callFilter("GET", "/daily-briefing").getStatus(),
+                "polling for prose ate the allowance the briefing itself needs");
+    }
+
     private void authenticateUser() {
         User user = new User();
         user.setId(UUID.randomUUID());

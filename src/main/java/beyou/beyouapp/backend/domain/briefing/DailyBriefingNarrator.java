@@ -1,7 +1,9 @@
 package beyou.beyouapp.backend.domain.briefing;
 
 import java.time.LocalDate;
+import java.time.format.TextStyle;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 import org.springframework.ai.chat.client.ChatClient;
@@ -12,7 +14,7 @@ import org.springframework.stereotype.Component;
 
 import beyou.beyouapp.backend.domain.briefing.dto.BriefingNarrative;
 import beyou.beyouapp.backend.domain.briefing.dto.GoalAhead;
-import beyou.beyouapp.backend.domain.briefing.dto.OpenItem;
+import beyou.beyouapp.backend.domain.briefing.dto.GoalPace;
 import beyou.beyouapp.backend.domain.briefing.dto.RecoveryWindow;
 import beyou.beyouapp.backend.domain.briefing.dto.TodayAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.YesterdayRecap;
@@ -28,11 +30,17 @@ import lombok.extern.slf4j.Slf4j;
  * {@code AI_UNAVAILABLE}; a briefing without prose is still a briefing, so failure here is
  * reported to the caller as a status and never as an exception the user sees.
  *
- * <p><b>The model is given finished numbers and asked only to phrase them.</b> It receives
- * counts, percentages and day gaps that {@link DailyBriefingFactsBuilder} already computed,
- * with an explicit instruction not to invent any others. Anything it does invent stays in
- * the prose, where it is at worst a clumsy sentence, and never reaches the figures the
- * dialog renders.
+ * <p><b>The model is given finished numbers and asked to say what they mean.</b> It
+ * receives counts, percentages and day gaps that {@link DailyBriefingFactsBuilder} already
+ * computed, with an explicit instruction not to invent any others. Anything it does invent
+ * stays in the prose, where it is at worst a clumsy sentence, and never reaches the figures
+ * the dialog renders.
+ *
+ * <p>The first version handed it only what the panel already shows and asked it to phrase
+ * that, and it did, every morning: "you have 25 items today and a 93-day streak" under the
+ * line that said exactly that. So the facts block is now split in two. What is on screen is
+ * labelled as such and the model is told not to repeat it; the {@link WeekSignals} beside it
+ * are the things the screen cannot say, and those are what it is asked to talk about.
  */
 @Component
 @Slf4j
@@ -43,9 +51,6 @@ public class DailyBriefingNarrator {
 
     /** Per line. Roughly a sentence and a half, which is all a panel this size holds. */
     static final int MAX_LINE_LENGTH = 220;
-
-    /** How many open item names are worth naming in the prompt before it is just a list. */
-    private static final int MAX_NAMED_ITEMS = 6;
 
     private final ChatClient chatClient;
     private final Resource systemTemplate;
@@ -75,7 +80,10 @@ public class DailyBriefingNarrator {
         NarrativePayload payload = chatClient.prompt()
                 .system(s -> s.text(systemTemplate)
                         .param("language", language(user))
-                        .param("today", LocalDate.now().toString()))
+                        // The account's day, not the server's. A user in UTC-3 opening the app
+                        // at 22:00 is still on the day the facts describe, and a server clock
+                        // past midnight would tell the model it is tomorrow.
+                        .param("today", dayLabel(facts.date())))
                 .user(factsMessage(facts))
                 .call()
                 .entity(NarrativePayload.class);
@@ -84,6 +92,11 @@ public class DailyBriefingNarrator {
                 NarrativeStatus.READY,
                 sanitize(payload == null ? null : payload.todayLines()),
                 sanitize(payload == null ? null : payload.yesterdayLines()));
+    }
+
+    /** "Wednesday 2026-10-07": the weekday is what lets the model say "on Sunday". */
+    public static String dayLabel(LocalDate date) {
+        return date.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + date;
     }
 
     private static String language(User user) {
@@ -101,6 +114,14 @@ public class DailyBriefingNarrator {
      * a failure, that an unscheduled day cannot break a streak. Those are the two things a
      * model gets wrong about this product when left to guess.
      *
+     * <p>Two sections, and the split is the instruction. ALREADY ON SCREEN is context the
+     * model needs for tone (was yesterday finished, is anything on today) and must not
+     * repeat. SIGNALS is what it is there to talk about. Yesterday's open items are left out
+     * by name and by count on purpose: the user is checking them off beside the prose while
+     * reading it, so any sentence about them is wrong a minute after it lands.
+     *
+     * <p>No journal text appears here, ever. {@link WeekSignals} carries mood levels only.
+     *
      * <p>Static and public so the prompt can be asserted without standing up a model. What
      * goes into it is the whole defence: everything here has already been computed, so a
      * fact left out does not fail, it silently produces vaguer prose.
@@ -109,72 +130,108 @@ public class DailyBriefingNarrator {
         StringBuilder sb = new StringBuilder();
         YesterdayRecap yesterday = facts.yesterday();
         TodayAhead today = facts.today();
+        WeekSignals signals = facts.signals() == null ? WeekSignals.empty() : facts.signals();
 
-        sb.append("YESTERDAY (").append(yesterday.date()).append(")\n");
+        sb.append("ALREADY ON SCREEN (context only, do not restate)\n");
         if (!yesterday.hadRoutine()) {
-            sb.append("- No routine covered the day. Nothing was asked of the user, so there is "
-                    + "nothing to praise and nothing to forgive.\n");
+            sb.append("- Yesterday no routine covered the day. Nothing was asked of the user, so "
+                    + "there is nothing to praise and nothing to forgive.\n");
         } else {
-            sb.append("- Completed: ").append(yesterday.complete() ? "yes" : "no").append('\n');
-            sb.append("- Checked: ").append(yesterday.doneCount())
-              .append(", deliberately skipped: ").append(yesterday.skippedCount())
-              .append(" (a skip is a choice the user made, never a failure)")
-              .append(", still open: ").append(yesterday.openItems().size()).append('\n');
-            sb.append("- XP earned: ").append(Math.round(yesterday.xpEarned())).append('\n');
-            if (yesterday.focusCycles() > 0) {
-                sb.append("- Focus sessions run: ").append(yesterday.focusCycles()).append('\n');
-            }
-            if (yesterday.moodLevel() != null) {
-                sb.append("- Mood logged: ").append(yesterday.moodLevel()).append(" out of 5\n");
-            }
-            if (!yesterday.openItems().isEmpty()) {
-                sb.append("- Still open: ").append(names(yesterday.openItems())).append('\n');
-            }
+            sb.append("- Yesterday finished: ").append(yesterday.complete() ? "yes" : "no")
+              .append(". A skip is a choice the user made, never a failure.\n");
         }
-
-        sb.append("\nTODAY\n");
         if (!today.scheduledToday()) {
             sb.append("- No routine covers today. The streak counts scheduled days only, so "
                     + "nothing is at risk.\n");
         } else {
-            sb.append("- Items scheduled: ").append(today.scheduledItemCount()).append('\n');
+            sb.append("- A routine covers today.\n");
         }
-        sb.append("- Current streak: ").append(today.currentStreak())
-          .append(" days, personal best: ").append(today.bestStreak()).append('\n');
+        sb.append("- Streak: ").append(today.currentStreak())
+          .append(" days, personal best ").append(today.bestStreak()).append(".\n");
+        RecoveryWindow recovery = today.recovery();
+        if (recovery != null) {
+            sb.append("- Older days still have open items; the oldest stops being checkable in ")
+              .append(recovery.daysUntilExpiry()).append(" days.\n");
+        }
 
-        for (GoalAhead goal : today.goalsApproaching()) {
+        sb.append("\nSIGNALS (what to talk about)\n");
+        boolean any = false;
+
+        if (signals.thisWeekPercent() != null) {
+            any = true;
+            sb.append("- Over the seven days ending yesterday, ").append(signals.thisWeekPercent())
+              .append("% of the items asked were checked");
+            if (signals.previousWeekPercent() != null) {
+                sb.append(" (the seven days before: ").append(signals.previousWeekPercent())
+                  .append("%)");
+            }
+            sb.append(". Skips are left out of both.\n");
+        }
+        for (WeekSignals.ItemPattern item : signals.slipping()) {
+            any = true;
+            sb.append("- Slipping: \"").append(item.name()).append("\" was left open on ")
+              .append(item.missed()).append(" of the ").append(item.asked())
+              .append(" days it came up this week.\n");
+        }
+        for (WeekSignals.ItemPattern item : signals.steady()) {
+            any = true;
+            sb.append("- Steady: \"").append(item.name()).append("\" was checked on all ")
+              .append(item.asked()).append(" days it came up this week.\n");
+        }
+        if (yesterday.focusCycles() > 0) {
+            any = true;
+            sb.append("- Focus sessions run yesterday: ").append(yesterday.focusCycles()).append(".\n");
+        }
+        if (yesterday.moodLevel() != null || signals.moodAverage() != null) {
+            any = true;
+            sb.append("- Mood, levels only (1 awful, 5 great):");
+            if (yesterday.moodLevel() != null) {
+                sb.append(" yesterday ").append(yesterday.moodLevel()).append(';');
+            }
+            if (signals.moodAverage() != null) {
+                sb.append(" this week averaged ").append(trim(signals.moodAverage()))
+                  .append(" over ").append(signals.moodDaysLogged()).append(" days logged");
+                if (signals.previousMoodAverage() != null) {
+                    sb.append(", the week before ").append(trim(signals.previousMoodAverage()));
+                }
+                sb.append('.');
+            }
+            sb.append('\n');
+        }
+
+        List<GoalAhead> goals = today.goalsAhead() == null ? List.of() : today.goalsAhead();
+        for (GoalAhead goal : goals) {
+            any = true;
             sb.append("- Goal \"").append(goal.name()).append("\": ")
               .append(goal.percentComplete()).append("% done (")
               .append(trim(goal.currentValue())).append(" of ").append(trim(goal.targetValue()))
-              .append(' ').append(goal.unit()).append("), ")
-              .append(goal.daysRemaining() < 0
-                      ? "overdue by " + Math.abs(goal.daysRemaining()) + " days"
-                      : goal.daysRemaining() + " days left")
-              .append('\n');
+              .append(' ').append(goal.unit()).append("), ");
+            switch (goal.pace()) {
+                case REACHED -> sb.append("target reached but not marked as done yet. Marking it "
+                        + "done is what pays its XP.");
+                case OVERDUE -> sb.append("ended ").append(Math.abs(goal.daysRemaining()))
+                        .append(" days ago without reaching the target.");
+                case BEHIND, ON_TRACK -> {
+                    sb.append(goal.daysRemaining() == 0
+                            ? "ends today"
+                            : "ends in " + goal.daysRemaining() + " days");
+                    sb.append(goal.pace() == GoalPace.BEHIND ? ", behind pace" : ", on pace")
+                      .append(" (a straight line from its start says ")
+                      .append(goal.expectedPercent()).append("% by today)");
+                    if (goal.requiredPerDay() != null) {
+                        sb.append(". Reaching it takes ").append(trim(goal.requiredPerDay()))
+                          .append(' ').append(goal.unit()).append(" a day from today on");
+                    }
+                    sb.append('.');
+                }
+            }
+            sb.append('\n');
         }
 
-        RecoveryWindow recovery = today.recovery();
-        if (recovery != null) {
-            sb.append("- ").append(recovery.openItems().size())
-              .append(" items are still open on older days. The oldest (")
-              .append(recovery.oldestOpenDay()).append(") stops being checkable in ")
-              .append(recovery.daysUntilExpiry()).append(" days and is now worth ")
-              .append(recovery.remainingXpPercent()).append("% of its XP.\n");
+        if (!any) {
+            sb.append("- Nothing stands out. Say something plain, or return empty lists.\n");
         }
-
         return sb.toString();
-    }
-
-    private static String names(List<OpenItem> items) {
-        List<String> named = items.stream()
-                .map(OpenItem::itemName)
-                .filter(Objects::nonNull)
-                .limit(MAX_NAMED_ITEMS)
-                .toList();
-        String joined = String.join(", ", named);
-        return items.size() > named.size()
-                ? joined + " and " + (items.size() - named.size()) + " more"
-                : joined;
     }
 
     /** Whole numbers without a trailing .0, which is how a person writes a count. */

@@ -126,7 +126,7 @@ The Actuator/management server runs separately on port `9091` and is **not** ver
 | `/task` | Tasks linked to categories |
 | `/goal` | Goals (increase / decrease / complete — only `complete` awards XP; archive / restore, sub-goals included, moves no XP) |
 | `/routine`, `/schedule` | Daily and list routines, scheduling, and per-day snapshots (`/routine/snapshot`) |
-| `/daily-briefing` | The new-day dialog: yesterday's unresolved items plus what is coming today. `POST /seen` acknowledges it |
+| `/daily-briefing` | The new-day dialog: yesterday's unresolved items, what is coming today and the goals ahead with their pace. `GET /narrative` is the poll for prose that lands after the first request stops waiting; `POST /seen` acknowledges it |
 | `/mood` | One entry per day: `PUT` replaces it, `PATCH` sets the level only, `GET` reads a date range |
 | `/focus` | Focus Mode history: completed timer cycles and per-item micro-tasks |
 | `/notebook` | Study notebook: topics and pages, roadmap boards, flashcards and reviews, sources, the study room, roadmap drafts kept until a topic is made from them (`/notebook/drafts`), and the notebook AI (`/notebook/ai/**`, its own rate-limit tier) |

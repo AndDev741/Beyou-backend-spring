@@ -4,12 +4,16 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.domain.briefing.dto.GoalAhead;
+import beyou.beyouapp.backend.domain.briefing.dto.GoalPace;
 import beyou.beyouapp.backend.domain.briefing.dto.OpenItem;
 import beyou.beyouapp.backend.domain.briefing.dto.RecoveryWindow;
 import beyou.beyouapp.backend.domain.briefing.dto.TodayAhead;
@@ -22,6 +26,7 @@ import beyou.beyouapp.backend.domain.goal.Goal;
 import beyou.beyouapp.backend.domain.goal.GoalRepository;
 import beyou.beyouapp.backend.domain.goal.GoalStatus;
 import beyou.beyouapp.backend.domain.mood.MoodService;
+import beyou.beyouapp.backend.domain.mood.dto.MoodEntryResponseDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver;
 import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
 import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshotRepository;
@@ -86,6 +91,33 @@ public class DailyBriefingFactsBuilder {
      */
     public static final int GOAL_HORIZON_DAYS = 14;
 
+    /**
+     * How many days of history the narrator's signals are read from: this week and the one
+     * before it, so "better than last week" is a comparison and not a guess.
+     *
+     * <p>Widens the one snapshot query rather than adding a second. The retroactive window
+     * is the most recent seven of these days and is filtered out of the same list.
+     */
+    static final int SIGNAL_DAYS = 14;
+
+    /** How many slipping or steady items the prompt names. More than three is a list. */
+    static final int MAX_PATTERNS = 3;
+
+    /**
+     * How many days an item has to have come up before "checked every time" says anything.
+     * Two out of two is luck; four out of four is a habit holding.
+     */
+    static final int STEADY_MIN_DAYS = 4;
+
+    /**
+     * Percentage points a goal may trail its straight line before it counts as behind.
+     *
+     * <p>Five, so a goal one tap short on a Tuesday is not flagged. The line itself is a
+     * simplification (see {@link GoalPace}), and a verdict sharper than the model it rests
+     * on would be false precision.
+     */
+    static final int PACE_TOLERANCE_POINTS = 5;
+
     private final RoutineSnapshotRepository snapshotRepository;
     private final DiaryRoutineRepository diaryRoutineRepository;
     private final GoalRepository goalRepository;
@@ -94,8 +126,19 @@ public class DailyBriefingFactsBuilder {
     private final UserStreakService userStreakService;
     private final XpDecayCalculator xpDecayCalculator;
 
-    /** Both halves of the facts, from one pass over the window. */
-    public record Facts(YesterdayRecap yesterday, TodayAhead today) {}
+    /**
+     * Both halves of the facts, plus what only the narrator reads.
+     *
+     * @param signals the two-week patterns behind the prose. Never serialized; see
+     *                {@link WeekSignals} for why
+     */
+    public record Facts(YesterdayRecap yesterday, TodayAhead today, WeekSignals signals) {
+
+        /** The account's own day these facts describe. */
+        public LocalDate date() {
+            return yesterday.date().plusDays(1);
+        }
+    }
 
     /**
      * @param user  the account, already loaded
@@ -106,22 +149,36 @@ public class DailyBriefingFactsBuilder {
     public Facts build(User user, LocalDate today) {
         LocalDate yesterday = today.minusDays(1);
         LocalDate windowStart = yesterday.minusDays(BACKFILL_DAYS - 1L);
+        LocalDate signalStart = yesterday.minusDays(SIGNAL_DAYS - 1L);
 
-        // One query for the whole retroactive window, checks included. Asking day by day
-        // would be seven round trips on the request that opens the dashboard.
-        List<RoutineSnapshot> window = snapshotRepository
+        // One query for two weeks, checks included. Asking day by day would be fourteen
+        // round trips on the request that opens the dashboard. The retroactive window is
+        // the recent half of the same list, and it is filtered rather than queried again so
+        // that the recovery panel can never read a day the check path would refuse.
+        List<RoutineSnapshot> fortnight = snapshotRepository
                 .findAllByUserIdAndSnapshotDateBetweenOrderBySnapshotDateAsc(
-                        user.getId(), windowStart, yesterday);
+                        user.getId(), signalStart, yesterday);
+        List<RoutineSnapshot> window = fortnight.stream()
+                .filter(s -> !s.getSnapshotDate().isBefore(windowStart))
+                .toList();
+
+        // Levels only, reduced on the line that reads them. The response DTO carries the
+        // journal text too, and nothing past this point has any business holding it.
+        Map<LocalDate, Integer> moods = new HashMap<>();
+        for (MoodEntryResponseDTO entry : moodService.getRange(user, signalStart, yesterday)) {
+            moods.put(entry.date(), entry.mood());
+        }
 
         return new Facts(
-                buildYesterday(user, yesterday, window),
-                buildToday(user, today, window, yesterday));
+                buildYesterday(user, yesterday, window, moods.get(yesterday)),
+                buildToday(user, today, window, yesterday),
+                buildSignals(fortnight, moods, yesterday));
     }
 
     // ---- yesterday ----
 
     private YesterdayRecap buildYesterday(User user, LocalDate yesterday,
-                                          List<RoutineSnapshot> window) {
+                                          List<RoutineSnapshot> window, Integer moodLevel) {
         List<RoutineSnapshot> snapshots = window.stream()
                 .filter(s -> yesterday.equals(s.getSnapshotDate()))
                 .toList();
@@ -135,7 +192,7 @@ public class DailyBriefingFactsBuilder {
             // their timezone. That window is under a minute and forcing snapshot creation
             // from a read path is a far larger change than it deserves.
             return new YesterdayRecap(yesterday, false, false, 0, 0, 0d, List.of(), 0,
-                    moodOn(user, yesterday));
+                    moodLevel);
         }
 
         int done = 0;
@@ -164,11 +221,7 @@ public class DailyBriefingFactsBuilder {
         return new YesterdayRecap(yesterday, true, complete, done, skipped, xp,
                 List.copyOf(open),
                 focusCycleRepository.findDay(user.getId(), yesterday).size(),
-                moodOn(user, yesterday));
-    }
-
-    private Integer moodOn(User user, LocalDate day) {
-        return moodService.getDay(user, day).map(entry -> entry.mood()).orElse(null);
+                moodLevel);
     }
 
     // ---- today ----
@@ -188,14 +241,16 @@ public class DailyBriefingFactsBuilder {
         }
 
         UserStreakService.UserStreak streak = userStreakService.streakOf(user, today);
+        List<Goal> openGoals = openGoals(user);
 
         return new TodayAhead(
                 scheduledItems,
                 scheduledToday,
                 streak.currentStreak(),
                 user.getMaxConstance() == null ? 0 : user.getMaxConstance(),
-                goalsApproaching(user, today),
-                recoveryWindow(user, window, yesterday, today));
+                goalsApproaching(openGoals, today),
+                recoveryWindow(user, window, yesterday, today),
+                goalsAhead(openGoals, today));
     }
 
     /**
@@ -223,23 +278,59 @@ public class DailyBriefingFactsBuilder {
     }
 
     /**
-     * Goals near their end date, soonest first.
-     *
-     * <p>Completed goals are left out, archived ones too (put away means not on today's mind),
-     * and so are goals whose end date is further off than {@link #GOAL_HORIZON_DAYS}. Overdue goals are kept: a goal whose date has passed with
-     * the target unmet is the single most useful thing this panel can say, and hiding it
-     * because the number went negative would be the panel lying by omission.
+     * Every goal still in play: not completed, and not archived (put away means not on
+     * today's mind). Read once and shared by both goal lists below.
      */
-    private List<GoalAhead> goalsApproaching(User user, LocalDate today) {
-        List<Goal> goals = goalRepository.findAllByUserId(user.getId()).orElseGet(List::of);
-
-        return goals.stream()
+    private List<Goal> openGoals(User user) {
+        return goalRepository.findAllByUserId(user.getId()).orElseGet(List::of).stream()
                 .filter(goal -> goal.getStatus() != GoalStatus.COMPLETED)
                 .filter(goal -> !Boolean.TRUE.equals(goal.getComplete()))
                 .filter(goal -> goal.getArchivedAt() == null)
                 .filter(goal -> goal.getEndDate() != null)
+                .toList();
+    }
+
+    /**
+     * Goals near their end date, soonest first, for the app builds already installed.
+     *
+     * <p>Goals whose end date is further off than {@link #GOAL_HORIZON_DAYS} are left out.
+     * Overdue goals are kept: a goal whose date has passed with the target unmet is worth
+     * saying, and hiding it because the number went negative would be the panel lying by
+     * omission. Unchanged since it shipped; {@link #goalsAhead} is what current clients read.
+     */
+    private List<GoalAhead> goalsApproaching(List<Goal> openGoals, LocalDate today) {
+        return openGoals.stream()
                 .filter(goal -> ChronoUnit.DAYS.between(today, goal.getEndDate()) <= GOAL_HORIZON_DAYS)
                 .sorted(Comparator.comparing(Goal::getEndDate))
+                .limit(MAX_GOALS_AHEAD)
+                .map(goal -> toGoalAhead(goal, today))
+                .toList();
+    }
+
+    /**
+     * The goals the user is heading toward, closest to their end date on either side.
+     *
+     * <p>No horizon, which is the point of this list: somebody whose goals all end in
+     * March still has somewhere they are going, and the morning panel is where that gets
+     * said. Sorted by distance from today in either direction rather than by end date, so a
+     * goal two days overdue sits beside one due in two days. On a tie the upcoming goal goes
+     * first, since that one can still be made.
+     *
+     * <p>A goal overdue by more than {@link #GOAL_HORIZON_DAYS} goes to the back whatever
+     * its distance. By then it has been left, not missed, and ranking it by distance would
+     * let something abandoned two months ago push out a goal the user is working toward in
+     * three. It still fills a slot nothing else wants.
+     */
+    private List<GoalAhead> goalsAhead(List<Goal> openGoals, LocalDate today) {
+        Comparator<Goal> staleLast = Comparator.comparing(
+                goal -> ChronoUnit.DAYS.between(today, goal.getEndDate()) < -GOAL_HORIZON_DAYS);
+        Comparator<Goal> byDistance = Comparator.comparingLong(
+                goal -> Math.abs(ChronoUnit.DAYS.between(today, goal.getEndDate())));
+        Comparator<Goal> upcomingFirst = Comparator.comparing(
+                goal -> goal.getEndDate().isBefore(today));
+        return openGoals.stream()
+                .sorted(staleLast.thenComparing(byDistance).thenComparing(upcomingFirst)
+                        .thenComparing(Goal::getEndDate))
                 .limit(MAX_GOALS_AHEAD)
                 .map(goal -> toGoalAhead(goal, today))
                 .toList();
@@ -254,10 +345,56 @@ public class DailyBriefingFactsBuilder {
         int percent = target > 0
                 ? (int) Math.min(100, Math.round(current / target * 100))
                 : 0;
+        long daysRemaining = ChronoUnit.DAYS.between(today, goal.getEndDate());
+        double remaining = Math.max(0d, target - current);
+        boolean reached = target > 0 && remaining == 0d;
+        int expected = expectedPercent(goal.getStartDate(), goal.getEndDate(), today);
+
+        GoalPace pace;
+        if (reached) {
+            pace = GoalPace.REACHED;
+        } else if (daysRemaining < 0) {
+            pace = GoalPace.OVERDUE;
+        } else if (percent + PACE_TOLERANCE_POINTS < expected) {
+            pace = GoalPace.BEHIND;
+        } else {
+            pace = GoalPace.ON_TRACK;
+        }
+
+        // Today counts as one of the days left, so a goal due today asks for the whole
+        // remainder today rather than dividing by zero.
+        Double perDay = (daysRemaining < 0 || reached || target <= 0)
+                ? null
+                : roundOneDecimal(remaining / (daysRemaining + 1));
 
         return new GoalAhead(goal.getId(), goal.getName(), goal.getIconId(),
                 current, target, goal.getUnit(), goal.getEndDate(),
-                ChronoUnit.DAYS.between(today, goal.getEndDate()), percent);
+                daysRemaining, percent, remaining, perDay, expected, pace);
+    }
+
+    /**
+     * Where a straight line from start to end says the goal should be by today, 0 to 100.
+     *
+     * <p>Counts today as elapsed, the same way {@code requiredPerDay} counts it as still
+     * available: the morning panel speaks for the whole of the day it opens on. A goal whose
+     * start is after its end, which the API does not prevent, reads as fully elapsed rather
+     * than throwing.
+     */
+    static int expectedPercent(LocalDate start, LocalDate end, LocalDate today) {
+        if (start == null || end == null) {
+            return 0;
+        }
+        long span = ChronoUnit.DAYS.between(start, end) + 1;
+        if (span <= 0) {
+            return 100;
+        }
+        long elapsed = ChronoUnit.DAYS.between(start, today) + 1;
+        long clamped = Math.max(0, Math.min(span, elapsed));
+        return (int) Math.round(clamped * 100d / span);
+    }
+
+    private static double roundOneDecimal(double value) {
+        return Math.round(value * 10d) / 10d;
     }
 
     /**
@@ -299,6 +436,119 @@ public class DailyBriefingFactsBuilder {
                 xpDecayCalculator.calculateDecayedXp(100d, user.getXpDecayStrategy(), oldest, today));
 
         return new RecoveryWindow(oldest, daysUntilExpiry, remainingXpPercent, List.copyOf(older));
+    }
+
+    // ---- signals, for the narrator only ----
+
+    /**
+     * Two weeks of snapshots, read for what they say rather than for what is still open.
+     *
+     * <p>Skips are left out of every count here, on both sides of the fraction. A skip is
+     * the user answering "not today", and counting it as asked-but-not-done would turn a
+     * deliberate choice into a miss the narrator then comments on.
+     *
+     * <p>Items still open this week are counted as not checked, even though most of them can
+     * still be checked from the dialog. That is the honest reading of the week as it stands
+     * when the prose is written, and the prose is only ever about a pattern, never about
+     * whether one particular item is still open.
+     */
+    private WeekSignals buildSignals(List<RoutineSnapshot> fortnight, Map<LocalDate, Integer> moods,
+                                     LocalDate yesterday) {
+        LocalDate weekStart = yesterday.minusDays(6);
+        List<RoutineSnapshot> thisWeek = fortnight.stream()
+                .filter(s -> !s.getSnapshotDate().isBefore(weekStart))
+                .toList();
+        List<RoutineSnapshot> lastWeek = fortnight.stream()
+                .filter(s -> s.getSnapshotDate().isBefore(weekStart))
+                .toList();
+
+        // Keyed by the live item when the snapshot kept its id, by name otherwise, so a habit
+        // that sits in two routines still reads as one habit. Snapshots arrive oldest first,
+        // so the name kept is the most recent one, which is what the user calls it now.
+        Map<String, int[]> counts = new LinkedHashMap<>();
+        Map<String, String> names = new HashMap<>();
+        for (RoutineSnapshot snapshot : thisWeek) {
+            for (SnapshotCheck check : snapshot.getChecks()) {
+                if (check.isSkipped()) {
+                    continue;
+                }
+                String key = itemKey(check);
+                int[] askedAndChecked = counts.computeIfAbsent(key, k -> new int[2]);
+                askedAndChecked[0]++;
+                if (check.isChecked()) {
+                    askedAndChecked[1]++;
+                }
+                names.put(key, check.getItemName());
+            }
+        }
+        List<WeekSignals.ItemPattern> patterns = counts.entrySet().stream()
+                .map(e -> new WeekSignals.ItemPattern(
+                        names.get(e.getKey()), e.getValue()[0], e.getValue()[1]))
+                .toList();
+
+        // Slipping: open on at least two days, and on at least half the days it came up. Both
+        // conditions, because one miss in two is noise and two misses in fourteen are fine.
+        List<WeekSignals.ItemPattern> slipping = patterns.stream()
+                .filter(p -> p.missed() >= 2 && p.missed() * 2 >= p.asked())
+                .sorted(Comparator.comparingInt(WeekSignals.ItemPattern::missed).reversed()
+                        .thenComparing(WeekSignals.ItemPattern::name))
+                .limit(MAX_PATTERNS)
+                .toList();
+        List<WeekSignals.ItemPattern> steady = patterns.stream()
+                .filter(p -> p.asked() >= STEADY_MIN_DAYS && p.missed() == 0)
+                .sorted(Comparator.comparingInt(WeekSignals.ItemPattern::asked).reversed()
+                        .thenComparing(WeekSignals.ItemPattern::name))
+                .limit(MAX_PATTERNS)
+                .toList();
+
+        int moodDays = (int) moods.keySet().stream()
+                .filter(day -> !day.isBefore(weekStart) && !day.isAfter(yesterday))
+                .count();
+
+        return new WeekSignals(
+                completionPercent(thisWeek),
+                completionPercent(lastWeek),
+                slipping,
+                steady,
+                averageMood(moods, weekStart, yesterday),
+                averageMood(moods, weekStart.minusDays(7), weekStart.minusDays(1)),
+                moodDays);
+    }
+
+    private static String itemKey(SnapshotCheck check) {
+        return check.getOriginalItemId() != null
+                ? check.getItemType() + ":" + check.getOriginalItemId()
+                : check.getItemType() + ":name:" + check.getItemName();
+    }
+
+    /** Checked over asked, skips out of both. Null when nothing was asked at all. */
+    private static Integer completionPercent(List<RoutineSnapshot> snapshots) {
+        int asked = 0;
+        int checked = 0;
+        for (RoutineSnapshot snapshot : snapshots) {
+            for (SnapshotCheck check : snapshot.getChecks()) {
+                if (check.isSkipped()) {
+                    continue;
+                }
+                asked++;
+                if (check.isChecked()) {
+                    checked++;
+                }
+            }
+        }
+        return asked == 0 ? null : (int) Math.round(checked * 100d / asked);
+    }
+
+    private static Double averageMood(Map<LocalDate, Integer> moods, LocalDate from, LocalDate to) {
+        List<Integer> levels = moods.entrySet().stream()
+                .filter(e -> !e.getKey().isBefore(from) && !e.getKey().isAfter(to))
+                .map(Map.Entry::getValue)
+                .toList();
+        if (levels.isEmpty()) {
+            return null;
+        }
+        double mean = levels.stream().mapToInt(Integer::intValue).average().orElse(0d);
+        return roundOneDecimal(mean);
     }
 
     // ---- shared ----
