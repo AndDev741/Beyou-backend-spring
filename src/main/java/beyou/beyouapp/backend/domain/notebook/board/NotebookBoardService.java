@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import beyou.beyouapp.backend.domain.notebook.MarkdownBlocks;
 import beyou.beyouapp.backend.domain.notebook.NotebookOwnership;
 import beyou.beyouapp.backend.domain.notebook.NotebookPage;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
@@ -95,16 +96,29 @@ public class NotebookBoardService {
         return new BoardResponseDTO(pageId, nodeDtos, edges);
     }
 
+    /**
+     * A node on the board. Without coordinates it goes on the next free grid cell; with
+     * {@code after} it is linked from that node, so it lands after it on the path. Either way the
+     * page's document gets its board block if it has none: a board grown from outside the page
+     * (the phone, the assistant) would otherwise have nodes nobody can see on the web.
+     */
     @Transactional
     public BoardChangeResponseDTO addNode(User user, UUID boardPageId, CreateNodeRequestDTO request) {
         NotebookPage board = ownership.page(user.getId(), boardPageId);
         NotebookNodeKind kind = request.kind() == null ? NotebookNodeKind.PAGE : request.kind();
+        if ((request.x() == null) != (request.y() == null)) {
+            throw new BusinessException(ErrorKey.INVALID_REQUEST, "x and y go together, or neither is sent");
+        }
+        if (request.after() != null && kind != NotebookNodeKind.PAGE) {
+            throw new BusinessException(ErrorKey.INVALID_REQUEST, "Only a page node can follow another");
+        }
+        GridCell cell = request.x() == null ? nextFreeCell(boardPageId) : new GridCell(request.x(), request.y());
         NotebookBoardNode node = new NotebookBoardNode();
         node.setUser(board.getUser());
         node.setBoardPageId(boardPageId);
         node.setKind(kind);
-        node.setX(request.x());
-        node.setY(request.y());
+        node.setX(cell.x());
+        node.setY(cell.y());
         node.setCreatedAt(Instant.now());
 
         if (kind == NotebookNodeKind.SECTION) {
@@ -126,10 +140,15 @@ public class NotebookBoardService {
             node.setPageId(pageId);
         }
         nodeRepository.save(node);
+        if (request.after() != null) {
+            addEdge(user, boardPageId, new CreateEdgeRequestDTO(request.after(), node.getId()));
+        }
         NotebookProgressService.Outcome outcome = progressService.boardChanged(user.getId(), boardPageId);
 
         ProgressGraph graph = progressService.graphFor(user.getId());
         BoardNodeDTO dto = toDto(graph, node, boardPageId, topicTitles(graph, List.of(node)));
+        // Last: the document's compare-and-set clears the persistence context.
+        pageService.ensureBlock(user, boardPageId, MarkdownBlocks.BOARD_BLOCK_TYPE);
         return new BoardChangeResponseDTO(dto, outcome.changed(), outcome.refreshUi());
     }
 

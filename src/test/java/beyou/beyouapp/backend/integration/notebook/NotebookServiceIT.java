@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.category.CategoryRepository;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.common.ExperienceLevel;
@@ -22,6 +23,7 @@ import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.focus.CycleKind;
 import beyou.beyouapp.backend.domain.focus.FocusService;
 import beyou.beyouapp.backend.domain.focus.dto.RecordCycleRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.MarkdownBlocks;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
 import beyou.beyouapp.backend.domain.notebook.NotebookRewards;
@@ -67,6 +69,7 @@ class NotebookServiceIT extends AbstractIntegrationTest {
     @Autowired private NotebookBoardNodeRepository nodeRepository;
     @Autowired private FocusService focusService;
     @Autowired private CategoryService categoryService;
+    @Autowired private CategoryRepository categoryRepository;
     @Autowired private UserRepository userRepository;
 
     private User user;
@@ -182,11 +185,11 @@ class NotebookServiceIT extends AbstractIntegrationTest {
                 new CreateTopicRequestDTO("Software Engineering", null, null, null, career.getId(), null));
         UUID node = node(topic.id(), "Hash Tables", 0, 0).node().pageId();
         node(topic.id(), "Heaps", 240, 0);
-        double before = career.getXpProgress().getXp();
+        double before = categoryXp(career);
 
         status(node, StatusChoice.DONE);
 
-        assertThat(career.getXpProgress().getXp() - before).isEqualTo(NotebookRewards.PAGE_DONE_XP);
+        assertThat(categoryXp(career) - before).isEqualTo(NotebookRewards.PAGE_DONE_XP);
     }
 
     /** Set by hand, a page holds its status against its nodes until it is handed back with AUTO. */
@@ -229,7 +232,7 @@ class NotebookServiceIT extends AbstractIntegrationTest {
         PageResponseDTO fundamentals = topic("Fundamentals of CS");
 
         BoardChangeResponseDTO linked = boardService.addNode(user, fundamentals.id(),
-                new CreateNodeRequestDTO(null, null, os, null, 0.0, 0.0, null, null));
+                new CreateNodeRequestDTO(null, null, os, null, 0.0, 0.0, null, null, null));
 
         assertThat(linked.node().linked()).isTrue();
         assertThat(linked.node().homeTopicTitle()).isEqualTo("Software Engineering");
@@ -247,7 +250,7 @@ class NotebookServiceIT extends AbstractIntegrationTest {
         UUID trees = node(structures, "Trees", 0, 0).node().pageId();
 
         assertThatThrownBy(() -> boardService.addNode(user, trees,
-                new CreateNodeRequestDTO(null, null, topic.id(), null, 0.0, 0.0, null, null)))
+                new CreateNodeRequestDTO(null, null, topic.id(), null, 0.0, 0.0, null, null, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorKey())
                 .isEqualTo(ErrorKey.NOTEBOOK_BOARD_CYCLE);
@@ -258,7 +261,7 @@ class NotebookServiceIT extends AbstractIntegrationTest {
         PageResponseDTO engineering = topic("Software Engineering");
         UUID os = node(engineering.id(), "Operating Systems", 0, 0).node().pageId();
         PageResponseDTO fundamentals = topic("Fundamentals of CS");
-        CreateNodeRequestDTO link = new CreateNodeRequestDTO(null, null, os, null, 0.0, 0.0, null, null);
+        CreateNodeRequestDTO link = new CreateNodeRequestDTO(null, null, os, null, 0.0, 0.0, null, null, null);
         boardService.addNode(user, fundamentals.id(), link);
 
         assertThatThrownBy(() -> boardService.addNode(user, fundamentals.id(), link))
@@ -273,7 +276,7 @@ class NotebookServiceIT extends AbstractIntegrationTest {
         UUID os = node(engineering.id(), "Operating Systems", 0, 0).node().pageId();
         PageResponseDTO fundamentals = topic("Fundamentals of CS");
         UUID nodeId = boardService.addNode(user, fundamentals.id(),
-                new CreateNodeRequestDTO(null, null, os, null, 0.0, 0.0, null, null)).node().id();
+                new CreateNodeRequestDTO(null, null, os, null, 0.0, 0.0, null, null, null)).node().id();
 
         boardService.deleteNode(user, nodeId, true);
 
@@ -311,6 +314,53 @@ class NotebookServiceIT extends AbstractIntegrationTest {
 
     // -------------------------------------------------------------- ownership
 
+    /**
+     * The phone and the assistant leave the coordinates out: the server picks the cell, links the
+     * node after the one named, and gives the page the block that shows its board on the web.
+     */
+    @Test
+    void aNodeWithoutCoordinatesGoesOnTheNextFreeCellAfterTheOneNamed() {
+        PageResponseDTO topic = topic("Networks");
+
+        BoardChangeResponseDTO first = boardService.addNode(user, topic.id(),
+                new CreateNodeRequestDTO(null, "Physical", null, null, null, null, null, null, null));
+        BoardChangeResponseDTO second = boardService.addNode(user, topic.id(),
+                new CreateNodeRequestDTO(null, "Link", null, null, null, null, null, null, first.node().id()));
+
+        assertThat(first.node().x()).isEqualTo(NotebookBoardService.gridCell(0).x());
+        assertThat(second.node().x()).isEqualTo(NotebookBoardService.gridCell(1).x());
+        assertThat(second.node().y()).isEqualTo(NotebookBoardService.gridCell(1).y());
+        assertThat(boardService.board(user, topic.id()).edges()).singleElement().satisfies(edge -> {
+            assertThat(edge.source()).isEqualTo(first.node().id());
+            assertThat(edge.target()).isEqualTo(second.node().id());
+        });
+        assertThat(pageRepository.findById(topic.id()).orElseThrow().getContent())
+                .contains("\"" + MarkdownBlocks.BOARD_BLOCK_TYPE + "\"");
+    }
+
+    @Test
+    void aNodeTakesBothCoordinatesOrNeither() {
+        PageResponseDTO topic = topic("Networks");
+
+        assertThatThrownBy(() -> boardService.addNode(user, topic.id(),
+                new CreateNodeRequestDTO(null, "Physical", null, null, 40.0, null, null, null, null)))
+                .extracting(e -> ((BusinessException) e).getErrorKey())
+                .isEqualTo(ErrorKey.INVALID_REQUEST);
+        assertThat(boardService.board(user, topic.id()).nodes()).isEmpty();
+    }
+
+    @Test
+    void aNodeCanOnlyFollowAPageNodeOfTheSameBoard() {
+        PageResponseDTO networks = topic("Networks");
+        PageResponseDTO other = topic("Algorithms");
+        BoardChangeResponseDTO elsewhere = node(other.id(), "Graphs", 0, 0);
+
+        assertThatThrownBy(() -> boardService.addNode(user, networks.id(),
+                new CreateNodeRequestDTO(null, "Physical", null, null, null, null, null, null, elsewhere.node().id())))
+                .extracting(e -> ((BusinessException) e).getErrorKey())
+                .isEqualTo(ErrorKey.NOTEBOOK_EDGE_INVALID);
+    }
+
     @Test
     void aStrangerCannotReadOrBuildOnSomebodysPage() {
         PageResponseDTO topic = topic("Private notes");
@@ -320,7 +370,7 @@ class NotebookServiceIT extends AbstractIntegrationTest {
                 .extracting(e -> ((BusinessException) e).getErrorKey())
                 .isEqualTo(ErrorKey.NOTEBOOK_PAGE_NOT_OWNED);
         assertThatThrownBy(() -> boardService.addNode(stranger, topic.id(),
-                new CreateNodeRequestDTO(null, "Mine now", null, null, 0.0, 0.0, null, null)))
+                new CreateNodeRequestDTO(null, "Mine now", null, null, 0.0, 0.0, null, null, null)))
                 .extracting(e -> ((BusinessException) e).getErrorKey())
                 .isEqualTo(ErrorKey.NOTEBOOK_PAGE_NOT_OWNED);
     }
@@ -333,7 +383,7 @@ class NotebookServiceIT extends AbstractIntegrationTest {
                 new CreateTopicRequestDTO("Theirs", null, null, null, null, null));
 
         assertThatThrownBy(() -> boardService.addNode(stranger, theirs.id(),
-                new CreateNodeRequestDTO(null, null, mine, null, 0.0, 0.0, null, null)))
+                new CreateNodeRequestDTO(null, null, mine, null, 0.0, 0.0, null, null, null)))
                 .extracting(e -> ((BusinessException) e).getErrorKey())
                 .isEqualTo(ErrorKey.NOTEBOOK_PAGE_NOT_OWNED);
     }
@@ -449,7 +499,7 @@ class NotebookServiceIT extends AbstractIntegrationTest {
 
     private BoardChangeResponseDTO node(UUID boardPageId, String title, double x, double y) {
         return boardService.addNode(user, boardPageId,
-                new CreateNodeRequestDTO(null, title, null, null, x, y, null, null));
+                new CreateNodeRequestDTO(null, title, null, null, x, y, null, null, null));
     }
 
     private StatusChangeResponseDTO status(UUID pageId, StatusChoice choice) {
@@ -458,6 +508,14 @@ class NotebookServiceIT extends AbstractIntegrationTest {
 
     private NotebookStatus statusOf(UUID pageId) {
         return pageRepository.findById(pageId).orElseThrow().getStatus();
+    }
+
+    /**
+     * Read again rather than from the entity in hand: the first node on a page without a board
+     * block writes that block, and the document's compare-and-set clears the persistence context.
+     */
+    private double categoryXp(Category category) {
+        return categoryRepository.findById(category.getId()).orElseThrow().getXpProgress().getXp();
     }
 
     private double userXp() {

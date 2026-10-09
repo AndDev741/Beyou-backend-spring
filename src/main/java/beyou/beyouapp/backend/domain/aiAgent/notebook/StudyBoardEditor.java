@@ -25,9 +25,7 @@ import beyou.beyouapp.backend.domain.notebook.ai.NotebookAiService;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.AiCardsRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.card.dto.CardDTO;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService;
-import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService.GridCell;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookNodeKind;
-import beyou.beyouapp.backend.domain.notebook.board.dto.BoardChangeResponseDTO;
 import beyou.beyouapp.backend.domain.notebook.board.dto.BoardEdgeDTO;
 import beyou.beyouapp.backend.domain.notebook.board.dto.BoardNodeDTO;
 import beyou.beyouapp.backend.domain.notebook.board.dto.BoardResponseDTO;
@@ -128,13 +126,10 @@ public class StudyBoardEditor {
         String name = required(title, "nodeTitle");
         BoardNodeDTO previous = isBlank(after) ? null : pageNode(user, page, after);
 
-        GridCell cell = boardService.nextFreeCell(page.getId());
-        BoardChangeResponseDTO added = boardService.addNode(user, page.getId(), new CreateNodeRequestDTO(
-                NotebookNodeKind.PAGE, name, null, null, cell.x(), cell.y(), null, null));
-        if (previous != null) {
-            boardService.addEdge(user, page.getId(), new CreateEdgeRequestDTO(previous.id(), added.node().id()));
-        }
-        pageService.ensureBlock(user, page.getId(), MarkdownBlocks.BOARD_BLOCK_TYPE);
+        // No coordinates: the next free cell. The service links it after the previous node and
+        // makes sure the page shows its board, as it does for the phone.
+        boardService.addNode(user, page.getId(), new CreateNodeRequestDTO(
+                NotebookNodeKind.PAGE, name, null, null, null, null, null, null, previous == null ? null : previous.id()));
         return success("Added \"" + name + "\" to the board of \"" + page.getTitle() + "\""
                 + (previous == null ? "" : ", after \"" + previous.title() + "\""));
     }

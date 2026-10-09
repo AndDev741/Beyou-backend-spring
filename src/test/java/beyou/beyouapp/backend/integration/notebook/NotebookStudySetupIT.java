@@ -183,7 +183,7 @@ class NotebookStudySetupIT extends AbstractIntegrationTest {
 
     private UUID node(UUID boardPageId, String title) {
         return boardService.addNode(user, boardPageId,
-                new CreateNodeRequestDTO(null, title, null, null, 0.0, 0.0, null, null)).node().pageId();
+                new CreateNodeRequestDTO(null, title, null, null, 0.0, 0.0, null, null, null)).node().pageId();
     }
 
     private void notes(UUID page, String text) {

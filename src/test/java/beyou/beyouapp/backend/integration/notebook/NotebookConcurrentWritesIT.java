@@ -92,7 +92,7 @@ class NotebookConcurrentWritesIT extends AbstractIntegrationTest {
     @Test
     void aStatusMovingUpKeepsTheTextSavedWhileItWasLoading() {
         UUID nodePageId = boardService.addNode(user, topicId,
-                new CreateNodeRequestDTO(null, "Trees", null, null, 0.0, 0.0, null, null)).node().pageId();
+                new CreateNodeRequestDTO(null, "Trees", null, null, 0.0, 0.0, null, null, null)).node().pageId();
 
         outer.executeWithoutResult(status -> {
             progressService.graphFor(user.getId());
