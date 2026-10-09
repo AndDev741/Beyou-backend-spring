@@ -296,7 +296,7 @@ class StudyBoardEditorIT extends AbstractIntegrationTest {
     private UUID node(UUID boardPageId, String title, int cell) {
         NotebookBoardService.GridCell at = NotebookBoardService.gridCell(cell);
         return boardService.addNode(user, boardPageId,
-                new CreateNodeRequestDTO(NotebookNodeKind.PAGE, title, null, null, at.x(), at.y(), null, null)).node().id();
+                new CreateNodeRequestDTO(NotebookNodeKind.PAGE, title, null, null, at.x(), at.y(), null, null, null)).node().id();
     }
 
     private void edge(UUID source, UUID target) {

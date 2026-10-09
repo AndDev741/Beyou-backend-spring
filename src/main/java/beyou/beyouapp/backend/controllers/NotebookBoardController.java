@@ -18,12 +18,14 @@ import org.springframework.web.bind.annotation.RestController;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService;
 import beyou.beyouapp.backend.domain.notebook.board.dto.BoardChangeResponseDTO;
 import beyou.beyouapp.backend.domain.notebook.board.dto.BoardEdgeDTO;
+import beyou.beyouapp.backend.domain.notebook.board.dto.BoardOrderRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.board.dto.BoardResponseDTO;
 import beyou.beyouapp.backend.domain.notebook.board.dto.CreateEdgeRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.board.dto.CreateNodeRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.board.dto.LayoutRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.board.dto.UpdateNodeRequestDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
+import beyou.beyouapp.backend.user.User;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -62,6 +64,18 @@ public class NotebookBoardController {
     public ResponseEntity<Void> layout(@PathVariable UUID pageId, @Valid @RequestBody LayoutRequestDTO request) {
         boardService.layout(authenticatedUser.getAuthenticatedUser(), pageId, request);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Makes the board one path through every page node, in the order given: what the phone's
+     * reorder sends. Edges the person drew are replaced by the chain. Answers the board as it is
+     * now.
+     */
+    @PutMapping("/pages/{pageId}/board/order")
+    public ResponseEntity<BoardResponseDTO> order(@PathVariable UUID pageId, @Valid @RequestBody BoardOrderRequestDTO request) {
+        User user = authenticatedUser.getAuthenticatedUser();
+        boardService.restructure(user, pageId, request.order());
+        return ResponseEntity.ok(boardService.board(user, pageId));
     }
 
     /**
