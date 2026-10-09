@@ -17,6 +17,7 @@ import beyou.beyouapp.backend.domain.notebook.NotebookStatus;
  * @param focusMinutes  completed pomodoro minutes on this page and every page under it
  * @param cardsDue      cards on this page due today or earlier, in the owner's day
  * @param sourcesCount  sources this page can read: its own plus every ancestor's
+ * @param contentRevision the document's revision; the editor sends it back with its next save
  */
 public record PageResponseDTO(
         UUID id,
@@ -39,5 +40,6 @@ public record PageResponseDTO(
         int cardsTotal,
         int cardsDue,
         int sourcesCount,
-        Instant updatedAt) {
+        Instant updatedAt,
+        long contentRevision) {
 }

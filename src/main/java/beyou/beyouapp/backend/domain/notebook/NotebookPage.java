@@ -48,6 +48,11 @@ import lombok.ToString;
  * document comes back. With only the changed columns in the UPDATE, each writer touches what
  * it changed. There is no {@code @Version} anywhere in the model, and the autosave should not
  * start failing because a status moved underneath it.
+ *
+ * <p>The document itself is the one exception: {@code contentRevision} goes up on every write
+ * of it, and every writer writes through {@link NotebookPageRepository#writeContentIfAt}, a
+ * compare-and-set on that number (V37). Two editors on one page then cannot overwrite each
+ * other; the one that saved from an older revision is told so and merges.
  */
 @Entity
 @Table(name = "notebook_pages")
@@ -99,6 +104,10 @@ public class NotebookPage {
     @Column(name = "content_text", columnDefinition = "text")
     @ToString.Exclude
     private String contentText;
+
+    /** Goes up on every write of {@code content}. See the class comment. */
+    @Column(name = "content_revision", nullable = false)
+    private long contentRevision;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)

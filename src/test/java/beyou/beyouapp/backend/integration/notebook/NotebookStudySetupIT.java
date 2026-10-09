@@ -188,7 +188,7 @@ class NotebookStudySetupIT extends AbstractIntegrationTest {
 
     private void notes(UUID page, String text) {
         pageService.saveContent(user, page, new UpdateContentRequestDTO(
-                "[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"" + text + "\",\"styles\":{}}]}]"));
+                "[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"" + text + "\",\"styles\":{}}]}]", null));
     }
 
     private User newUser(String tag) {

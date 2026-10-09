@@ -150,4 +150,7 @@ public enum ErrorKey {
     // "Find sources for me": no search provider is configured, or the search did not answer.
     NOTEBOOK_DISCOVERY_UNAVAILABLE,
     NOTEBOOK_DISCOVERY_FAILED,
+    // The page's document was written since the editor read it (another device, another tab, the
+    // assistant). The editor reads the page again and merges before saving.
+    NOTEBOOK_CONTENT_CONFLICT,
 }

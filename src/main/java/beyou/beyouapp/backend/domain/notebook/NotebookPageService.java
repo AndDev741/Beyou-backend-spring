@@ -12,8 +12,10 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -244,7 +246,8 @@ public class NotebookPageService {
                 (int) cardRepository.countByPageId(page.getId()),
                 (int) cardRepository.countByPageIdAndDueOnLessThanEqual(page.getId(), today),
                 sources,
-                page.getUpdatedAt());
+                page.getUpdatedAt(),
+                page.getContentRevision());
     }
 
     @Transactional(readOnly = true)
@@ -326,43 +329,65 @@ public class NotebookPageService {
     /**
      * The autosave. Stores the document and re-derives the text the AI reads from it here, so
      * the two cannot disagree.
+     *
+     * <p>The write only lands if the page is still at the revision the editor started from. A
+     * phone and a computer on the same page, or the assistant appending notes to a page that is
+     * open, used to mean the later save quietly removed the other write; now the late editor is
+     * refused with NOTEBOOK_CONTENT_CONFLICT, reads the page again and merges block by block.
+     * A request with no {@code baseRevision} comes from a client older than revisions and still
+     * overwrites, so a tab left open across the deploy keeps saving.
      */
     @Transactional
     public ContentSavedDTO saveContent(User user, UUID pageId, UpdateContentRequestDTO request) {
         NotebookPage page = ownership.page(user.getId(), pageId);
-        page.setContent(request.content());
-        page.setContentText(BlockText.extract(request.content()));
+        long read = request.baseRevision() == null ? page.getContentRevision() : request.baseRevision();
         Instant now = Instant.now();
-        page.setUpdatedAt(now);
-        return new ContentSavedDTO(page.getId(), now);
+        int written = pageRepository.writeContentIfAt(page.getId(), request.content(),
+                BlockText.extract(request.content()), now, read);
+        if (written == 0) {
+            throw new BusinessException(ErrorKey.NOTEBOOK_CONTENT_CONFLICT,
+                    "The page changed since revision " + read + "; read it again and merge");
+        }
+        return new ContentSavedDTO(page.getId(), now, read + 1);
     }
 
-    /** "Save to page": markdown from the study room, appended to the document as blocks. */
+    /** "Save to page": markdown from the study room or the assistant, appended to the document as blocks. */
     @Transactional
     public PageResponseDTO append(User user, UUID pageId, AppendRequestDTO request) {
-        NotebookPage page = ownership.page(user.getId(), pageId);
-        appendMarkdown(page, request.markdown());
+        ownership.page(user.getId(), pageId);
+        rewriteContent(pageId, existing -> MarkdownBlocks.append(existing, request.markdown()));
         return page(user, pageId, false);
-    }
-
-    /** Shared with the study room, which saves outputs straight into a page. */
-    @Transactional
-    public void appendMarkdown(NotebookPage page, String markdown) {
-        String content = MarkdownBlocks.append(page.getContent(), markdown);
-        page.setContent(content);
-        page.setContentText(BlockText.extract(content));
-        page.setUpdatedAt(Instant.now());
     }
 
     /** Puts a block of {@code type} in the page's document when it has none. See MarkdownBlocks.withBlock. */
     @Transactional
     public void ensureBlock(User user, UUID pageId, String type) {
-        NotebookPage page = ownership.page(user.getId(), pageId);
-        String content = MarkdownBlocks.withBlock(page.getContent(), type);
-        if (content.equals(page.getContent())) return;
-        page.setContent(content);
-        page.setContentText(BlockText.extract(content));
-        page.setUpdatedAt(Instant.now());
+        ownership.page(user.getId(), pageId);
+        rewriteContent(pageId, existing -> MarkdownBlocks.withBlock(existing, type));
+    }
+
+    /** How many times a server-side writer rereads a document that someone else wrote first. */
+    private static final int REWRITE_ATTEMPTS = 3;
+
+    /**
+     * A server-side change to the document (append, a block it must have), made with the same
+     * compare-and-set as the autosave so it never removes an edit, and never is removed by one:
+     * the editor's next save from before it is refused and merges it in. When the document moved
+     * between the read and the write, it is read again and the change applied to the new one.
+     */
+    private void rewriteContent(UUID pageId, UnaryOperator<String> change) {
+        for (int attempt = 0; attempt < REWRITE_ATTEMPTS; attempt++) {
+            NotebookPage page = pageRepository.findById(pageId).orElseThrow(
+                    () -> new BusinessException(ErrorKey.NOTEBOOK_PAGE_NOT_FOUND, "Notebook page not found"));
+            String content = change.apply(page.getContent());
+            if (Objects.equals(content, page.getContent())) return;
+            if (pageRepository.writeContentIfAt(pageId, content, BlockText.extract(content), Instant.now(),
+                    page.getContentRevision()) == 1) {
+                return;
+            }
+        }
+        throw new BusinessException(ErrorKey.NOTEBOOK_CONTENT_CONFLICT,
+                "The page kept changing while it was being written; try again");
     }
 
     @Transactional

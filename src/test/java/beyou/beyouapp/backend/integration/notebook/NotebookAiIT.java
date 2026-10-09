@@ -269,7 +269,7 @@ class NotebookAiIT extends AbstractIntegrationTest {
         UUID topic = topic("Data Structures");
         UUID trees = node(topic, "Trees");
         pageService.saveContent(user, trees, new UpdateContentRequestDTO(
-                "[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"A heap keeps the smallest key at the root.\",\"styles\":{}}]}]"));
+                "[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"A heap keeps the smallest key at the root.\",\"styles\":{}}]}]", null));
         when(llm.call(eq(LlmPayloads.CardsPayload.class), anyString(), any())).thenReturn(
                 new LlmPayloads.CardsPayload(List.of(
                         new LlmPayloads.Card("Where is the smallest key in a min-heap?", "At the root.", 1))));
@@ -303,7 +303,7 @@ class NotebookAiIT extends AbstractIntegrationTest {
     private UUID pageWithNotes(String title, String notes) {
         UUID page = node(topic("Data Structures"), title);
         pageService.saveContent(user, page, new UpdateContentRequestDTO(
-                "[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"" + notes + "\",\"styles\":{}}]}]"));
+                "[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"" + notes + "\",\"styles\":{}}]}]", null));
         return page;
     }
 

@@ -64,4 +64,20 @@ class MarkdownBlocksTest {
         assertThat(doc).contains("\"type\":\"" + MarkdownBlocks.BOARD_BLOCK_TYPE + "\"");
         assertThat(BlockText.extract(doc)).isEqualTo("Why this matters");
     }
+
+    /**
+     * Editors merge a page block by block, by id. A block the server writes without one could
+     * only be matched by its text, so every block written here carries its own.
+     */
+    @Test
+    void everyBlockTheServerWritesHasItsOwnId() {
+        String doc = MarkdownBlocks.withBlock(
+                MarkdownBlocks.append(MarkdownBlocks.boardDocument("Intro"), "# Title\n\n- one\n- two\n\nText"),
+                MarkdownBlocks.CARDS_BLOCK_TYPE);
+
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        tools.jackson.databind.json.JsonMapper.builder().build().readTree(doc).forEach(block -> ids.add(block.path("id").asString()));
+
+        assertThat(ids).hasSize(7).doesNotContain("").doesNotHaveDuplicates();
+    }
 }
