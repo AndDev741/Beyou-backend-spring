@@ -15,6 +15,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import jakarta.annotation.PreDestroy;
+import beyou.beyouapp.backend.monitoring.UserContextLogFilter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -79,7 +80,9 @@ public class SourceIngestionService {
     /** Queues the job to run once the current transaction commits. */
     public void submit(UUID sourceId, UUID userId, Payload payload) {
         if (!background) return;
-        Runnable job = () -> pool.submit(() -> ingest(sourceId, userId, payload));
+        // Off the request thread, so the user id every log line carries is set by hand.
+        Runnable job = () -> pool.submit(() -> UserContextLogFilter.withUserId(userId,
+                () -> ingest(sourceId, userId, payload)));
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override

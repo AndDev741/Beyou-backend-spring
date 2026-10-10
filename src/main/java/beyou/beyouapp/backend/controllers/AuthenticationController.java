@@ -127,17 +127,17 @@ public class AuthenticationController {
      * link this from settings". That is a normal outcome, not an error to retry.
      */
     @PostMapping("/oidc/{provider}")
-    public ResponseEntity<Map<String, Object>> oidcLogin(@PathVariable String provider,
-                                                         @RequestBody @Valid OidcLoginDTO request,
-                                                         HttpServletResponse response){
+    public ResponseEntity<?> oidcLogin(@PathVariable String provider,
+                                       @RequestBody @Valid OidcLoginDTO request,
+                                       HttpServletResponse response){
         return oidcAuthService.login(provider, request.idToken(), request.timezone(), false, response);
     }
 
     /** The same, on the mobile contract: X-Access-Token header and refreshToken in the body. */
     @PostMapping("/oidc/{provider}/mobile")
-    public ResponseEntity<Map<String, Object>> oidcLoginMobile(@PathVariable String provider,
-                                                               @RequestBody @Valid OidcLoginDTO request,
-                                                               HttpServletResponse response){
+    public ResponseEntity<?> oidcLoginMobile(@PathVariable String provider,
+                                             @RequestBody @Valid OidcLoginDTO request,
+                                             HttpServletResponse response){
         return oidcAuthService.login(provider, request.idToken(), request.timezone(), true, response);
     }
 

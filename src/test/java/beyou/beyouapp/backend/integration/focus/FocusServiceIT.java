@@ -264,6 +264,20 @@ class FocusServiceIT extends AbstractIntegrationTest {
         assertThatThrownBy(() -> focusService.deleteMicroTask(stranger, task.id())).isInstanceOf(BusinessException.class);
     }
 
+    // The client words "this is not yours" and "this is gone" differently, so the two refusals
+    // carry their own keys. They used to borrow ROUTINE_NOT_OWNED and the generic INVALID_REQUEST.
+    @Test
+    void aMissingMicroTaskAndSomebodyElsesAreRefusedWithTheirOwnKeys() {
+        FocusMicroTaskResponseDTO task = focusService.addMicroTask(user, new CreateMicroTaskRequestDTO(itemA, "Water", false));
+
+        assertThatThrownBy(() -> focusService.toggleMicroTask(stranger, task.id()))
+            .extracting(e -> ((BusinessException) e).getErrorKey())
+            .isEqualTo(ErrorKey.FOCUS_MICRO_TASK_NOT_OWNED);
+        assertThatThrownBy(() -> focusService.toggleMicroTask(user, UUID.randomUUID()))
+            .extracting(e -> ((BusinessException) e).getErrorKey())
+            .isEqualTo(ErrorKey.FOCUS_MICRO_TASK_NOT_FOUND);
+    }
+
     // ------------------------------------------------------------------- day
 
     @Test

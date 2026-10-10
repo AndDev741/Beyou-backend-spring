@@ -11,6 +11,15 @@ GOOGLE_CLIENT_SECRET=
 # Add the Android/iOS OAuth client ids here once provisioned.
 GOOGLE_MOBILE_AUDIENCES=
 
+# Federated sign-in (OIDC) beyond Google. Leave the issuer or the client id blank and the
+# provider does not exist: no login button, and its routes answer OIDC_PROVIDER_UNKNOWN.
+# Keep TRUST_EMAIL_VERIFIED false unless you trust that issuer's word on e-mail addresses;
+# while it is false the provider can only be linked from an account that already signed in.
+OIDC_OMELHORSITE_ISSUER=
+OIDC_OMELHORSITE_CLIENT_ID=
+# OIDC_OMELHORSITE_DISPLAY_NAME="O Melhor Site"
+# OIDC_OMELHORSITE_TRUST_EMAIL_VERIFIED=false
+
 # URLs
 FRONTEND_URL=http://localhost:3000/
 OAUTH_GOOGLE_URL=https://oauth2.googleapis.com/token
@@ -71,6 +80,11 @@ NVIDIA_API_KEY=
 TAVILY_API_KEY=
 NOTEBOOK_DISCOVERY_GEMINI_API_KEY=
 # NOTEBOOK_DISCOVERY_GEMINI_MODEL=gemini-flash-latest
+
+# Daily Briefing. Narration is the LLM-written prose under the facts; false shows the facts
+# alone and makes no model call. Briefing rows older than the retention are swept nightly.
+# BRIEFING_NARRATION_ENABLED=true
+# BRIEFING_RETENTION_DAYS=30
 
 # How long a signed profile-photo URL stays loadable, in minutes. The URL is the
 # only proof GET /user/photo/{id} gets, so it expires.

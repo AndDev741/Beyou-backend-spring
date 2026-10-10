@@ -120,7 +120,7 @@ google:
 # Federated sign-in providers, beyond Google.
 #
 # A block with no issuer or no client id is treated as absent: /auth/oidc/providers
-# omits it and /auth/oidc/<slug> answers 404. That is the off switch, and it is the
+# omits it and /auth/oidc/<slug> answers 400 OIDC_PROVIDER_UNKNOWN. That is the off switch, and it is the
 # default — an environment that sets none of these ships the feature dark.
 #
 # trustEmailVerified is the important one, and false is the safe default. See

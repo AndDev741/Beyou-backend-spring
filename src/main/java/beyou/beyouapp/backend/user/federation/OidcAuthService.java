@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.user.federation;
 
+import beyou.beyouapp.backend.exceptions.ApiErrorResponse;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
@@ -50,8 +51,15 @@ public class OidcAuthService {
                 .toList();
     }
 
-    public ResponseEntity<Map<String, Object>> login(String slug, String idToken, String claimedTimezone,
-                                                     boolean mobile, HttpServletResponse response) {
+    /**
+     * @return 200 with the session on {@link FederationOutcome.LoggedIn}, or 403 with an
+     *         {@link ApiErrorResponse} keyed {@code FEDERATED_LINK_REQUIRED} on
+     *         {@link FederationOutcome.LinkRequired}, its reason and the provider in details.
+     *         The 403 is built here rather than thrown because it is an answer the client
+     *         branches on, not a failure, and every handler for a thrown refusal answers 400.
+     */
+    public ResponseEntity<?> login(String slug, String idToken, String claimedTimezone,
+                                   boolean mobile, HttpServletResponse response) {
         OidcProviderProperties.Provider provider = provider(slug);
         FederatedPrincipal principal = verifier.verify(idToken, provider).withTimezone(claimedTimezone);
 
@@ -60,10 +68,12 @@ public class OidcAuthService {
         return switch (outcome) {
             case FederationOutcome.LoggedIn loggedIn -> issueTokens(loggedIn.user(), mobile, response);
             case FederationOutcome.LinkRequired linkRequired -> ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of(
-                            "error", "FEDERATED_LINK_REQUIRED",
-                            "reason", linkRequired.reason().name(),
-                            "provider", slug));
+                    .body(new ApiErrorResponse(
+                            ErrorKey.FEDERATED_LINK_REQUIRED.name(),
+                            "Sign in the usual way, then link this provider from settings",
+                            Map.of(
+                                    "reason", linkRequired.reason().name(),
+                                    "provider", slug)));
         };
     }
 

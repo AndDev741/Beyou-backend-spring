@@ -2,7 +2,6 @@ package beyou.beyouapp.backend.domain.aiAgent;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +36,7 @@ import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
 import beyou.beyouapp.backend.domain.aiAgent.llm.FallbackChatModel;
 import beyou.beyouapp.backend.domain.aiAgent.dto.AgentEvent;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.user.User;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -309,7 +309,7 @@ public class AiAgentService {
                 .param("userChatContext", orNone(chat.getUserContextInChat()))
                 .param("currentPage", orNone(currentPage))
                 .param("focusItem", orNone(selectedItemGroupId == null ? null : selectedItemGroupId.toString()))
-                .param("today", LocalDate.now().toString()))
+                .param("today", UserDateResolver.today(user).toString()))
             .user(userInput)
             .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chat.getId().toString()))
             .tools(toolCallbacks)

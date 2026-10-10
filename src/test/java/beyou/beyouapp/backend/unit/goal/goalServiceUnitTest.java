@@ -582,12 +582,32 @@ public class goalServiceUnitTest {
     void moveUnder_nullDetachesToTopLevel() {
         Goal parent = ownedGoal(UUID.randomUUID(), null);
         goal.setParent(parent);
+        goal.setParentId(parent.getId()); // as loaded from the database
         when(goalRepository.findById(goalId)).thenReturn(Optional.of(goal));
         when(goalRepository.save(goal)).thenReturn(goal);
 
-        goalService.moveUnder(goalId, null, userId);
+        GoalResponseDTO moved = goalService.moveUnder(goalId, null, userId);
 
         assertEquals(null, goal.getParent());
+        assertEquals(null, moved.parentId(), "the reply still names the old parent");
+    }
+
+    // The reply is what the assistant reads back to the person, so it has to name the new
+    // parent. parentId is a read-only mirror that Hibernate only fills on load; before the
+    // mirror moved with the relation, this answered with the goal's old place in the tree.
+    @Test
+    void moveUnder_repliesWithTheNewParent() {
+        Goal oldParent = ownedGoal(UUID.randomUUID(), null);
+        Goal newParent = ownedGoal(UUID.randomUUID(), null);
+        goal.setParent(oldParent);
+        goal.setParentId(oldParent.getId()); // as loaded from the database
+        userGoalsAre(goal, oldParent, newParent);
+        when(goalRepository.save(goal)).thenReturn(goal);
+
+        GoalResponseDTO moved = goalService.moveUnder(goalId, newParent.getId(), userId);
+
+        assertEquals(newParent.getId(), moved.parentId());
+        assertEquals(newParent.getId(), goal.getParentId());
     }
 
     // ------------------------------------------------------------------ archiving

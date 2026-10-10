@@ -111,6 +111,14 @@ public enum ErrorKey {
     FEDERATED_IDENTITY_ISSUER_ALREADY_LINKED,
     OIDC_PROVIDER_UNKNOWN,
     OIDC_TOKEN_INVALID,
+    // Federated sign-in verified the identity, but it may not enter on its own: the issuer's
+    // word on the address is not trusted, or the address belongs to an account that exists.
+    // Answered as a 403 with the reason and the provider in details. Not an error to retry:
+    // the client asks the person to sign in their usual way and link the provider from settings.
+    FEDERATED_LINK_REQUIRED,
+    // Focus mode micro-tasks. Separate keys for the same reason as the notebook's below.
+    FOCUS_MICRO_TASK_NOT_FOUND,
+    FOCUS_MICRO_TASK_NOT_OWNED,
     // Study notebook. Not-owned and not-found stay separate keys like every other domain,
     // even though both answer 400, because the client words them differently.
     NOTEBOOK_PAGE_NOT_FOUND,
@@ -124,6 +132,7 @@ public enum ErrorKey {
     NOTEBOOK_NODE_DUPLICATE,
     // An edge between nodes of different boards, or a section used as an endpoint.
     NOTEBOOK_EDGE_INVALID,
+    NOTEBOOK_EDGE_NOT_FOUND,
     NOTEBOOK_CARD_NOT_FOUND,
     NOTEBOOK_SOURCE_NOT_FOUND,
     NOTEBOOK_SOURCE_TOO_LARGE,

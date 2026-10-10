@@ -312,6 +312,15 @@ class NotebookServiceIT extends AbstractIntegrationTest {
                 .isEqualTo(ErrorKey.NOTEBOOK_EDGE_INVALID);
     }
 
+    // An edge that is already gone (deleted from another tab, say) is "not found", which the
+    // client words differently from a link it refused to draw. It used to answer EDGE_INVALID.
+    @Test
+    void deletingAnEdgeThatIsGoneSaysSo() {
+        assertThatThrownBy(() -> boardService.deleteEdge(user, UUID.randomUUID()))
+                .extracting(e -> ((BusinessException) e).getErrorKey())
+                .isEqualTo(ErrorKey.NOTEBOOK_EDGE_NOT_FOUND);
+    }
+
     // -------------------------------------------------------------- ownership
 
     /**

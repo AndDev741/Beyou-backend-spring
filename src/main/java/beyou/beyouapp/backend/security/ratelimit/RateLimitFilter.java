@@ -70,6 +70,29 @@ public class RateLimitFilter extends OncePerRequestFilter {
     );
 
     /**
+     * Federated sign-in, {@code POST /auth/oidc/{provider}} and {@code .../mobile}: a sign-in door
+     * like {@code /auth/google}, anonymous and able to create an account, so it spends the same
+     * per-address bucket. It used to fall through to the write branch, which lets any request
+     * with no user id through, so it had no limit at all.
+     *
+     * <p>POST only, because {@code GET /auth/oidc/providers} is what the login screen reads on
+     * every visit and must not eat the five sign-in attempts. {@code /link} is excluded too: it
+     * is authenticated, so the write branch already keys it on the user.
+     */
+    private static boolean isFederatedSignInPath(String method, String path) {
+        String prefix = "/auth/oidc/";
+        if (!"POST".equals(method) || !path.startsWith(prefix)) {
+            return false;
+        }
+        String rest = path.substring(prefix.length());
+        int slash = rest.indexOf('/');
+        if (slash < 0) {
+            return !rest.isEmpty();
+        }
+        return slash > 0 && rest.substring(slash + 1).equals("mobile");
+    }
+
+    /**
      * The unsubscribe link's endpoint. Unauthenticated, so it needs a per-address bucket
      * of its own: every other write branch below reads a user id and calls
      * {@code doFilter} when there is none, which would leave this path unbounded.
@@ -135,7 +158,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String bucketKey;
         Bucket bucket;
 
-        if (AUTH_PATHS.contains(path)) {
+        if (AUTH_PATHS.contains(path) || isFederatedSignInPath(method, path)) {
             String ip = getClientIp(request);
             bucketKey = "auth:" + ip;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAuthBucket());

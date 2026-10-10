@@ -1,6 +1,5 @@
 package beyou.beyouapp.backend.domain.aiAgent.onboarding;
 
-import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -20,6 +19,7 @@ import beyou.beyouapp.backend.domain.aiAgent.onboarding.dto.OnboardingSuggestion
 import beyou.beyouapp.backend.domain.aiAgent.onboarding.dto.OnboardingSuggestionRequest.OnboardingContext;
 import beyou.beyouapp.backend.domain.aiAgent.onboarding.dto.OnboardingSuggestions;
 import beyou.beyouapp.backend.domain.aiAgent.onboarding.dto.OnboardingSuggestions.*;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.user.User;
@@ -92,7 +92,7 @@ public class OnboardingSuggestionService {
                 .system(s -> s.text(systemTemplate)
                         .param("language", user.getLanguageInUse() != null ? user.getLanguageInUse() : "en")
                         .param("iconCatalog", AiIconCatalog.promptCatalog())
-                        .param("today", LocalDate.now().toString()))
+                        .param("today", UserDateResolver.today(user).toString()))
                 .user(userMessage)
                 .call()
                 .entity(type);

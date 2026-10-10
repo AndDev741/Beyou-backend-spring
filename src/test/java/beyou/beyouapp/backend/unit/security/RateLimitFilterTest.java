@@ -81,6 +81,48 @@ class RateLimitFilterTest {
         assertNotNull(sixthResponse.getHeader("Retry-After"));
     }
 
+    // Federated sign-in is a door like /auth/google: anonymous, and it can create an account.
+    // It used to fall through to the write branch, which waves through any request with no
+    // user id, so it had no limit at all while the Google routes beside it had five.
+    @Test
+    void shouldThrottleFederatedSignInPerAddress() throws Exception {
+        for (String path : List.of("/auth/oidc/omelhorsite", "/auth/oidc/omelhorsite/mobile")) {
+            cache.invalidateAll();
+            for (int i = 0; i < 5; i++) {
+                assertEquals(200, callFilterFrom("POST", path, "10.0.0.7").getStatus());
+            }
+            MockHttpServletResponse sixth = callFilterFrom("POST", path, "10.0.0.7");
+            assertEquals(429, sixth.getStatus(), path + " is not in the auth bucket");
+            assertNotNull(sixth.getHeader("Retry-After"));
+        }
+    }
+
+    // One bucket for every sign-in door, so switching from the password form to a federated
+    // button cannot hand the same address a second allowance.
+    @Test
+    void shouldShareTheAuthBucketBetweenPasswordAndFederatedSignIn() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            callFilterFrom("POST", "/auth/login", "10.0.0.8");
+        }
+        assertEquals(429, callFilterFrom("POST", "/auth/oidc/omelhorsite", "10.0.0.8").getStatus());
+    }
+
+    // The provider list is what the login screen reads on every visit, and /link is an
+    // authenticated write that already has a user to key on. Neither may spend the five
+    // sign-in attempts an address gets.
+    @Test
+    void shouldLeaveTheProviderListAndLinkOutOfTheAuthBucket() throws Exception {
+        for (int i = 0; i < 10; i++) {
+            assertEquals(200, callFilterFrom("GET", "/auth/oidc/providers", "10.0.0.9").getStatus());
+        }
+        authenticateUser();
+        for (int i = 0; i < 10; i++) {
+            assertEquals(200, callFilterFrom("POST", "/auth/oidc/omelhorsite/link", "10.0.0.9").getStatus());
+        }
+        assertEquals(200, callFilterFrom("POST", "/auth/login", "10.0.0.9").getStatus(),
+                "the provider list or /link ate the sign-in allowance");
+    }
+
     @Test
     void shouldReturnRateLimitRemainingHeader() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/auth/login");
@@ -263,6 +305,14 @@ class RateLimitFilterTest {
         user.setId(UUID.randomUUID());
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(user, null, List.of()));
+    }
+
+    private MockHttpServletResponse callFilterFrom(String method, String path, String ip) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest(method, path);
+        request.setRemoteAddr(ip);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilterInternal(request, response, filterChain);
+        return response;
     }
 
     private MockHttpServletResponse callFilter(String method, String path) throws Exception {

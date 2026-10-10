@@ -2,6 +2,9 @@ package beyou.beyouapp.backend.domain.routine.specializedRoutines.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
+
 import java.util.List;
 
 import beyou.beyouapp.backend.domain.routine.RoutineType;
@@ -21,11 +24,18 @@ import beyou.beyouapp.backend.domain.routine.RoutineType;
  * server-built {@code DiaryRoutineResponseDTO} is never deserialized and does carry one.
  */
 public record DiaryRoutineRequestDTO(
-        String name,
-        String iconId,
+        // varchar(255). No @NotBlank on purpose: a blank name is the service's
+        // ROUTINE_NAME_REQUIRED, which both clients already word for the person.
+        @Size(max = 255) String name,
+        @Size(max = 255) String iconId,
         RoutineType type,
-        List<RoutineSectionRequestDTO> routineSections,
-        List<RoutineItemRequestDTO> items) {
+        // Bounds generous enough for any routine a person keeps, low enough that one request
+        // cannot ask the server to merge thousands of rows in a single transaction.
+        @Size(max = MAX_SECTIONS) List<@Valid RoutineSectionRequestDTO> routineSections,
+        @Size(max = MAX_ITEMS) List<RoutineItemRequestDTO> items) {
+
+    public static final int MAX_SECTIONS = 50;
+    public static final int MAX_ITEMS = 500;
 
     /**
      * The routine's shape, defaulting to DAILY when the caller said nothing.

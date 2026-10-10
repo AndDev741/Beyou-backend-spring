@@ -58,6 +58,10 @@ import lombok.RequiredArgsConstructor;
  * <p>The model never writes to the database and never picks an id or a coordinate. It proposes
  * text; this class cleans it, and the regular services create what the person accepted. The draft
  * is the onboarding pattern again: stateless, reviewable, nothing stored until "Create".
+ *
+ * <p>The methods that call the model are not {@code @Transactional}. Each reads in one short
+ * transaction, asks the model with none open, and writes (when it writes) in a second short one;
+ * see {@link NotebookTransactions} for why a call of up to ninety seconds cannot hold a connection.
  */
 @Service
 @RequiredArgsConstructor
@@ -79,11 +83,22 @@ public class NotebookAiService {
     private final NotebookCardService cardService;
     private final GoalRepository goalRepository;
     private final NotebookRoadmapDraftRepository draftRepository;
+    private final NotebookTransactions tx;
+
+    /** What a grounded prompt carries out of the read transaction: plain values only. */
+    private record Grounded(String message, StudyContextBuilder.Context context, String pageTitle) {
+    }
 
     // ------------------------------------------------------------------ draft
 
-    @Transactional(readOnly = true)
     public RoadmapDraftDTO roadmapDraft(User user, RoadmapDraftRequestDTO request) {
+        String message = tx.read(() -> roadmapMessage(user, request));
+        LlmPayloads.RoadmapPayload payload = llm.call(LlmPayloads.RoadmapPayload.class, message, user);
+        List<LlmPayloads.RoadmapNode> raw = payload.nodes() == null ? List.of() : payload.nodes();
+        return tx.read(() -> draftFrom(user, raw));
+    }
+
+    private String roadmapMessage(User user, RoadmapDraftRequestDTO request) {
         StringBuilder message = new StringBuilder("PLANNING\nPlan a study roadmap.\n")
                 .append("Subject: ").append(request.title().strip()).append('\n');
         if (request.why() != null && !request.why().isBlank()) {
@@ -121,10 +136,10 @@ public class NotebookAiService {
                 when the node could be skipped for the stated aim).
                 JSON: {"nodes":[{"title":"","why":"","subtopics":[""],"estimatedHours":10,"optional":false}]}
                 """);
+        return message.toString();
+    }
 
-        LlmPayloads.RoadmapPayload payload = llm.call(LlmPayloads.RoadmapPayload.class, message.toString(), user);
-        List<LlmPayloads.RoadmapNode> raw = payload.nodes() == null ? List.of() : payload.nodes();
-
+    private RoadmapDraftDTO draftFrom(User user, List<LlmPayloads.RoadmapNode> raw) {
         ProgressGraph graph = progressService.graphFor(user.getId());
         Map<String, NotebookPage> existing = existingByTitle(graph);
         List<DraftNodeDTO> nodes = new ArrayList<>();
@@ -205,37 +220,41 @@ public class NotebookAiService {
 
     // ---------------------------------------------------------------- suggest
 
-    @Transactional(readOnly = true)
     public List<SuggestedNodeDTO> suggestNodes(User user, UUID pageId, SuggestNodesRequestDTO request) {
-        NotebookPage page = ownership.page(user.getId(), pageId);
-        ProgressGraph graph = progressService.graphFor(user.getId());
-        List<String> existing = graph.childrenOf(pageId).stream()
-                .map(graph::page).filter(p -> p != null).map(NotebookPage::getTitle).toList();
-        NotebookPage topic = page.isTopic() ? page : graph.page(page.getTopicId());
+        record Prompt(String message, List<String> existing) {
+        }
+        Prompt prompt = tx.read(() -> {
+            NotebookPage page = ownership.page(user.getId(), pageId);
+            ProgressGraph graph = progressService.graphFor(user.getId());
+            List<String> existing = graph.childrenOf(pageId).stream()
+                    .map(graph::page).filter(p -> p != null).map(NotebookPage::getTitle).toList();
+            NotebookPage topic = page.isTopic() ? page : graph.page(page.getTopicId());
 
-        StringBuilder message = new StringBuilder();
-        if (request.fromSources()) {
-            StudyContextBuilder.Context context = contextBuilder.forPage(user, page);
-            if (context.isEmpty()) {
-                throw new BusinessException(ErrorKey.NOTEBOOK_NOTHING_TO_STUDY, "No notes or sources to read");
+            StringBuilder message = new StringBuilder();
+            if (request.fromSources()) {
+                StudyContextBuilder.Context context = contextBuilder.forPage(user, page);
+                if (context.isEmpty()) {
+                    throw new BusinessException(ErrorKey.NOTEBOOK_NOTHING_TO_STUDY, "No notes or sources to read");
+                }
+                message.append("GROUNDED\n").append(context.render());
+            } else {
+                message.append("PLANNING\n");
             }
-            message.append("GROUNDED\n").append(context.render());
-        } else {
-            message.append("PLANNING\n");
-        }
-        message.append("The roadmap is on the page \"").append(page.getTitle()).append('"');
-        if (topic != null && !topic.getId().equals(page.getId())) {
-            message.append(", inside the topic \"").append(topic.getTitle()).append('"');
-        }
-        message.append(".\nNodes already on it: ")
-                .append(existing.isEmpty() ? "(none)" : String.join(", ", existing))
-                .append(".\nSuggest 3 to 5 NEW nodes worth adding, in the order to study them. Never repeat ")
-                .append("an existing node. Each: title (max 60 characters) and why (one sentence, max 160 ")
-                .append("characters).\nJSON: {\"suggestions\":[{\"title\":\"\",\"why\":\"\"}]}\n");
+            message.append("The roadmap is on the page \"").append(page.getTitle()).append('"');
+            if (topic != null && !topic.getId().equals(page.getId())) {
+                message.append(", inside the topic \"").append(topic.getTitle()).append('"');
+            }
+            message.append(".\nNodes already on it: ")
+                    .append(existing.isEmpty() ? "(none)" : String.join(", ", existing))
+                    .append(".\nSuggest 3 to 5 NEW nodes worth adding, in the order to study them. Never repeat ")
+                    .append("an existing node. Each: title (max 60 characters) and why (one sentence, max 160 ")
+                    .append("characters).\nJSON: {\"suggestions\":[{\"title\":\"\",\"why\":\"\"}]}\n");
+            return new Prompt(message.toString(), existing);
+        });
 
-        LlmPayloads.SuggestionsPayload payload = llm.call(LlmPayloads.SuggestionsPayload.class, message.toString(), user);
+        LlmPayloads.SuggestionsPayload payload = llm.call(LlmPayloads.SuggestionsPayload.class, prompt.message(), user);
         Set<String> taken = new LinkedHashSet<>();
-        existing.forEach(t -> taken.add(normalise(t)));
+        prompt.existing().forEach(t -> taken.add(normalise(t)));
         List<SuggestedNodeDTO> out = new ArrayList<>();
         for (LlmPayloads.Suggestion s : payload.suggestions() == null ? List.<LlmPayloads.Suggestion>of() : payload.suggestions()) {
             String title = clean(s.title(), 255);
@@ -248,61 +267,68 @@ public class NotebookAiService {
 
     // ---------------------------------------------------------------- explain
 
-    @Transactional(readOnly = true)
     public AnswerDTO explain(User user, UUID pageId, ExplainRequestDTO request) {
-        NotebookPage page = ownership.page(user.getId(), pageId);
-        StudyContextBuilder.Context context = contextBuilder.forQuestion(user, page, request.text());
-        String message = "SUPPORTED\n" + context.render()
-                + "Explain this part of the person's notes on \"" + page.getTitle() + "\" so they understand "
-                + "it, in at most 200 words:\n\"\"\"\n" + request.text().strip() + "\n\"\"\"\n"
-                + "JSON: {\"answer\":\"markdown\",\"citations\":[numbers you used]}\n";
-        LlmPayloads.AnswerPayload payload = llm.call(LlmPayloads.AnswerPayload.class, message, user);
-        String markdown = contextBuilder.withoutDeadMarkers(context, clean(payload.answer(), 8000));
-        return new AnswerDTO(markdown, contextBuilder.citations(context, markdown, payload.citations()));
+        Grounded prompt = tx.read(() -> {
+            NotebookPage page = ownership.page(user.getId(), pageId);
+            StudyContextBuilder.Context context = contextBuilder.forQuestion(user, page, request.text());
+            String message = "SUPPORTED\n" + context.render()
+                    + "Explain this part of the person's notes on \"" + page.getTitle() + "\" so they understand "
+                    + "it, in at most 200 words:\n\"\"\"\n" + request.text().strip() + "\n\"\"\"\n"
+                    + "JSON: {\"answer\":\"markdown\",\"citations\":[numbers you used]}\n";
+            return new Grounded(message, context, page.getTitle());
+        });
+        LlmPayloads.AnswerPayload payload = llm.call(LlmPayloads.AnswerPayload.class, prompt.message(), user);
+        String markdown = contextBuilder.withoutDeadMarkers(prompt.context(), clean(payload.answer(), 8000));
+        return new AnswerDTO(markdown, contextBuilder.citations(prompt.context(), markdown, payload.citations()));
     }
 
     // ------------------------------------------------------------------ cards
 
-    @Transactional
     public List<CardDTO> cards(User user, UUID pageId, AiCardsRequestDTO request) {
-        NotebookPage page = ownership.page(user.getId(), pageId);
         int count = request.count() == null ? DEFAULT_CARDS : request.count();
         boolean selection = request.text() != null && !request.text().isBlank();
-        StudyContextBuilder.Context context = selection
-                ? contextBuilder.forQuestion(user, page, request.text())
-                : contextBuilder.forPage(user, page);
-        if (context.isEmpty() && !selection) {
-            throw new BusinessException(ErrorKey.NOTEBOOK_NOTHING_TO_STUDY, "No notes or sources to read");
-        }
-        StringBuilder message = new StringBuilder("GROUNDED\n").append(context.render());
-        if (selection) {
-            message.append("Focus on this text the person selected:\n\"\"\"\n").append(request.text().strip())
-                    .append("\n\"\"\"\n(The selection itself counts as material even where no passage repeats it.)\n");
-        }
-        message.append("Write ").append(count).append("""
-                 flashcards. front: a question that tests understanding rather than the wording \
-                (max 200 characters). back: the answer in one to three sentences (max 400 characters). \
-                citation: the number of the passage that supports it, or null.
-                JSON: {"cards":[{"front":"","back":"","citation":1}]}
-                """);
-        LlmPayloads.CardsPayload payload = llm.call(LlmPayloads.CardsPayload.class, message.toString(), user);
+        Grounded prompt = tx.read(() -> {
+            NotebookPage page = ownership.page(user.getId(), pageId);
+            StudyContextBuilder.Context context = selection
+                    ? contextBuilder.forQuestion(user, page, request.text())
+                    : contextBuilder.forPage(user, page);
+            if (context.isEmpty() && !selection) {
+                throw new BusinessException(ErrorKey.NOTEBOOK_NOTHING_TO_STUDY, "No notes or sources to read");
+            }
+            StringBuilder message = new StringBuilder("GROUNDED\n").append(context.render());
+            if (selection) {
+                message.append("Focus on this text the person selected:\n\"\"\"\n").append(request.text().strip())
+                        .append("\n\"\"\"\n(The selection itself counts as material even where no passage repeats it.)\n");
+            }
+            message.append("Write ").append(count).append("""
+                     flashcards. front: a question that tests understanding rather than the wording \
+                    (max 200 characters). back: the answer in one to three sentences (max 400 characters). \
+                    citation: the number of the passage that supports it, or null.
+                    JSON: {"cards":[{"front":"","back":"","citation":1}]}
+                    """);
+            return new Grounded(message.toString(), context, page.getTitle());
+        });
+        LlmPayloads.CardsPayload payload = llm.call(LlmPayloads.CardsPayload.class, prompt.message(), user);
 
         Map<Integer, Passage> passages = new HashMap<>();
-        context.passages().forEach(p -> passages.put(p.number(), p));
+        prompt.context().passages().forEach(p -> passages.put(p.number(), p));
         List<CreateCardRequestDTO> cards = new ArrayList<>();
         for (LlmPayloads.Card card : payload.cards() == null ? List.<LlmPayloads.Card>of() : payload.cards()) {
             String front = clean(card.front(), 2000);
             String back = clean(card.back(), 2000);
             if (front.isEmpty() || back.isEmpty()) continue;
             Passage cited = card.citation() == null ? null : passages.get(card.citation());
-            String label = cited == null ? page.getTitle() : cited.label();
+            String label = cited == null ? prompt.pageTitle() : cited.label();
             cards.add(new CreateCardRequestDTO(front, back, clean(label, 255)));
             if (cards.size() >= count) break;
         }
         if (cards.isEmpty()) {
             throw new BusinessException(ErrorKey.AI_UNAVAILABLE, "No usable cards came back");
         }
-        return cardService.createAll(page, cards, UserDateResolver.today(user));
+        // Loaded again: the page from the read is detached, and it may have been deleted while
+        // the model was thinking, in which case this refuses rather than saving orphans.
+        return tx.write(() -> cardService.createAll(ownership.page(user.getId(), pageId), cards,
+                UserDateResolver.today(user)));
     }
 
     // --------------------------------------------------------------- helpers

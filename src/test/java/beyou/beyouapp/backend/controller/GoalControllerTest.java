@@ -266,4 +266,49 @@ private final ObjectMapper objectMapper = new ObjectMapper()
                 .andExpect(status().isBadRequest());
         org.mockito.Mockito.verifyNoInteractions(goalService);
     }
+
+    // A goal someone else owns comes back as GOAL_NOT_OWNED. These three handlers used to wrap
+    // every exception in a RuntimeException. The response survived that only because Spring
+    // matches @ExceptionHandler against the cause chain; the logging aspect does not, so each
+    // refusal was logged at ERROR with a stack trace. These pin the response now the wrap is gone.
+    @Test
+    void completeOnSomeoneElsesGoalAnswersWithItsErrorKey() throws Exception {
+        UUID goalId = UUID.randomUUID();
+        when(goalService.checkGoal(goalId, userId)).thenThrow(notOwned());
+
+        mockMvc.perform(put("/goal/complete")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(goalId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("GOAL_NOT_OWNED"));
+    }
+
+    @Test
+    void increaseOnSomeoneElsesGoalAnswersWithItsErrorKey() throws Exception {
+        UUID goalId = UUID.randomUUID();
+        when(goalService.increaseCurrentValue(goalId, 1.0, userId)).thenThrow(notOwned());
+
+        mockMvc.perform(put("/goal/increase")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new UpdateGoalValueDTO(goalId, 1.0))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("GOAL_NOT_OWNED"));
+    }
+
+    @Test
+    void decreaseOnSomeoneElsesGoalAnswersWithItsErrorKey() throws Exception {
+        UUID goalId = UUID.randomUUID();
+        when(goalService.decreaseCurrentValue(goalId, 1.0, userId)).thenThrow(notOwned());
+
+        mockMvc.perform(put("/goal/decrease")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new UpdateGoalValueDTO(goalId, 1.0))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("GOAL_NOT_OWNED"));
+    }
+
+    private static beyou.beyouapp.backend.exceptions.BusinessException notOwned() {
+        return new beyou.beyouapp.backend.exceptions.BusinessException(
+                beyou.beyouapp.backend.exceptions.ErrorKey.GOAL_NOT_OWNED, "The goal isn't of the user in context");
+    }
 }

@@ -385,7 +385,7 @@ public class NotebookBoardService {
     @Transactional
     public void deleteEdge(User user, UUID edgeId) {
         NotebookBoardEdge edge = edgeRepository.findById(edgeId)
-                .orElseThrow(() -> new BusinessException(ErrorKey.NOTEBOOK_EDGE_INVALID, "Edge not found"));
+                .orElseThrow(() -> new BusinessException(ErrorKey.NOTEBOOK_EDGE_NOT_FOUND, "Edge not found"));
         ownership.page(user.getId(), edge.getBoardPageId());
         edgeRepository.delete(edge);
     }

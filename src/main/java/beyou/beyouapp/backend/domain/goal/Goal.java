@@ -120,6 +120,21 @@ public class Goal {
     private UUID parentId;
 
     /**
+     * Sets the relation and its mirror together, and is the only setter for the relation.
+     *
+     * <p>Hibernate fills {@link #parentId} when it loads the row and never again in the same
+     * session, so a goal re-parented here kept reporting its old parent until the next read.
+     * GoalService.moveUnder returned exactly that to the assistant, which then told the person
+     * the move had not happened. Keeping the two in one setter means no path can update one
+     * and forget the other. Hibernate itself writes fields, not setters, so this is not on its
+     * load path.
+     */
+    public void setParent(Goal parent) {
+        this.parent = parent;
+        this.parentId = parent == null ? null : parent.getId();
+    }
+
+    /**
      * When the goal was put away, or null while it is active. Orthogonal to {@link #status}:
      * a finished goal and an abandoned one can both be archived, and neither changes how far
      * it got or the XP it paid. Written only by GoalService.setArchived, which also stamps the
