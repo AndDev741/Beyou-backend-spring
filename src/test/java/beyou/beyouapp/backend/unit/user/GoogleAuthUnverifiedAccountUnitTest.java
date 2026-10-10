@@ -83,7 +83,7 @@ class GoogleAuthUnverifiedAccountUnitTest {
 
     /** A password account, exactly as registration leaves it before anyone clicks the link. */
     private User unverifiedLocalAccount() {
-        User user = new User(new UserRegisterDTO("Squatter", EMAIL, "AttackerPassword1!", null));
+        User user = new User(new UserRegisterDTO("Squatter", EMAIL, "AttackerPassword1!", null, null));
         user.setEmailVerified(false);
         return user;
     }
@@ -93,7 +93,7 @@ class GoogleAuthUnverifiedAccountUnitTest {
     void googleRefusesUnverifiedLocalAccount() {
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(unverifiedLocalAccount()));
 
-        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, response);
+        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, null, response);
 
         assertEquals(HttpStatus.FORBIDDEN, result.getStatusCode());
         assertEquals("EMAIL_NOT_VERIFIED", result.getBody().get("error"),
@@ -109,7 +109,7 @@ class GoogleAuthUnverifiedAccountUnitTest {
         user.setEmailVerified(true);
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
 
-        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, response);
+        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, null, response);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         verify(tokenService).generateJwtToken(user);
@@ -122,7 +122,7 @@ class GoogleAuthUnverifiedAccountUnitTest {
         assertTrue(googleUser.isEmailVerified(), "the Google constructor is what makes this row verified");
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(googleUser));
 
-        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, response);
+        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, null, response);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
     }
@@ -133,7 +133,7 @@ class GoogleAuthUnverifiedAccountUnitTest {
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
 
-        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, response);
+        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, null, response);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         verify(userRepository).save(any(User.class));

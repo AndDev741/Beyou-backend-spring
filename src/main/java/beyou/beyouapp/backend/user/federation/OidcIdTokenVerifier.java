@@ -116,8 +116,7 @@ public class OidcIdTokenVerifier {
                 decoded.getClaim("email").asString(),
                 Boolean.TRUE.equals(decoded.getClaim("email_verified").asBoolean()),
                 decoded.getClaim("name").asString(),
-                decoded.getClaim("picture").asString(),
-                null);
+                decoded.getClaim("picture").asString());
     }
 
     private RSAPublicKey resolveKey(String issuer, String kid) {

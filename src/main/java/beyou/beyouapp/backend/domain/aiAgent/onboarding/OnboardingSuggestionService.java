@@ -23,6 +23,7 @@ import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserLanguage;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
@@ -90,7 +91,7 @@ public class OnboardingSuggestionService {
     private <T> T doCall(Class<T> type, String userMessage, User user) {
         return chatClient.prompt()
                 .system(s -> s.text(systemTemplate)
-                        .param("language", user.getLanguageInUse() != null ? user.getLanguageInUse() : "en")
+                        .param("language", UserLanguage.forPrompt(user))
                         .param("iconCatalog", AiIconCatalog.promptCatalog())
                         .param("today", UserDateResolver.today(user).toString()))
                 .user(userMessage)

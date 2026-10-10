@@ -38,6 +38,7 @@ import beyou.beyouapp.backend.domain.aiAgent.llm.FallbackChatModel;
 import beyou.beyouapp.backend.domain.aiAgent.dto.AgentEvent;
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserLanguage;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.Disposable;
@@ -303,7 +304,7 @@ public class AiAgentService {
         User user = chat.getUser();
         return this.chatClient.prompt()
             .system(s -> s.text(systemTemplate)
-                .param("language", user.getLanguageInUse() != null ? user.getLanguageInUse() : "en")
+                .param("language", UserLanguage.forPrompt(user))
                 .param("iconCatalog", AiIconCatalog.promptCatalog())
                 .param("userContext", orNone(user.getUserContext()))
                 .param("userChatContext", orNone(chat.getUserContextInChat()))

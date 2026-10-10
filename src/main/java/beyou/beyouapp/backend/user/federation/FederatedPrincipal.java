@@ -18,6 +18,7 @@ package beyou.beyouapp.backend.user.federation;
  * @param picture       avatar URL, may be null
  * @param timezone      claimed by the CLIENT, never by the issuer, and only ever applied
  *                      when an account is created — same contract as {@code GoogleUserDTO}
+ * @param language      claimed by the client too, under the same contract
  */
 public record FederatedPrincipal(
         String issuer,
@@ -26,9 +27,17 @@ public record FederatedPrincipal(
         boolean emailVerified,
         String name,
         String picture,
-        String timezone) {
+        String timezone,
+        String language) {
 
-    public FederatedPrincipal withTimezone(String timezone) {
-        return new FederatedPrincipal(issuer, subject, email, emailVerified, name, picture, timezone);
+    /** A principal with nothing claimed by the client yet, which is how a verifier builds one. */
+    public FederatedPrincipal(String issuer, String subject, String email, boolean emailVerified,
+                              String name, String picture) {
+        this(issuer, subject, email, emailVerified, name, picture, null, null);
+    }
+
+    /** What the client claimed about its device, attached after verification. */
+    public FederatedPrincipal withClientClaims(String timezone, String language) {
+        return new FederatedPrincipal(issuer, subject, email, emailVerified, name, picture, timezone, language);
     }
 }

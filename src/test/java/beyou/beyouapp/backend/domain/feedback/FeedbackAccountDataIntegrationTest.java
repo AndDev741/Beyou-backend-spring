@@ -412,7 +412,7 @@ class FeedbackAccountDataIntegrationTest extends AbstractIntegrationTest {
 
     private User recreateUser(String email, String name, UserRole role) {
         deleteUser(email);
-        userService.registerUser(new UserRegisterDTO(name, email, PASSWORD, null));
+        userService.registerUser(new UserRegisterDTO(name, email, PASSWORD, null, null));
 
         User user = userRepository.findByEmail(email).orElseThrow();
         user.setEmailVerified(true);

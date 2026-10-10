@@ -164,7 +164,7 @@ class UserIdLogPatternTest extends AbstractIntegrationTest {
     void everyLineAnAuthenticatedRequestLogsAfterAuthCarriesThatUsersId() throws Exception {
         refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
-        userService.registerUser(new UserRegisterDTO("log ctx", "logcontext@beyou.test", "TestPassword1!", null));
+        userService.registerUser(new UserRegisterDTO("log ctx", "logcontext@beyou.test", "TestPassword1!", null, null));
         User user = userRepository.findByEmail("logcontext@beyou.test").orElseThrow();
         user.setEmailVerified(true);
         userRepository.save(user);

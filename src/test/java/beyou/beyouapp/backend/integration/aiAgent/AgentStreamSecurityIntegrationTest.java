@@ -94,7 +94,7 @@ class AgentStreamSecurityIntegrationTest extends AbstractIntegrationTest {
     }
 
     private User registerAndVerify(String email) {
-        userService.registerUser(new UserRegisterDTO("test", email, PASSWORD, null));
+        userService.registerUser(new UserRegisterDTO("test", email, PASSWORD, null, null));
         User user = userRepository.findByEmail(email).orElseThrow();
         user.setEmailVerified(true);
         user = userRepository.saveAndFlush(user);

@@ -79,7 +79,7 @@ class UserServiceGoogleMobileAuthUnitTest {
         when(refreshTokenService.createRefreshToken(user)).thenReturn("refresh");
         when(userMapper.toResponseDTO(user)).thenReturn(dto);
 
-        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, response);
+        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, null, response);
 
         assertThat(result.getStatusCode().value()).isEqualTo(200);
         assertThat(result.getBody()).containsEntry("success", dto).containsEntry("refreshToken", "refresh");
@@ -100,7 +100,7 @@ class UserServiceGoogleMobileAuthUnitTest {
         when(userMapper.toResponseDTO(org.mockito.ArgumentMatchers.any(User.class)))
                 .thenReturn(dummyDto());
 
-        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, response);
+        ResponseEntity<Map<String, Object>> result = service.googleMobileAuth(ID_TOKEN, null, null, response);
 
         ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(saved.capture());
@@ -121,11 +121,12 @@ class UserServiceGoogleMobileAuthUnitTest {
         when(userMapper.toResponseDTO(org.mockito.ArgumentMatchers.any(User.class)))
                 .thenReturn(dummyDto());
 
-        service.googleMobileAuth(ID_TOKEN, "Europe/Lisbon", response);
+        service.googleMobileAuth(ID_TOKEN, "Europe/Lisbon", "pt-BR", response);
 
         ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(saved.capture());
         assertThat(saved.getValue().getTimezone()).isEqualTo("Europe/Lisbon");
+        assertThat(saved.getValue().getLanguageInUse()).isEqualTo("pt");
         assertThat(saved.getValue().getTimezoneSource())
                 .isEqualTo(beyou.beyouapp.backend.user.enums.TimezoneSource.DETECTED);
     }
@@ -141,7 +142,7 @@ class UserServiceGoogleMobileAuthUnitTest {
         when(refreshTokenService.createRefreshToken(user)).thenReturn("refresh");
         when(userMapper.toResponseDTO(user)).thenReturn(dto);
 
-        service.googleMobileAuth(ID_TOKEN, "America/Sao_Paulo", response);
+        service.googleMobileAuth(ID_TOKEN, "America/Sao_Paulo", null, response);
 
         // Sign-in is not the place to decide whether a detected zone may replace one the
         // account already has. That rule lives in UserService.editUser, which the client
@@ -155,7 +156,7 @@ class UserServiceGoogleMobileAuthUnitTest {
         when(googleIdTokenVerifierService.verify(ID_TOKEN))
                 .thenThrow(new BusinessException(ErrorKey.INVALID_REQUEST, "Invalid Google ID token"));
 
-        assertThatThrownBy(() -> service.googleMobileAuth(ID_TOKEN, null, response))
+        assertThatThrownBy(() -> service.googleMobileAuth(ID_TOKEN, null, null, response))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Invalid Google ID token");
 

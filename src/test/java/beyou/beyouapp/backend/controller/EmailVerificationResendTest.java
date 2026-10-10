@@ -79,7 +79,7 @@ public class EmailVerificationResendTest extends AbstractIntegrationTest {
     }
 
     private User register(String email) {
-        userService.registerUser(new UserRegisterDTO("test", email, "TestPassword1!", null));
+        userService.registerUser(new UserRegisterDTO("test", email, "TestPassword1!", null, null));
         return userRepository.findByEmail(email).orElseThrow();
     }
 

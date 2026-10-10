@@ -60,20 +60,23 @@ public class AuthenticationController {
 
     /**
      * {@code timezone} is optional and carries the browser's detected IANA zone, so a
-     * Google account is not created on the UTC calendar. A client that does not send it
-     * still works; the boot reconcile picks the account up afterwards.
+     * Google account is not created on the UTC calendar. {@code language} is the language
+     * the screen is showing, so the account's AI text and mail start in it. A client that
+     * sends neither still works; the boot reconcile picks the account up afterwards.
      */
     @GetMapping("/google")
     public ResponseEntity<Map<String, Object>> googleAuth(@RequestParam("code") String code,
                                 @RequestParam(value = "timezone", required = false) String timezone,
+                                @RequestParam(value = "language", required = false) String language,
                                 HttpServletResponse response){
-        return userServiceGoogleOAuth.googleAuth(code, timezone, response);
+        return userServiceGoogleOAuth.googleAuth(code, timezone, language, response);
     }
 
     @PostMapping("/google/mobile")
     public ResponseEntity<Map<String, Object>> googleMobileAuth(@RequestBody @Valid GoogleMobileLoginDTO request,
                                 HttpServletResponse response){
-        return userServiceGoogleOAuth.googleMobileAuth(request.idToken(), request.timezone(), response);
+        return userServiceGoogleOAuth.googleMobileAuth(request.idToken(), request.timezone(),
+                request.language(), response);
     }
 
     @PostMapping("/refresh")
@@ -130,7 +133,8 @@ public class AuthenticationController {
     public ResponseEntity<?> oidcLogin(@PathVariable String provider,
                                        @RequestBody @Valid OidcLoginDTO request,
                                        HttpServletResponse response){
-        return oidcAuthService.login(provider, request.idToken(), request.timezone(), false, response);
+        return oidcAuthService.login(provider, request.idToken(), request.timezone(), request.language(),
+                false, response);
     }
 
     /** The same, on the mobile contract: X-Access-Token header and refreshToken in the body. */
@@ -138,7 +142,8 @@ public class AuthenticationController {
     public ResponseEntity<?> oidcLoginMobile(@PathVariable String provider,
                                              @RequestBody @Valid OidcLoginDTO request,
                                              HttpServletResponse response){
-        return oidcAuthService.login(provider, request.idToken(), request.timezone(), true, response);
+        return oidcAuthService.login(provider, request.idToken(), request.timezone(), request.language(),
+                true, response);
     }
 
     /**

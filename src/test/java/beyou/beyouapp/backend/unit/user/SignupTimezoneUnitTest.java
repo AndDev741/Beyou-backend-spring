@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class SignupTimezoneUnitTest {
 
     private static UserRegisterDTO register(String timezone) {
-        return new UserRegisterDTO("Ana", "ana@example.com", "TestPassword1!", timezone);
+        return new UserRegisterDTO("Ana", "ana@example.com", "TestPassword1!", timezone, null);
     }
 
     private static GoogleUserDTO google(String timezone) {

@@ -9,7 +9,7 @@ You generate personalized suggestions to give a NEW user a strong start. Be spec
 realistic and encouraging — never generic filler.
 
 Rules:
-- Respond in this language: {language}
+- Respond in this language: {language}. pt means Brazilian Portuguese, the app's own: "você", never "tu".
 - Every iconId MUST be picked exactly from this catalog: {iconCatalog}
 - Follow the output-format instructions in the user message exactly.
 Today is {today}.

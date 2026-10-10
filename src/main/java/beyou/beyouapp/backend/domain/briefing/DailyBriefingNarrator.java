@@ -19,6 +19,7 @@ import beyou.beyouapp.backend.domain.briefing.dto.RecoveryWindow;
 import beyou.beyouapp.backend.domain.briefing.dto.TodayAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.YesterdayRecap;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserLanguage;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -100,9 +101,7 @@ public class DailyBriefingNarrator {
     }
 
     private static String language(User user) {
-        return user.getLanguageInUse() != null && !user.getLanguageInUse().isBlank()
-                ? user.getLanguageInUse()
-                : "en";
+        return UserLanguage.forPrompt(user);
     }
 
     /**
