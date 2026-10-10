@@ -62,8 +62,7 @@ public class GoalController {
 
     /**
      * Archive or restore a goal, with its sub-goals. Returns every goal whose state changed, so
-     * a client can patch its list without a refetch. Not wrapped in a RuntimeException like the
-     * handlers below: a refused archive has to reach the client as its error key.
+     * a client can patch its list without a refetch.
      */
     @PutMapping("/archive")
     public List<GoalResponseDTO> setArchived(@RequestBody @Valid ArchiveGoalRequestDTO dto) {
@@ -74,33 +73,18 @@ public class GoalController {
     @PutMapping("/complete")
     public RefreshUiDTO setAsComplete(@RequestBody UUID goalId) {
         User user = authenticatedUser.getAuthenticatedUser();
-        
-        try {
-            return goalService.checkGoal(goalId, user.getId());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        } 
+        return goalService.checkGoal(goalId, user.getId());
     }
 
     @PutMapping("/increase")
     public GoalResponseDTO increaseCurrentValue(@RequestBody @Valid UpdateGoalValueDTO dto) {
         User user = authenticatedUser.getAuthenticatedUser();
-        
-        try {
-            return goalService.increaseCurrentValue(dto.goalId(), dto.value(), user.getId());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        } 
+        return goalService.increaseCurrentValue(dto.goalId(), dto.value(), user.getId());
     }
 
     @PutMapping("/decrease")
     public GoalResponseDTO decreaseCurrentValue(@RequestBody @Valid UpdateGoalValueDTO dto) {
         User user = authenticatedUser.getAuthenticatedUser();
-        
-        try {
-            return goalService.decreaseCurrentValue(dto.goalId(), dto.value(), user.getId());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        } 
+        return goalService.decreaseCurrentValue(dto.goalId(), dto.value(), user.getId());
     }
 }

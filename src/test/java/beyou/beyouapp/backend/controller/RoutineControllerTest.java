@@ -259,4 +259,39 @@ class RoutineControllerTest extends AbstractIntegrationTest {
 
         verify(diaryRoutineService).skipOrUnskipGroup(skipRequest, userId);
     }
+
+    // routines.name and routine_sections.name are varchar(255). A longer name used to reach the
+    // INSERT and fail there; the request is now refused at the door with the field named.
+    // A blank name is NOT tested here on purpose: it stays the service's ROUTINE_NAME_REQUIRED,
+    // which the clients already translate.
+    @Test
+    void aRoutineNameLongerThanItsColumnIsRefusedBeforeTheService() throws Exception {
+        DiaryRoutineRequestDTO requestDTO = new DiaryRoutineRequestDTO(
+                "x".repeat(256), "icon", RoutineType.DAILY,
+                List.of(new RoutineSectionRequestDTO(null, "Morning", "sun", null, null, List.of(), List.of(), false)), List.of());
+
+        mockMvc.perform(post("/routine")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(requestDTO)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.details.name").exists());
+
+        org.mockito.Mockito.verifyNoInteractions(diaryRoutineService);
+    }
+
+    @Test
+    void aSectionNameLongerThanItsColumnIsRefusedBeforeTheService() throws Exception {
+        DiaryRoutineRequestDTO requestDTO = new DiaryRoutineRequestDTO(
+                "My routine", "icon", RoutineType.DAILY,
+                List.of(new RoutineSectionRequestDTO(null, "x".repeat(256), "sun", null, null, List.of(), List.of(), false)), List.of());
+
+        mockMvc.perform(post("/routine")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(requestDTO)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"));
+
+        org.mockito.Mockito.verifyNoInteractions(diaryRoutineService);
+    }
 }

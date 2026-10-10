@@ -22,6 +22,7 @@ import beyou.beyouapp.backend.domain.briefing.dto.DailyBriefingResponseDTO;
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.user.User;
 import jakarta.annotation.PreDestroy;
+import beyou.beyouapp.backend.monitoring.UserContextLogFilter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -286,22 +287,25 @@ public class DailyBriefingService {
 
     private CompletableFuture<BriefingNarrative> submit(User user, UUID rowId,
                                                        DailyBriefingFactsBuilder.Facts facts) {
-        CompletableFuture<BriefingNarrative> future = CompletableFuture.supplyAsync(() -> {
-            BriefingNarrative narrative = narrator.narrate(facts, user);
-            writes.storeNarrative(rowId, NarrativeStatus.READY, writeJson(narrative));
-            return narrative;
-        }, narrationPool);
+        // On the narration pool, so the user id the log lines carry is set by hand.
+        UUID userId = user.getId();
+        CompletableFuture<BriefingNarrative> future = CompletableFuture.supplyAsync(
+                () -> UserContextLogFilter.withUserId(userId, () -> {
+                    BriefingNarrative narrative = narrator.narrate(facts, user);
+                    writes.storeNarrative(rowId, NarrativeStatus.READY, writeJson(narrative));
+                    return narrative;
+                }), narrationPool);
 
         // Registered on the future rather than in a finally inside the supplier, so the
         // entry outlives the work by exactly as long as it takes a waiting caller to be
         // handed the result.
-        return future.whenComplete((narrative, error) -> {
+        return future.whenComplete((narrative, error) -> UserContextLogFilter.withUserId(userId, () -> {
             inFlight.remove(rowId);
             if (error != null) {
                 log.warn("Briefing narration failed for {} — serving facts only", rowId, error);
                 writes.storeNarrative(rowId, NarrativeStatus.UNAVAILABLE, null);
             }
-        });
+        }));
     }
 
     private String writeJson(BriefingNarrative narrative) {

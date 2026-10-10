@@ -2,7 +2,6 @@ package beyou.beyouapp.backend.domain.notebook.ai;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -20,6 +19,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.user.User;
@@ -128,7 +128,7 @@ public class NotebookLlm {
         T result = chatClient.prompt()
                 .system(s -> s.text(systemTemplate)
                         .param("language", user.getLanguageInUse() != null ? user.getLanguageInUse() : "en")
-                        .param("today", LocalDate.now().toString()))
+                        .param("today", UserDateResolver.today(user).toString()))
                 .user(userMessage)
                 .call()
                 .entity(type);

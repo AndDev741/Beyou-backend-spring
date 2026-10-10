@@ -22,6 +22,7 @@ import beyou.beyouapp.backend.domain.notebook.NotebookPage;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
 import beyou.beyouapp.backend.domain.notebook.ai.NotebookAiService;
+import beyou.beyouapp.backend.domain.notebook.ai.NotebookTransactions;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.AiCardsRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.card.dto.CardDTO;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService;
@@ -72,6 +73,7 @@ public class StudyBoardEditor {
     private final NotebookOwnership ownership;
     private final NotebookAiService aiService;
     private final NotebookAiQuota aiQuota;
+    private final NotebookTransactions tx;
 
     // ----------------------------------------------------------------- reads
 
@@ -297,16 +299,22 @@ public class StudyBoardEditor {
      * block if it had none, so the cards show where the person reads. It spends the notebook-ai
      * quota like the button does.
      */
-    @Transactional
     public Map<String, Object> generateCards(User user, String board, String node, Integer count, String focus) {
-        NotebookPage page = boardPage(user, board);
-        UUID pageId = page.getId();
-        String title = page.getTitle();
-        if (!isBlank(node)) {
-            BoardNodeDTO target = pageNode(user, page, node);
-            pageId = target.pageId();
-            title = target.title();
+        // Not @Transactional, unlike the other tools here: the cards call reaches the model, and
+        // a transaction open around it would hold a connection for as long as the model takes.
+        // The lookup gets a short one of its own; NotebookAiService.cards and ensureBlock open theirs.
+        record Target(UUID pageId, String title) {
         }
+        Target target = tx.read(() -> {
+            NotebookPage page = boardPage(user, board);
+            if (isBlank(node)) {
+                return new Target(page.getId(), page.getTitle());
+            }
+            BoardNodeDTO found = pageNode(user, page, node);
+            return new Target(found.pageId(), found.title());
+        });
+        UUID pageId = target.pageId();
+        String title = target.title();
         if (count != null && (count < 1 || count > CARDS_MAX)) {
             throw new IllegalArgumentException("count is between 1 and " + CARDS_MAX);
         }

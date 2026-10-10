@@ -9,6 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -118,6 +121,41 @@ class NotebookLlmTest {
         llm.call(Answer.class, "Draft a roadmap", user());
 
         assertThat(seen.get()).isEqualTo("user-123");
+    }
+
+    /**
+     * "Today" in the prompt is the person's day, not the server's. Kiritimati and Pago Pago are
+     * 25 hours apart, so at any instant they are on different dates: a prompt built from the
+     * server's clock gives both the same one and fails here whatever time the suite runs.
+     */
+    @Test
+    void todayInThePromptIsTheAccountsOwnDay() {
+        List<String> systemPrompts = new ArrayList<>();
+        when(chatModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            systemPrompts.add(((Prompt) inv.getArgument(0)).getInstructions().get(0).getText());
+            return ok("{\"text\":\"ok\"}");
+        });
+
+        // A budget of its own: this is about the prompt, and the class's 600 ms can run out on a
+        // cold first call, which would fail the test for a reason it is not about.
+        NotebookLlm roomy = new NotebookLlm(chatModel,
+                new ByteArrayResource("Tutor. Language {language}. Today {today}.".getBytes()),
+                Duration.ofSeconds(20), Duration.ofSeconds(1));
+        try {
+            roomy.call(Answer.class, "Draft a roadmap", userIn("Pacific/Kiritimati"));
+            roomy.call(Answer.class, "Draft a roadmap", userIn("Pacific/Pago_Pago"));
+        } finally {
+            roomy.shutdown();
+        }
+
+        assertThat(systemPrompts.get(0)).contains("Today " + LocalDate.now(ZoneId.of("Pacific/Kiritimati")));
+        assertThat(systemPrompts.get(1)).contains("Today " + LocalDate.now(ZoneId.of("Pacific/Pago_Pago")));
+    }
+
+    private static User userIn(String zone) {
+        User u = user();
+        u.setTimezone(zone);
+        return u;
     }
 
     private static ChatResponse ok(String json) {

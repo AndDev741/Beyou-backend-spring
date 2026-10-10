@@ -48,6 +48,11 @@ import lombok.RequiredArgsConstructor;
  *
  * <p>Ownership is checked through the item's routine, the same path {@code CheckItemService} uses:
  * an item group belongs to a section, the section to a routine, the routine to a user.
+ *
+ * <p>Not cached. The micro-task read is also a write (it materialises pinned names, above), so a
+ * cached answer would skip the very rows the person is about to tick. The rest are reads for one
+ * day and one item, written to on every tick, and each is a single indexed query. No cached read
+ * elsewhere returns these rows either, which is why nothing here evicts.
  */
 @Service
 @RequiredArgsConstructor
@@ -343,9 +348,9 @@ public class FocusService {
 
     private FocusMicroTask ownedTask(User user, UUID id) {
         FocusMicroTask task = microTaskRepository.findById(id)
-            .orElseThrow(() -> new BusinessException(ErrorKey.INVALID_REQUEST, "Micro-task not found"));
+            .orElseThrow(() -> new BusinessException(ErrorKey.FOCUS_MICRO_TASK_NOT_FOUND, "Micro-task not found"));
         if (!task.getUser().getId().equals(user.getId())) {
-            throw new BusinessException(ErrorKey.ROUTINE_NOT_OWNED, "Micro-task belongs to another user");
+            throw new BusinessException(ErrorKey.FOCUS_MICRO_TASK_NOT_OWNED, "Micro-task belongs to another user");
         }
         return task;
     }

@@ -3,6 +3,9 @@ package beyou.beyouapp.backend.monitoring;
 import java.io.IOException;
 
 import org.slf4j.MDC;
+
+import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -65,6 +68,35 @@ public class UserContextLogFilter extends OncePerRequestFilter {
 
     /** MDC key. Matches the {@code %X{userId}} lookup in the log pattern. */
     public static final String USER_ID_KEY = "userId";
+
+    /**
+     * Runs work that left the request thread with this user's id in its log lines.
+     *
+     * <p>The MDC is per thread, so a job handed to a pool (the briefing's narration, a notebook
+     * source being read, a roadmap draft) logs {@code anonymous} unless it sets the id itself.
+     * Those are the lines most worth attributing: they are where a slow provider or an
+     * unreadable PDF shows up. The id is removed afterwards, since a pooled platform thread
+     * would otherwise carry it into the next user's job.
+     */
+    public static <T> T withUserId(UUID userId, Supplier<T> work) {
+        if (userId == null) {
+            return work.get();
+        }
+        MDC.put(USER_ID_KEY, userId.toString());
+        try {
+            return work.get();
+        } finally {
+            MDC.remove(USER_ID_KEY);
+        }
+    }
+
+    /** {@link #withUserId(UUID, Supplier)} for work with no result. */
+    public static void withUserId(UUID userId, Runnable work) {
+        withUserId(userId, () -> {
+            work.run();
+            return null;
+        });
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,

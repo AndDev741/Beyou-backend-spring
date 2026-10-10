@@ -6,7 +6,6 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -189,21 +188,20 @@ public class RoadmapDraftService {
         if (draft == null || draft.getStatus() != RoadmapDraftStatus.DRAFTING) return;
         UUID userId = draft.getUser().getId();
         // Off the request thread, so the user id every log line carries is set by hand.
-        MDC.put(UserContextLogFilter.USER_ID_KEY, userId.toString());
-        try {
-            User user = userRepository.findById(userId).orElse(null);
-            if (user == null) return;
-            RoadmapDraftRequestDTO request = objectMapper.readValue(draft.getRequest(), RoadmapDraftRequestDTO.class);
-            RoadmapDraftDTO result = aiService.roadmapDraft(user, request);
-            writes.ready(draftId, objectMapper.writeValueAsString(result));
-        } catch (BusinessException e) {
-            writes.failed(draftId, e.getErrorKey().name());
-        } catch (RuntimeException e) {
-            log.error("Roadmap draft {} failed", draftId, e);
-            writes.failed(draftId, ErrorKey.AI_UNAVAILABLE.name());
-        } finally {
-            MDC.remove(UserContextLogFilter.USER_ID_KEY);
-        }
+        UserContextLogFilter.withUserId(userId, () -> {
+            try {
+                User user = userRepository.findById(userId).orElse(null);
+                if (user == null) return;
+                RoadmapDraftRequestDTO request = objectMapper.readValue(draft.getRequest(), RoadmapDraftRequestDTO.class);
+                RoadmapDraftDTO result = aiService.roadmapDraft(user, request);
+                writes.ready(draftId, objectMapper.writeValueAsString(result));
+            } catch (BusinessException e) {
+                writes.failed(draftId, e.getErrorKey().name());
+            } catch (RuntimeException e) {
+                log.error("Roadmap draft {} failed", draftId, e);
+                writes.failed(draftId, ErrorKey.AI_UNAVAILABLE.name());
+            }
+        });
     }
 
     /**

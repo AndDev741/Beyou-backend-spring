@@ -64,12 +64,14 @@ Configuration lives in `application.yaml` and is driven entirely by environment 
 | `DATABASE_USERNAME` / `DATABASE_PASSWORD` | DB credentials | `postgres` / — |
 | `TOKEN_SECRET` | JWT signing secret | — |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth | — |
+| `OIDC_OMELHORSITE_ISSUER` / `OIDC_OMELHORSITE_CLIENT_ID` / `OIDC_OMELHORSITE_DISPLAY_NAME` / `OIDC_OMELHORSITE_TRUST_EMAIL_VERIFIED` | A federated sign-in provider; blank issuer or client id means the provider is off | — / — / `O Melhor Site` / `false` |
 | `FRONTEND_URL` | Allowed redirect / link base | `http://localhost:3000/` |
 | `COOKIE_SECURE` / `COOKIE_SAME_SITE` | Refresh-cookie flags | `false` / `Lax` |
 | `CORS_ALLOWED_PATTERN` | Allowed CORS origin pattern (wildcard rejected in `prod`) | `*` |
 | `MAIL_*` | SMTP host/port/credentials for transactional email | — |
 | `MISTRAL_API_KEY` / `GEMINI_API_KEY` | LLM fallback chain for the assistant, onboarding and the study notebook (`prod` needs at least one) | — |
 | `NOTEBOOK_EMBEDDING_BASE_URL` / `NOTEBOOK_EMBEDDING_API_KEY` / `NOTEBOOK_EMBEDDING_MODEL` | The study notebook's one embedding model; no key means full-text search only | Mistral's endpoint / `MISTRAL_API_KEY` / `mistral-embed` |
+| `BRIEFING_NARRATION_ENABLED` / `BRIEFING_RETENTION_DAYS` | Daily Briefing: the LLM prose under the facts, and how many days of briefing rows to keep | `true` / `30` |
 | `TAVILY_API_KEY` / `NOTEBOOK_DISCOVERY_GEMINI_API_KEY` / `NOTEBOOK_DISCOVERY_GEMINI_MODEL` | "Find sources for me": Tavily when its key is set, otherwise Gemini with Google Search when its own key is (needs billing; no fallback to `GEMINI_API_KEY`); neither turns the feature off | — / — / `gemini-flash-latest` |
 | `DOCS_IMPORT_*` | GitHub repo + secret for docs import | see `envExample` |
 | `MANAGEMENT_PORT` / `ACTUATOR_ENDPOINTS` | Actuator server | `9091` / `health,metrics,prometheus` |
@@ -119,7 +121,7 @@ The Actuator/management server runs separately on port `9091` and is **not** ver
 
 | Base path | Responsibility |
 |-----------|----------------|
-| `/auth` | Register, login, refresh, logout, Google OAuth, email verification, forgot/reset password |
+| `/auth` | Register, login, refresh, logout, Google OAuth, federated OIDC sign-in and linking, email verification, forgot/reset password |
 | `/user` | Profile; `/user/export` for data export |
 | `/category` | Categories with XP/leveling |
 | `/habit` | Habits linked to categories |

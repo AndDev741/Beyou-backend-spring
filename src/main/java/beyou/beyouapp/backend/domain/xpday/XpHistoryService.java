@@ -24,6 +24,11 @@ import lombok.RequiredArgsConstructor;
  * Every series that comes out of here has one entry per day of the window, in order,
  * with zero for the days nothing moved — because on those days nothing did move, and a
  * bar of height zero says that where a missing bar says nothing at all.
+ *
+ * <p>Not cached, for the reason mood is not. The read takes a window, so a cache keyed on the
+ * user would hand one window's series to a request for another, and the rows move on every
+ * check-in, so a composite key would need its own eviction on each of those writes. What it
+ * saves is one indexed range read over at most {@link #MAX_RANGE_DAYS} rows.
  */
 @Service
 @RequiredArgsConstructor

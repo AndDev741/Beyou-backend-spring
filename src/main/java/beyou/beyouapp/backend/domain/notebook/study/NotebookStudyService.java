@@ -19,6 +19,7 @@ import beyou.beyouapp.backend.domain.notebook.NotebookProgressService;
 import beyou.beyouapp.backend.domain.notebook.NotebookRewards;
 import beyou.beyouapp.backend.domain.notebook.ProgressGraph;
 import beyou.beyouapp.backend.domain.notebook.ai.NotebookLlm;
+import beyou.beyouapp.backend.domain.notebook.ai.NotebookTransactions;
 import beyou.beyouapp.backend.domain.notebook.ai.StudyContextBuilder;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.CitationDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.LlmPayloads;
@@ -52,6 +53,10 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Outputs are stored as JSON (see the Stored records below). A quiz keeps its answers on the
  * server: the client gets the questions, sends its picks to {@link #grade}, and only then sees
  * what was right. That is also where the 20 XP is paid, once per quiz.
+ *
+ * <p>{@link #chat} and {@link #generate} call the model and are not {@code @Transactional}: they
+ * read in one short transaction, ask the model with none open, and save in a second one. See
+ * {@link NotebookTransactions}.
  */
 @Service
 @RequiredArgsConstructor
@@ -78,6 +83,7 @@ public class NotebookStudyService {
     private final NotebookLlm llm;
     private final NotebookRewards rewards;
     private final ObjectMapper objectMapper;
+    private final NotebookTransactions tx;
 
     record StoredAnswer(String markdown, List<CitationDTO> citations) {
     }
@@ -150,39 +156,47 @@ public class NotebookStudyService {
 
     // ------------------------------------------------------------------ chat
 
-    @Transactional
     public ChatTurnDTO chat(User user, UUID pageId, String question) {
-        NotebookPage page = ownership.page(user.getId(), pageId);
-        StudyContextBuilder.Context context = contextBuilder.forQuestion(user, page, question);
-        if (context.isEmpty()) {
-            throw new BusinessException(ErrorKey.NOTEBOOK_NOTHING_TO_STUDY, "No notes or sources to answer from");
+        record Prompt(String message, StudyContextBuilder.Context context) {
         }
-        List<NotebookChatMessage> earlier = new ArrayList<>(messageRepository
-                .findByPageIdOrderByCreatedAtDesc(pageId, PageRequest.of(0, CONTEXT_TURNS)));
-        Collections.reverse(earlier);
-
-        StringBuilder message = new StringBuilder("GROUNDED\n").append(context.render());
-        if (!earlier.isEmpty()) {
-            message.append("The conversation so far:\n");
-            for (NotebookChatMessage m : earlier) {
-                message.append(NotebookChatMessage.USER.equals(m.getRole()) ? "Person: " : "Tutor: ")
-                        .append(m.getContent()).append('\n');
+        Prompt prompt = tx.read(() -> {
+            NotebookPage page = ownership.page(user.getId(), pageId);
+            StudyContextBuilder.Context context = contextBuilder.forQuestion(user, page, question);
+            if (context.isEmpty()) {
+                throw new BusinessException(ErrorKey.NOTEBOOK_NOTHING_TO_STUDY, "No notes or sources to answer from");
             }
-        }
-        message.append("\nThe person asks: ").append(question.strip()).append('\n')
-                .append("Answer in at most 250 words.\n")
-                .append("JSON: {\"answer\":\"markdown\",\"citations\":[numbers you used]}\n");
-        LlmPayloads.AnswerPayload payload = llm.call(LlmPayloads.AnswerPayload.class, message.toString(), user);
-        String markdown = contextBuilder.withoutDeadMarkers(context, clip(payload.answer(), 8000));
+            List<NotebookChatMessage> earlier = new ArrayList<>(messageRepository
+                    .findByPageIdOrderByCreatedAtDesc(pageId, PageRequest.of(0, CONTEXT_TURNS)));
+            Collections.reverse(earlier);
+
+            StringBuilder message = new StringBuilder("GROUNDED\n").append(context.render());
+            if (!earlier.isEmpty()) {
+                message.append("The conversation so far:\n");
+                for (NotebookChatMessage m : earlier) {
+                    message.append(NotebookChatMessage.USER.equals(m.getRole()) ? "Person: " : "Tutor: ")
+                            .append(m.getContent()).append('\n');
+                }
+            }
+            message.append("\nThe person asks: ").append(question.strip()).append('\n')
+                    .append("Answer in at most 250 words.\n")
+                    .append("JSON: {\"answer\":\"markdown\",\"citations\":[numbers you used]}\n");
+            return new Prompt(message.toString(), context);
+        });
+        LlmPayloads.AnswerPayload payload = llm.call(LlmPayloads.AnswerPayload.class, prompt.message(), user);
+        String markdown = contextBuilder.withoutDeadMarkers(prompt.context(), clip(payload.answer(), 8000));
         if (markdown.isBlank()) {
             throw new BusinessException(ErrorKey.AI_UNAVAILABLE, "The answer came back empty");
         }
-        List<CitationDTO> citations = contextBuilder.citations(context, markdown, payload.citations());
+        List<CitationDTO> citations = contextBuilder.citations(prompt.context(), markdown, payload.citations());
 
-        NotebookChatMessage asked = save(page, NotebookChatMessage.USER, question.strip(), null);
-        NotebookChatMessage answered = save(page, NotebookChatMessage.ASSISTANT, markdown,
-                objectMapper.writeValueAsString(citations));
-        return new ChatTurnDTO(toMessage(asked), toMessage(answered));
+        return tx.write(() -> {
+            // Loaded again: the page from the read is detached by now.
+            NotebookPage page = ownership.page(user.getId(), pageId);
+            NotebookChatMessage asked = save(page, NotebookChatMessage.USER, question.strip(), null);
+            NotebookChatMessage answered = save(page, NotebookChatMessage.ASSISTANT, markdown,
+                    objectMapper.writeValueAsString(citations));
+            return new ChatTurnDTO(toMessage(asked), toMessage(answered));
+        });
     }
 
     @Transactional
@@ -205,36 +219,45 @@ public class NotebookStudyService {
 
     // --------------------------------------------------------------- studio
 
-    @Transactional
     public StudyOutputDTO generate(User user, UUID pageId, StudyOutputKind kind) {
-        NotebookPage page = ownership.page(user.getId(), pageId);
-        StudyContextBuilder.Context context = contextBuilder.forPage(user, page);
-        if (context.isEmpty()) {
-            throw new BusinessException(ErrorKey.NOTEBOOK_NOTHING_TO_STUDY, "No notes or sources to read");
+        record Material(StudyContextBuilder.Context context, String pageTitle) {
         }
+        Material material = tx.read(() -> {
+            NotebookPage page = ownership.page(user.getId(), pageId);
+            StudyContextBuilder.Context context = contextBuilder.forPage(user, page);
+            if (context.isEmpty()) {
+                throw new BusinessException(ErrorKey.NOTEBOOK_NOTHING_TO_STUDY, "No notes or sources to read");
+            }
+            return new Material(context, page.getTitle());
+        });
+        StudyContextBuilder.Context context = material.context();
         String content = switch (kind) {
             case OVERVIEW -> overview(user, context);
-            case SUMMARY -> answer(user, context, page, """
+            case SUMMARY -> answer(user, context, material.pageTitle(), """
                     Summarise the passages for someone studying "%s": the main ideas in a few short \
                     paragraphs or bullets, at most 300 words.""");
-            case STUDY_GUIDE -> answer(user, context, page, """
+            case STUDY_GUIDE -> answer(user, context, material.pageTitle(), """
                     Write a study guide for "%s" from the passages: ## Key ideas (bullets), \
                     ## Terms to know (bullets, term in bold then a short definition), and \
                     ## Questions to check yourself (4 to 6). At most 500 words.""");
             case QUIZ -> quiz(user, context);
         };
-        if (kind == StudyOutputKind.OVERVIEW) {
-            // One overview per page: a new one replaces the last instead of piling up.
-            outputRepository.deleteByPageIdAndKind(pageId, StudyOutputKind.OVERVIEW);
-        }
-        NotebookStudyOutput output = new NotebookStudyOutput();
-        output.setUser(page.getUser());
-        output.setPageId(pageId);
-        output.setKind(kind);
-        output.setTitle(page.getTitle());
-        output.setContent(content);
-        output.setCreatedAt(Instant.now());
-        return toOutput(outputRepository.save(output));
+        return tx.write(() -> {
+            // Loaded again: the page from the read is detached, and its title may have changed.
+            NotebookPage page = ownership.page(user.getId(), pageId);
+            if (kind == StudyOutputKind.OVERVIEW) {
+                // One overview per page: a new one replaces the last instead of piling up.
+                outputRepository.deleteByPageIdAndKind(pageId, StudyOutputKind.OVERVIEW);
+            }
+            NotebookStudyOutput output = new NotebookStudyOutput();
+            output.setUser(page.getUser());
+            output.setPageId(pageId);
+            output.setKind(kind);
+            output.setTitle(page.getTitle());
+            output.setContent(content);
+            output.setCreatedAt(Instant.now());
+            return toOutput(outputRepository.save(output));
+        });
     }
 
     private String overview(User user, StudyContextBuilder.Context context) {
@@ -251,8 +274,8 @@ public class NotebookStudyService {
                 contextBuilder.citations(context, summary, null)));
     }
 
-    private String answer(User user, StudyContextBuilder.Context context, NotebookPage page, String task) {
-        String message = "GROUNDED\n" + context.render() + task.formatted(page.getTitle())
+    private String answer(User user, StudyContextBuilder.Context context, String pageTitle, String task) {
+        String message = "GROUNDED\n" + context.render() + task.formatted(pageTitle)
                 + "\nJSON: {\"answer\":\"markdown\",\"citations\":[numbers you used]}\n";
         LlmPayloads.AnswerPayload payload = llm.call(LlmPayloads.AnswerPayload.class, message, user);
         String markdown = contextBuilder.withoutDeadMarkers(context, clip(payload.answer(), 12000));
