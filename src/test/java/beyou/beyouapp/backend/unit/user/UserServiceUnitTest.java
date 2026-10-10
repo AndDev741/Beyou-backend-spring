@@ -20,6 +20,7 @@ import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -148,11 +149,27 @@ public class UserServiceUnitTest {
         @Test
         public void shouldRegisterANewUser() {
             UserRegisterDTO userRegisterDTO = new UserRegisterDTO("Name", "email1234@gmail.com",
-                    "TestPassword1!", null);
+                    "TestPassword1!", null, null);
             ResponseEntity<Map<String, String>> response = userService.registerUser(userRegisterDTO);
 
             assertEquals(ResponseEntity.ok().body(Map.of("success", "User registered successfully")),
                     response);
+        }
+
+        @Test
+        @DisplayName("the verification mail goes out in the language the signup screen was showing")
+        public void shouldMailTheVerificationInTheClaimedLanguage() {
+            // registerUser reads the language off the new row to pick the mail template. Before
+            // signup carried a language that row had none, so every verification mail was English.
+            UserRegisterDTO userRegisterDTO = new UserRegisterDTO("Name", "email5678@gmail.com",
+                    "TestPassword1!", null, "pt-BR");
+
+            userService.registerUser(userRegisterDTO);
+
+            org.mockito.ArgumentCaptor<beyou.beyouapp.backend.user.event.UserRegisteredEvent> event =
+                    org.mockito.ArgumentCaptor.forClass(beyou.beyouapp.backend.user.event.UserRegisteredEvent.class);
+            org.mockito.Mockito.verify(eventPublisher).publishEvent(event.capture());
+            assertEquals("pt", event.getValue().getLanguage());
         }
 
         @Test
@@ -194,7 +211,7 @@ public class UserServiceUnitTest {
         @Test
         public void shouldDeleteSuccessfullyAUser() {
             UserRegisterDTO userRegisterDTO = new UserRegisterDTO("Name", "newUser@gmail.com",
-                    "TestPassword1!", null);
+                    "TestPassword1!", null, null);
             userService.registerUser(userRegisterDTO);
             Optional<User> newUser = userService.getUser(userRegisterDTO.email());
 
@@ -492,7 +509,7 @@ public class UserServiceUnitTest {
         @Test
         public void shouldThrowEmailAlreadyInUseError() {
             UserRegisterDTO userRegisterDTO = new UserRegisterDTO("Name", "email@gmail.com",
-                    "TestPassword1!", null);
+                    "TestPassword1!", null, null);
             User user = new User(userRegisterDTO);
             when(userRepository.findByEmail(userRegisterDTO.email())).thenReturn(Optional.of(user));
 
@@ -506,7 +523,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForRequiredName() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("     ", "email@gmail.com",
-                        "TestPassword1!", null);
+                        "TestPassword1!", null, null);
                 userService.registerUser(newUser);
             });
 
@@ -517,7 +534,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForMinimumCharactersInName() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("N", "email@gmail.com",
-                        "TestPassword1!", null);
+                        "TestPassword1!", null, null);
                 userService.registerUser(newUser);
             });
 
@@ -528,7 +545,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForRequiredEmail() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("Name", "",
-                        "TestPassword1!", null);
+                        "TestPassword1!", null, null);
                 userService.registerUser(newUser);
             });
 
@@ -539,7 +556,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForInvalidEmail() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("Name", "email",
-                        "TestPassword1!", null);
+                        "TestPassword1!", null, null);
                 userService.registerUser(newUser);
             });
 
@@ -550,7 +567,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForRequiredPassword() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("Name", "email@gmail.com",
-                        "   ", null);
+                        "   ", null, null);
                 userService.registerUser(newUser);
             });
 
@@ -567,7 +584,7 @@ public class UserServiceUnitTest {
         public void shouldThrowExceptionForMinimumCharacterInPassword() {
             Exception exception = assertThrows(IllegalArgumentException.class, () -> {
                 UserRegisterDTO newUser = new UserRegisterDTO("Name", "email@gmail.com",
-                        "12345", null);
+                        "12345", null, null);
                 userService.registerUser(newUser);
             });
 

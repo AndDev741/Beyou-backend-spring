@@ -66,7 +66,7 @@ class FederatedIdentityServiceUnitTest {
     }
 
     private FederatedPrincipal principal(String email, boolean verified) {
-        return new FederatedPrincipal(ISSUER, SUBJECT, email, verified, "Someone", null, null);
+        return new FederatedPrincipal(ISSUER, SUBJECT, email, verified, "Someone", null);
     }
 
     private User existingAccount(String email) {
@@ -190,7 +190,7 @@ class FederatedIdentityServiceUnitTest {
         User user = existingAccount("someone@gmail.com");
 
         service.recordSeenIdentity(user, new FederatedPrincipal(
-                "https://accounts.google.com", null, "someone@gmail.com", true, null, null, null));
+                "https://accounts.google.com", null, "someone@gmail.com", true, null, null));
 
         verify(identities, never()).save(any(FederatedIdentity.class));
     }

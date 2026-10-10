@@ -204,6 +204,7 @@ public class User implements UserDetails {
         setPassword(user.password());
         setGoogleAccount(false);
         adoptClaimedTimezone(user.timezone());
+        adoptClaimedLanguage(user.language());
     }
 
     public User(GoogleUserDTO googleUser) {
@@ -214,6 +215,7 @@ public class User implements UserDetails {
         setPerfilPhoto(googleUser.perfilPhoto());
         setEmailVerified(true);
         adoptClaimedTimezone(googleUser.timezone());
+        adoptClaimedLanguage(googleUser.language());
     }
 
     /**
@@ -239,6 +241,7 @@ public class User implements UserDetails {
         user.setPerfilPhoto(principal.picture());
         user.setEmailVerified(true);
         user.adoptClaimedTimezone(principal.timezone());
+        user.adoptClaimedLanguage(principal.language());
         return user;
     }
 
@@ -259,6 +262,25 @@ public class User implements UserDetails {
         if (usable != null) {
             setTimezone(usable);
             setTimezoneSource(TimezoneSource.DETECTED);
+        }
+    }
+
+    /**
+     * Takes the language a signup claimed, when it is one the app ships.
+     *
+     * <p>Beside {@link #adoptClaimedTimezone} for the same reason: every signup path ends at
+     * one of these constructors, so none of them can forget it. Before this, nothing at
+     * signup wrote the column, and an account that never opened the language setting got
+     * its verification mail, its daily briefing and its notebook tutor in English whatever
+     * the screen said.
+     *
+     * <p>Silent when the claim is unusable, leaving the column empty for the client's boot
+     * reconcile to fill.
+     */
+    private void adoptClaimedLanguage(String claimed) {
+        String usable = UserLanguage.usableOrNull(claimed);
+        if (usable != null) {
+            setLanguageInUse(usable);
         }
     }
 

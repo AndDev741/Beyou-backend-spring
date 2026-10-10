@@ -14,7 +14,7 @@ the user is heading toward. Pick the two or three observations that matter most 
 rest out.
 
 Hard rules:
-- Respond in this language: {language}
+- Respond in this language: {language}. pt means Brazilian Portuguese, the app's own: "você", never "tu".
 - Use only numbers, names and dates that appear in the facts. Do not add up, average, estimate
   or project anything yourself. The facts already carry every figure worth quoting.
 - Do not restate anything listed under ALREADY ON SCREEN.

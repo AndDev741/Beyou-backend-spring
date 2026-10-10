@@ -59,8 +59,11 @@ public class UserServiceGoogleOAuth {
      *                        answer, and whether a detected zone may replace it is a
      *                        decision that belongs to {@code UserService.editUser}, which
      *                        the client reaches through the boot reconcile.
+     * @param claimedLanguage the language the browser is showing, or null. Same rule: it
+     *                        only shapes an account being created here.
      */
     public ResponseEntity<Map<String, Object>> googleAuth(String code, String claimedTimezone,
+                                                          String claimedLanguage,
                                                           HttpServletResponse response){
         String googleAccessToken = getOAuthAccessTokenGoogle(code);
         Map<String, String> profileDetails = getProfileDetailsFromGoogle(googleAccessToken);
@@ -70,7 +73,8 @@ public class UserServiceGoogleOAuth {
 
         // v2 userinfo calls it "id"; it is the same value the ID token calls "sub".
         String subject = profileDetails.get("id");
-        GoogleUserDTO googleUser = new GoogleUserDTO(email, name, perfilPhoto, claimedTimezone, subject);
+        GoogleUserDTO googleUser = new GoogleUserDTO(email, name, perfilPhoto, claimedTimezone, subject,
+                claimedLanguage);
         Optional<User> optionalUser = userRepository.findByEmail(googleUser.email());
 
         if(optionalUser.isPresent()){
@@ -110,11 +114,13 @@ public class UserServiceGoogleOAuth {
      * refreshToken in the body, no cookie).
      */
     public ResponseEntity<Map<String, Object>> googleMobileAuth(String idToken, String claimedTimezone,
+                                                                String claimedLanguage,
                                                                 HttpServletResponse response) {
-        // The zone does not come from Google: a verified ID token carries no such claim,
-        // so the device sends it alongside and it is merged in here.
+        // The zone and the language do not come from Google: a verified ID token carries
+        // neither claim, so the device sends them alongside and they are merged in here.
         GoogleUserDTO googleUser = googleIdTokenVerifierService.verify(idToken)
-                .withTimezone(claimedTimezone);
+                .withTimezone(claimedTimezone)
+                .withLanguage(claimedLanguage);
 
         User user = userRepository.findByEmail(googleUser.email())
                 .orElseGet(() -> userRepository.save(new User(googleUser)));
@@ -236,7 +242,7 @@ public class UserServiceGoogleOAuth {
         try {
             federatedIdentityService.recordSeenIdentity(user, new FederatedPrincipal(
                     GOOGLE_ISSUER, googleUser.subject(), googleUser.email(),
-                    true, googleUser.name(), googleUser.perfilPhoto(), null));
+                    true, googleUser.name(), googleUser.perfilPhoto()));
         } catch (Exception e) {
             System.err.println("Could not record Google federated identity: " + e.getMessage());
         }

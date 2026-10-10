@@ -27,5 +27,14 @@ public record UserRegisterDTO(@NotBlank(message = "Name is Required")
                              * not cost someone their account. {@code UserService.registerUser}
                              * does the checking.
                              */
-                            String timezone) {
+                            String timezone,
+                            /**
+                             * The language the client's screen is showing ({@code en},
+                             * {@code pt}, or a regional tag like {@code pt-BR}), or null from
+                             * a client that predates this field. Same contract as
+                             * {@code timezone}: unvalidated here, normalised by
+                             * {@code UserLanguage}, and dropped rather than refused when it
+                             * names a language the app does not ship.
+                             */
+                            String language) {
 }

@@ -23,6 +23,7 @@ import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserLanguage;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
@@ -127,7 +128,7 @@ public class NotebookLlm {
     private <T> T doCall(Class<T> type, String userMessage, User user) {
         T result = chatClient.prompt()
                 .system(s -> s.text(systemTemplate)
-                        .param("language", user.getLanguageInUse() != null ? user.getLanguageInUse() : "en")
+                        .param("language", UserLanguage.forPrompt(user))
                         .param("today", UserDateResolver.today(user).toString()))
                 .user(userMessage)
                 .call()

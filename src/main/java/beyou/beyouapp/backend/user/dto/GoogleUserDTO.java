@@ -1,12 +1,13 @@
 package beyou.beyouapp.backend.user.dto;
 
 /**
- * A Google identity, plus the zone the client claims the device is in.
+ * A Google identity, plus the zone and language the client claims.
  *
  * <p>{@code timezone} does NOT come from Google. The web callback carries it as a query
  * parameter and the mobile path takes it from the request body, because the verified ID
  * token has no such claim. It is null whenever the client did not send one, and it is only
- * ever applied when the account is being created.
+ * ever applied when the account is being created. {@code language} travels the same way
+ * and follows the same rule.
  *
  * <p>{@code subject} is Google's {@code sub} — the stable per-user id that
  * {@code federated_identities} keys on. It arrives as {@code id} from the v2 userinfo
@@ -18,14 +19,19 @@ package beyou.beyouapp.backend.user.dto;
  * <p>Server-built, never a {@code @RequestBody}, so the convenience constructors below are
  * safe — Jackson never sees this record and cannot pick the wrong one.
  */
-public record GoogleUserDTO(String email, String name, String perfilPhoto, String timezone, String subject) {
+public record GoogleUserDTO(String email, String name, String perfilPhoto, String timezone, String subject,
+                            String language) {
 
     public GoogleUserDTO(String email, String name, String perfilPhoto) {
-        this(email, name, perfilPhoto, null, null);
+        this(email, name, perfilPhoto, null, null, null);
     }
 
     public GoogleUserDTO(String email, String name, String perfilPhoto, String timezone) {
-        this(email, name, perfilPhoto, timezone, null);
+        this(email, name, perfilPhoto, timezone, null, null);
+    }
+
+    public GoogleUserDTO(String email, String name, String perfilPhoto, String timezone, String subject) {
+        this(email, name, perfilPhoto, timezone, subject, null);
     }
 
     public boolean isGoogleAccount() {
@@ -34,11 +40,16 @@ public record GoogleUserDTO(String email, String name, String perfilPhoto, Strin
 
     /** The same identity with a client-claimed zone attached. */
     public GoogleUserDTO withTimezone(String timezone) {
-        return new GoogleUserDTO(email, name, perfilPhoto, timezone, subject);
+        return new GoogleUserDTO(email, name, perfilPhoto, timezone, subject, language);
+    }
+
+    /** The same identity with a client-claimed language attached. */
+    public GoogleUserDTO withLanguage(String language) {
+        return new GoogleUserDTO(email, name, perfilPhoto, timezone, subject, language);
     }
 
     /** The same identity with Google's stable subject attached. */
     public GoogleUserDTO withSubject(String subject) {
-        return new GoogleUserDTO(email, name, perfilPhoto, timezone, subject);
+        return new GoogleUserDTO(email, name, perfilPhoto, timezone, subject, language);
     }
 }

@@ -59,9 +59,11 @@ public class OidcAuthService {
      *         branches on, not a failure, and every handler for a thrown refusal answers 400.
      */
     public ResponseEntity<?> login(String slug, String idToken, String claimedTimezone,
-                                   boolean mobile, HttpServletResponse response) {
+                                   String claimedLanguage, boolean mobile,
+                                   HttpServletResponse response) {
         OidcProviderProperties.Provider provider = provider(slug);
-        FederatedPrincipal principal = verifier.verify(idToken, provider).withTimezone(claimedTimezone);
+        FederatedPrincipal principal = verifier.verify(idToken, provider)
+                .withClientClaims(claimedTimezone, claimedLanguage);
 
         FederationOutcome outcome = federatedIdentityService.resolve(principal, provider);
 

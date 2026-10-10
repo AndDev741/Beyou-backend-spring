@@ -10,6 +10,7 @@ import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
 import beyou.beyouapp.backend.domain.feedback.event.FeedbackRepliedEvent;
 import beyou.beyouapp.backend.domain.feedback.event.FeedbackSubmittedEvent;
 import beyou.beyouapp.backend.notification.engagement.NudgeDecision;
+import beyou.beyouapp.backend.user.UserLanguage;
 import beyou.beyouapp.backend.user.event.UserRegisteredEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
@@ -861,14 +862,7 @@ public class EmailService {
     }
 
     private String normalizeLanguage(String language) {
-        if (language == null || language.isBlank()) {
-            return "en";
-        }
-        String normalized = language.trim().toLowerCase();
-        if (normalized.startsWith("pt")) {
-            return "pt";
-        }
-        return "en";
+        return UserLanguage.orDefault(language);
     }
 
     private String resolveSubject(String language) {

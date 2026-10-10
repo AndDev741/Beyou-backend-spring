@@ -11,7 +11,10 @@ import jakarta.validation.constraints.NotBlank;
  * never leaves the device that generated it — sending the code here would mean shipping
  * the verifier with it, which defeats PKCE rather than using it.
  *
+ * <p>{@code timezone} and {@code language} are what the client's device reports. Neither
+ * comes from the issuer, and both are only applied when the account is created.
+ *
  * <p>Records used as {@code @RequestBody} take no convenience constructors: Jackson picks
  * a constructor by shape, and a second one gives it a way to pick wrongly.
  */
-public record OidcLoginDTO(@NotBlank String idToken, String timezone) {}
+public record OidcLoginDTO(@NotBlank String idToken, String timezone, String language) {}

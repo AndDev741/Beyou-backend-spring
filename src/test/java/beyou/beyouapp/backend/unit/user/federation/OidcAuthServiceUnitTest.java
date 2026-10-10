@@ -76,7 +76,7 @@ class OidcAuthServiceUnitTest {
         user = new User();
         user.setId(UUID.randomUUID());
         when(verifier.verify(anyString(), any())).thenReturn(new FederatedPrincipal(
-                "https://id.example.test", "subject-1", "person@example.test", true, "Person", null, null));
+                "https://id.example.test", "subject-1", "person@example.test", true, "Person", null));
         when(tokenService.generateJwtToken(user)).thenReturn("jwt");
         when(refreshTokenService.createRefreshToken(user)).thenReturn("refresh");
         when(userMapper.toResponseDTO(user)).thenReturn(mock(UserResponseDTO.class));
@@ -87,7 +87,7 @@ class OidcAuthServiceUnitTest {
     void loggedInIssuesTokens() {
         when(federatedIdentityService.resolve(any(), any())).thenReturn(new FederationOutcome.LoggedIn(user));
 
-        ResponseEntity<?> result = service.login(SLUG, "id-token", "Europe/Lisbon", false, response);
+        ResponseEntity<?> result = service.login(SLUG, "id-token", "Europe/Lisbon", null, false, response);
 
         assertEquals(200, result.getStatusCode().value());
         verify(tokenService).addJwtTokenToResponse(response, "jwt", "refresh");
@@ -98,7 +98,7 @@ class OidcAuthServiceUnitTest {
     void mobileLoginCarriesTheRefreshToken() {
         when(federatedIdentityService.resolve(any(), any())).thenReturn(new FederationOutcome.LoggedIn(user));
 
-        ResponseEntity<?> result = service.login(SLUG, "id-token", null, true, response);
+        ResponseEntity<?> result = service.login(SLUG, "id-token", null, null, true, response);
 
         Map<?, ?> body = assertInstanceOf(Map.class, result.getBody());
         assertEquals("refresh", body.get("refreshToken"));
@@ -111,7 +111,7 @@ class OidcAuthServiceUnitTest {
         when(federatedIdentityService.resolve(any(), any())).thenReturn(new FederationOutcome.LinkRequired(
                 FederationOutcome.LinkRequired.Reason.ACCOUNT_EXISTS, "person@example.test"));
 
-        ResponseEntity<?> result = service.login(SLUG, "id-token", null, false, response);
+        ResponseEntity<?> result = service.login(SLUG, "id-token", null, null, false, response);
 
         assertEquals(403, result.getStatusCode().value());
         ApiErrorResponse body = assertInstanceOf(ApiErrorResponse.class, result.getBody());
@@ -126,7 +126,7 @@ class OidcAuthServiceUnitTest {
     @DisplayName("an unconfigured provider is refused before the token is even read")
     void unknownProviderIsRefused() {
         BusinessException e = assertThrows(BusinessException.class,
-                () -> service.login("nobody", "id-token", null, false, response));
+                () -> service.login("nobody", "id-token", null, null, false, response));
 
         assertEquals(ErrorKey.OIDC_PROVIDER_UNKNOWN, e.getErrorKey());
         verifyNoInteractions(verifier, federatedIdentityService);
