@@ -10,10 +10,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import beyou.beyouapp.backend.AbstractIntegrationTest;
@@ -28,6 +31,15 @@ import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.common.ExperienceLevel;
+import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
+import beyou.beyouapp.backend.domain.feedback.FeedbackReplyService;
+import beyou.beyouapp.backend.domain.feedback.FeedbackService;
+import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackReplyRequestDTO;
+import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackRequestDTO;
+import beyou.beyouapp.backend.domain.goal.GoalService;
+import beyou.beyouapp.backend.domain.goal.GoalStatus;
+import beyou.beyouapp.backend.domain.goal.GoalTerm;
+import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
@@ -79,6 +91,19 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
     @Autowired ChatService chatService;
     @Autowired beyou.beyouapp.backend.user.deletion.AccountDeletionService accountDeletionService;
     @Autowired PasswordResetTokenRepository passwordResetTokenRepository;
+    @Autowired GoalService goalService;
+    @Autowired FeedbackService feedbackService;
+    @Autowired FeedbackReplyService feedbackReplyService;
+    @Autowired JdbcTemplate jdbc;
+
+    /**
+     * The user-owned tables the test below fills through the application's own services. The
+     * rest come from {@link UserOwnedRows}. A table in neither fails
+     * {@link #everyTableThatPointsAtAUserIsSeededBeforeTheDelete()}.
+     */
+    private static final Set<String> SEEDED_THROUGH_SERVICES = Set.of(
+            "categories", "habits", "tasks", "goals", "routines", "chats",
+            "password_reset_tokens", "account_deletion_codes", "feedback", "feedback_reply");
 
     /** Nothing here should try to reach an SMTP server. */
     @MockitoBean EmailService emailService;
@@ -136,6 +161,24 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
         scheduleService.create(new CreateScheduleDTO(
                 Set.of(WeekDay.Monday, WeekDay.Wednesday), routineId), userId);
 
+        // A goal with a sub-goal: goals.parent_id points back at goals, so the delete also has
+        // to get past a foreign key inside the same table.
+        UUID parentGoalId = createGoal("Run a half marathon", null, categoryId, userId);
+        createGoal("Run 10 km", parentGoalId, categoryId, userId);
+
+        // Feedback with a reply on it. The rows cascade in the database; the reply's author
+        // column nulls instead.
+        UUID feedbackId = feedbackService.submitFeedback(new CreateFeedbackRequestDTO(
+                FeedbackCategory.BUG, "the chart is empty", null), userId).id();
+        feedbackReplyService.reply(feedbackId, userId,
+                new CreateFeedbackReplyRequestDTO("it fixed itself"));
+
+        // Everything added since: mood, focus, the notebook, the briefing, linked sign-ins and
+        // the rest. Their migrations say they cascade; this is what makes that a fact.
+        UUID itemGroupId = jdbc.queryForObject("SELECT hg.id FROM habit_groups hg "
+                + "JOIN habits h ON h.id = hg.habit_id WHERE h.user_id = ?", UUID.class, userId);
+        UserOwnedRows.seed(jdbc, userId, itemGroupId, routineId, habitId, categoryId);
+
         // The two plain foreign keys that used to block the delete outright.
         chatService.createChat("A conversation with the agent", userId);
         PasswordResetToken token = new PasswordResetToken();
@@ -152,19 +195,27 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
         String code = accountDeletionService.requestCode(user);
         assertThat(code).as("the property above must expose the code").isNotNull();
 
+        // Every table the guard below calls seeded really holds a row now, so the zero counts
+        // after the delete mean the rows went, not that they were never there.
+        for (UserOwnedRows.UserForeignKey fk : UserOwnedRows.foreignKeysToUsers(jdbc)) {
+            assertThat(rowsFor(fk.table(), fk.column(), userId))
+                    .as("%s.%s holds nothing for this account, so its delete proves nothing",
+                            fk.table(), fk.column())
+                    .isPositive();
+        }
+
         assertThatCode(() -> accountDeletionService.confirm(user, code))
                 .as("a used account must be deletable through the route people will use")
                 .doesNotThrowAnyException();
 
         assertThat(rowsFor("users", "id", userId)).isZero();
-        assertThat(rowsFor("chats", "user_id", userId)).isZero();
-        assertThat(rowsFor("password_reset_tokens", "user_id", userId)).isZero();
-        assertThat(rowsFor("tasks", "user_id", userId)).isZero();
-        assertThat(rowsFor("habits", "user_id", userId)).isZero();
-        assertThat(rowsFor("categories", "user_id", userId)).isZero();
-        assertThat(rowsFor("routines", "user_id", userId)).isZero();
-        assertThat(rowsFor("refresh_tokens", "user_id", userId)).isZero();
-        assertThat(rowsFor("account_deletion_codes", "user_id", userId)).isZero();
+        // Every column in the schema that points at a user, read from the schema itself, so a
+        // table added next year is checked here without anyone editing this line.
+        for (UserOwnedRows.UserForeignKey fk : UserOwnedRows.foreignKeysToUsers(jdbc)) {
+            assertThat(rowsFor(fk.table(), fk.column(), userId))
+                    .as("%s.%s still names the deleted account", fk.table(), fk.column())
+                    .isZero();
+        }
 
         // The row nothing counts by user_id, because it has no user_id to count by.
         // A schedule is reachable only through routines.schedule_id, so once the
@@ -176,6 +227,39 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo(orphansBefore);
     }
 
+
+    /**
+     * The guard for the next table.
+     *
+     * <p>The loop above only proves something for tables that held a row before the delete.
+     * A table nobody seeds passes it with zero rows before and zero after. So the list of
+     * tables pointing at {@code users} is read from the live schema, and every one has to be
+     * seeded somewhere in this class. Add a user-owned table and this fails until a row for it
+     * goes into {@link UserOwnedRows} or into the services above.
+     */
+    @Test
+    @DisplayName("every table that points at a user gets a row before the delete runs")
+    void everyTableThatPointsAtAUserIsSeededBeforeTheDelete() {
+        Set<String> unseeded = new TreeSet<>(UserOwnedRows.tablesPointingAtUsers(jdbc));
+        unseeded.removeAll(UserOwnedRows.SEEDED);
+        unseeded.removeAll(SEEDED_THROUGH_SERVICES);
+
+        assertThat(unseeded)
+                .as("These tables point at users but nothing in this test puts a row in them, "
+                        + "so it cannot tell whether they go with the account. Seed one in "
+                        + "UserOwnedRows.seed and add the table to UserOwnedRows.SEEDED.")
+                .isEmpty();
+    }
+
+    private UUID createGoal(String name, UUID parentId, UUID categoryId, UUID userId) {
+        goalService.createGoal(new CreateGoalRequestDTO(
+                name, null, "lucide:flag", 10.0, "km", 0.0, List.of(categoryId), null,
+                LocalDate.now(ZoneOffset.UTC), LocalDate.now(ZoneOffset.UTC).plusMonths(2),
+                GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM, parentId), userId);
+        return goalService.getAllGoals(userId).stream()
+                .filter(goal -> goal.name().equals(name))
+                .findFirst().orElseThrow().id();
+    }
 
     /**
      * The cap on guessing, against a real transaction boundary.

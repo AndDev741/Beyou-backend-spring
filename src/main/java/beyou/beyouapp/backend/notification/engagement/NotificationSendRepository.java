@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.notification.engagement;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,4 +40,7 @@ public interface NotificationSendRepository extends JpaRepository<NotificationSe
      * of hundreds is a far smaller error than mailing somebody twice.
      */
     long countBySentOn(LocalDate sentOn);
+
+    /** Every nudge mail this account was sent, oldest first. For the data export. */
+    List<NotificationSend> findByUserIdOrderBySentOnAsc(UUID userId);
 }

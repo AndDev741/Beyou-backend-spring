@@ -3,19 +3,28 @@
 -- The tested path is POST /user/deletion/confirm. This exists for the case where the
 -- application is down or the route itself is what broke, and it is a last resort.
 --
--- Why it is this long: only seven foreign keys in the whole schema cascade at the
--- database level (feedback and its children, agent_message, entity_check_day,
--- account_deletion_codes, and feedback_reply.author_id which nulls). Everything else
--- is carried off by Hibernate's @OneToMany(cascade = ALL), which a psql session does
--- not have. An earlier version of this procedure said "sections/groups follow" and
--- "the join tables follow their owning row"; neither is true without the ORM, so it
--- would have stopped on a foreign-key violation partway through, on an account
--- somebody was already having a bad day about.
+-- Why it is this long: none of the foreign keys in the V1 baseline cascade at the
+-- database level. Categories, habits, tasks, goals, routines, their sections and groups,
+-- snapshots, chats and tokens are carried off by Hibernate's @OneToMany(cascade = ALL) or
+-- by UserService, and a psql session has neither. An earlier version of this procedure
+-- said "sections/groups follow" and "the join tables follow their owning row"; neither is
+-- true without the ORM, so it would have stopped on a foreign-key violation partway
+-- through, on an account somebody was already having a bad day about.
+--
+-- The tables added later do cascade from users in their own migrations, which is why
+-- nothing below names them: feedback and its children, agent_message, entity_check_day,
+-- account_deletion_codes, entity_xp_day, and everything from V24 on (notification
+-- preferences and sends, focus cycles and micro-tasks, federated sign-ins, mood entries,
+-- the daily briefing, and every notebook table). feedback_reply.author_id nulls instead.
+-- Two of them also hang off rows deleted here: focus_micro_tasks goes with its item group
+-- in step 3, and focus_cycles.item_group_id plus the notebook's links to goals, habits and
+-- categories null themselves.
 --
 -- This file is executed verbatim by ManualAccountDeleteRunbookTest against a real
--- schema, on an account seeded through the application's own services. If the schema
--- grows a table this misses, that test fails. Keep it that way: the value here is not
--- the SQL, it is that the SQL is known to work.
+-- schema, on an account that holds a row in every table pointing at users. The test
+-- reads that list of tables from the schema, so if the schema grows a table this misses,
+-- it fails. Keep it that way: the value here is not the SQL, it is that the SQL is known
+-- to work.
 --
 -- Usage: psql -v userId="'<uuid>'" -f manual-account-delete.sql
 -- Statements are separated by a blank line for the test runner. Keep that convention.
@@ -118,8 +127,8 @@ DELETE FROM password_reset_tokens WHERE user_id = :userId;
 
 DELETE FROM chats WHERE user_id = :userId;
 
--- 8. The account. feedback, entity_check_day and account_deletion_codes are the only
--- three that really do cascade from here.
+-- 8. The account. Everything still pointing at it cascades from here: the tables named
+-- at the top of this file.
 DELETE FROM users WHERE id = :userId;
 
 COMMIT;

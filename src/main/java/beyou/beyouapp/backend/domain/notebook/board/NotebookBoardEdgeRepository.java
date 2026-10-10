@@ -15,4 +15,7 @@ public interface NotebookBoardEdgeRepository extends JpaRepository<NotebookBoard
     List<NotebookBoardEdge> findByBoardPageIdIn(Collection<UUID> boardPageIds);
 
     boolean existsBySourceNodeIdAndTargetNodeId(UUID sourceNodeId, UUID targetNodeId);
+
+    /** Every edge on every board the user has, for the data export. */
+    List<NotebookBoardEdge> findByUserId(UUID userId);
 }

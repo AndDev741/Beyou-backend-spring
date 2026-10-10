@@ -11,9 +11,11 @@ import java.time.LocalTime;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -23,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import javax.imageio.ImageIO;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -34,6 +37,16 @@ import beyou.beyouapp.backend.domain.mood.dto.UpsertMoodEntryDTO;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
 import beyou.beyouapp.backend.domain.common.ExperienceLevel;
+import beyou.beyouapp.backend.domain.briefing.NarrativeStatus;
+import beyou.beyouapp.backend.domain.focus.CycleKind;
+import beyou.beyouapp.backend.domain.goal.GoalService;
+import beyou.beyouapp.backend.domain.goal.GoalStatus;
+import beyou.beyouapp.backend.domain.goal.GoalTerm;
+import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.card.CardRating;
+import beyou.beyouapp.backend.domain.notebook.study.StudyOutputKind;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineItemRequestDTO;
+import beyou.beyouapp.backend.notification.engagement.NudgeKind;
 import beyou.beyouapp.backend.domain.habit.HabitService;
 import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
@@ -51,6 +64,7 @@ import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 
+import static java.util.Map.entry;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -85,6 +99,46 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
     @Autowired AgentMessageService agentMessageService;
     @Autowired PhotoStorageService photoStorageService;
     @Autowired MoodService moodService;
+    @Autowired GoalService goalService;
+    @Autowired JdbcTemplate jdbc;
+
+    /**
+     * Where each table that points at a user ends up in the file: a section, or a key under
+     * {@code notIncluded} that says why it stayed out. Read against the live schema by
+     * {@link #everyTableThatPointsAtAUserIsInTheFileOrSaysWhyNot()}.
+     */
+    private static final Map<String, String> WHERE_EACH_TABLE_GOES = Map.ofEntries(
+            entry("categories", "categories"),
+            entry("habits", "habits"),
+            entry("tasks", "tasks"),
+            entry("goals", "goals"),
+            entry("routines", "routines"),
+            entry("chats", "agentChats"),
+            entry("feedback", "feedback"),
+            entry("feedback_reply", "feedback"),
+            entry("entity_check_day", "checkHistory"),
+            entry("mood_entries", "moodEntries"),
+            entry("notification_preferences", "profile.engagementEmails"),
+            entry("notification_sends", "engagementEmailsSent"),
+            entry("federated_identities", "profile.linkedSignIns"),
+            entry("focus_cycles", "focus.cycles"),
+            entry("focus_micro_tasks", "focus.microTasks"),
+            entry("daily_briefing", "dailyBriefings"),
+            entry("notebook_pages", "notebook.pages"),
+            entry("notebook_board_nodes", "notebook.board.nodes"),
+            entry("notebook_board_edges", "notebook.board.edges"),
+            entry("notebook_cards", "notebook.flashcards"),
+            entry("notebook_card_reviews", "notebook.flashcardReviews"),
+            entry("notebook_sources", "notebook.sources"),
+            entry("notebook_study_outputs", "notebook.studyOutputs"),
+            entry("notebook_chat_messages", "notebook.studyChats"),
+            entry("notebook_roadmap_drafts", "notebook.roadmapDrafts"),
+            entry("routine_snapshot", "notIncluded.routineSnapshots"),
+            entry("notebook_source_chunks", "notIncluded.notebookSourceText"),
+            entry("entity_xp_day", "notIncluded.xpHistory"),
+            entry("refresh_tokens", "notIncluded.credentials"),
+            entry("password_reset_tokens", "notIncluded.credentials"),
+            entry("account_deletion_codes", "notIncluded.credentials"));
 
     private User user;
 
@@ -344,5 +398,170 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo("Slept badly but the talk went well.");
 
         assertThat(entries.get(1).get("note")).as("a day with only a level is still a day").isNull();
+    }
+
+    /**
+     * Everything that shipped after the export was last made whole: the goal tree, LIST
+     * routines, focus mode, linked sign-ins, the morning briefing, the nudge mails, and the
+     * parts of the notebook that are not pages. Each of those reached production with no line
+     * in this file, and the class comment above says what that costs.
+     */
+    @Test
+    @DisplayName("the export carries the goal tree, the routine shape, focus, sign-ins, briefings and the whole notebook")
+    @SuppressWarnings("unchecked")
+    void exportsWhatShippedSinceTheLastAudit() {
+        UUID userId = user.getId();
+
+        categoryService.createCategory(new CategoryRequestDTO(
+                "Languages", "lucide:book", "seeded", ExperienceLevel.BEGINNER), userId);
+        UUID categoryId = categoryService.getAllCategories(userId).get(0).id();
+        habitService.createHabit(new CreateHabitDTO("Drink water", "seeded", "stay hydrated",
+                "lucide:droplet", 3, 2, List.of(categoryId), ExperienceLevel.BEGINNER), userId);
+        UUID habitId = habitService.getHabits(userId).get(0).id();
+        taskService.createTask(new CreateTaskRequestDTO("Tidy the desk", "seeded",
+                "lucide:broom", 2, 2, List.of(categoryId), false), userId);
+        UUID taskId = taskService.getAllTasks(userId).get(0).id();
+
+        // A LIST routine: no times anywhere, so the order is the only shape it has.
+        diaryRoutineService.createDiaryRoutine(new DiaryRoutineRequestDTO(
+                "Errands", "lucide:list", RoutineType.LIST, null, List.of(
+                        new RoutineItemRequestDTO(null, habitId, null),
+                        new RoutineItemRequestDTO(null, null, taskId))), userId);
+        UUID routineId = diaryRoutineService.getAllDiaryRoutines(userId).get(0).id();
+
+        UUID parentGoalId = createGoal("Speak Spanish", null, categoryId);
+        UUID childGoalId = createGoal("Finish the A1 book", parentGoalId, categoryId);
+
+        UUID itemGroupId = jdbc.queryForObject("SELECT hg.id FROM habit_groups hg "
+                + "JOIN habits h ON h.id = hg.habit_id WHERE h.user_id = ?", UUID.class, userId);
+        UserOwnedRows.Seeded seeded = UserOwnedRows.seed(jdbc, userId, itemGroupId, routineId,
+                habitId, categoryId);
+
+        Map<String, Object> export = exportService.exportUserData();
+
+        // The tree. Flat, a sub-goal reads like a goal of its own.
+        List<Map<String, Object>> goals = (List<Map<String, Object>>) export.get("goals");
+        Map<UUID, Object> parentOf = new HashMap<>();
+        goals.forEach(goal -> parentOf.put((UUID) goal.get("id"), goal.get("parentId")));
+        assertThat(parentOf).containsEntry(childGoalId, parentGoalId);
+        assertThat(parentOf.get(parentGoalId)).as("the top of the tree has no parent").isNull();
+
+        // The routine says what it is, and the items say their order.
+        Map<String, Object> routine = ((List<Map<String, Object>>) export.get("routines")).get(0);
+        assertThat(routine.get("type"))
+                .as("this used to say DiaryRoutine for every routine, LIST or not")
+                .isEqualTo(RoutineType.LIST);
+        Map<String, Object> listSection = ((List<Map<String, Object>>) routine.get("sections")).get(0);
+        Map<String, Object> habitItem = ((List<Map<String, Object>>) listSection.get("habits")).get(0);
+        Map<String, Object> taskItem = ((List<Map<String, Object>>) listSection.get("tasks")).get(0);
+        assertThat(habitItem.get("orderIndex")).isEqualTo(0);
+        assertThat(taskItem.get("orderIndex")).isEqualTo(1);
+
+        // Focus: the cycle and the micro-task, both pointing at the routine item they ran on.
+        Map<String, Object> focus = (Map<String, Object>) export.get("focus");
+        assertThat(focus).as("focus mode had no section at all").isNotNull();
+        Map<String, Object> cycle = ((List<Map<String, Object>>) focus.get("cycles")).get(0);
+        assertThat(cycle.get("kind")).isEqualTo(CycleKind.POMODORO);
+        assertThat(cycle.get("minutes")).isEqualTo(25);
+        assertThat(cycle.get("itemGroupId")).isEqualTo(itemGroupId);
+        assertThat(cycle.get("notebookPageId")).isEqualTo(seeded.pageId());
+        Map<String, Object> microTask = ((List<Map<String, Object>>) focus.get("microTasks")).get(0);
+        assertThat(microTask.get("name")).isEqualTo("fill the bottle");
+        assertThat(microTask.get("itemGroupId")).isEqualTo(itemGroupId);
+
+        // Who else can sign in to this account.
+        Map<String, Object> profile = (Map<String, Object>) export.get("profile");
+        Map<String, Object> signIn = ((List<Map<String, Object>>) profile.get("linkedSignIns")).get(0);
+        assertThat(signIn.get("issuer")).isEqualTo("https://id.example.test");
+        assertThat(signIn.get("subject")).isEqualTo("subject-" + userId + "-0");
+        assertThat(signIn.get("emailAtLink")).isEqualTo("linked@example.test");
+
+        // The briefing's words, read back the way the dialog reads them.
+        Map<String, Object> briefing = ((List<Map<String, Object>>) export.get("dailyBriefings")).get(0);
+        assertThat(briefing.get("date")).isEqualTo(seeded.day());
+        assertThat(briefing.get("status")).isEqualTo(NarrativeStatus.READY);
+        assertThat((List<String>) briefing.get("todayLines")).containsExactly("Two habits left.");
+        assertThat((List<String>) briefing.get("yesterdayLines")).containsExactly("A full day.");
+
+        Map<String, Object> mail = ((List<Map<String, Object>>) export.get("engagementEmailsSent")).get(0);
+        assertThat(mail.get("kind")).isEqualTo(NudgeKind.STREAK_RECORD_AT_RISK);
+        assertThat(mail.get("sentOn")).isEqualTo(seeded.day());
+
+        // The notebook beyond its pages.
+        Map<String, Object> notebook = (Map<String, Object>) export.get("notebook");
+        Map<String, Object> board = (Map<String, Object>) notebook.get("board");
+        List<Map<String, Object>> nodes = (List<Map<String, Object>>) board.get("nodes");
+        assertThat(nodes).hasSize(2);
+        assertThat(nodes).anySatisfy(node -> {
+            assertThat(node.get("id")).isEqualTo(seeded.sectionNodeId());
+            assertThat(node.get("label")).isEqualTo("Grammar");
+            assertThat(node.get("x")).isEqualTo(10.0);
+        });
+        Map<String, Object> edge = ((List<Map<String, Object>>) board.get("edges")).get(0);
+        assertThat(edge.get("fromNodeId")).isEqualTo(seeded.sectionNodeId());
+        assertThat(edge.get("toNodeId")).isEqualTo(seeded.pageNodeId());
+
+        Map<String, Object> card = ((List<Map<String, Object>>) notebook.get("flashcards")).get(0);
+        assertThat(card.get("id")).as("reviews point at it").isEqualTo(seeded.cardId());
+        Map<String, Object> review = ((List<Map<String, Object>>) notebook.get("flashcardReviews")).get(0);
+        assertThat(review.get("cardId")).isEqualTo(seeded.cardId());
+        assertThat(review.get("rating")).isEqualTo(CardRating.GOOD);
+
+        Map<String, Object> output = ((List<Map<String, Object>>) notebook.get("studyOutputs")).get(0);
+        assertThat(output.get("kind")).isEqualTo(StudyOutputKind.QUIZ);
+        assertThat(output.get("score")).isEqualTo(4);
+        assertThat(output.get("total")).isEqualTo(5);
+
+        assertThat((Map<String, Object>) export.get("notIncluded"))
+                .containsKeys("routineSnapshots", "notebookSourceText", "xpHistory",
+                        "dailyBriefingFacts", "credentials");
+
+        userService.deleteUser(user);
+    }
+
+    /**
+     * The guard for the next feature.
+     *
+     * <p>The export promises that whatever it leaves out is named under {@code notIncluded}.
+     * Four features in a row broke that promise without anyone noticing, because nothing
+     * connected "a new table that belongs to a user" to "this file". This does: it reads every
+     * table pointing at {@code users} from the live schema and fails for any that has no
+     * section here and no entry under {@code notIncluded}.
+     */
+    @Test
+    @DisplayName("every table that points at a user is either in the file or named under notIncluded")
+    @SuppressWarnings("unchecked")
+    void everyTableThatPointsAtAUserIsInTheFileOrSaysWhyNot() {
+        Set<String> unaccounted = new TreeSet<>(UserOwnedRows.tablesPointingAtUsers(jdbc));
+        unaccounted.removeAll(WHERE_EACH_TABLE_GOES.keySet());
+        assertThat(unaccounted)
+                .as("These tables hold a user's data and the export says nothing about them. "
+                        + "Add a section to UserExportService, or a notIncluded entry saying why "
+                        + "not, and map the table in WHERE_EACH_TABLE_GOES.")
+                .isEmpty();
+
+        // And every place the map names really exists in the file, even for an empty account.
+        Map<String, Object> export = exportService.exportUserData();
+        WHERE_EACH_TABLE_GOES.forEach((table, path) -> {
+            Object node = export;
+            for (String key : path.split("\\.")) {
+                assertThat(node).as("%s: %s is not an object in the export", table, path)
+                        .isInstanceOf(Map.class);
+                assertThat((Map<String, Object>) node)
+                        .as("%s should land at %s", table, path)
+                        .containsKey(key);
+                node = ((Map<String, Object>) node).get(key);
+            }
+        });
+    }
+
+    private UUID createGoal(String name, UUID parentId, UUID categoryId) {
+        goalService.createGoal(new CreateGoalRequestDTO(
+                name, null, "lucide:flag", 10.0, "chapters", 0.0, List.of(categoryId), null,
+                LocalDate.now(ZoneOffset.UTC), LocalDate.now(ZoneOffset.UTC).plusMonths(2),
+                GoalStatus.NOT_STARTED, GoalTerm.SHORT_TERM, parentId), user.getId());
+        return goalService.getAllGoals(user.getId()).stream()
+                .filter(goal -> goal.name().equals(name))
+                .findFirst().orElseThrow().id();
     }
 }

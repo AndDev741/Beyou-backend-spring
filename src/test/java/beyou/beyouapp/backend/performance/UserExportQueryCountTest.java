@@ -7,19 +7,26 @@ import beyou.beyouapp.backend.HibernateStatistics;
 import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessageService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
+import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.common.ExperienceLevel;
 import beyou.beyouapp.backend.domain.feedback.FeedbackCategory;
 import beyou.beyouapp.backend.domain.feedback.FeedbackReplyService;
 import beyou.beyouapp.backend.domain.feedback.FeedbackService;
 import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackReplyRequestDTO;
 import beyou.beyouapp.backend.domain.feedback.dto.CreateFeedbackRequestDTO;
+import beyou.beyouapp.backend.domain.habit.HabitService;
+import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
+import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.HabitGroupDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSectionRequestDTO;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserExportService;
+import beyou.beyouapp.backend.user.UserOwnedRows;
 import beyou.beyouapp.backend.user.UserRepository;
 import beyou.beyouapp.backend.user.UserService;
 import jakarta.persistence.EntityManagerFactory;
@@ -28,6 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -64,6 +72,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * correct if the same data comes back — a batch read that silently dropped a chat's
  * messages would satisfy any query-count assertion ever written.
  *
+ * <p>The same holds for everything added since: focus cycles and micro-tasks, linked sign-ins,
+ * briefings, nudge mails, and the notebook's boards, reviews and study outputs. Each gets
+ * {@code n} rows here, and the micro-tasks point at a routine item, which is the lazy
+ * reference most likely to turn into a query per row.
+ *
  * <p>One cost stays per chat and is not counted here: conversations older than
  * {@code agent_message} are read from Spring AI's ChatMemory, which is JdbcTemplate and
  * therefore invisible to Hibernate's statistics, and whose API takes one conversation at
@@ -97,6 +110,9 @@ class UserExportQueryCountTest extends AbstractIntegrationTest {
     @Autowired FeedbackReplyService feedbackReplyService;
     @Autowired DiaryRoutineService diaryRoutineService;
     @Autowired ScheduleService scheduleService;
+    @Autowired CategoryService categoryService;
+    @Autowired HabitService habitService;
+    @Autowired JdbcTemplate jdbc;
 
     private User current;
 
@@ -166,13 +182,24 @@ class UserExportQueryCountTest extends AbstractIntegrationTest {
                     new CreateFeedbackReplyRequestDTO("looking into it " + i));
         }
 
+        // One habit, placed in every routine, so each routine has an item for focus rows to
+        // point at.
+        categoryService.createCategory(new CategoryRequestDTO(
+                "Health", "lucide:heart", "seeded", ExperienceLevel.BEGINNER), userId);
+        UUID categoryId = categoryService.getAllCategories(userId).get(0).id();
+        habitService.createHabit(new CreateHabitDTO("Drink water", "seeded", "stay hydrated",
+                "lucide:droplet", 3, 2, List.of(categoryId), ExperienceLevel.BEGINNER), userId);
+        UUID habitId = habitService.getHabits(userId).get(0).id();
+
         // Routines, each scheduled — the schedule and the days it holds were two of
         // the six per-element reads.
         for (int i = 0; i < n; i++) {
             diaryRoutineService.createDiaryRoutine(new DiaryRoutineRequestDTO(
                     "routine-" + i, "lucide:sun", RoutineType.DAILY,
                     List.of(new RoutineSectionRequestDTO(null, "section", "lucide:sunrise",
-                            LocalTime.of(7, 0), LocalTime.of(8, 0), List.of(), List.of(), false)), List.of()),
+                            LocalTime.of(7, 0), LocalTime.of(8, 0), List.of(),
+                            List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null)),
+                            false)), List.of()),
                     userId);
         }
         List<UUID> routineIds = diaryRoutineService.getAllDiaryRoutines(userId).stream()
@@ -180,6 +207,14 @@ class UserExportQueryCountTest extends AbstractIntegrationTest {
         for (int i = 0; i < routineIds.size(); i++) {
             scheduleService.create(
                     new CreateScheduleDTO(Set.of(WeekDay.values()[i]), routineIds.get(i)), userId);
+        }
+
+        // n of everything added since the N+1 fix, each copy on its own day.
+        List<UUID> itemGroupIds = jdbc.queryForList(
+                "SELECT id FROM habit_groups WHERE habit_id = ?", UUID.class, habitId);
+        for (int i = 0; i < n; i++) {
+            UserOwnedRows.seed(jdbc, userId, itemGroupIds.get(i), routineIds.get(i), habitId,
+                    categoryId, i);
         }
 
         var stats = new HibernateStatistics(emf);
@@ -200,6 +235,21 @@ class UserExportQueryCountTest extends AbstractIntegrationTest {
                 assertThat((List<?>) submission.get("replies"))
                         .as("a submission that was answered must export the answer")
                         .hasSize(1));
+
+        Map<String, Object> focus = (Map<String, Object>) export.get("focus");
+        assertThat((List<?>) focus.get("cycles")).hasSize(n);
+        assertThat((List<Map<String, Object>>) focus.get("microTasks"))
+                .hasSize(n)
+                .allSatisfy(task -> assertThat(task.get("itemGroupId")).isNotNull());
+        assertThat((List<?>) export.get("dailyBriefings")).hasSize(n);
+        assertThat((List<?>) export.get("engagementEmailsSent")).hasSize(n);
+        assertThat((List<?>) ((Map<String, Object>) export.get("profile")).get("linkedSignIns")).hasSize(n);
+        Map<String, Object> notebook = (Map<String, Object>) export.get("notebook");
+        Map<String, Object> board = (Map<String, Object>) notebook.get("board");
+        assertThat((List<?>) board.get("nodes")).hasSize(2 * n);
+        assertThat((List<?>) board.get("edges")).hasSize(n);
+        assertThat((List<?>) notebook.get("flashcardReviews")).hasSize(n);
+        assertThat((List<?>) notebook.get("studyOutputs")).hasSize(n);
 
         List<Map<String, Object>> routines = (List<Map<String, Object>>) export.get("routines");
         assertThat(routines).hasSize(n);

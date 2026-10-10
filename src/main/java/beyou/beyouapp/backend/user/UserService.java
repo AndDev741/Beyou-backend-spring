@@ -236,9 +236,13 @@ public class UserService {
      *       {@code REFERENCES users(id)} with no cascade at all, so the database would
      *       refuse this delete on its own. Tasks were missing from that list until this
      *       feature shipped, which is exactly how that gap gets found.</li>
-     *   <li><b>The database</b> takes feedback (V9), entity_check_day (V13) and
-     *       account_deletion_codes (V16) — the three that really are ON DELETE
-     *       CASCADE.</li>
+     *   <li><b>The database</b> takes feedback (V9), entity_check_day (V13),
+     *       account_deletion_codes (V16), entity_xp_day (V19) and every table added
+     *       from V24 on: notification preferences and sends, focus cycles and
+     *       micro-tasks, federated sign-ins, mood entries, the daily briefing and the
+     *       whole notebook. All ON DELETE CASCADE. AccountDeletionIntegrationTest puts a
+     *       row in each and reads the list of tables from the schema, so a new one that
+     *       forgets its cascade fails there.</li>
      *   <li><b>This method</b> takes refresh tokens, password reset tokens and chats,
      *       which have neither.</li>
      * </ul>
@@ -351,11 +355,10 @@ public class UserService {
      * verbatim against a real schema on an account seeded through this application's
      * own services. The version that lived here was wrong: it said routine sections and
      * groups followed their routine and that the category join tables followed their
-     * owning row, when only seven foreign keys in this schema cascade in the database
-     * and none of those are among them. Everything else is Hibernate's doing, and a
-     * psql session has no Hibernate — so following it literally would have stopped on a
-     * foreign-key violation partway through. Prose drifts from a schema; an executed
-     * file cannot.
+     * owning row, when no foreign key in the V1 baseline cascades in the database.
+     * Those are Hibernate's doing, and a psql session has no Hibernate, so following it
+     * literally would have stopped on a foreign-key violation partway through. Prose
+     * drifts from a schema; an executed file cannot.
      *
      * <p>Running it by hand is a last resort: the route above is the tested path.
      *

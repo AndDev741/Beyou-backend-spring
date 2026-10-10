@@ -78,4 +78,12 @@ public interface FocusMicroTaskRepository extends JpaRepository<FocusMicroTask, 
      */
     @Query(value = "SELECT pg_advisory_xact_lock(hashtext(:key))", nativeQuery = true)
     void lockItemList(@Param("key") String key);
+
+    /** Every micro-task the user ever wrote, by day and then list position. For the data export. */
+    @Query("""
+        SELECT t FROM FocusMicroTask t
+        WHERE t.user.id = :userId
+        ORDER BY t.taskDate ASC, t.orderIndex ASC, t.createdAt ASC
+        """)
+    List<FocusMicroTask> findAllForExport(@Param("userId") UUID userId);
 }
