@@ -2,6 +2,8 @@ package beyou.beyouapp.backend.domain.briefing;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -223,6 +225,31 @@ public class DailyBriefingService {
     /** The same, against a named day. See {@link #briefingFor(User, LocalDate)}. */
     public void markSeen(User user, LocalDate date) {
         writes.markSeen(user, date);
+    }
+
+    /**
+     * The lines this account was shown, one entry per day retention has kept, for the data
+     * export.
+     *
+     * <p>Here rather than in {@code UserExportService} because reading the stored prose back is
+     * this class's job ({@link #readStored}), and a second parser somewhere else would drift
+     * from the first. Only the generated lines leave: the numbers beside them were never
+     * stored, they are recomputed from habits, goals and check-ins on every open, and those
+     * travel in their own sections of the file.
+     */
+    public List<Map<String, Object>> exportForUser(UUID userId) {
+        return repository.findByUserIdOrderByBriefingDateAsc(userId).stream().map(row -> {
+            BriefingNarrative narrative = isReady(row)
+                    ? readStored(row)
+                    : BriefingNarrative.absent(row.getNarrativeStatus());
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("date", row.getBriefingDate());
+            map.put("status", narrative.status());
+            map.put("todayLines", narrative.todayLines());
+            map.put("yesterdayLines", narrative.yesterdayLines());
+            map.put("seenAt", row.getSeenAt());
+            return map;
+        }).toList();
     }
 
     // ---- narrative ----

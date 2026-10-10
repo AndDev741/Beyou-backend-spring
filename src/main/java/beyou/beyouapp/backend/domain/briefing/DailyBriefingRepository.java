@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.briefing;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,4 +29,7 @@ public interface DailyBriefingRepository extends JpaRepository<DailyBriefing, UU
     @Modifying
     @Query("DELETE FROM DailyBriefing b WHERE b.briefingDate < :cutoff")
     int deleteOlderThan(@Param("cutoff") LocalDate cutoff);
+
+    /** The rows retention has not swept yet, oldest first. For the data export. */
+    List<DailyBriefing> findByUserIdOrderByBriefingDateAsc(UUID userId);
 }

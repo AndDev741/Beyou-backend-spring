@@ -35,4 +35,18 @@ public interface FocusCycleRepository extends JpaRepository<FocusCycle, UUID> {
         """)
     long sumPomodoroMinutes(@Param("userId") UUID userId,
                             @Param("pageIds") java.util.Collection<UUID> pageIds);
+
+    /**
+     * Every cycle the user ever completed, oldest first, for the data export.
+     *
+     * <p>No fetch join: the export only needs the item group's id, and Hibernate answers
+     * {@code getItemGroup().getId()} from the foreign key without loading the group.
+     * {@code UserExportQueryCountTest} holds this to one statement however many cycles exist.
+     */
+    @Query("""
+        SELECT c FROM FocusCycle c
+        WHERE c.user.id = :userId
+        ORDER BY c.cycleDate ASC, c.startedAt ASC
+        """)
+    List<FocusCycle> findAllForExport(@Param("userId") UUID userId);
 }

@@ -27,4 +27,7 @@ public interface NotebookBoardNodeRepository extends JpaRepository<NotebookBoard
     List<NotebookBoardNode> findByBoardPageIdIn(Collection<UUID> boardPageIds);
 
     long countByBoardPageId(UUID boardPageId);
+
+    /** Every node on every board the user has, for the data export. */
+    List<NotebookBoardNode> findByUserIdOrderByCreatedAtAsc(UUID userId);
 }

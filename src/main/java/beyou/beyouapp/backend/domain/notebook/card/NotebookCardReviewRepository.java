@@ -21,4 +21,7 @@ public interface NotebookCardReviewRepository extends JpaRepository<NotebookCard
     @Query("select distinct r.reviewDate from NotebookCardReview r "
             + "where r.user.id = :userId and r.reviewDate >= :since order by r.reviewDate desc")
     List<LocalDate> reviewDaysSince(@Param("userId") UUID userId, @Param("since") LocalDate since);
+
+    /** Every answer the user ever gave a flashcard, oldest first. For the data export. */
+    List<NotebookCardReview> findByUserIdOrderByReviewedAtAsc(UUID userId);
 }

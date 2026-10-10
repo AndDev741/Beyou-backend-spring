@@ -15,4 +15,7 @@ public interface NotebookStudyOutputRepository extends JpaRepository<NotebookStu
     Optional<NotebookStudyOutput> findFirstByPageIdAndKindOrderByCreatedAtDesc(UUID pageId, StudyOutputKind kind);
 
     void deleteByPageIdAndKind(UUID pageId, StudyOutputKind kind);
+
+    /** Everything the study room ever produced for the user, oldest first. For the data export. */
+    List<NotebookStudyOutput> findByUserIdOrderByCreatedAtAsc(UUID userId);
 }

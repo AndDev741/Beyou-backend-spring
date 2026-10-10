@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
+import beyou.beyouapp.backend.domain.briefing.DailyBriefingService;
 import beyou.beyouapp.backend.domain.category.CategoryRepository;
 import beyou.beyouapp.backend.domain.checkday.CheckHistoryService;
 import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
@@ -9,13 +10,19 @@ import beyou.beyouapp.backend.domain.common.CheckProgress;
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.feedback.FeedbackService;
+import beyou.beyouapp.backend.domain.focus.FocusCycleRepository;
+import beyou.beyouapp.backend.domain.focus.FocusMicroTaskRepository;
 import beyou.beyouapp.backend.domain.goal.GoalRepository;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
 import beyou.beyouapp.backend.domain.notebook.ai.draft.RoadmapDraftService;
+import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardEdgeRepository;
+import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardNodeRepository;
 import beyou.beyouapp.backend.domain.notebook.card.NotebookCardRepository;
+import beyou.beyouapp.backend.domain.notebook.card.NotebookCardReviewRepository;
 import beyou.beyouapp.backend.domain.notebook.source.NotebookSourceRepository;
 import beyou.beyouapp.backend.domain.notebook.study.NotebookChatMessageRepository;
+import beyou.beyouapp.backend.domain.notebook.study.NotebookStudyOutputRepository;
 import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
@@ -24,9 +31,11 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.domain.task.TaskRepository;
+import beyou.beyouapp.backend.notification.engagement.NotificationSendRepository;
 import beyou.beyouapp.backend.notification.preferences.NotificationPreferences;
 import beyou.beyouapp.backend.notification.preferences.NotificationPreferencesRepository;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
+import beyou.beyouapp.backend.user.federation.FederatedIdentityRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -68,6 +77,15 @@ public class UserExportService {
     private final NotebookSourceRepository notebookSourceRepository;
     private final NotebookChatMessageRepository notebookChatMessageRepository;
     private final RoadmapDraftService roadmapDraftService;
+    private final NotebookBoardNodeRepository notebookBoardNodeRepository;
+    private final NotebookBoardEdgeRepository notebookBoardEdgeRepository;
+    private final NotebookCardReviewRepository notebookCardReviewRepository;
+    private final NotebookStudyOutputRepository notebookStudyOutputRepository;
+    private final FocusCycleRepository focusCycleRepository;
+    private final FocusMicroTaskRepository focusMicroTaskRepository;
+    private final FederatedIdentityRepository federatedIdentityRepository;
+    private final DailyBriefingService dailyBriefingService;
+    private final NotificationSendRepository notificationSendRepository;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -105,6 +123,7 @@ public class UserExportService {
         profile.put("engagementEmails", notificationPreferencesRepository.findById(userId)
                 .map(NotificationPreferences::isEngagementEmail)
                 .orElse(true));
+        profile.put("linkedSignIns", linkedSignIns(userId));
         export.put("profile", profile);
 
         // Categories
@@ -149,6 +168,10 @@ public class UserExportService {
             // Null for an active goal. An export that dropped this would hand back archived
             // goals looking like live ones.
             map.put("archivedAt", g.getArchivedAt());
+            // The goal this one sits under, or null at the top level. Read off the mirror
+            // column, so it costs no query per goal. Without it the tree comes out flat and
+            // a reader cannot tell a sub-goal from a goal of its own.
+            map.put("parentId", g.getParentId());
             return map;
         }).toList());
 
@@ -200,6 +223,24 @@ public class UserExportService {
         // query count however big the notebook grows (UserExportQueryCountTest).
         export.put("notebook", notebook(userId));
 
+        // Focus mode: every pomodoro and break that ran to the end, and the micro-tasks the
+        // person broke their items into. The names are typed by them, so they travel in full.
+        export.put("focus", focus(userId));
+
+        // The prose of the morning dialog, for the days retention still holds. Assembled by
+        // the briefing domain, which is the one that knows how the stored lines read back.
+        export.put("dailyBriefings", dailyBriefingService.exportForUser(userId));
+
+        // Which nudge mails went out and when. A record of what Beyou sent about the person
+        // is theirs to see, and it is one tiny row per mail.
+        export.put("engagementEmailsSent", notificationSendRepository.findByUserIdOrderBySentOnAsc(userId)
+                .stream().map(send -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("kind", send.getKind());
+                    map.put("sentOn", send.getSentOn());
+                    return map;
+                }).toList());
+
         // Say out loud what a reader will not find here, so the file can be trusted
         // as a whole rather than spot-checked. Deletion takes these too.
         Map<String, Object> omitted = new LinkedHashMap<>();
@@ -211,9 +252,17 @@ public class UserExportService {
                 + "you added as notebook sources. It is a copy of documents you already have, and a "
                 + "book's worth of it per source would bury the rest of this file; the sources "
                 + "themselves are listed under notebook.sources.");
-        omitted.put("credentials", "Password hash, refresh tokens and any pending "
-                + "verification or reset tokens. Nothing here is useful to you and all of it "
-                + "is dangerous in a file.");
+        omitted.put("xpHistory", "The day-by-day XP ledger behind the progress chart. The "
+                + "totals it adds up to are in every progress field above, and the app's XP "
+                + "chart reads the daily breakdown a year at a time. A row per thing that earns "
+                + "XP per day would otherwise outgrow the rest of this file.");
+        omitted.put("dailyBriefingFacts", "The numbers in the morning dialog. They were never "
+                + "stored: each open recomputes them from your habits, goals and check-ins, "
+                + "which are all in this file. The generated lines that sat beside them are "
+                + "under dailyBriefings.");
+        omitted.put("credentials", "Password hash, refresh tokens, and any pending "
+                + "verification, reset or account-deletion codes. Nothing here is useful to "
+                + "you and all of it is dangerous in a file.");
         export.put("notIncluded", omitted);
 
         return export;
@@ -311,7 +360,9 @@ public class UserExportService {
             map.put("id", r.getId());
             map.put("name", r.getName());
             map.put("iconId", r.getIconId());
-            map.put("type", "DiaryRoutine");
+            // DAILY or LIST. This said "DiaryRoutine" for every routine, which is the Java
+            // class name and told a reader nothing once LIST routines existed.
+            map.put("type", r.getRoutineType());
             map.put("schedule", schedule(r.getSchedule()));
             map.put("progress", xp(r.getXpProgress()));
             map.put("streak", streak(r.getCheckProgress()));
@@ -340,6 +391,9 @@ public class UserExportService {
         map.put("habitId", group.getHabit() == null ? null : group.getHabit().getId());
         map.put("startTime", group.getStartTime());
         map.put("endTime", group.getEndTime());
+        // A LIST routine has no times, so its order is the only thing saying which item comes
+        // first. A DAILY one orders by time and carries the number along anyway.
+        map.put("orderIndex", group.getOrderIndex());
         return map;
     }
 
@@ -349,6 +403,7 @@ public class UserExportService {
         map.put("taskId", group.getTask() == null ? null : group.getTask().getId());
         map.put("startTime", group.getStartTime());
         map.put("endTime", group.getEndTime());
+        map.put("orderIndex", group.getOrderIndex());
         return map;
     }
 
@@ -452,7 +507,8 @@ public class UserExportService {
 
     /**
      * Pages as plain text (the document format is the editor's business, the words are the
-     * person's), flashcards with their schedule, the sources' details, and the study-room chats.
+     * person's), the boards that arrange them, flashcards with their schedule and every answer
+     * given to them, the sources' details, the study-room chats and what the study room made.
      */
     private Map<String, Object> notebook(UUID userId) {
         Map<String, Object> notebook = new LinkedHashMap<>();
@@ -473,12 +529,25 @@ public class UserExportService {
         }).toList());
         notebook.put("flashcards", notebookCardRepository.findByUserIdOrderByCreatedAtAsc(userId).stream().map(c -> {
             Map<String, Object> map = new LinkedHashMap<>();
+            // The id is what flashcardReviews points at.
+            map.put("id", c.getId());
             map.put("pageId", c.getPageId());
             map.put("front", c.getFront());
             map.put("back", c.getBack());
             map.put("dueOn", c.getDueOn());
             return map;
         }).toList());
+        // Every answer, not just where the schedule ended up: the history of how a card went
+        // is the person's record of studying it.
+        notebook.put("flashcardReviews", notebookCardReviewRepository.findByUserIdOrderByReviewedAtAsc(userId).stream().map(r -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("cardId", r.getCardId());
+            map.put("rating", r.getRating());
+            map.put("reviewedOn", r.getReviewDate());
+            map.put("reviewedAt", r.getReviewedAt());
+            return map;
+        }).toList());
+        notebook.put("board", board(userId));
         notebook.put("sources", notebookSourceRepository.findByUserIdOrderByCreatedAtAsc(userId).stream().map(s -> {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("pageId", s.getPageId());
@@ -496,8 +565,109 @@ public class UserExportService {
             map.put("at", m.getCreatedAt());
             return map;
         }).toList());
+        // Overviews, summaries, study guides and quizzes with the score they got. Generated by
+        // a model, but generated for this person out of their own pages, and the quiz results
+        // are theirs outright.
+        notebook.put("studyOutputs", notebookStudyOutputRepository.findByUserIdOrderByCreatedAtAsc(userId).stream().map(o -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("pageId", o.getPageId());
+            map.put("kind", o.getKind());
+            map.put("title", o.getTitle());
+            map.put("content", o.getContent());
+            map.put("score", o.getScore());
+            map.put("total", o.getTotal());
+            map.put("passedAt", o.getPassedAt());
+            map.put("createdAt", o.getCreatedAt());
+            return map;
+        }).toList());
         // What was asked for, what the model drafted and the ticks: all of it is the person's.
         notebook.put("roadmapDrafts", roadmapDraftService.exportForUser(userId));
         return notebook;
+    }
+
+    /**
+     * The boards: which pages and sections sit on each one, where, and what links to what.
+     *
+     * <p>Positions are kept. A board is a layout the person made by dragging things around,
+     * the way a routine is an order they chose, and dropping x and y would hand back a pile
+     * of cards with the arrangement gone. Two queries, one per table, whatever the size.
+     */
+    private Map<String, Object> board(UUID userId) {
+        Map<String, Object> board = new LinkedHashMap<>();
+        board.put("nodes", notebookBoardNodeRepository.findByUserIdOrderByCreatedAtAsc(userId).stream().map(n -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", n.getId());
+            map.put("boardPageId", n.getBoardPageId());
+            map.put("kind", n.getKind());
+            map.put("pageId", n.getPageId());
+            map.put("label", n.getLabel());
+            map.put("x", n.getX());
+            map.put("y", n.getY());
+            map.put("width", n.getWidth());
+            map.put("height", n.getHeight());
+            return map;
+        }).toList());
+        board.put("edges", notebookBoardEdgeRepository.findByUserId(userId).stream().map(e -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("boardPageId", e.getBoardPageId());
+            map.put("fromNodeId", e.getSourceNodeId());
+            map.put("toNodeId", e.getTargetNodeId());
+            return map;
+        }).toList());
+        return board;
+    }
+
+    /**
+     * Completed focus cycles and the micro-tasks written during them.
+     *
+     * <p>Both point at a routine item by {@code itemGroupId}, the same id the routines section
+     * gives each habit or task inside a section, so a reader joins them there. The id comes
+     * off the foreign key without loading the group, so this stays two queries.
+     */
+    private Map<String, Object> focus(UUID userId) {
+        Map<String, Object> focus = new LinkedHashMap<>();
+        focus.put("cycles", focusCycleRepository.findAllForExport(userId).stream().map(c -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("date", c.getCycleDate());
+            map.put("kind", c.getKind());
+            map.put("minutes", c.getMinutes());
+            map.put("startedAt", c.getStartedAt());
+            map.put("endedAt", c.getEndedAt());
+            map.put("itemGroupId", c.getItemGroup() == null ? null : c.getItemGroup().getId());
+            map.put("notebookPageId", c.getNotebookPageId());
+            return map;
+        }).toList());
+        focus.put("microTasks", focusMicroTaskRepository.findAllForExport(userId).stream().map(t -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("date", t.getTaskDate());
+            map.put("itemGroupId", t.getItemGroup().getId());
+            map.put("name", t.getName());
+            map.put("pinned", t.isPinned());
+            map.put("doneAt", t.getDoneAt());
+            map.put("orderIndex", t.getOrderIndex());
+            return map;
+        }).toList());
+        return focus;
+    }
+
+    /**
+     * The outside accounts that can sign in to this one.
+     *
+     * <p>The provider's subject goes in. It is how that provider names this person, which
+     * makes it personal data under the same rule as an email address, and it is not a
+     * credential: signing in still takes a token the provider signs. Leaving it out would hide
+     * the one value that says which account at the provider is linked. No token of any kind is
+     * stored here, so none can leave.
+     */
+    private List<Map<String, Object>> linkedSignIns(UUID userId) {
+        return federatedIdentityRepository.findAllByUserId(userId).stream().map(f -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("issuer", f.getIssuer());
+            map.put("subject", f.getSubject());
+            map.put("emailAtLink", f.getEmailAtLink());
+            map.put("linkedAt", f.getCreatedAt());
+            map.put("lastLoginAt", f.getLastLoginAt());
+            return map;
+        }).toList();
     }
 }
