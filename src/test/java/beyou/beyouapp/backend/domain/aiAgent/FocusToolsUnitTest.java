@@ -251,6 +251,10 @@ public class FocusToolsUnitTest {
     /**
      * The registered surface, asserted by name. A cycle write appearing here later would be a
      * deliberate product decision, not something that slips in with a refactor.
+     *
+     * <p>"Cycle" here is the Focus Mode record of a finished timer. The study cycle tools
+     * (createStudyCycle, listStudyCycles) share the word and nothing else: they plan a queue of
+     * study blocks and never write a focus cycle, so they are the one exception by name.
      */
     @Test
     void exposesTheMicroTaskSurfaceAndNoWayToWriteACycle() {
@@ -263,7 +267,9 @@ public class FocusToolsUnitTest {
         assertTrue(names.containsAll(Set.of(
                 "getItemMicroTasks", "getFocusDay", "addMicroTask",
                 "toggleMicroTask", "pinMicroTask", "deleteMicroTask", "reorderMicroTasks")), names.toString());
-        assertTrue(names.stream().noneMatch(name -> name.toLowerCase().contains("cycle")),
+        assertTrue(names.stream()
+                        .filter(name -> !name.contains("StudyCycle"))
+                        .noneMatch(name -> name.toLowerCase().contains("cycle")),
                 "a cycle is the record that somebody sat through a timer: " + names);
     }
 
