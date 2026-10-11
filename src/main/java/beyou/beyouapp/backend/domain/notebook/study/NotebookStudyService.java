@@ -24,6 +24,7 @@ import beyou.beyouapp.backend.domain.notebook.ai.StudyContextBuilder;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.CitationDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.LlmPayloads;
 import beyou.beyouapp.backend.domain.notebook.card.NotebookCardRepository;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleService;
 import beyou.beyouapp.backend.domain.notebook.source.NotebookSourceService;
 import beyou.beyouapp.backend.domain.notebook.study.dto.ChatMessageDTO;
 import beyou.beyouapp.backend.domain.notebook.study.dto.ChatTurnDTO;
@@ -84,6 +85,7 @@ public class NotebookStudyService {
     private final NotebookRewards rewards;
     private final ObjectMapper objectMapper;
     private final NotebookTransactions tx;
+    private final StudyCycleService studyCycles;
 
     record StoredAnswer(String markdown, List<CitationDTO> citations) {
     }
@@ -347,6 +349,9 @@ public class NotebookStudyService {
             NotebookPage topic = page.isTopic() ? page : ownership.page(user.getId(), page.getTopicId());
             refresh = rewards.pay(page.getUser(), topic.getCategory(), NotebookRewards.QUIZ_PASSED_XP);
             xp = NotebookRewards.QUIZ_PASSED_XP;
+            // A study cycle block that asked for this quiz and whose page is already done is
+            // understood now.
+            studyCycles.onQuizPassed(user.getId(), page.getId(), output.getPassedAt());
         }
         return new QuizResultDTO(score, total, passed, graded, xp, refresh);
     }

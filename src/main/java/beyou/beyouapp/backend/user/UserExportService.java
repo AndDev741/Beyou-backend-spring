@@ -20,6 +20,13 @@ import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardEdgeRepository;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardNodeRepository;
 import beyou.beyouapp.backend.domain.notebook.card.NotebookCardRepository;
 import beyou.beyouapp.backend.domain.notebook.card.NotebookCardReviewRepository;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleBlockRepository;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleDayRepository;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleLapBlockRepository;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleLapRepository;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleRepository;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleTopicRepository;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudySessionRepository;
 import beyou.beyouapp.backend.domain.notebook.source.NotebookSourceRepository;
 import beyou.beyouapp.backend.domain.notebook.study.NotebookChatMessageRepository;
 import beyou.beyouapp.backend.domain.notebook.study.NotebookStudyOutputRepository;
@@ -81,6 +88,13 @@ public class UserExportService {
     private final NotebookBoardEdgeRepository notebookBoardEdgeRepository;
     private final NotebookCardReviewRepository notebookCardReviewRepository;
     private final NotebookStudyOutputRepository notebookStudyOutputRepository;
+    private final StudyCycleRepository studyCycleRepository;
+    private final StudyCycleDayRepository studyCycleDayRepository;
+    private final StudyCycleTopicRepository studyCycleTopicRepository;
+    private final StudyCycleBlockRepository studyCycleBlockRepository;
+    private final StudyCycleLapBlockRepository studyCycleLapBlockRepository;
+    private final StudyCycleLapRepository studyCycleLapRepository;
+    private final StudySessionRepository studySessionRepository;
     private final FocusCycleRepository focusCycleRepository;
     private final FocusMicroTaskRepository focusMicroTaskRepository;
     private final FederatedIdentityRepository federatedIdentityRepository;
@@ -582,7 +596,106 @@ public class UserExportService {
         }).toList());
         // What was asked for, what the model drafted and the ticks: all of it is the person's.
         notebook.put("roadmapDrafts", roadmapDraftService.exportForUser(userId));
+        notebook.put("studyCycles", studyCycles(userId));
+        // Study logged by hand. cycleId and lapNumber say which lap the minutes went into.
+        notebook.put("studySessions", studySessionRepository.findAllForExport(userId).stream().map(x -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", x.getId());
+            map.put("topicId", x.getTopicId());
+            map.put("pageId", x.getPageId());
+            map.put("minutes", x.getMinutes());
+            map.put("studiedOn", x.getStudiedOn());
+            map.put("note", x.getNote());
+            map.put("loggedAt", x.getCreatedAt());
+            map.put("cycleId", x.getCycleId());
+            map.put("lapNumber", x.getLapNumber());
+            return map;
+        }).toList());
         return notebook;
+    }
+
+    /**
+     * Study cycles, archived ones included: the week, the topics and their weights, the queue,
+     * the progress of every block in every lap, and the closed laps.
+     *
+     * <p>One query per table, grouped under each cycle in memory, so the cost stays at six
+     * statements however many cycles, blocks and laps the person has
+     * ({@code UserExportQueryCountTest}).
+     */
+    private List<Map<String, Object>> studyCycles(UUID userId) {
+        Map<UUID, List<Map<String, Object>>> days = new LinkedHashMap<>();
+        studyCycleDayRepository.findAllForExport(userId).forEach(d -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("weekday", d.getWeekday());
+            map.put("minutes", d.getMinutes());
+            map.put("startTime", d.getStartTime());
+            days.computeIfAbsent(d.getCycleId(), k -> new ArrayList<>()).add(map);
+        });
+        Map<UUID, List<Map<String, Object>>> topics = new LinkedHashMap<>();
+        studyCycleTopicRepository.findAllForExport(userId).forEach(t -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("topicId", t.getTopicId());
+            map.put("importance", t.getImportance());
+            map.put("mastery", t.getMastery());
+            map.put("minutesOverride", t.getMinutesOverride());
+            map.put("active", t.isActive());
+            topics.computeIfAbsent(t.getCycleId(), k -> new ArrayList<>()).add(map);
+        });
+        Map<UUID, List<Map<String, Object>>> blocks = new LinkedHashMap<>();
+        studyCycleBlockRepository.findAllForExport(userId).forEach(b -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", b.getId());
+            map.put("position", b.getPosition());
+            map.put("topicId", b.getTopicId());
+            map.put("mode", b.getMode());
+            map.put("plannedMinutes", b.getPlannedMinutes());
+            map.put("goalSource", b.getGoalSource());
+            map.put("pageId", b.getPageId());
+            map.put("requireQuiz", b.isRequireQuiz());
+            map.put("note", b.getNote());
+            blocks.computeIfAbsent(b.getCycleId(), k -> new ArrayList<>()).add(map);
+        });
+        Map<UUID, List<Map<String, Object>>> progress = new LinkedHashMap<>();
+        studyCycleLapBlockRepository.findAllForExport(userId).forEach(r -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("lapNumber", r.getLapNumber());
+            map.put("blockId", r.getBlockId());
+            map.put("minutes", r.getMinutes());
+            map.put("targetPageId", r.getTargetPageId());
+            map.put("state", r.getState());
+            map.put("closedAt", r.getClosedAt());
+            progress.computeIfAbsent(r.getCycleId(), k -> new ArrayList<>()).add(map);
+        });
+        Map<UUID, List<Map<String, Object>>> laps = new LinkedHashMap<>();
+        studyCycleLapRepository.findAllForExport(userId).forEach(l -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("number", l.getNumber());
+            map.put("startedAt", l.getStartedAt());
+            map.put("closedAt", l.getClosedAt());
+            map.put("minutes", l.getMinutes());
+            map.put("plannedMinutes", l.getPlannedMinutes());
+            map.put("understood", l.getUnderstood());
+            map.put("turnsUsed", l.getTurnsUsed());
+            map.put("blocks", l.getBlocks());
+            laps.computeIfAbsent(l.getCycleId(), k -> new ArrayList<>()).add(map);
+        });
+        return studyCycleRepository.findAllForExport(userId).stream().map(c -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", c.getId());
+            map.put("name", c.getName());
+            map.put("defaultMode", c.getDefaultMode());
+            map.put("maxBlockMinutes", c.getMaxBlockMinutes());
+            map.put("lapNumber", c.getLapNumber());
+            map.put("lapStartedAt", c.getLapStartedAt());
+            map.put("archivedAt", c.getArchivedAt());
+            map.put("createdAt", c.getCreatedAt());
+            map.put("week", days.getOrDefault(c.getId(), List.of()));
+            map.put("topics", topics.getOrDefault(c.getId(), List.of()));
+            map.put("blocks", blocks.getOrDefault(c.getId(), List.of()));
+            map.put("lapProgress", progress.getOrDefault(c.getId(), List.of()));
+            map.put("closedLaps", laps.getOrDefault(c.getId(), List.of()));
+            return map;
+        }).toList();
     }
 
     /**

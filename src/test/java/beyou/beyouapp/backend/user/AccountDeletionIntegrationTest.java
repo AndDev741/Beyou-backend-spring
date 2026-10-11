@@ -204,9 +204,29 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
                     .isPositive();
         }
 
+        // The study cycle's own tables point at the cycle, not at users, so the loop below cannot
+        // see them. Their ids are taken now and checked by hand after the delete.
+        List<UUID> cycleIds = jdbc.queryForList("SELECT id FROM study_cycles WHERE user_id = ?", UUID.class, userId);
+        List<String> cycleTables = List.of("study_cycle_days", "study_cycle_topics", "study_cycle_blocks",
+                "study_cycle_lap_blocks", "study_cycle_laps");
+        assertThat(cycleIds).isNotEmpty();
+        for (String table : cycleTables) {
+            assertThat(rowsFor(table, "cycle_id", cycleIds.get(0)))
+                    .as("%s holds nothing for the seeded cycle, so its delete proves nothing", table)
+                    .isPositive();
+        }
+
         assertThatCode(() -> accountDeletionService.confirm(user, code))
                 .as("a used account must be deletable through the route people will use")
                 .doesNotThrowAnyException();
+
+        for (String table : cycleTables) {
+            for (UUID cycleId : cycleIds) {
+                assertThat(rowsFor(table, "cycle_id", cycleId))
+                        .as("%s still holds a row of the deleted account's study cycle", table)
+                        .isZero();
+            }
+        }
 
         assertThat(rowsFor("users", "id", userId)).isZero();
         // Every column in the schema that points at a user, read from the schema itself, so a
