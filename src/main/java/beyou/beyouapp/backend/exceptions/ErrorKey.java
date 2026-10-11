@@ -162,4 +162,16 @@ public enum ErrorKey {
     // The page's document was written since the editor read it (another device, another tab, the
     // assistant). The editor reads the page again and merges before saving.
     NOTEBOOK_CONTENT_CONFLICT,
+    // Study cycles (StudyCycleService). Not-owned and not-found stay separate, like the notebook's.
+    STUDY_CYCLE_NOT_FOUND,
+    STUDY_CYCLE_NOT_OWNED,
+    // The topic is already in another active cycle. The refusal names that cycle in details
+    // (cycleId, cycleName, topicId) so the client can say which one.
+    STUDY_CYCLE_TOPIC_TAKEN,
+    // Ten active cycles per account, thirty topics or sixty blocks per cycle.
+    STUDY_CYCLE_LIMIT,
+    // Also the answer for another user's session: nothing about it is the caller's to learn.
+    STUDY_SESSION_NOT_FOUND,
+    // A manual session dated in the future or more than 30 days back, on the owner's calendar.
+    STUDY_SESSION_DATE,
 }

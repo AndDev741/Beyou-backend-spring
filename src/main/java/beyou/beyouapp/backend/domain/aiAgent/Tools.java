@@ -48,6 +48,7 @@ import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
 import beyou.beyouapp.backend.domain.aiAgent.notebook.StudyBoardEditor;
+import beyou.beyouapp.backend.domain.aiAgent.notebook.StudyCycleAssistant;
 import beyou.beyouapp.backend.domain.notebook.dto.HomeResponseDTO;
 import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.mood.dto.SetMoodLevelDTO;
@@ -105,6 +106,8 @@ public class Tools {
     private NotebookPageService notebookPageService;
     @Autowired
     private StudyBoardEditor studyBoardEditor;
+    @Autowired
+    private StudyCycleAssistant studyCycleAssistant;
     @Autowired
     private Validator validator;
 
@@ -785,8 +788,8 @@ public class Tools {
             "beYou", "beYouDark", "Sunset", "Amethyst", "Midnight",
             "Cyberpunk", "Mocha", "Polar", "Late Latte");
     private static final List<String> AVAILABLE_WIDGETS = List.of(
-            "worstArea", "constance", "betterArea", "dailyProgress",
-            "fastTips", "levelProgress", "categoryBalance");
+            "worstArea", "constance", "constanceHeatmap", "betterArea", "dailyProgress",
+            "fastTips", "levelProgress", "categoryBalance", "moodWeek", "studyToday");
 
     @Tool(description = "Get the user's current configuration (name, profile phrase, theme, language, "
             + "timezone, streak/constance mode, XP decay strategy, dashboard widgets) plus the valid "
@@ -1033,6 +1036,58 @@ public class Tools {
                 .map(t -> Map.of("topic", t.title(), "due", t.due())).toList());
         plan.put("reviewStreakDays", home.review().streak());
         return plan;
+    }
+
+    // Study cycles. The topic in each is a notebook topic by exact title or id; StudyCycleAssistant
+    // refuses a name that matches nothing or several, the way the board tools do.
+    @Tool(description = "Today's study cycle plan: per cycle with minutes today, the blocks that fit the day in "
+            + "order (topic, TIME or GOAL, the concept to understand, minutes done of planned, clock times when "
+            + "the day has a start time) and the blocks already closed today. Read only")
+    Map<String, Object> getStudyToday(ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is reading today's study cycles for user: {}", user.getId());
+        return studyCycleAssistant.today(user);
+    }
+
+    @Tool(description = "List the user's active study cycles: name, lap number, blocks closed of total, minutes "
+            + "this lap, concepts understood this lap and today's minutes. Read only")
+    List<Map<String, Object>> listStudyCycles(ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is listing study cycles for user: {}", user.getId());
+        return studyCycleAssistant.list(user);
+    }
+
+    @Tool(description = "Create a study cycle (ciclo de estudos): a queue of study blocks over notebook topics, "
+            + "laid out by the same planner as the editor from each topic's importance and mastery and the week's "
+            + "minutes. A topic already in another active cycle is refused. Confirm the topics and the week first")
+    Map<String, Object> createStudyCycle(
+            @ToolParam(description = "Cycle name, max 80 characters") String name,
+            @ToolParam(description = "Study minutes per weekday, 0 to 720 in steps of 5, with an optional startTime "
+                    + "HH:mm. Days left out are rest days") List<StudyCycleAssistant.DayInput> days,
+            @ToolParam(description = "1 to 30 notebook topics, by exact title or id, each with importance and mastery "
+                    + "1 to 5 (more importance and less mastery get more minutes)") List<StudyCycleAssistant.TopicInput> topics,
+            @ToolParam(description = "Optional: longest block in minutes, 15 to 240. Defaults to 90", required = false)
+            Integer maxBlockMinutes,
+            @ToolParam(description = "Optional: GOAL (each block aims at understanding the topic's next roadmap page) "
+                    + "or TIME (minutes only). Defaults to GOAL", required = false) String defaultMode,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is creating a study cycle for user: {}", user.getId());
+        return studyCycleAssistant.create(user, name, days, topics, maxBlockMinutes, defaultMode);
+    }
+
+    @Tool(description = "Log study done outside the app on a notebook topic (a class, a book, exercises on paper). "
+            + "The minutes go into the topic's study cycle at once. Only for study the user said they did")
+    Map<String, Object> logStudySession(
+            @ToolParam(description = "The notebook topic, by exact title or id") String topic,
+            @ToolParam(description = "Minutes studied, 1 to 600") Integer minutes,
+            @ToolParam(description = "Optional: a short note, max 200 characters", required = false) String note,
+            @ToolParam(description = "Optional: the day as yyyy-MM-dd, within the last 30 days. Omit for today",
+                    required = false) String date,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is logging a study session for user: {}", user.getId());
+        return studyCycleAssistant.logSession(user, topic, minutes, note, date);
     }
 
     // Feedback

@@ -16,6 +16,7 @@ import beyou.beyouapp.backend.domain.briefing.dto.BriefingNarrative;
 import beyou.beyouapp.backend.domain.briefing.dto.GoalAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.GoalPace;
 import beyou.beyouapp.backend.domain.briefing.dto.RecoveryWindow;
+import beyou.beyouapp.backend.domain.briefing.dto.StudyAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.TodayAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.YesterdayRecap;
 import beyou.beyouapp.backend.user.User;
@@ -152,6 +153,7 @@ public class DailyBriefingNarrator {
             sb.append("- Older days still have open items; the oldest stops being checkable in ")
               .append(recovery.daysUntilExpiry()).append(" days.\n");
         }
+        appendStudy(sb, today, yesterday);
 
         sb.append("\nSIGNALS (what to talk about)\n");
         boolean any = false;
@@ -231,6 +233,41 @@ public class DailyBriefingNarrator {
             sb.append("- Nothing stands out. Say something plain, or return empty lists.\n");
         }
         return sb.toString();
+    }
+
+    /**
+     * One line, on screen: the study cycles' plan for the day and yesterday's study, as numbers
+     * and names. Written only when there is a cycle with minutes today or study yesterday, so an
+     * account without cycles never reads a line about them.
+     */
+    static void appendStudy(StringBuilder sb, TodayAhead today, YesterdayRecap yesterday) {
+        List<StudyAhead> study = today.study() == null ? List.of() : today.study();
+        if (study.isEmpty() && yesterday.studyMinutes() <= 0) {
+            return;
+        }
+        sb.append("- Study cycles: ");
+        if (study.isEmpty()) {
+            sb.append("no study planned today");
+        } else {
+            for (int i = 0; i < study.size(); i++) {
+                StudyAhead cycle = study.get(i);
+                if (i > 0) sb.append("; ");
+                sb.append('"').append(cycle.cycleName()).append("\" ").append(cycle.minutes()).append(" minutes today");
+                if (cycle.startTime() != null) {
+                    sb.append(" from ").append(cycle.startTime());
+                }
+                if (!cycle.entries().isEmpty()) {
+                    sb.append(", first ");
+                    for (int j = 0; j < cycle.entries().size(); j++) {
+                        StudyAhead.Entry entry = cycle.entries().get(j);
+                        if (j > 0) sb.append(", ");
+                        sb.append('"').append(entry.title()).append("\" (").append(entry.minutesToday()).append(" min)");
+                    }
+                }
+            }
+        }
+        sb.append(". Yesterday ").append(yesterday.studyMinutes()).append(" minutes studied and ")
+          .append(yesterday.conceptsUnderstood()).append(" concepts understood.\n");
     }
 
     /** Whole numbers without a trailing .0, which is how a person writes a count. */

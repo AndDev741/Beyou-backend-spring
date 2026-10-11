@@ -29,6 +29,7 @@ import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import beyou.beyouapp.backend.domain.aiAgent.notebook.StudyBoardEditor;
+import beyou.beyouapp.backend.domain.aiAgent.notebook.StudyCycleAssistant;
 import beyou.beyouapp.backend.domain.focus.FocusService;
 import beyou.beyouapp.backend.domain.focus.dto.CreateMicroTaskRequestDTO;
 import beyou.beyouapp.backend.domain.focus.dto.ReorderMicroTasksRequestDTO;
@@ -73,6 +74,9 @@ public class ToolsJsonBindingTest {
 
     @Mock
     private StudyBoardEditor studyBoardEditor;
+
+    @Mock
+    private StudyCycleAssistant studyCycleAssistant;
 
     @InjectMocks
     private Tools tools;
@@ -438,24 +442,60 @@ public class ToolsJsonBindingTest {
         verify(studyBoardEditor).addNode(user, "Fundamentos", "Compiladores", null);
     }
 
+    /** The week and the topics arrive as lists of objects, the optional fields left out. */
+    @Test
+    void aStudyCycleBindsItsDaysAndTopicsAsTheModelSendsThem() {
+        User user = new User();
+        when(userService.findUserById(userId)).thenReturn(user);
+
+        callback("createStudyCycle").call("""
+                {"name": "Concurso", "days": [{"weekday": "segunda", "minutes": 180, "startTime": "19:00"},
+                                              {"weekday": "SATURDAY", "minutes": 240}],
+                 "topics": [{"topic": "Português", "importance": 5, "mastery": 2}]}
+                """, toolContext);
+
+        verify(studyCycleAssistant).create(eq(user), eq("Concurso"),
+                eq(List.of(new StudyCycleAssistant.DayInput("segunda", 180, "19:00"),
+                        new StudyCycleAssistant.DayInput("SATURDAY", 240, null))),
+                eq(List.of(new StudyCycleAssistant.TopicInput("Português", 5, 2))),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull());
+    }
+
+    @Test
+    void aStudySessionBindsWithoutItsOptionalFields() {
+        User user = new User();
+        when(userService.findUserById(userId)).thenReturn(user);
+
+        callback("logStudySession").call("""
+                {"topic": "Português", "minutes": 45}
+                """, toolContext);
+
+        verify(studyCycleAssistant).logSession(user, "Português", 45, null, null);
+    }
+
     /**
      * A notebook tool that writes but is missing from AgentToolDomains leaves the board on screen
      * showing what was there before the assistant changed it. Every tool with "Study" in its name
-     * is either one of the reads or tells the client to refresh the notebook.
+     * is either one of the reads or tells the client to refresh what it changed: the notebook for
+     * the board tools, the study cycles for the cycle tools.
      */
     @Test
     void everyNotebookWriteToolTellsTheClientToRefreshTheNotebook() {
-        Set<String> reads = Set.of("listStudyTopics", "getStudyPlanForToday", "getStudyBoard");
+        Set<String> reads = Set.of("listStudyTopics", "getStudyPlanForToday", "getStudyBoard",
+                "getStudyToday", "listStudyCycles");
+        Set<String> cycleWrites = Set.of("createStudyCycle", "logStudySession");
         List<String> studyTools = Arrays.stream(
                         MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks())
                 .map(c -> c.getToolDefinition().name())
                 .filter(name -> name.contains("Study"))
                 .toList();
 
-        assertEquals(12, studyTools.size(), studyTools.toString());
+        assertEquals(16, studyTools.size(), studyTools.toString());
         for (String tool : studyTools) {
             if (reads.contains(tool)) {
                 assertEquals(List.of(), AgentToolDomains.domainsOf(tool), tool);
+            } else if (cycleWrites.contains(tool)) {
+                assertEquals(List.of("studyCycles"), AgentToolDomains.domainsOf(tool), tool);
             } else {
                 assertTrue(AgentToolDomains.domainsOf(tool).contains("notebook"), tool);
             }

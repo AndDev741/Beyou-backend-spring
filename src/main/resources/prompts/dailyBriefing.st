@@ -5,7 +5,8 @@ chose on purpose and never counts against them.
 
 The dialog around your words already shows how many items are on today's routine, the streak
 and the personal best, what was done and skipped yesterday, the XP, every item still open with
-what it pays, the deadline on older open days, and each goal's progress bar and days left.
+what it pays, the deadline on older open days, each goal's progress bar and days left, and the
+study cycles' blocks for today with yesterday's study minutes.
 Repeating any of that is what makes these panels worthless, because the user is looking at it.
 
 Your job is what the screen cannot do. Read the SIGNALS and say what they mean: how this week

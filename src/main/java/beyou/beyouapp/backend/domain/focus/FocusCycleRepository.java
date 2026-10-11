@@ -37,6 +37,21 @@ public interface FocusCycleRepository extends JpaRepository<FocusCycle, UUID> {
                             @Param("pageIds") java.util.Collection<UUID> pageIds);
 
     /**
+     * Pomodoros run on a notebook page between two of the owner's days, oldest first. The study
+     * cycle reads these for what was studied today and for its history; breaks are left out for
+     * the same reason as in {@link #sumPomodoroMinutes}. No fetch join: only the page id is read.
+     */
+    @Query("""
+        SELECT c FROM FocusCycle c
+        WHERE c.user.id = :userId AND c.cycleDate BETWEEN :from AND :to
+          AND c.notebookPageId IS NOT NULL
+          AND c.kind = beyou.beyouapp.backend.domain.focus.CycleKind.POMODORO
+        ORDER BY c.startedAt ASC
+        """)
+    List<FocusCycle> findNotebookPomodoros(@Param("userId") UUID userId, @Param("from") LocalDate from,
+                                           @Param("to") LocalDate to);
+
+    /**
      * Every cycle the user ever completed, oldest first, for the data export.
      *
      * <p>No fetch join: the export only needs the item group's id, and Hibernate answers

@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.notebook.NotebookOwnership;
+import beyou.beyouapp.backend.domain.notebook.NotebookPage;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleService;
 import beyou.beyouapp.backend.domain.focus.dto.CreateMicroTaskRequestDTO;
 import beyou.beyouapp.backend.domain.focus.dto.FocusCycleResponseDTO;
 import beyou.beyouapp.backend.domain.focus.dto.FocusDayResponseDTO;
@@ -65,6 +67,7 @@ public class FocusService {
     private final FocusMicroTaskRepository microTaskRepository;
     private final ItemGroupRepository itemGroupRepository;
     private final NotebookOwnership notebookOwnership;
+    private final StudyCycleService studyCycleService;
 
     // ---------------------------------------------------------------- cycles
 
@@ -84,9 +87,10 @@ public class FocusService {
         ItemGroup item = request.itemGroupId() == null ? null : ownedItem(user, request.itemGroupId());
         // Through the notebook's own ownership check, so a cycle cannot be filed against somebody
         // else's page and show up in their "focused" total.
-        UUID notebookPageId = request.notebookPageId() == null
+        NotebookPage notebookPage = request.notebookPageId() == null
             ? null
-            : notebookOwnership.page(user.getId(), request.notebookPageId()).getId();
+            : notebookOwnership.page(user.getId(), request.notebookPageId());
+        UUID notebookPageId = notebookPage == null ? null : notebookPage.getId();
 
         FocusCycle cycle = new FocusCycle();
         cycle.setUser(user);
@@ -97,7 +101,14 @@ public class FocusService {
         cycle.setEndedAt(request.endedAt());
         cycle.setMinutes(request.minutes());
         cycle.setNotebookPageId(notebookPageId);
-        return FocusCycleResponseDTO.from(cycleRepository.save(cycle));
+        FocusCycle saved = cycleRepository.save(cycle);
+
+        // A pomodoro on a notebook page is study time for that page's topic, and its study cycle
+        // (if one holds the topic) moves on by these minutes. Breaks are rest, not study.
+        if (notebookPage != null && request.kind() == CycleKind.POMODORO) {
+            studyCycleService.credit(user, notebookPage.rootId(), request.minutes(), Instant.now());
+        }
+        return FocusCycleResponseDTO.from(saved);
     }
 
     // ----------------------------------------------------------- micro-tasks

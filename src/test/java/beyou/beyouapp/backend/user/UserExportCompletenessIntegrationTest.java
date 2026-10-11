@@ -133,6 +133,8 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
             entry("notebook_study_outputs", "notebook.studyOutputs"),
             entry("notebook_chat_messages", "notebook.studyChats"),
             entry("notebook_roadmap_drafts", "notebook.roadmapDrafts"),
+            entry("study_cycles", "notebook.studyCycles"),
+            entry("study_sessions", "notebook.studySessions"),
             entry("routine_snapshot", "notIncluded.routineSnapshots"),
             entry("notebook_source_chunks", "notIncluded.notebookSourceText"),
             entry("entity_xp_day", "notIncluded.xpHistory"),
@@ -511,6 +513,22 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         assertThat(output.get("kind")).isEqualTo(StudyOutputKind.QUIZ);
         assertThat(output.get("score")).isEqualTo(4);
         assertThat(output.get("total")).isEqualTo(5);
+
+        // The study cycle with everything under it, and the session logged by hand.
+        Map<String, Object> studyCycle = ((List<Map<String, Object>>) notebook.get("studyCycles")).get(0);
+        assertThat(studyCycle.get("name")).isEqualTo("Concurso");
+        assertThat(studyCycle.get("lapNumber")).isEqualTo(2);
+        assertThat((List<?>) studyCycle.get("week")).hasSize(1);
+        assertThat(((List<Map<String, Object>>) studyCycle.get("topics")).get(0).get("topicId")).isEqualTo(seeded.topicId());
+        assertThat(((List<Map<String, Object>>) studyCycle.get("blocks")).get(0).get("note")).isEqualTo("verbs");
+        Map<String, Object> progress = ((List<Map<String, Object>>) studyCycle.get("lapProgress")).get(0);
+        assertThat(progress.get("targetPageId")).isEqualTo(seeded.pageId());
+        assertThat(progress.get("minutes")).isEqualTo(55);
+        assertThat(((List<Map<String, Object>>) studyCycle.get("closedLaps")).get(0).get("understood")).isEqualTo(1);
+        Map<String, Object> session = ((List<Map<String, Object>>) notebook.get("studySessions")).get(0);
+        assertThat(session.get("minutes")).isEqualTo(45);
+        assertThat(session.get("note")).isEqualTo("a book chapter");
+        assertThat(session.get("cycleId")).isEqualTo(studyCycle.get("id"));
 
         assertThat((Map<String, Object>) export.get("notIncluded"))
                 .containsKeys("routineSnapshots", "notebookSourceText", "xpHistory",

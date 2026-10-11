@@ -15,6 +15,7 @@ import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardNodeRepository;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookNodeKind;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleService;
 import beyou.beyouapp.backend.domain.notebook.dto.PageStatusDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.StatusChoice;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class NotebookProgressService {
     private final NotebookPageRepository pageRepository;
     private final NotebookBoardNodeRepository nodeRepository;
     private final NotebookRewards rewards;
+    private final StudyCycleService studyCycles;
 
     /** Everything the user has, as a graph. Two reads. */
     @Transactional(readOnly = true)
@@ -77,7 +79,7 @@ public class NotebookProgressService {
             apply(page, choice.toStatus(), outcome);
         }
         propagateUp(graph, pageId, outcome, new HashSet<>(Set.of(pageId)));
-        return settle(page, outcome);
+        return settle(userId, page, outcome);
     }
 
     /**
@@ -97,7 +99,7 @@ public class NotebookProgressService {
             }
         }
         propagateUp(graph, boardPageId, outcome, new HashSet<>(Set.of(boardPageId)));
-        return settle(page, outcome);
+        return settle(userId, page, outcome);
     }
 
     private void propagateUp(ProgressGraph graph, UUID pageId, Outcome outcome, Set<UUID> visited) {
@@ -125,8 +127,19 @@ public class NotebookProgressService {
         }
     }
 
-    /** Pays for every page that finished in this change, in one go, and saves. */
-    private Outcome settle(NotebookPage page, Outcome outcome) {
+    /**
+     * Pays for every page that finished in this change, in one go, and tells the study cycles
+     * which pages reached DONE. Both here, at the end of the one funnel every status change goes
+     * through, so a new way of finishing a page cannot forget either.
+     */
+    private Outcome settle(UUID userId, NotebookPage page, Outcome outcome) {
+        List<UUID> nowDone = outcome.changed.stream()
+                .filter(change -> change.status() == NotebookStatus.DONE)
+                .map(PageStatusDTO::pageId)
+                .toList();
+        if (!nowDone.isEmpty()) {
+            studyCycles.onPagesDone(userId, nowDone, Instant.now());
+        }
         if (!outcome.finished.isEmpty()) {
             NotebookRewards.Payroll payroll = new NotebookRewards.Payroll();
             for (NotebookPage finished : outcome.finished) {

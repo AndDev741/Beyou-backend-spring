@@ -16,8 +16,10 @@ import beyou.beyouapp.backend.domain.briefing.dto.GoalAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.GoalPace;
 import beyou.beyouapp.backend.domain.briefing.dto.OpenItem;
 import beyou.beyouapp.backend.domain.briefing.dto.RecoveryWindow;
+import beyou.beyouapp.backend.domain.briefing.dto.StudyAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.TodayAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.YesterdayRecap;
+import beyou.beyouapp.backend.domain.notebook.cycle.BlockMode;
 import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotItemType;
 
 /**
@@ -125,7 +127,7 @@ class DailyBriefingNarratorTest {
     void factsMessage_saysNothingIsAtRiskOnAnUnscheduledDay() {
         String message = DailyBriefingNarrator.factsMessage(facts(
                 recap(true, true, 4, 0, 80d, List.of()),
-                new TodayAhead(0, false, 6, 9, List.of(), null, List.of()),
+                new TodayAhead(0, false, 6, 9, List.of(), null, List.of(), List.of()),
                 WeekSignals.empty()));
 
         assertThat(message).contains("No routine covers today");
@@ -136,7 +138,7 @@ class DailyBriefingNarratorTest {
     @Test
     void factsMessage_distinguishesAnEmptyDayFromAMissedOne() {
         String message = DailyBriefingNarrator.factsMessage(facts(
-                new YesterdayRecap(YESTERDAY, false, false, 0, 0, 0d, List.of(), 0, null),
+                new YesterdayRecap(YESTERDAY, false, false, 0, 0, 0d, List.of(), 0, null, 0, 0),
                 today(List.of(), null), WeekSignals.empty()));
 
         assertThat(message).contains("no routine covered the day");
@@ -153,6 +155,36 @@ class DailyBriefingNarratorTest {
 
         String context = message.substring(0, message.indexOf("SIGNALS"));
         assertThat(context).contains("stops being checkable in 1 days");
+    }
+
+    /**
+     * Today's study and yesterday's, as one line of facts on screen: the cycle, its minutes and
+     * start, the first blocks by name, and yesterday's minutes and concepts.
+     */
+    @Test
+    void factsMessage_carriesTheStudyCyclesAsOneLineOnScreen() {
+        TodayAhead today = new TodayAhead(4, true, 3, 5, List.of(), null, List.of(), List.of(
+                new StudyAhead("Concurso TRT", "19:00", 180, List.of(
+                        new StudyAhead.Entry("Entender Crase", BlockMode.GOAL, 70),
+                        new StudyAhead.Entry("Dir. Administrativo", BlockMode.TIME, 70)))));
+        YesterdayRecap yesterday = new YesterdayRecap(YESTERDAY, true, true, 3, 0, 30d, List.of(), 2, null, 95, 1);
+
+        String message = DailyBriefingNarrator.factsMessage(facts(yesterday, today, WeekSignals.empty()));
+
+        String context = message.substring(0, message.indexOf("SIGNALS"));
+        assertThat(context).contains("- Study cycles: \"Concurso TRT\" 180 minutes today from 19:00, "
+                + "first \"Entender Crase\" (70 min), \"Dir. Administrativo\" (70 min). "
+                + "Yesterday 95 minutes studied and 1 concepts understood.");
+        assertThat(message.lines().filter(line -> line.contains("Study cycles"))).hasSize(1);
+    }
+
+    /** An account without study cycles never reads a line about them. */
+    @Test
+    void factsMessage_saysNothingAboutStudyWithoutIt() {
+        String message = DailyBriefingNarrator.factsMessage(facts(
+                recap(true, false, 1, 0, 10d, List.of()), today(List.of(), null), WeekSignals.empty()));
+
+        assertThat(message).doesNotContain("Study cycles");
     }
 
     // ---- the signals ----
@@ -189,7 +221,7 @@ class DailyBriefingNarratorTest {
         WeekSignals signals = new WeekSignals(null, null, List.of(), List.of(), 3.6, 3.1, 5);
 
         String message = DailyBriefingNarrator.factsMessage(facts(
-                new YesterdayRecap(YESTERDAY, true, false, 1, 0, 5d, List.of(), 0, 4),
+                new YesterdayRecap(YESTERDAY, true, false, 1, 0, 5d, List.of(), 0, 4, 0, 0),
                 today(List.of(), null), signals));
 
         assertThat(message).contains("levels only (1 awful, 5 great)");
@@ -256,7 +288,7 @@ class DailyBriefingNarratorTest {
 
         String message = DailyBriefingNarrator.factsMessage(facts(
                 recap(true, false, 1, 0, 10d, List.of()),
-                new TodayAhead(3, true, 2, 5, List.of(legacyOnly), null, List.of()),
+                new TodayAhead(3, true, 2, 5, List.of(legacyOnly), null, List.of(), List.of()),
                 WeekSignals.empty()));
 
         assertThat(message).doesNotContain("Legacy");
@@ -279,12 +311,12 @@ class DailyBriefingNarratorTest {
     }
 
     private static TodayAhead today(List<GoalAhead> goalsAhead, RecoveryWindow recovery) {
-        return new TodayAhead(4, true, 3, 5, List.of(), recovery, goalsAhead);
+        return new TodayAhead(4, true, 3, 5, List.of(), recovery, goalsAhead, List.of());
     }
 
     private static YesterdayRecap recap(boolean hadRoutine, boolean complete, int done,
                                         int skipped, double xp, List<OpenItem> open) {
-        return new YesterdayRecap(YESTERDAY, hadRoutine, complete, done, skipped, xp, open, 0, null);
+        return new YesterdayRecap(YESTERDAY, hadRoutine, complete, done, skipped, xp, open, 0, null, 0, 0);
     }
 
     private static GoalAhead goal(String name, double current, double target, String unit,

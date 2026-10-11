@@ -40,7 +40,8 @@ public record DailyBriefingResponseDTO(
      * they would drift. A dialog that greets someone every morning with "nothing happened"
      * teaches them to dismiss it unread, and then it is dead on the mornings it matters —
      * so a briefing with nothing open, nothing scheduled, no open goal and no deadline
-     * is not shown at all.
+     * is not shown at all. A study cycle with minutes on the day counts as something
+     * scheduled, and minutes studied yesterday as something that happened.
      *
      * <p>Yesterday being complete DOES count as worth showing: finishing a day is the
      * result the whole product is about, and saying so is the one cheerful thing in here.
@@ -49,12 +50,13 @@ public record DailyBriefingResponseDTO(
      */
     public boolean worthShowing() {
         boolean somethingAboutYesterday = yesterday != null
-            && (yesterday.hadRoutine() || yesterday.moodLevel() != null);
+            && (yesterday.hadRoutine() || yesterday.moodLevel() != null || yesterday.studyMinutes() > 0);
         boolean somethingAboutToday = today != null
             && (today.scheduledItemCount() > 0
                 || !today.goalsApproaching().isEmpty()
                 || !today.goalsAhead().isEmpty()
-                || today.recovery() != null);
+                || today.recovery() != null
+                || (today.study() != null && !today.study().isEmpty()));
         return somethingAboutYesterday || somethingAboutToday;
     }
 }

@@ -73,7 +73,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * messages would satisfy any query-count assertion ever written.
  *
  * <p>The same holds for everything added since: focus cycles and micro-tasks, linked sign-ins,
- * briefings, nudge mails, and the notebook's boards, reviews and study outputs. Each gets
+ * briefings, nudge mails, the notebook's boards, reviews and study outputs, and its study cycles
+ * with their sessions. Each gets
  * {@code n} rows here, and the micro-tasks point at a routine item, which is the lazy
  * reference most likely to turn into a query per row.
  *
@@ -250,6 +251,14 @@ class UserExportQueryCountTest extends AbstractIntegrationTest {
         assertThat((List<?>) board.get("edges")).hasSize(n);
         assertThat((List<?>) notebook.get("flashcardReviews")).hasSize(n);
         assertThat((List<?>) notebook.get("studyOutputs")).hasSize(n);
+        // Study cycles nest five tables under each cycle; grouped in memory, never read per cycle.
+        List<Map<String, Object>> studyCycles = (List<Map<String, Object>>) notebook.get("studyCycles");
+        assertThat(studyCycles).hasSize(n).allSatisfy(cycle -> {
+            assertThat((List<?>) cycle.get("blocks")).hasSize(1);
+            assertThat((List<?>) cycle.get("lapProgress")).hasSize(1);
+            assertThat((List<?>) cycle.get("closedLaps")).hasSize(1);
+        });
+        assertThat((List<?>) notebook.get("studySessions")).hasSize(n);
 
         List<Map<String, Object>> routines = (List<Map<String, Object>>) export.get("routines");
         assertThat(routines).hasSize(n);

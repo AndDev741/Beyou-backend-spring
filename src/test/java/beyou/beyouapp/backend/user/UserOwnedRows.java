@@ -43,7 +43,8 @@ public final class UserOwnedRows {
             "focus_cycles", "focus_micro_tasks", "federated_identities", "mood_entries",
             "daily_briefing", "notebook_pages", "notebook_board_nodes", "notebook_board_edges",
             "notebook_cards", "notebook_card_reviews", "notebook_sources", "notebook_source_chunks",
-            "notebook_study_outputs", "notebook_chat_messages", "notebook_roadmap_drafts");
+            "notebook_study_outputs", "notebook_chat_messages", "notebook_roadmap_drafts",
+            "study_cycles", "study_sessions");
 
     /** What the export assertions need to find again. */
     public record Seeded(UUID topicId, UUID pageId, UUID sectionNodeId, UUID pageNodeId, UUID cardId,
@@ -149,6 +150,30 @@ public final class UserOwnedRows {
                 + "created_at, updated_at) VALUES (?, ?, 'Spanish in a month', 'READY', "
                 + "'{\"title\":\"Spanish in a month\"}', ?, ?, ?)",
                 UUID.randomUUID(), userId, now, now, now);
+
+        // A study cycle with one of everything under it: the tables below study_cycles point at it
+        // rather than at users, so only a row in each proves the cascade reaches them too.
+        UUID cycleId = UUID.randomUUID();
+        UUID blockId = UUID.randomUUID();
+        jdbc.update("INSERT INTO study_cycles (id, user_id, name, default_mode, max_block_minutes, lap_number, "
+                + "lap_started_at, position, created_at, updated_at) VALUES (?, ?, 'Concurso', 'GOAL', 90, 2, ?, 1, ?, ?)",
+                cycleId, userId, now, now, now);
+        jdbc.update("INSERT INTO study_cycle_days (cycle_id, weekday, minutes, start_time) "
+                + "VALUES (?, 'MONDAY', 120, '19:00')", cycleId);
+        jdbc.update("INSERT INTO study_cycle_topics (id, cycle_id, topic_id, importance, mastery, active, position) "
+                + "VALUES (?, ?, ?, 5, 2, true, 1)", UUID.randomUUID(), cycleId, topicId);
+        jdbc.update("INSERT INTO study_cycle_blocks (id, cycle_id, position, topic_id, mode, planned_minutes, "
+                + "goal_source, page_id, require_quiz, note) VALUES (?, ?, 1, ?, 'GOAL', 70, 'PAGE', ?, false, 'verbs')",
+                blockId, cycleId, topicId, pageId);
+        jdbc.update("INSERT INTO study_cycle_lap_blocks (id, cycle_id, block_id, lap_number, minutes, target_page_id, "
+                + "state, closed_at) VALUES (?, ?, ?, 1, 55, ?, 'UNDERSTOOD', ?)",
+                UUID.randomUUID(), cycleId, blockId, pageId, now);
+        jdbc.update("INSERT INTO study_cycle_laps (id, cycle_id, number, started_at, closed_at, minutes, "
+                + "planned_minutes, understood, turns_used, blocks) VALUES (?, ?, 1, ?, ?, 55, 70, 1, 0, 1)",
+                UUID.randomUUID(), cycleId, now, now);
+        jdbc.update("INSERT INTO study_sessions (id, user_id, topic_id, page_id, minutes, studied_on, note, "
+                + "created_at, cycle_id, lap_number) VALUES (?, ?, ?, ?, 45, ?, 'a book chapter', ?, ?, 1)",
+                UUID.randomUUID(), userId, topicId, pageId, day, now, cycleId);
 
         jdbc.update("INSERT INTO focus_cycles (id, user_id, cycle_date, item_group_id, kind, started_at, "
                 + "ended_at, minutes, notebook_page_id) VALUES (?, ?, ?, ?, 'POMODORO', ?, ?, 25, ?)",
