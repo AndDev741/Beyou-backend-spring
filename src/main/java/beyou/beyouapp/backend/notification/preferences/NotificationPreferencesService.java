@@ -3,7 +3,6 @@ package beyou.beyouapp.backend.notification.preferences;
 import java.security.SecureRandom;
 import java.util.Base64;
 
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,35 +43,20 @@ public class NotificationPreferencesService {
      * <p>Not read-only, and that is the point: the token has to exist before a mail can
      * link to it, and the first mail is often the first time this row is needed at all.
      *
-     * <p>The insert races itself. Two requests for an account with no row — a settings
-     * screen open in two tabs, or the nightly pass overlapping a login — both see
-     * nothing and both insert. The primary key on {@code user_id} makes the loser fail
-     * rather than write a second row, and the loser then re-reads the winner's row. The
-     * alternative, locking the user first, would serialise every send behind a row lock
-     * to avoid something the database already refuses.
+     * <p>The insert races itself. Two requests for an account with no row (the configuration
+     * page mounts two settings cards that both read on mount, or the nightly pass overlaps a
+     * login) both see nothing and both insert. The insert is {@code ON CONFLICT DO NOTHING}, so
+     * the loser writes nothing, raises nothing, and reads the winner's row. Catching the
+     * primary-key violation instead does not work: the failed flush marks the transaction
+     * rollback-only, and the request answers 500 after the re-read already succeeded.
      */
     @Transactional
     public NotificationPreferences getOrCreate(User user) {
         return repository.findById(user.getId())
-                .orElseGet(() -> insertDefaults(user));
-    }
-
-    private NotificationPreferences insertDefaults(User user) {
-        NotificationPreferences preferences = new NotificationPreferences();
-        preferences.setUser(user);
-        preferences.setEngagementEmail(true);
-        preferences.setUnsubscribeToken(generateToken());
-
-        try {
-            return repository.saveAndFlush(preferences);
-        } catch (DataIntegrityViolationException raced) {
-            // Somebody else inserted between our read and our write. Their row is as
-            // good as the one we were about to write, and re-reading is cheaper than
-            // preventing the collision.
-            log.debug("Lost the race to create notification preferences for user {}, re-reading", user.getId());
-            return repository.findById(user.getId())
-                    .orElseThrow(() -> raced);
-        }
+                .orElseGet(() -> {
+                    repository.insertDefaultsIfAbsent(user.getId(), generateToken());
+                    return repository.findById(user.getId()).orElseThrow();
+                });
     }
 
     /** Flips the engagement-mail switch for an authenticated account. */
