@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.notification.preferences;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.UUID;
 
 import beyou.beyouapp.backend.user.User;
@@ -22,7 +23,7 @@ import lombok.ToString;
 
 /**
  * Whether this account may be sent engagement mail, and the token that turns it off
- * from inside a message.
+ * from inside a message. Since V40, also how calendar reminders reach it.
  *
  * <p>One row per user, keyed by the user's own id — see {@code V24} for why this is a
  * table of its own rather than two columns on {@link User}, and why the token is stored
@@ -65,6 +66,25 @@ public class NotificationPreferences {
 
     @Column(name = "engagement_email", nullable = false)
     private boolean engagementEmail = true;
+
+    /**
+     * Calendar reminder mail, sent when a reminder got no reaction in the browser. Separate
+     * from {@link #engagementEmail} on purpose: turning off nudges nobody asked for must not
+     * silence a reminder somebody set themselves.
+     */
+    @Column(name = "reminder_email", nullable = false)
+    private boolean reminderEmail = true;
+
+    /**
+     * Browser notifications for calendar reminders. The server stores the choice so it follows
+     * the account across devices; the browser still has to grant the permission on each one.
+     */
+    @Column(name = "reminder_web", nullable = false)
+    private boolean reminderWeb = true;
+
+    /** The time an untimed calendar task reminds at. Must agree with the V40 column default. */
+    @Column(name = "reminder_default_time", nullable = false)
+    private LocalTime reminderDefaultTime = ReminderSettings.DEFAULTS.defaultTime();
 
     /**
      * The unguessable value an unsubscribe link carries. Never logged, and never sent

@@ -2,7 +2,9 @@ package beyou.beyouapp.backend.notification;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.Year;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
@@ -1200,6 +1202,127 @@ public class EmailService {
                            + nudge.bestStreak() + ". Today is a scheduled day and it is still open.");
             }
         };
+    }
+
+    private static final DateTimeFormatter REMINDER_TIME = DateTimeFormatter.ofPattern("HH:mm");
+
+    /**
+     * The calendar reminder that got no reaction in the browser.
+     *
+     * <p>Not a nudge, so it carries no unsubscribe token: the user set this reminder themselves,
+     * and the off switch for these mails lives with the other reminder settings, which the
+     * footer links to. The title and note are the user's own words and are escaped like every
+     * other user-written text in these mails.
+     *
+     * <p>Throws rather than swallowing, like the nudge: the caller marks the task as mailed only
+     * after this returns, and a swallowed failure would mark a reminder that never arrived.
+     *
+     * @param time the task's own time, or null for an untimed task
+     */
+    public void sendCalendarReminder(String to, String title, String note, LocalDate date, LocalTime time,
+                                     String language) {
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+
+            helper.setTo(to);
+            helper.setFrom(fromAddress);
+            helper.setSubject(resolveCalendarReminderSubject(title, language));
+            helper.setText(buildCalendarReminderHtmlBody(title, note, date, time, language), true);
+
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to send calendar reminder", e);
+        }
+    }
+
+    /**
+     * The title is the subject, because it is the reminder. Control characters are flattened to
+     * spaces first: the title is user input headed for a mail header.
+     */
+    private String resolveCalendarReminderSubject(String title, String language) {
+        String flat = title == null ? "" : title.replaceAll("\\p{Cntrl}", " ").strip();
+        return normalizeLanguage(language).equals("pt")
+            ? "Lembrete: " + flat
+            : "Reminder: " + flat;
+    }
+
+    private String buildCalendarReminderHtmlBody(String title, String note, LocalDate date, LocalTime time,
+                                                 String language) {
+        boolean pt = normalizeLanguage(language).equals("pt");
+        // ISO for the date, like the nudge mails: unambiguous in both languages.
+        String when = time == null
+            ? (pt ? "Marcado para " + date + "." : "Set for " + date + ".")
+            : (pt ? "Marcado para " + date + " às " + time.format(REMINDER_TIME) + "."
+                  : "Set for " + date + " at " + time.format(REMINDER_TIME) + ".");
+        String noteBlock = note == null || note.isBlank()
+            ? ""
+            : "<p style=\"color:#6b7280;line-height:1.6;white-space:pre-line;\">" + escape(note) + "</p>";
+        String cta = pt ? "Abrir o calendário" : "Open the calendar";
+        String calendarLink = frontendLink("/calendar?date=" + date);
+        String settingsLink = frontendLink("/configuration");
+        String footer = pt
+            ? "Você recebeu este e-mail porque os lembretes por e-mail estão ligados e ninguém abriu "
+              + "este lembrete no navegador. Para desligar, vá em "
+              + "<a href=\"%s\" style=\"color:#6b7280;\">Configurações</a>, na parte de Lembretes."
+            : "You got this because reminder emails are on and this reminder was not opened in the "
+              + "browser. To turn them off, go to "
+              + "<a href=\"%s\" style=\"color:#6b7280;\">Configuration</a>, under Reminders.";
+
+        return """
+                <html>
+                <body style="margin:0;padding:0;background-color:#f5f7fa;font-family:Arial,Helvetica,sans-serif;">
+                    <table width="100%%" cellpadding="0" cellspacing="0" style="padding:40px 0;">
+                        <tr>
+                            <td align="center">
+                                <table width="600" cellpadding="0" cellspacing="0"
+                                       style="background:#ffffff;border-radius:16px;padding:40px;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
+
+                                    <tr>
+                                        <td align="center" style="padding-bottom:20px;">
+                                            <h1 style="margin:0;color:#0082E1;">Beyou</h1>
+                                        </td>
+                                    </tr>
+
+                                    <tr>
+                                        <td style="padding-top:10px;">
+                                            <h2 style="color:#111827;">%s</h2>
+                                            <p style="color:#374151;line-height:1.6;">%s</p>
+                                            %s
+
+                                            <div style="text-align:center;margin:30px 0;">
+                                                <a href="%s"
+                                                   style="background-color:#0082E1;
+                                                          color:#ffffff;
+                                                          padding:14px 28px;
+                                                          text-decoration:none;
+                                                          border-radius:10px;
+                                                          font-weight:bold;
+                                                          display:inline-block;">%s</a>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    <tr>
+                                        <td style="padding-top:10px;border-top:1px solid #e5e7eb;">
+                                            <p style="color:#6b7280;font-size:12px;line-height:1.6;margin:16px 0 0 0;">%s</p>
+                                        </td>
+                                    </tr>
+
+                                    <tr>
+                                        <td align="center" style="padding-top:24px;">
+                                            <p style="color:#9ca3af;font-size:11px;margin:0;">Beyou &copy; %s</p>
+                                        </td>
+                                    </tr>
+
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </body>
+                </html>
+                """.formatted(escape(title), escape(when), noteBlock, calendarLink, cta,
+                        footer.formatted(settingsLink), Year.now());
     }
 
 }

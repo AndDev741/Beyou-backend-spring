@@ -18,7 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *
  * <p>Exists because the deletion tests used to seed only what existed when they were written.
  * Every table added after that (mood, focus, the whole notebook, federated sign-ins, the
- * briefing) cascades from {@code users} in its migration, and two of those migrations say a
+ * briefing, calendar tasks) cascades from {@code users} in its migration, and two of those migrations say a
  * deletion test proves it. None did. A cascade nobody exercises is a comment, so both deletion
  * tests now seed a row here per table and check every one is gone.
  *
@@ -44,7 +44,7 @@ public final class UserOwnedRows {
             "daily_briefing", "notebook_pages", "notebook_board_nodes", "notebook_board_edges",
             "notebook_cards", "notebook_card_reviews", "notebook_sources", "notebook_source_chunks",
             "notebook_study_outputs", "notebook_chat_messages", "notebook_roadmap_drafts",
-            "study_cycles", "study_sessions");
+            "study_cycles", "study_sessions", "calendar_tasks");
 
     /** What the export assertions need to find again. */
     public record Seeded(UUID topicId, UUID pageId, UUID sectionNodeId, UUID pageNodeId, UUID cardId,
@@ -191,6 +191,11 @@ public final class UserOwnedRows {
                 + "narrative_status, seen_at, created_at) VALUES (?, ?, ?, ?, 'READY', ?, ?)",
                 UUID.randomUUID(), userId, day,
                 "{\"todayLines\":[\"Two habits left.\"],\"yesterdayLines\":[\"A full day.\"]}", now, now);
+
+        jdbc.update("INSERT INTO calendar_tasks (id, user_id, title, note, task_date, task_time, "
+                + "advance_minutes, completed_at, xp_awarded, created_at, updated_at) "
+                + "VALUES (?, ?, 'Renew the passport', 'bring two photos', ?, '10:00', 60, ?, 10, ?, ?)",
+                UUID.randomUUID(), userId, day, now, now, now);
 
         return new Seeded(topicId, pageId, sectionNodeId, pageNodeId, cardId, itemGroupId, day);
     }

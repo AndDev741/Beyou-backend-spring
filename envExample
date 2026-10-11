@@ -147,6 +147,12 @@ NUDGE_HEARTBEAT_URL=
 # comments there for why each number is what it is.
 ENGAGEMENT_NUDGES_ENABLED=false
 
+# Calendar reminder mail: sent when a reminder got no reaction in the browser within an hour.
+# ON by default (these are reminders people set themselves); set false as an incident switch.
+# Leave the heartbeat blank to disable it; with it set, expect a check-in every five minutes.
+CALENDAR_REMINDER_EMAILS_ENABLED=true
+REMINDER_HEARTBEAT_URL=
+
 # Spring Profile (dev or prod)
 SPRING_PROFILES_ACTIVE=dev
 

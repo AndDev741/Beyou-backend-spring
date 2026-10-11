@@ -1,18 +1,24 @@
 package beyou.beyouapp.backend.notification.preferences;
 
 import java.security.SecureRandom;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import beyou.beyouapp.backend.notification.preferences.dto.UpdateNotificationPreferencesDTO;
 import beyou.beyouapp.backend.user.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The one place that decides whether an account may be sent engagement mail.
+ * The one place that decides whether an account may be sent engagement mail, and how its
+ * calendar reminders reach it.
  *
  * <p>Two callers, with opposite postures. The settings screen asks about the account it
  * is authenticated as. The unsubscribe link asks about whoever holds a token, with no
@@ -44,35 +50,75 @@ public class NotificationPreferencesService {
      * <p>Not read-only, and that is the point: the token has to exist before a mail can
      * link to it, and the first mail is often the first time this row is needed at all.
      *
-     * <p>The insert races itself. Two requests for an account with no row — a settings
-     * screen open in two tabs, or the nightly pass overlapping a login — both see
-     * nothing and both insert. The primary key on {@code user_id} makes the loser fail
-     * rather than write a second row, and the loser then re-reads the winner's row. The
-     * alternative, locking the user first, would serialise every send behind a row lock
-     * to avoid something the database already refuses.
+     * <p>The insert races itself. Two requests for an account with no row (the configuration
+     * page mounts two settings cards that both read on mount, or the nightly pass overlaps a
+     * login) both see nothing and both insert. The insert is {@code ON CONFLICT DO NOTHING}, so
+     * the loser writes nothing, raises nothing, and reads the winner's row. Catching the
+     * primary-key violation instead does not work: the failed flush marks the transaction
+     * rollback-only, and the request answers 500 after the re-read already succeeded.
      */
     @Transactional
     public NotificationPreferences getOrCreate(User user) {
         return repository.findById(user.getId())
-                .orElseGet(() -> insertDefaults(user));
+                .orElseGet(() -> {
+                    repository.insertDefaultsIfAbsent(user.getId(), generateToken());
+                    return repository.findById(user.getId()).orElseThrow();
+                });
     }
 
-    private NotificationPreferences insertDefaults(User user) {
-        NotificationPreferences preferences = new NotificationPreferences();
-        preferences.setUser(user);
-        preferences.setEngagementEmail(true);
-        preferences.setUnsubscribeToken(generateToken());
-
-        try {
-            return repository.saveAndFlush(preferences);
-        } catch (DataIntegrityViolationException raced) {
-            // Somebody else inserted between our read and our write. Their row is as
-            // good as the one we were about to write, and re-reading is cheaper than
-            // preventing the collision.
-            log.debug("Lost the race to create notification preferences for user {}, re-reading", user.getId());
-            return repository.findById(user.getId())
-                    .orElseThrow(() -> raced);
+    /**
+     * The settings-screen write: applies whichever fields the body carries and leaves the rest.
+     *
+     * <p>Partial on purpose. The engagement switch shipped first, and a client that only knows
+     * about it sends a body with that one field; reading the missing reminder fields as false
+     * would silently turn every reminder off for whoever toggled nudges from an older build.
+     */
+    @Transactional
+    public NotificationPreferences update(User user, UpdateNotificationPreferencesDTO changes) {
+        NotificationPreferences preferences = getOrCreate(user);
+        if (changes.engagementEmail() != null) {
+            preferences.setEngagementEmail(changes.engagementEmail());
         }
+        if (changes.reminderEmail() != null) {
+            preferences.setReminderEmail(changes.reminderEmail());
+        }
+        if (changes.reminderWeb() != null) {
+            preferences.setReminderWeb(changes.reminderWeb());
+        }
+        if (changes.reminderDefaultTime() != null) {
+            // The clients offer minutes; a stray seconds field would make the reminder fire at
+            // 09:00:30 and the settings screen show a time nobody picked.
+            preferences.setReminderDefaultTime(changes.reminderDefaultTime().truncatedTo(ChronoUnit.MINUTES));
+        }
+        return repository.save(preferences);
+    }
+
+    /**
+     * How calendar reminders reach this account, without creating its row.
+     *
+     * <p>Read-only, unlike {@link #getOrCreate}: the calendar asks on every range request, in a
+     * read-only transaction, and nothing about reading a default justifies a write. A missing
+     * row is {@link ReminderSettings#DEFAULTS}, for the same reason a missing row is opted in
+     * to engagement mail.
+     */
+    @Transactional(readOnly = true)
+    public ReminderSettings reminderSettings(UUID userId) {
+        return repository.findById(userId)
+                .map(ReminderSettings::of)
+                .orElse(ReminderSettings.DEFAULTS);
+    }
+
+    /**
+     * The same for many accounts in one query, for the reminder mail job. Every id asked for
+     * is in the map; the ones with no row map to the defaults.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, ReminderSettings> reminderSettings(Collection<UUID> userIds) {
+        Map<UUID, ReminderSettings> settings = new HashMap<>();
+        userIds.forEach(id -> settings.put(id, ReminderSettings.DEFAULTS));
+        repository.findAllById(userIds)
+                .forEach(preferences -> settings.put(preferences.getUserId(), ReminderSettings.of(preferences)));
+        return settings;
     }
 
     /** Flips the engagement-mail switch for an authenticated account. */

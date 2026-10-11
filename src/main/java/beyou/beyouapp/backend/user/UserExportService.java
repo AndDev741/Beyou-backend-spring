@@ -2,6 +2,8 @@ package beyou.beyouapp.backend.user;
 
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.briefing.DailyBriefingService;
+import beyou.beyouapp.backend.domain.calendar.CalendarReminderTime;
+import beyou.beyouapp.backend.domain.calendar.CalendarTaskRepository;
 import beyou.beyouapp.backend.domain.category.CategoryRepository;
 import beyou.beyouapp.backend.domain.checkday.CheckHistoryService;
 import beyou.beyouapp.backend.domain.checkday.EntityCheckDay;
@@ -59,6 +61,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -100,6 +103,7 @@ public class UserExportService {
     private final FederatedIdentityRepository federatedIdentityRepository;
     private final DailyBriefingService dailyBriefingService;
     private final NotificationSendRepository notificationSendRepository;
+    private final CalendarTaskRepository calendarTaskRepository;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -134,9 +138,18 @@ public class UserExportService {
         // The default is what an account with no row gets; see V24 on why absence means
         // opted in. The unsubscribe token deliberately does NOT travel: it is a
         // capability that works without a session, and this file gets mailed around.
-        profile.put("engagementEmails", notificationPreferencesRepository.findById(userId)
+        Optional<NotificationPreferences> preferences = notificationPreferencesRepository.findById(userId);
+        profile.put("engagementEmails", preferences
                 .map(NotificationPreferences::isEngagementEmail)
                 .orElse(true));
+        // The calendar reminder settings live on the same row and default the same way: on, and
+        // 09:00 for tasks with no time of their own.
+        Map<String, Object> reminders = new LinkedHashMap<>();
+        reminders.put("emails", preferences.map(NotificationPreferences::isReminderEmail).orElse(true));
+        reminders.put("browserNotifications", preferences.map(NotificationPreferences::isReminderWeb).orElse(true));
+        reminders.put("defaultTime", preferences.map(NotificationPreferences::getReminderDefaultTime)
+                .orElse(CalendarReminderTime.DEFAULT_TIME).toString());
+        profile.put("reminders", reminders);
         profile.put("linkedSignIns", linkedSignIns(userId));
         export.put("profile", profile);
 
@@ -232,6 +245,25 @@ public class UserExportService {
             map.put("updatedAt", m.getUpdatedAt());
             return map;
         }).toList());
+
+        // Calendar tasks, done or not, with what completing them paid and whether their reminder
+        // was clicked or mailed. One query for all of them.
+        export.put("calendarTasks", calendarTaskRepository.findByUserIdOrderByTaskDateAscCreatedAtAsc(userId)
+                .stream().map(t -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("id", t.getId());
+                    map.put("title", t.getTitle());
+                    map.put("note", t.getNote());
+                    map.put("date", t.getTaskDate());
+                    map.put("time", t.getTaskTime() == null ? null : t.getTaskTime().toString());
+                    map.put("advanceMinutes", t.getAdvanceMinutes());
+                    map.put("completedAt", t.getCompletedAt());
+                    map.put("xpAwarded", t.getXpAwarded());
+                    map.put("reminderClickedAt", t.getAcknowledgedAt());
+                    map.put("reminderEmailSentAt", t.getReminderEmailSentAt());
+                    map.put("createdAt", t.getCreatedAt());
+                    return map;
+                }).toList());
 
         // The study notebook: one query per table, never per page, so the export stays flat in
         // query count however big the notebook grows (UserExportQueryCountTest).

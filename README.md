@@ -17,6 +17,7 @@ Beyou helps people build better days: track habits, set goals, plan daily routin
 - **Gamification engine** — XP and leveling for the user, each category, and each habit, coordinated transactionally so a single check-in updates every affected entity in one response.
 - **Daily routines & check-ins** — schedule routines, check/uncheck/skip items, track streaks ("constance"), and persist per-day snapshots.
 - **Daily mood and journaling** — one entry per day on a five-point scale with an optional free-text note. Two write verbs on purpose: `PUT` replaces the day, `PATCH` sets only the level and cannot touch the note, so a client that never loaded somebody's diary cannot delete it.
+- **Calendar and reminders**: one-off tasks on a date with an optional time and advance notice, shown next to each day's routine, goal deadlines and mood in one range read. The reminder instant is computed on the server in one function, the web app shows it as a browser notification, and a reminder nobody reacted to within an hour is mailed once. Completing one pays 10 XP to the user, and un-completing takes exactly that back.
 - **Study notebook** — topics laid out as roadmap boards whose nodes are pages of notes, flashcards scheduled by SM-2, and sources (PDF, web link, pasted text) read in the background into passages that a grounded study AI answers from with citations. PDFs are parsed in memory and never stored; link sources refuse private-network addresses (SSRF).
 - **Study cycles** — the *ciclo de estudos* method on top of the notebook: an ordered queue of blocks over notebook topics, planned from each topic's importance and mastery and the week's minutes, that moves forward lap by lap. A block asks for minutes (TIME) or for a concept understood (GOAL: the topic's next roadmap page, or a chosen one, optionally with its quiz passed). Finished pomodoros on a topic's pages and sessions logged by hand credit the queue, a page marked done closes its block, and today's slice of every cycle (with clock times when the day has a start) feeds the notebook home, the dashboard, the Daily Briefing and the assistant. No XP.
 - **AI assistant** — a streaming chat (Spring AI, provider-agnostic with a fallback chain) whose tools call the same domain services as the REST API, so every action it takes passes the same ownership checks and validation as a button click. Plus stateless onboarding suggestions.
@@ -72,6 +73,7 @@ Configuration lives in `application.yaml` and is driven entirely by environment 
 | `MAIL_*` | SMTP host/port/credentials for transactional email | — |
 | `MISTRAL_API_KEY` / `GEMINI_API_KEY` | LLM fallback chain for the assistant, onboarding and the study notebook (`prod` needs at least one) | — |
 | `NOTEBOOK_EMBEDDING_BASE_URL` / `NOTEBOOK_EMBEDDING_API_KEY` / `NOTEBOOK_EMBEDDING_MODEL` | The study notebook's one embedding model; no key means full-text search only | Mistral's endpoint / `MISTRAL_API_KEY` / `mistral-embed` |
+| `CALENDAR_REMINDER_EMAILS_ENABLED` / `CALENDAR_REMINDER_DAILY_CAP` / `REMINDER_HEARTBEAT_URL` | Calendar reminder mail: on by default (an incident switch, off in `test` and `e2e`), its own daily budget, and the reminder pass's heartbeat (blank means none) | `true` / `150` / — |
 | `BRIEFING_NARRATION_ENABLED` / `BRIEFING_RETENTION_DAYS` | Daily Briefing: the LLM prose under the facts, and how many days of briefing rows to keep | `true` / `30` |
 | `TAVILY_API_KEY` / `NOTEBOOK_DISCOVERY_GEMINI_API_KEY` / `NOTEBOOK_DISCOVERY_GEMINI_MODEL` | "Find sources for me": Tavily when its key is set, otherwise Gemini with Google Search when its own key is (needs billing; no fallback to `GEMINI_API_KEY`); neither turns the feature off | — / — / `gemini-flash-latest` |
 | `DOCS_IMPORT_*` | GitHub repo + secret for docs import | see `envExample` |
@@ -132,13 +134,14 @@ The Actuator/management server runs separately on port `9091` and is **not** ver
 | `/daily-briefing` | The new-day dialog: yesterday's unresolved items, what is coming today and the goals ahead with their pace. `GET /narrative` is the poll for prose that lands after the first request stops waiting; `POST /seen` acknowledges it |
 | `/mood` | One entry per day: `PUT` replaces it, `PATCH` sets the level only, `GET` reads a date range |
 | `/focus` | Focus Mode history: completed timer cycles and per-item micro-tasks |
+| `/calendar` | A range of days with their tasks, routines, goal deadlines and mood (`GET /calendar`, at most 62 days), and dated tasks under `/calendar/tasks`: create, edit, delete, complete (pays XP), acknowledge a reminder, and the upcoming reminders. Someone else's task answers 404 `CALENDAR_TASK_NOT_FOUND` |
 | `/notebook` | Study notebook: topics and pages, roadmap boards, flashcards and reviews, sources, the study room, roadmap drafts kept until a topic is made from them (`/notebook/drafts`), the notebook AI (`/notebook/ai/**`, its own rate-limit tier), and study cycles (`/notebook/cycles`: list, plan preview, create, today's slice, edit, block order, archive, history) with manual study sessions (`/notebook/sessions`) |
 | `/check-history` | The day-by-day record behind every streak strip, for any checkable owner |
 | `/xp` | XP history per owner, for the dashboard charts |
 | `/feedback` | Feedback submissions and replies (`/feedback/admin` requires ADMIN) |
 | `/ai/agent` | The assistant: chats, messages, and the SSE stream |
 | `/onboarding` | Stateless AI onboarding suggestions |
-| `/notification` | E-mail preferences (`/notification/preferences`) and the unauthenticated unsubscribe link |
+| `/notification` | Engagement-mail and calendar reminder preferences (`/notification/preferences`, a partial `PUT`) and the unauthenticated unsubscribe link |
 | `/user/photo` | Profile photo upload, fetch and removal |
 | `/docs/**` | Architecture, API, blog, project docs, and search (admin import behind a secret header) |
 
@@ -168,15 +171,15 @@ End-to-end tests (Playwright) live in the sibling `Beyou-e2e-tests` repository a
 ```
 src/main/java/beyou/beyouapp/backend/
 ├── controllers/        REST controllers (domain + docs/)
-├── domain/             category, habit, task, goal, routine, mood, focus,
+├── domain/             category, habit, task, goal, routine, mood, focus, calendar,
 │                       notebook, checkday, xpday, briefing, feedback, aiAgent, common
 ├── security/           JWT, refresh tokens, password reset, rate limiting
 ├── user/               User entity (UserDetails), service, Google OAuth
 ├── docs/               GitHub-backed docs import (architecture, api, blog, project, search)
 ├── exceptions/         GlobalExceptionHandler + BusinessException / ErrorKey
-├── notification/       EmailService
+├── notification/       EmailService, engagement nudges, mail and reminder preferences
 ├── AOP/                Controller & service logging aspects
-├── monitoring/         User-id MDC filter, activity tracking
+├── monitoring/         User-id MDC filter, activity tracking, scheduled-job heartbeats
 └── config/             Cross-cutting configuration
 ```
 

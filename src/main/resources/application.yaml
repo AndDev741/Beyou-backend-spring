@@ -214,6 +214,25 @@ engagement:
   # a day the snapshot job will not accept a check for is a lie.
   backfill-days: ${ENGAGEMENT_BACKFILL_DAYS:7}
 
+# Calendar reminders: the mail that goes out when a reminder got no reaction in the browser.
+calendar:
+  reminders:
+    # ON by default, unlike engagement.enabled: these are reminders the user set on their own
+    # tasks, not mail the product decided to send, so there is no launch to gate. The flag is
+    # an incident switch. Each account can still turn the mail off in its settings.
+    email-enabled: ${CALENDAR_REMINDER_EMAILS_ENABLED:true}
+    # How long a reminder waits for a click or a completion before the mail goes. The web
+    # client shows a reminder it missed by less than this when a tab opens, so the two hand
+    # over at the same minute; move them together.
+    email-grace-minutes: 60
+    # A reminder whose window passed while the job was down is never mailed late. "Your 10:00
+    # appointment" arriving the next afternoon is worse than no mail.
+    email-max-age-hours: 24
+    # Reminder mails per UTC day across every account. Its own share of the provider's
+    # 300/day free tier, which also carries verification, resets, deletion codes and the
+    # engagement nudges.
+    daily-cap: ${CALENDAR_REMINDER_DAILY_CAP:150}
+
 rate-limit:
   enabled: true
 
@@ -397,6 +416,9 @@ monitoring:
     # nudge job that stops running looks exactly like a quiet week. Nobody complains about
     # mail they did not receive. Expect a check-in once per hour while the flag is on.
     nudge-url: ${NUDGE_HEARTBEAT_URL:}
+    # The calendar reminder mail pass. It runs every five minutes while
+    # calendar.reminders.email-enabled is on, so set the monitor's interval to about 900s.
+    reminder-url: ${REMINDER_HEARTBEAT_URL:}
 
 management:
   server:

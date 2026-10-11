@@ -787,9 +787,11 @@ public class Tools {
     private static final List<String> AVAILABLE_THEMES = List.of(
             "beYou", "beYouDark", "Sunset", "Amethyst", "Midnight",
             "Cyberpunk", "Mocha", "Polar", "Late Latte");
+    // Mirrors WIDGET_IDS in the frontend's packages/state/src/dashboard/widgets.ts. A widget missing
+    // here is one the assistant never offers, since these are the options getUserConfiguration lists.
     private static final List<String> AVAILABLE_WIDGETS = List.of(
             "worstArea", "constance", "constanceHeatmap", "betterArea", "dailyProgress",
-            "fastTips", "levelProgress", "categoryBalance", "moodWeek", "studyToday");
+            "fastTips", "levelProgress", "categoryBalance", "moodWeek", "studyToday", "calendarToday");
 
     @Tool(description = "Get the user's current configuration (name, profile phrase, theme, language, "
             + "timezone, streak/constance mode, XP decay strategy, dashboard widgets) plus the valid "
