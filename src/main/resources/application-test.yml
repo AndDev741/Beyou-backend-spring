@@ -116,6 +116,13 @@ sentry:
 monitoring:
   heartbeat:
     snapshot-url: ""
+    reminder-url: ""
+
+# The reminder mail pass OFF, so the five-minute cron never fires mid-suite. The tests drive
+# CalendarReminderEmailService directly, against a mocked mail sender.
+calendar:
+  reminders:
+    email-enabled: false
 
 # Study notebook. Embeddings pinned off for the same reason as the heartbeat above: a
 # MISTRAL_API_KEY exported in a developer's shell would otherwise bind through the default and

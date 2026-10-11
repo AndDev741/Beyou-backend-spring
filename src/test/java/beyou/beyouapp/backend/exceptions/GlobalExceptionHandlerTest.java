@@ -153,6 +153,25 @@ class GlobalExceptionHandlerTest {
         return request;
     }
 
+    /**
+     * The calendar's not-found is a 404, and it is the only one: the older domains' not-found
+     * keys keep their 400, because the clients were written against it.
+     */
+    @Test
+    void handleBusinessException_calendarTaskNotFound_is404AndOlderNotFoundKeysStay400() {
+        ResponseEntity<ApiErrorResponse> calendar = handler.handleBusinessException(
+                new BusinessException(ErrorKey.CALENDAR_TASK_NOT_FOUND, "Calendar task not found"));
+
+        assertEquals(HttpStatus.NOT_FOUND, calendar.getStatusCode());
+        assertNotNull(calendar.getBody());
+        assertEquals(ErrorKey.CALENDAR_TASK_NOT_FOUND.name(), calendar.getBody().errorKey());
+
+        assertEquals(HttpStatus.BAD_REQUEST, handler.handleBusinessException(
+                new BusinessException(ErrorKey.GOAL_NOT_FOUND, "Goal not found")).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, handler.handleBusinessException(
+                new BusinessException(ErrorKey.CALENDAR_RANGE_INVALID, "'to' is before 'from'")).getStatusCode());
+    }
+
     @Test
     void handleBusinessException_googleOAuthFailed_returnsStructuredResponseWith400() {
         ResponseEntity<ApiErrorResponse> response = handler.handleBusinessException(

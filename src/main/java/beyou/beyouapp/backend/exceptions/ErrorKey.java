@@ -30,6 +30,12 @@ public enum ErrorKey {
     GOAL_DEPTH_EXCEEDED,
     // Archived goals: a new sub-goal, or a moved one, under a goal that has been put away
     GOAL_PARENT_ARCHIVED,
+    // Calendar tasks. A task that belongs to someone else answers this too, so the key never
+    // says which ids exist. Answered as 404, unlike the older domains' not-found keys, which
+    // answer 400 because their clients were written against that (GlobalExceptionHandler).
+    CALENDAR_TASK_NOT_FOUND,
+    // GET /calendar with a bound missing, 'to' before 'from', or more days than one read may span.
+    CALENDAR_RANGE_INVALID,
     MOOD_NOT_FOUND,
     // A mood is a report, not a plan: MoodService refuses days after the owner's today.
     MOOD_FUTURE_DATE,

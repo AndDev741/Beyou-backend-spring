@@ -2,6 +2,9 @@ package beyou.beyouapp.backend.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +19,8 @@ import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.notification.preferences.NotificationPreferences;
 import beyou.beyouapp.backend.notification.preferences.NotificationPreferencesRepository;
 import beyou.beyouapp.backend.notification.preferences.NotificationPreferencesService;
+import beyou.beyouapp.backend.notification.preferences.ReminderSettings;
+import beyou.beyouapp.backend.notification.preferences.dto.UpdateNotificationPreferencesDTO;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 
@@ -159,6 +164,95 @@ class NotificationPreferencesIntegrationTest extends AbstractIntegrationTest {
         assertThat(repository.findById(user.getId()))
                 .as("a preference has no meaning once the account is gone")
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a new row has every reminder channel on and 09:00 as the default time")
+    void remindersDefaultOn() {
+        NotificationPreferences preferences = service.getOrCreate(user);
+
+        assertThat(preferences.isReminderEmail()).isTrue();
+        assertThat(preferences.isReminderWeb()).isTrue();
+        assertThat(preferences.getReminderDefaultTime()).isEqualTo(LocalTime.of(9, 0));
+    }
+
+    /**
+     * The engagement toggle shipped first. A client that only knows about it sends a body with
+     * that one field, and reading the absent reminder fields as false would switch every
+     * reminder off for whoever touched the nudge setting.
+     */
+    @Test
+    @DisplayName("an engagement-only update leaves the reminder settings alone")
+    void engagementOnlyUpdateKeepsReminders() {
+        service.update(user, new UpdateNotificationPreferencesDTO(null, null, null, LocalTime.of(7, 30)));
+
+        NotificationPreferences after = service.update(user, new UpdateNotificationPreferencesDTO(false, null, null, null));
+
+        assertThat(after.isEngagementEmail()).isFalse();
+        assertThat(after.isReminderEmail()).as("absent from the body, so still on").isTrue();
+        assertThat(after.isReminderWeb()).as("absent from the body, so still on").isTrue();
+        assertThat(after.getReminderDefaultTime()).isEqualTo(LocalTime.of(7, 30));
+    }
+
+    @Test
+    @DisplayName("a reminder-only update leaves the engagement switch alone, and each field is independent")
+    void reminderOnlyUpdateKeepsEngagement() {
+        NotificationPreferences after = service.update(user, new UpdateNotificationPreferencesDTO(null, false, null, null));
+
+        assertThat(after.isEngagementEmail()).isTrue();
+        assertThat(after.isReminderEmail()).isFalse();
+        assertThat(after.isReminderWeb()).as("not in the body, so not touched").isTrue();
+        assertThat(after.getReminderDefaultTime()).isEqualTo(LocalTime.of(9, 0));
+    }
+
+    @Test
+    @DisplayName("an empty update changes nothing")
+    void emptyUpdateChangesNothing() {
+        // A mix of on and off, so reading a missing field as either value shows up.
+        service.update(user, new UpdateNotificationPreferencesDTO(false, null, false, LocalTime.of(6, 15)));
+
+        NotificationPreferences after = service.update(user, new UpdateNotificationPreferencesDTO(null, null, null, null));
+
+        assertThat(after.isEngagementEmail()).isFalse();
+        assertThat(after.isReminderEmail()).isTrue();
+        assertThat(after.isReminderWeb()).isFalse();
+        assertThat(after.getReminderDefaultTime()).isEqualTo(LocalTime.of(6, 15));
+    }
+
+    @Test
+    @DisplayName("the default time is kept to the minute")
+    void defaultTimeDropsSeconds() {
+        NotificationPreferences after = service.update(user,
+                new UpdateNotificationPreferencesDTO(null, null, null, LocalTime.of(7, 30, 45)));
+
+        assertThat(after.getReminderDefaultTime()).isEqualTo(LocalTime.of(7, 30));
+    }
+
+    /**
+     * The calendar reads this inside read-only transactions on every range request. Creating the
+     * row there would fail on Postgres, and reading a default should not write anyway.
+     */
+    @Test
+    @DisplayName("reading reminder settings for an account with no row gives the defaults and writes nothing")
+    void reminderSettingsReadsWithoutCreating() {
+        assertThat(service.reminderSettings(user.getId())).isEqualTo(ReminderSettings.DEFAULTS);
+        assertThat(repository.findById(user.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the batch read covers every id asked for, stored or not")
+    void batchReminderSettings() {
+        User other = new User();
+        other.setName("Someone Else");
+        other.setEmail("prefs-" + UUID.randomUUID() + "@test.com");
+        other.setPassword("irrelevant-for-this-test");
+        other = userRepository.save(other);
+        service.update(user, new UpdateNotificationPreferencesDTO(null, false, null, LocalTime.of(8, 0)));
+
+        Map<UUID, ReminderSettings> settings = service.reminderSettings(List.of(user.getId(), other.getId()));
+
+        assertThat(settings).containsEntry(user.getId(), new ReminderSettings(false, true, LocalTime.of(8, 0)));
+        assertThat(settings).containsEntry(other.getId(), ReminderSettings.DEFAULTS);
     }
 
     /**

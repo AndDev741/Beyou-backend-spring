@@ -22,8 +22,10 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 @ControllerAdvice
 @Slf4j
@@ -53,10 +55,21 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
+    /**
+     * Business errors whose answer is 404 rather than the default 400.
+     *
+     * <p>Opt-in per key, and short on purpose. Every domain that predates the calendar answers
+     * its not-found keys with 400, and the web and mobile clients were written against that, so
+     * moving them is a coordinated change of its own. A domain designed after this list existed
+     * puts its not-found key here from the start.
+     */
+    static final Set<ErrorKey> NOT_FOUND_KEYS = EnumSet.of(ErrorKey.CALENDAR_TASK_NOT_FOUND);
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusinessException(BusinessException ex){
         ApiErrorResponse response = new ApiErrorResponse(ex.getErrorKey().name(), ex.getMessage(), ex.getDetails());
-        return ResponseEntity.badRequest().body(response);
+        HttpStatus status = NOT_FOUND_KEYS.contains(ex.getErrorKey()) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(response);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

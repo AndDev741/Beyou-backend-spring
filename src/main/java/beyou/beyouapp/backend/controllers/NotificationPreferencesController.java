@@ -22,8 +22,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /**
- * The engagement-mail switch: two authenticated endpoints for the settings screen, and
- * one public one for the link inside a message.
+ * The engagement-mail switch and the calendar reminder settings: two authenticated endpoints
+ * for the settings screen, and one public one for the unsubscribe link inside a message.
  *
  * <p>The public endpoint is the whole reason this controller is not part of
  * {@code UserController}. Unsubscribing has to work for somebody who cannot log in —
@@ -42,16 +42,19 @@ public class NotificationPreferencesController {
     public ResponseEntity<NotificationPreferencesResponseDTO> getPreferences() {
         User user = authenticatedUser.getAuthenticatedUser();
         NotificationPreferences preferences = preferencesService.getOrCreate(user);
-        return ResponseEntity.ok(new NotificationPreferencesResponseDTO(preferences.isEngagementEmail()));
+        return ResponseEntity.ok(NotificationPreferencesResponseDTO.from(preferences));
     }
 
+    /**
+     * Partial: every field of the body is optional and a missing one is left as it is, so the
+     * engagement toggle and the Reminders section can each send only their own fields.
+     */
     @PutMapping("/notification/preferences")
     public ResponseEntity<NotificationPreferencesResponseDTO> updatePreferences(
             @RequestBody @Valid UpdateNotificationPreferencesDTO request) {
         User user = authenticatedUser.getAuthenticatedUser();
-        NotificationPreferences preferences =
-                preferencesService.setEngagementEmail(user, request.engagementEmail());
-        return ResponseEntity.ok(new NotificationPreferencesResponseDTO(preferences.isEngagementEmail()));
+        NotificationPreferences preferences = preferencesService.update(user, request);
+        return ResponseEntity.ok(NotificationPreferencesResponseDTO.from(preferences));
     }
 
     /**

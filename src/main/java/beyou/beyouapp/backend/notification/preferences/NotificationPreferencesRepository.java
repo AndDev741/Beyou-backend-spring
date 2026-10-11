@@ -23,7 +23,7 @@ public interface NotificationPreferencesRepository extends JpaRepository<Notific
 
     /**
      * Writes the default row unless the account already has one, and never raises on the
-     * collision.
+     * collision. The reminder columns take their defaults from V40.
      *
      * <p>Native because the point is {@code ON CONFLICT DO NOTHING}: a primary-key violation
      * raised inside a JPA transaction marks it rollback-only, so a request that lost the

@@ -143,6 +143,13 @@ sentry:
 monitoring:
   heartbeat:
     snapshot-url: ""
+    reminder-url: ""
+
+# The reminder mail pass OFF. The e2e stack has no mail server, and a spec that creates a
+# timed task would otherwise have the job trying to mail it an hour later on a long run.
+calendar:
+  reminders:
+    email-enabled: false
 
 # Somewhere writable, wherever this profile runs.
 #

@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.goal;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,4 +18,12 @@ public interface GoalRepository extends JpaRepository<Goal, UUID> {
      */
     @EntityGraph(attributePaths = {"categories"})
     Optional<List<Goal>> findAllByUserId(UUID userId);
+
+    /**
+     * The goals ending inside a window of days, for the calendar. Archived goals are left out:
+     * archiving is how someone puts a goal away, and the clients already hide them from the
+     * goals page.
+     */
+    List<GoalDeadline> findDeadlinesByUserIdAndEndDateBetweenAndArchivedAtIsNull(
+            UUID userId, LocalDate from, LocalDate to);
 }

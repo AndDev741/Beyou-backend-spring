@@ -118,6 +118,7 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
             entry("feedback_reply", "feedback"),
             entry("entity_check_day", "checkHistory"),
             entry("mood_entries", "moodEntries"),
+            entry("calendar_tasks", "calendarTasks"),
             entry("notification_preferences", "profile.engagementEmails"),
             entry("notification_sends", "engagementEmailsSent"),
             entry("federated_identities", "profile.linkedSignIns"),
@@ -484,6 +485,23 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         assertThat(briefing.get("status")).isEqualTo(NarrativeStatus.READY);
         assertThat((List<String>) briefing.get("todayLines")).containsExactly("Two habits left.");
         assertThat((List<String>) briefing.get("yesterdayLines")).containsExactly("A full day.");
+
+        // The reminder settings sit on the preferences row beside the engagement switch.
+        Map<String, Object> reminders = (Map<String, Object>) ((Map<String, Object>) export.get("profile"))
+                .get("reminders");
+        assertThat(reminders).containsEntry("emails", true)
+                .containsEntry("browserNotifications", true)
+                .containsEntry("defaultTime", "09:00");
+
+        // Calendar tasks, with what completing one paid.
+        Map<String, Object> calendarTask = ((List<Map<String, Object>>) export.get("calendarTasks")).get(0);
+        assertThat(calendarTask.get("title")).isEqualTo("Renew the passport");
+        assertThat(calendarTask.get("note")).isEqualTo("bring two photos");
+        assertThat(calendarTask.get("date")).isEqualTo(seeded.day());
+        assertThat(calendarTask.get("time")).isEqualTo("10:00");
+        assertThat(calendarTask.get("advanceMinutes")).isEqualTo(60);
+        assertThat(calendarTask.get("completedAt")).as("it was done").isNotNull();
+        assertThat(calendarTask.get("xpAwarded")).isEqualTo(10.0);
 
         Map<String, Object> mail = ((List<Map<String, Object>>) export.get("engagementEmailsSent")).get(0);
         assertThat(mail.get("kind")).isEqualTo(NudgeKind.STREAK_RECORD_AT_RISK);
