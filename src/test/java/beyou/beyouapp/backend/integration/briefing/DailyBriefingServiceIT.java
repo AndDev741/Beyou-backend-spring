@@ -31,6 +31,7 @@ import beyou.beyouapp.backend.domain.briefing.dto.DailyBriefingResponseDTO;
 import beyou.beyouapp.backend.domain.briefing.dto.GoalAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.GoalPace;
 import beyou.beyouapp.backend.domain.briefing.dto.OpenItem;
+import beyou.beyouapp.backend.domain.briefing.dto.StudyAhead;
 import beyou.beyouapp.backend.domain.common.CheckXpCalculator;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.goal.Goal;
@@ -41,6 +42,21 @@ import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
 import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.mood.dto.UpsertMoodEntryDTO;
+import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
+import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService;
+import beyou.beyouapp.backend.domain.notebook.board.dto.CreateNodeRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.cycle.BlockMode;
+import beyou.beyouapp.backend.domain.notebook.cycle.LapBlockState;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleLapBlock;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleLapBlockRepository;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleService;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudySession;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudySessionRepository;
+import beyou.beyouapp.backend.domain.notebook.cycle.dto.CycleConfigRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.cycle.dto.CycleDayDTO;
+import beyou.beyouapp.backend.domain.notebook.cycle.dto.CycleTopicDTO;
+import beyou.beyouapp.backend.domain.notebook.cycle.dto.StudyCycleDTO;
+import beyou.beyouapp.backend.domain.notebook.dto.CreateTopicRequestDTO;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleRepository;
@@ -96,6 +112,11 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
     @Autowired private GoalRepository goalRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private jakarta.persistence.EntityManagerFactory entityManagerFactory;
+    @Autowired private NotebookPageService pageService;
+    @Autowired private NotebookBoardService boardService;
+    @Autowired private StudyCycleService studyCycleService;
+    @Autowired private StudySessionRepository studySessionRepository;
+    @Autowired private StudyCycleLapBlockRepository lapBlockRepository;
 
     /**
      * A Wednesday, so the seeded Mon/Wed/Fri schedule covers both it and the day before is a
@@ -362,6 +383,59 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
         assertThat(briefing.today().goalsAhead()).extracting(GoalAhead::name)
                 .containsExactly("Next spring");
         assertThat(briefing.worthShowing()).isTrue();
+    }
+
+    // ---- study cycles ----
+
+    /**
+     * A study cycle with minutes on the day is something on today, and the briefing names its
+     * first blocks the way the account reads (pt here). Yesterday's study is counted from what
+     * happened yesterday: a session dated then, and a concept understood then.
+     */
+    @Test
+    void studyCyclesReachTheBriefing() {
+        User student = newUser();
+        student.setLanguageInUse("pt");
+        student = userRepository.saveAndFlush(student);
+        authenticateAs(student);
+        UUID topic = pageService.createTopic(student,
+                new CreateTopicRequestDTO("Dir. Constitucional", null, null, null, null, null)).id();
+        boardService.addNode(student, topic, new CreateNodeRequestDTO(null, "Controle de constitucionalidade",
+                null, null, 0d, 0d, null, null, null));
+        List<CycleDayDTO> week = new ArrayList<>();
+        for (java.time.DayOfWeek day : java.time.DayOfWeek.values()) {
+            week.add(new CycleDayDTO(day, 120, "19:00"));
+        }
+        StudyCycleDTO cycle = studyCycleService.create(student, new CycleConfigRequestDTO("Concurso", BlockMode.GOAL, 60,
+                week, List.of(new CycleTopicDTO(topic, 5, 2, 120))));
+
+        StudySession session = new StudySession();
+        session.setUser(student);
+        session.setTopicId(topic);
+        session.setMinutes(45);
+        session.setStudiedOn(YESTERDAY);
+        session.setCreatedAt(YESTERDAY.atTime(20, 0).toInstant(java.time.ZoneOffset.UTC));
+        studySessionRepository.saveAndFlush(session);
+        // The second block: the first already has its lap row, written when the cycle was read
+        // back after creating it (the concept of each topic's first open block is fixed on read).
+        StudyCycleLapBlock understood = new StudyCycleLapBlock(cycle.id(), cycle.blocks().get(1).id(), 1);
+        understood.setState(LapBlockState.UNDERSTOOD);
+        understood.setMinutes(45);
+        understood.setClosedAt(YESTERDAY.atTime(20, 30).toInstant(java.time.ZoneOffset.UTC));
+        lapBlockRepository.saveAndFlush(understood);
+
+        DailyBriefingResponseDTO briefing = briefingService.briefingFor(student, TODAY);
+
+        assertThat(briefing.worthShowing()).isTrue();
+        StudyAhead ahead = briefing.today().study().get(0);
+        assertThat(ahead.cycleName()).isEqualTo("Concurso");
+        assertThat(ahead.startTime()).isEqualTo("19:00");
+        assertThat(ahead.minutes()).isEqualTo(120);
+        assertThat(ahead.entries().get(0).title()).isEqualTo("Entender Controle de constitucionalidade");
+        assertThat(ahead.entries().get(0).mode()).isEqualTo(BlockMode.GOAL);
+        assertThat(ahead.entries().get(0).minutesToday()).isEqualTo(60);
+        assertThat(briefing.yesterday().studyMinutes()).isEqualTo(45);
+        assertThat(briefing.yesterday().conceptsUnderstood()).isEqualTo(1);
     }
 
     // ---- signals for the narrator ----

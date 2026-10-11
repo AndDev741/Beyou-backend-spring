@@ -16,6 +16,7 @@ import beyou.beyouapp.backend.domain.briefing.dto.GoalAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.GoalPace;
 import beyou.beyouapp.backend.domain.briefing.dto.OpenItem;
 import beyou.beyouapp.backend.domain.briefing.dto.RecoveryWindow;
+import beyou.beyouapp.backend.domain.briefing.dto.StudyAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.TodayAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.YesterdayRecap;
 import beyou.beyouapp.backend.domain.checkday.UserStreakService;
@@ -27,6 +28,11 @@ import beyou.beyouapp.backend.domain.goal.GoalRepository;
 import beyou.beyouapp.backend.domain.goal.GoalStatus;
 import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.mood.dto.MoodEntryResponseDTO;
+import beyou.beyouapp.backend.domain.notebook.cycle.BlockMode;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleService;
+import beyou.beyouapp.backend.domain.notebook.cycle.dto.StudyTodayCycleDTO;
+import beyou.beyouapp.backend.domain.notebook.cycle.dto.StudyTodayDTO;
+import beyou.beyouapp.backend.domain.notebook.cycle.dto.TodayEntryDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver;
 import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
 import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshotRepository;
@@ -36,6 +42,7 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserLanguage;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -118,6 +125,9 @@ public class DailyBriefingFactsBuilder {
      */
     static final int PACE_TOLERANCE_POINTS = 5;
 
+    /** How many blocks of a cycle's day the panel names. The study card has the rest. */
+    static final int MAX_STUDY_ENTRIES = 3;
+
     private final RoutineSnapshotRepository snapshotRepository;
     private final DiaryRoutineRepository diaryRoutineRepository;
     private final GoalRepository goalRepository;
@@ -125,6 +135,7 @@ public class DailyBriefingFactsBuilder {
     private final MoodService moodService;
     private final UserStreakService userStreakService;
     private final XpDecayCalculator xpDecayCalculator;
+    private final StudyCycleService studyCycleService;
 
     /**
      * Both halves of the facts, plus what only the narrator reads.
@@ -183,6 +194,8 @@ public class DailyBriefingFactsBuilder {
                 .filter(s -> yesterday.equals(s.getSnapshotDate()))
                 .toList();
 
+        StudyCycleService.DayRecap study = studyCycleService.recap(user, yesterday);
+
         if (snapshots.isEmpty()) {
             // No snapshot means no routine covered the day, so nothing was asked of the
             // user. Deliberately not rendered as a failure anywhere downstream: the clients
@@ -192,7 +205,7 @@ public class DailyBriefingFactsBuilder {
             // their timezone. That window is under a minute and forcing snapshot creation
             // from a read path is a far larger change than it deserves.
             return new YesterdayRecap(yesterday, false, false, 0, 0, 0d, List.of(), 0,
-                    moodLevel);
+                    moodLevel, study.minutes(), study.conceptsUnderstood());
         }
 
         int done = 0;
@@ -221,7 +234,7 @@ public class DailyBriefingFactsBuilder {
         return new YesterdayRecap(yesterday, true, complete, done, skipped, xp,
                 List.copyOf(open),
                 focusCycleRepository.findDay(user.getId(), yesterday).size(),
-                moodLevel);
+                moodLevel, study.minutes(), study.conceptsUnderstood());
     }
 
     // ---- today ----
@@ -250,7 +263,41 @@ public class DailyBriefingFactsBuilder {
                 user.getMaxConstance() == null ? 0 : user.getMaxConstance(),
                 goalsApproaching(openGoals, today),
                 recoveryWindow(user, window, yesterday, today),
-                goalsAhead(openGoals, today));
+                goalsAhead(openGoals, today),
+                studyAhead(user, today));
+    }
+
+    /**
+     * The study cycles with minutes on the day, each with the first blocks of its slice. Read
+     * through {@link StudyCycleService#todayPreview}, the same slice the notebook's card shows,
+     * but without fixing any concept: this runs in a read-only transaction and a briefing must not
+     * be the request that writes the cycle.
+     *
+     * <p>The title is the one place the server words something for this panel: "Entender X" or
+     * "Understand X" for a GOAL block with a concept, in the account's language, because the
+     * clients print it as it comes.
+     */
+    private List<StudyAhead> studyAhead(User user, LocalDate today) {
+        StudyTodayDTO preview = studyCycleService.todayPreview(user, today);
+        boolean portuguese = "pt".equals(UserLanguage.forPrompt(user));
+        List<StudyAhead> out = new ArrayList<>();
+        for (StudyTodayCycleDTO cycle : preview.cycles()) {
+            List<StudyAhead.Entry> entries = cycle.entries().stream()
+                    .filter(entry -> !entry.doneToday())
+                    .limit(MAX_STUDY_ENTRIES)
+                    .map(entry -> new StudyAhead.Entry(studyTitle(entry, portuguese), entry.mode(),
+                            entry.minutesToday()))
+                    .toList();
+            out.add(new StudyAhead(cycle.name(), cycle.startTime(), cycle.dayMinutes(), entries));
+        }
+        return out;
+    }
+
+    private static String studyTitle(TodayEntryDTO entry, boolean portuguese) {
+        if (entry.mode() == BlockMode.GOAL && entry.target() != null) {
+            return (portuguese ? "Entender " : "Understand ") + entry.target().title();
+        }
+        return entry.topic() == null ? "" : entry.topic().title();
     }
 
     /**

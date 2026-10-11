@@ -25,6 +25,9 @@ import java.util.List;
  *                    actionable from the dialog. This is the list the left panel renders
  * @param focusCycles pomodoros run on the day, counted across every routine
  * @param moodLevel   the 1-5 mood logged for the day, or null if none was
+ * @param studyMinutes minutes studied on the topics of the active study cycles (pomodoros on
+ *                    their pages plus logged sessions), the same sum today's card makes
+ * @param conceptsUnderstood GOAL blocks of the active cycles closed as understood that day
  */
 public record YesterdayRecap(
     LocalDate date,
@@ -35,7 +38,9 @@ public record YesterdayRecap(
     double xpEarned,
     List<OpenItem> openItems,
     int focusCycles,
-    Integer moodLevel
+    Integer moodLevel,
+    int studyMinutes,
+    int conceptsUnderstood
 ) {
 
     /** A day with a routine on it and nothing left hanging. */

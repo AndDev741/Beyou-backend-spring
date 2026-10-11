@@ -25,6 +25,8 @@ import java.util.List;
  *                           is no horizon: a goal three months out is still where the
  *                           user is heading, and the panel is the one place each morning
  *                           that says so
+ * @param study              the study cycles with minutes on the day, each with the first
+ *                           blocks of its slice. Empty without cycles, or on a rest day
  */
 public record TodayAhead(
     int scheduledItemCount,
@@ -33,5 +35,6 @@ public record TodayAhead(
     int bestStreak,
     List<GoalAhead> goalsApproaching,
     RecoveryWindow recovery,
-    List<GoalAhead> goalsAhead
+    List<GoalAhead> goalsAhead,
+    List<StudyAhead> study
 ) {}
