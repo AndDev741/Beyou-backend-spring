@@ -4,14 +4,12 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-import beyou.beyouapp.backend.domain.notebook.dto.PageRefDTO;
-
 /**
  * A cycle's study, day by day, for at most 31 days.
  *
- * @param topics the cycle's topics, for the legend
+ * @param topics the cycle's subjects, for the legend
  */
-public record StudyHistoryDTO(UUID cycleId, LocalDate from, LocalDate to, List<PageRefDTO> topics, List<Day> days) {
+public record StudyHistoryDTO(UUID cycleId, LocalDate from, LocalDate to, List<SubjectRefDTO> topics, List<Day> days) {
 
     /**
      * @param plannedMinutes the week's minutes for that weekday, as the week is configured now

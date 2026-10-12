@@ -28,7 +28,6 @@ import beyou.beyouapp.backend.domain.focus.FocusCycle;
 import beyou.beyouapp.backend.domain.focus.FocusCycleRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookOwnership;
 import beyou.beyouapp.backend.domain.notebook.NotebookPage;
-import beyou.beyouapp.backend.domain.notebook.NotebookPageKind;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookStatus;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardNodeRepository;
@@ -63,7 +62,7 @@ import lombok.RequiredArgsConstructor;
  *
  * <p>Two things move a lap, and both come through here:
  * <ul>
- *   <li><b>Minutes</b>, through {@link #credit}: a finished pomodoro on a page of the topic
+ *   <li><b>Minutes</b>, through {@link #credit}: a finished pomodoro on a page inside a subject
  *       ({@code FocusService.recordCycle}) or a manual session ({@link #logSession}). Nothing else
  *       credits, and no XP is paid anywhere in this feature.</li>
  *   <li><b>Understanding</b>, through {@link #onPagesDone} (called by
@@ -73,19 +72,29 @@ import lombok.RequiredArgsConstructor;
  * The arithmetic of both lives in {@link StudyLap}; this class loads the rows, locks the cycle,
  * asks the lap, and saves.
  *
+ * <p><b>Subjects.</b> What a cycle rotates between is any notebook page, a topic or an area inside
+ * one ("Implementação 2.0" inside "Software Engineer"); the API still calls it {@code topic}. A
+ * page belongs to a subject when the subject is on its home chain ({@link HomeTree}), and to the
+ * nearest one when several are. Subjects never overlap: across every active cycle of the user, no
+ * subject is, contains, or sits inside another ({@link #checkTopics}). That is what makes a
+ * pomodoro credit exactly one block. The home chain is the relation, never the boards: a linked
+ * page counts under its home only.
+ *
  * <p><b>Locking.</b> Every write that moves a lap holds the cycle's row lock
  * ({@link StudyCycleRepository#lockById}, or {@link StudyCycleRepository#lockActive} for all of a
  * user's cycles, in id order). Two pomodoros finishing together would otherwise both read a block
  * at 50 of 70 minutes and both write their own total, or both close the same lap. The reads that
  * also write ({@link #today}, {@link #get}) take the same lock, so two screens opening at once
- * cannot both create the same lap row.
+ * cannot both create the same lap row. The writes that choose subjects ({@link #create},
+ * {@link #update}) first take a per-user advisory lock ({@link StudyCycleRepository#lockSubjects})
+ * so two saves cannot both pass the overlap check.
  *
  * <p><b>The read that writes.</b> A GOAL block whose source is NEXT gets its concept from the
  * roadmap when it is first worked on. {@link #today} and {@link #get} also fix it for the first
- * open GOAL block of each topic. That matters for a person who studies the concept the card
+ * open GOAL block of each subject. That matters for a person who studies the concept the card
  * showed on the page screen, with no timer, and marks it done: the block must close as
  * understood, and it can only if the concept was written down before the page moved. Later blocks
- * of the same topic are only previewed, because the concept they get depends on what happens
+ * of the same subject are only previewed, because the concept they get depends on what happens
  * first.
  *
  * <p>Not cached, like the rest of the notebook. The reads write (above), and every pomodoro and
@@ -133,6 +142,7 @@ public class StudyCycleService {
 
     @Transactional
     public StudyCycleDTO create(User user, CycleConfigRequestDTO request) {
+        lockSubjects(user);
         String name = name(request.name());
         Map<DayOfWeek, CycleDayDTO> days = week(request.days());
         checkMaxBlock(request.maxBlockMinutes());
@@ -187,6 +197,8 @@ public class StudyCycleService {
      */
     @Transactional
     public StudyCycleDTO update(User user, UUID cycleId, CycleConfigRequestDTO request) {
+        // The subject lock first, then the cycle's row: the order every config write takes them in.
+        lockSubjects(user);
         StudyCycle cycle = lockEditable(user, cycleId);
         String name = name(request.name());
         Map<DayOfWeek, CycleDayDTO> days = week(request.days());
@@ -231,7 +243,7 @@ public class StudyCycleService {
                 row.setPosition(position++);
             }
         }
-        // A topic taken out of the cycle is free for another one.
+        // A subject taken out of the cycle is free for another one.
         topicRepository.deleteAll(topicRows.values());
 
         cycle.setName(name);
@@ -248,8 +260,8 @@ public class StudyCycleService {
 
     /**
      * The queue, replaced by the list given, in that order. Existing blocks named by id keep their
-     * lap progress; blocks left out are deleted with theirs. A block cannot move to another topic:
-     * its minutes were studied on this one.
+     * lap progress; blocks left out are deleted with theirs. A block cannot move to another
+     * subject: its minutes were studied on this one.
      */
     @Transactional
     public StudyCycleDTO replaceBlocks(User user, UUID cycleId, List<BlockRequestDTO> requests) {
@@ -259,6 +271,7 @@ public class StudyCycleService {
         }
         checkBlockCount(requests.size());
         Set<UUID> topics = activeTopicIds(cycle.getId());
+        NotebookFacts facts = facts(user.getId());
         Map<UUID, StudyCycleBlock> existing = new LinkedHashMap<>();
         blockRepository.findByCycleIdOrderByPositionAsc(cycle.getId()).forEach(b -> existing.put(b.getId(), b));
 
@@ -284,8 +297,8 @@ public class StudyCycleService {
                 block.setTopicId(request.topicId());
             }
             block.setPosition(position++);
-            if (apply(user, block, request.mode(), request.plannedMinutes(), request.goalSource(), request.pageId(),
-                    Boolean.TRUE.equals(request.requireQuiz()), request.note()) && block.getId() != null) {
+            if (apply(user, facts, block, request.mode(), request.plannedMinutes(), request.goalSource(),
+                    request.pageId(), Boolean.TRUE.equals(request.requireQuiz()), request.note()) && block.getId() != null) {
                 changedGoals.add(block.getId());
             }
             blockRepository.save(block);
@@ -317,7 +330,7 @@ public class StudyCycleService {
         if (mode == null || planned == null) {
             throw new BusinessException(ErrorKey.INVALID_REQUEST, "mode and plannedMinutes cannot be cleared");
         }
-        boolean goalChanged = apply(user, block, mode, planned, source, pageId, requireQuiz, note);
+        boolean goalChanged = apply(user, facts(user.getId()), block, mode, planned, source, pageId, requireQuiz, note);
 
         Instant now = Instant.now();
         cycle.setUpdatedAt(now);
@@ -386,20 +399,22 @@ public class StudyCycleService {
     }
 
     /**
-     * What a day held for the briefing's recap: minutes studied on the topics of the active cycles
-     * (pomodoros and logged sessions, the same sum as today's card) and concepts understood.
+     * What a day held for the briefing's recap: minutes studied inside the subjects of the active
+     * cycles (pomodoros and logged sessions, the same sum as today's card) and concepts understood.
      */
     @Transactional(readOnly = true)
     public DayRecap recap(User user, LocalDate date) {
         List<StudyCycle> cycles = cycleRepository.findActive(user.getId());
         if (cycles.isEmpty()) return new DayRecap(0, 0);
         List<UUID> ids = cycles.stream().map(StudyCycle::getId).toList();
-        Set<UUID> topics = new HashSet<>();
+        Set<UUID> subjects = new HashSet<>();
         topicRepository.findByCycleIdInOrderByPositionAsc(ids).stream()
-                .filter(StudyCycleTopic::isActive).forEach(t -> topics.add(t.getTopicId()));
+                .filter(StudyCycleTopic::isActive).forEach(t -> subjects.add(t.getTopicId()));
         NotebookFacts facts = facts(user.getId());
-        int minutes = studied(facts, topics, focusCycleRepository.findNotebookPomodoros(user.getId(), date, date),
-                sessionRepository.findRange(user.getId(), date, date));
+        int minutes = studiedBySubject(facts, subjects,
+                focusCycleRepository.findNotebookPomodoros(user.getId(), date, date),
+                sessionRepository.findRange(user.getId(), date, date))
+                .values().stream().mapToInt(Integer::intValue).sum();
         ZoneId zone = UserDateResolver.zoneOf(user);
         int understood = (int) lapBlockRepository.findByCycleIdInAndClosedAtGreaterThanEqualAndClosedAtLessThan(ids,
                         date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
@@ -417,27 +432,47 @@ public class StudyCycleService {
     }
 
     /**
-     * Minutes studied on a topic go into the active cycle that holds it, at {@code at}. The walk
-     * is {@link StudyLap#credit}; this finds the cycle, locks it, saves, and closes the lap when
-     * every block is closed (a lap row is written, the lap number moves on, and the overflow of
-     * the session that closed it stays in the closed lap).
+     * Minutes studied on a page go into the active cycle whose subject the page belongs to, at
+     * {@code at}: the nearest subject on the page's home chain, the page itself included. A page
+     * linked onto a subject's board from somewhere else counts under its home, never under the
+     * board that shows it. The walk is {@link StudyLap#credit}; this finds the cycle, locks it,
+     * saves, and closes the lap when every block is closed (a lap row is written, the lap number
+     * moves on, and the overflow of the session that closed it stays in the closed lap).
      *
-     * @return null when no active cycle holds the topic, or the topic has no block in it
+     * @param pageId the page studied: a subject, or any page below one
+     * @return null when no active subject holds the page, or the subject has no block
      */
     @Transactional
-    public CreditOutcome credit(User user, UUID topicId, int minutes, Instant at) {
-        StudyCycleTopic holder = topicRepository.findByTopicIdAndActiveTrue(topicId).orElse(null);
-        if (holder == null) return null;
+    public CreditOutcome credit(User user, UUID pageId, int minutes, Instant at) {
+        NotebookFacts facts = facts(user.getId());
+        StudyCycleTopic holder = holderOf(user, pageId, facts);
+        return holder == null ? null : credit(user, holder, minutes, at, facts);
+    }
+
+    private CreditOutcome credit(User user, StudyCycleTopic holder, int minutes, Instant at, NotebookFacts facts) {
         StudyCycle cycle = cycleRepository.lockById(holder.getCycleId()).orElse(null);
         if (cycle == null || cycle.archived() || !cycle.getUser().getId().equals(user.getId())) return null;
 
         StudyLap lap = currentLapOf(cycle);
-        StudyLap.Credit credit = lap.credit(topicId, minutes, at, facts(user.getId()));
+        StudyLap.Credit credit = lap.credit(holder.getTopicId(), minutes, at, facts);
         if (credit == null) return null;
         int lapNumber = cycle.getLapNumber();
         lapBlockRepository.saveAll(lap.created());
         closeLapIfComplete(cycle, lap, at);
         return new CreditOutcome(cycle.getId(), cycle.getName(), lapNumber, credit);
+    }
+
+    /**
+     * The active subject row a page belongs to, or null. A user with no active subject costs one
+     * query and no walk.
+     */
+    private StudyCycleTopic holderOf(User user, UUID pageId, NotebookFacts facts) {
+        if (pageId == null) return null;
+        Map<UUID, StudyCycleTopic> held = new HashMap<>();
+        topicRepository.findActiveByUserId(user.getId()).forEach(t -> held.put(t.getTopicId(), t));
+        if (held.isEmpty()) return null;
+        UUID subject = facts.home().nearest(pageId, held.keySet());
+        return subject == null ? null : held.get(subject);
     }
 
     /**
@@ -485,11 +520,19 @@ public class StudyCycleService {
      * A manual session. Credited now, into the current lap, whatever {@code studiedOn} says: the
      * date only places it in the history. The date must be the owner's today or one of the 30
      * days before it.
+     *
+     * <p>The session names a subject and, optionally, a page inside it. The minutes go where a
+     * pomodoro on that page would send them (the most specific page named decides, see
+     * {@link #credit}). The row then names the subject they went to, with the page named below it
+     * kept as the page, so the assistant saying "45 minutes of Testes" for a page inside the
+     * subject "Implementação" lands on Implementação, and a delete takes the minutes back from the
+     * same blocks. A session that lands in no subject keeps what was named, for the history.
      */
     @Transactional
     public SessionResponseDTO logSession(User user, SessionRequestDTO request) {
-        NotebookPage topic = ownership.topic(user.getId(), request.topicId());
-        UUID pageId = request.pageId() == null ? null : pageOfTopic(user, request.pageId(), topic.getId());
+        NotebookPage named = ownership.page(user.getId(), request.topicId());
+        NotebookFacts facts = facts(user.getId());
+        UUID pageId = request.pageId() == null ? null : pageInSubject(user, facts, request.pageId(), named.getId());
         LocalDate today = UserDateResolver.today(user);
         if (request.studiedOn().isAfter(today) || request.studiedOn().isBefore(today.minusDays(SESSION_DAYS_BACK))) {
             throw new BusinessException(ErrorKey.STUDY_SESSION_DATE,
@@ -497,12 +540,15 @@ public class StudyCycleService {
         }
 
         Instant now = Instant.now();
-        CreditOutcome outcome = credit(user, topic.getId(), request.minutes(), now);
+        StudyCycleTopic holder = holderOf(user, pageId != null ? pageId : named.getId(), facts);
+        CreditOutcome outcome = holder == null ? null : credit(user, holder, request.minutes(), now, facts);
+        UUID subject = holder == null ? named.getId() : holder.getTopicId();
+        UUID studied = pageId != null ? pageId : subject.equals(named.getId()) ? null : named.getId();
 
         StudySession session = new StudySession();
         session.setUser(user);
-        session.setTopicId(topic.getId());
-        session.setPageId(pageId);
+        session.setTopicId(subject);
+        session.setPageId(studied);
         session.setMinutes(request.minutes());
         session.setStudiedOn(request.studiedOn());
         session.setNote(note(request.note()));
@@ -672,12 +718,12 @@ public class StudyCycleService {
     /**
      * Writes a block's settings, normalised: GOAL defaults to NEXT; NEXT carries no page; PAGE
      * needs one; TIME carries no source and no quiz, and may keep a page as a hint. Every page must
-     * be the caller's and belong to the block's topic.
+     * be the caller's and be the block's subject or a page below it.
      *
      * @return whether what the block aims at changed (mode, source or page)
      */
-    private boolean apply(User user, StudyCycleBlock block, BlockMode mode, int planned, GoalSource source,
-            UUID pageId, boolean requireQuiz, String note) {
+    private boolean apply(User user, NotebookFacts facts, StudyCycleBlock block, BlockMode mode, int planned,
+            GoalSource source, UUID pageId, boolean requireQuiz, String note) {
         if (planned < StudyCycleBlock.MIN_MINUTES || planned > StudyCycleBlock.MAX_MINUTES) {
             throw new BusinessException(ErrorKey.INVALID_REQUEST, "plannedMinutes is 5..600");
         }
@@ -694,7 +740,7 @@ public class StudyCycleService {
             newQuiz = requireQuiz;
         }
         if (newPage != null) {
-            pageOfTopic(user, newPage, block.getTopicId());
+            pageInSubject(user, facts, newPage, block.getTopicId());
         }
         boolean changed = block.getMode() != mode || block.getGoalSource() != newSource
                 || !Objects.equals(block.getPageId(), newPage);
@@ -707,18 +753,35 @@ public class StudyCycleService {
         return changed;
     }
 
-    /** A page of the caller's, in the given topic (the topic itself allowed). */
-    private UUID pageOfTopic(User user, UUID pageId, UUID topicId) {
+    /**
+     * A page of the caller's that is the subject or lives below it in the home tree. The same
+     * topic is not enough any more: with "Implementação" as the subject, a page of its sibling
+     * "Produto" is somebody else's block, and a pomodoro on it would never credit this one.
+     */
+    private UUID pageInSubject(User user, NotebookFacts facts, UUID pageId, UUID subjectId) {
         NotebookPage page = ownership.page(user.getId(), pageId);
-        if (!topicId.equals(page.rootId())) {
-            throw new BusinessException(ErrorKey.INVALID_REQUEST, "The page is not in that topic");
+        if (!facts.home().within(page.getId(), subjectId)) {
+            throw new BusinessException(ErrorKey.INVALID_REQUEST, "The page is not inside that subject");
         }
         return page.getId();
     }
 
+    /** See {@link StudyCycleRepository#lockSubjects}. Released when the transaction ends. */
+    private void lockSubjects(User user) {
+        cycleRepository.lockSubjects("study-cycle-subjects:" + user.getId());
+    }
+
     /**
-     * Every topic is a TOPIC page of the caller's, listed once, and in no other active cycle. The
-     * refusal for a taken topic names the cycle that holds it.
+     * Every subject is a page of the caller's (a topic or any page inside one), listed once, and
+     * none overlaps another: the same page, one inside the other, or the other way round, on the
+     * home chain. Inside this request that is STUDY_CYCLE_TOPIC_OVERLAP; against a subject another
+     * active cycle holds it is STUDY_CYCLE_TOPIC_TAKEN, naming that cycle and that subject.
+     *
+     * <p>Why it matters: a pomodoro credits the one subject its page belongs to. With "Software
+     * Engineer" in one cycle and "Implementação" (inside it) in another, a page of Implementação
+     * would belong to both. The partial unique index only knows the same page twice, so ancestry
+     * is checked here, under {@link #lockSubjects} (the caller takes it) so the subjects read here
+     * cannot change before this transaction commits.
      */
     private void checkTopics(User user, List<CycleTopicDTO> topics, UUID cycleId) {
         if (topics.isEmpty()) {
@@ -739,24 +802,43 @@ public class StudyCycleService {
             if (!page.getUser().getId().equals(user.getId())) {
                 throw new BusinessException(ErrorKey.NOTEBOOK_PAGE_NOT_OWNED, "Notebook page does not belong to the user");
             }
-            if (page.getKind() != NotebookPageKind.TOPIC) {
-                throw new BusinessException(ErrorKey.NOTEBOOK_TOPIC_REQUIRED, "Expected a topic");
+        }
+
+        HomeTree home = facts(user.getId()).home();
+        Map<UUID, List<UUID>> chains = new LinkedHashMap<>();
+        ids.forEach(id -> chains.put(id, home.chain(id)));
+        for (UUID id : ids) {
+            for (UUID above : chains.get(id)) {
+                if (above.equals(id) || !chains.containsKey(above)) continue;
+                Map<String, String> details = new LinkedHashMap<>();
+                details.put("ancestorId", above.toString());
+                details.put("descendantId", id.toString());
+                throw new BusinessException(ErrorKey.STUDY_CYCLE_TOPIC_OVERLAP,
+                        "One subject is a page inside another: pick the area or the whole, not both", details);
             }
         }
-        for (StudyCycleTopic taken : topicRepository.findByTopicIdInAndActiveTrue(ids)) {
-            if (taken.getCycleId().equals(cycleId)) continue;
-            StudyCycle other = cycleRepository.findById(taken.getCycleId()).orElse(null);
-            Map<String, String> details = new LinkedHashMap<>();
-            details.put("topicId", taken.getTopicId().toString());
-            details.put("cycleId", taken.getCycleId().toString());
-            details.put("cycleName", other == null ? "" : other.getName());
-            throw new BusinessException(ErrorKey.STUDY_CYCLE_TOPIC_TAKEN,
-                    "The topic is already in the study cycle \"" + details.get("cycleName") + "\"", details);
+
+        for (StudyCycleTopic held : topicRepository.findActiveByUserId(user.getId())) {
+            if (held.getCycleId().equals(cycleId)) continue;
+            for (UUID id : ids) {
+                if (!chains.get(id).contains(held.getTopicId()) && !home.within(held.getTopicId(), id)) continue;
+                StudyCycle other = cycleRepository.findById(held.getCycleId()).orElse(null);
+                Map<String, String> details = new LinkedHashMap<>();
+                details.put("topicId", id.toString());
+                details.put("cycleId", held.getCycleId().toString());
+                details.put("cycleName", other == null ? "" : other.getName());
+                details.put("takenTopicId", held.getTopicId().toString());
+                details.put("takenTopicTitle", pageRepository.findById(held.getTopicId())
+                        .map(NotebookPage::getTitle).orElse(""));
+                throw new BusinessException(ErrorKey.STUDY_CYCLE_TOPIC_TAKEN,
+                        "The subject overlaps \"" + details.get("takenTopicTitle") + "\", which the study cycle \""
+                                + details.get("cycleName") + "\" holds", details);
+            }
         }
     }
 
     /**
-     * Each topic once, with its numbers in range. The request DTOs carry the same bounds as
+     * Each subject once, with its numbers in range. The request DTOs carry the same bounds as
      * annotations; they are checked again here because the assistant builds its requests without
      * going through a controller, and the database's CHECKs would only answer with a conflict.
      */
@@ -924,8 +1006,8 @@ public class StudyCycleService {
     }
 
     /**
-     * Fixes the concept of the first open GOAL block of each topic, when the roadmap has one. See
-     * the class comment for why a read does this.
+     * Fixes the concept of the first open GOAL block of each subject, when the roadmap has one.
+     * See the class comment for why a read does this.
      */
     private void resolveHeads(StudyLap lap, NotebookFacts facts) {
         Set<UUID> seen = new HashSet<>();
@@ -956,12 +1038,12 @@ public class StudyCycleService {
         List<CycleTopicViewDTO> topics = loaded.topics(cycle.getId()).stream()
                 .filter(t -> t.isActive() || cycle.archived())
                 .map(t -> new CycleTopicViewDTO(t.getTopicId(), t.getImportance(), t.getMastery(),
-                        t.getMinutesOverride(), facts.ref(t.getTopicId())))
+                        t.getMinutesOverride(), facts.subject(t.getTopicId())))
                 .toList();
         List<StudyBlockDTO> blocks = lap.blocks().stream().map(block -> {
             StudyCycleLapBlock row = lap.rowOrNull(block);
             Shown shown = shown(block, lap, facts, false);
-            return new StudyBlockDTO(block.getId(), block.getPosition(), facts.ref(block.getTopicId()), block.getMode(),
+            return new StudyBlockDTO(block.getId(), block.getPosition(), facts.subject(block.getTopicId()), block.getMode(),
                     block.getPlannedMinutes(), block.getGoalSource(), facts.ref(block.getPageId()), block.isRequireQuiz(),
                     block.getNote(), new BlockProgressDTO(cycle.getLapNumber(), lap.minutes(block), lap.state(block),
                             row == null ? null : row.getClosedAt(), shown.target(), shown.preview(), shown.quizPassed()));
@@ -1029,8 +1111,14 @@ public class StudyCycleService {
         lapBlockRepository.findByCycleIdInAndClosedAtGreaterThanEqualAndClosedAtLessThan(ids,
                         date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
                 .forEach(r -> closedToday.computeIfAbsent(r.getCycleId(), k -> new ArrayList<>()).add(r));
-        List<FocusCycle> pomodoros = focusCycleRepository.findNotebookPomodoros(user.getId(), date, date);
-        List<StudySession> sessions = sessionRepository.findRange(user.getId(), date, date);
+        // Studied today, per subject, matched against every active cycle's subjects at once: a
+        // page counts in the one cycle whose subject is nearest above it, where its minutes went.
+        Set<UUID> subjects = new HashSet<>();
+        cycles.forEach(c -> loaded.topics(c.getId()).stream().filter(StudyCycleTopic::isActive)
+                .forEach(t -> subjects.add(t.getTopicId())));
+        Map<UUID, Integer> studiedBySubject = studiedBySubject(facts, subjects,
+                focusCycleRepository.findNotebookPomodoros(user.getId(), date, date),
+                sessionRepository.findRange(user.getId(), date, date));
 
         record Built(StudyCycle cycle, LocalTime start, StudyTodayCycleDTO dto) {
         }
@@ -1050,9 +1138,8 @@ public class StudyCycleService {
                 continue;
             }
             LocalTime start = day.getStartTime();
-            Set<UUID> topics = new HashSet<>();
-            loaded.topics(cycle.getId()).stream().filter(StudyCycleTopic::isActive).forEach(t -> topics.add(t.getTopicId()));
-            int studied = studied(facts, topics, pomodoros, sessions);
+            int studied = loaded.topics(cycle.getId()).stream().filter(StudyCycleTopic::isActive)
+                    .mapToInt(t -> studiedBySubject.getOrDefault(t.getTopicId(), 0)).sum();
 
             Map<UUID, StudyCycleBlock> blocksById = new HashMap<>();
             lap.blocks().forEach(b -> blocksById.put(b.getId(), b));
@@ -1092,23 +1179,34 @@ public class StudyCycleService {
     private static TodayEntryDTO entry(StudyCycleBlock block, NotebookFacts facts, LocalDate day, int credited,
             int minutesToday, LapBlockState state, boolean doneToday, boolean nextLap, String start, String end,
             Shown shown) {
-        return new TodayEntryDTO(block.getId(), block.getPosition(), facts.ref(block.getTopicId()), block.getMode(),
+        return new TodayEntryDTO(block.getId(), block.getPosition(), facts.subject(block.getTopicId()), block.getMode(),
                 block.getGoalSource(), facts.ref(block.getPageId()), block.getNote(), block.isRequireQuiz(),
                 block.getPlannedMinutes(), credited, minutesToday, state, doneToday, nextLap, start, end,
                 shown.target(), shown.preview(), shown.quizPassed(), facts.cardsDue(block.getTopicId(), day));
     }
 
-    /** Pomodoros on pages of these topics plus sessions on them. */
-    private static int studied(NotebookFacts facts, Set<UUID> topics, List<FocusCycle> pomodoros,
+    /**
+     * Minutes per subject: pomodoros on pages inside it plus sessions on it, each counted under the
+     * nearest of {@code subjects} on its home chain, which is where {@link #credit} sent them. A
+     * session is placed by its page when it names one, else by its subject.
+     */
+    static Map<UUID, Integer> studiedBySubject(NotebookFacts facts, Set<UUID> subjects, List<FocusCycle> pomodoros,
             List<StudySession> sessions) {
-        int minutes = 0;
+        Map<UUID, Integer> minutes = new HashMap<>();
+        if (subjects.isEmpty()) return minutes;
         for (FocusCycle cycle : pomodoros) {
-            UUID root = facts.rootOf(cycle.getNotebookPageId());
-            if (root != null && topics.contains(root)) minutes += cycle.getMinutes();
+            UUID subject = facts.home().nearest(cycle.getNotebookPageId(), subjects);
+            if (subject != null) minutes.merge(subject, cycle.getMinutes(), Integer::sum);
         }
         for (StudySession session : sessions) {
-            if (topics.contains(session.getTopicId())) minutes += session.getMinutes();
+            UUID subject = facts.home().nearest(sessionPage(session), subjects);
+            if (subject != null) minutes.merge(subject, session.getMinutes(), Integer::sum);
         }
         return minutes;
+    }
+
+    /** The most specific page a session names: its page, else its subject. */
+    static UUID sessionPage(StudySession session) {
+        return session.getPageId() != null ? session.getPageId() : session.getTopicId();
     }
 }

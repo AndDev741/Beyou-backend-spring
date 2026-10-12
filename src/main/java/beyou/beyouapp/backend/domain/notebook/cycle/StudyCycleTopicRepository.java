@@ -2,7 +2,6 @@ package beyou.beyouapp.backend.domain.notebook.cycle;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,10 +16,14 @@ public interface StudyCycleTopicRepository extends JpaRepository<StudyCycleTopic
 
     List<StudyCycleTopic> findByCycleIdInOrderByPositionAsc(Collection<UUID> cycleIds);
 
-    /** The active row holding a topic, if any. At most one, by the partial unique index. */
-    Optional<StudyCycleTopic> findByTopicIdAndActiveTrue(UUID topicId);
-
-    List<StudyCycleTopic> findByTopicIdInAndActiveTrue(Collection<UUID> topicIds);
+    /**
+     * Every subject the user's active cycles hold now, across all of them. What a page is matched
+     * against when it is credited (the nearest one on its home chain wins), and what a new subject
+     * must not overlap.
+     */
+    @Query("select t from StudyCycleTopic t, StudyCycle c where c.id = t.cycleId and c.user.id = :userId "
+            + "and c.archivedAt is null and t.active = true")
+    List<StudyCycleTopic> findActiveByUserId(@Param("userId") UUID userId);
 
     /** For the data export. */
     @Query("select t from StudyCycleTopic t, StudyCycle c where c.id = t.cycleId and c.user.id = :userId "

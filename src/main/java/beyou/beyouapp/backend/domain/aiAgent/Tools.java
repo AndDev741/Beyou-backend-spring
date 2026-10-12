@@ -1040,10 +1040,12 @@ public class Tools {
         return plan;
     }
 
-    // Study cycles. The topic in each is a notebook topic by exact title or id; StudyCycleAssistant
-    // refuses a name that matches nothing or several, the way the board tools do.
+    // Study cycles. A subject is a notebook topic or any page inside one, by exact title or id;
+    // StudyCycleAssistant refuses a name that matches nothing, or several pages (naming the topic
+    // each lives in), the way the board tools do.
     @Tool(description = "Today's study cycle plan: per cycle with minutes today, the blocks that fit the day in "
-            + "order (topic, TIME or GOAL, the concept to understand, minutes done of planned, clock times when "
+            + "order (subject as \"Topic › Area\" when it lives inside a topic, TIME or GOAL, the concept to understand, "
+            + "minutes done of planned, clock times when "
             + "the day has a start time) and the blocks already closed today. Read only")
     Map<String, Object> getStudyToday(ToolContext toolContext) {
         User user = loadUser(toolContext);
@@ -1059,15 +1061,17 @@ public class Tools {
         return studyCycleAssistant.list(user);
     }
 
-    @Tool(description = "Create a study cycle (ciclo de estudos): a queue of study blocks over notebook topics, "
-            + "laid out by the same planner as the editor from each topic's importance and mastery and the week's "
-            + "minutes. A topic already in another active cycle is refused. Confirm the topics and the week first")
+    @Tool(description = "Create a study cycle (ciclo de estudos): a queue of study blocks over subjects, each a "
+            + "notebook topic or an area (page) inside one, laid out by the same planner as the editor from each "
+            + "subject's importance and mastery and the week's minutes. Subjects never overlap: one inside another, "
+            + "here or in another active cycle, is refused. Confirm the subjects and the week first")
     Map<String, Object> createStudyCycle(
             @ToolParam(description = "Cycle name, max 80 characters") String name,
             @ToolParam(description = "Study minutes per weekday, 0 to 720 in steps of 5, with an optional startTime "
                     + "HH:mm. Days left out are rest days") List<StudyCycleAssistant.DayInput> days,
-            @ToolParam(description = "1 to 30 notebook topics, by exact title or id, each with importance and mastery "
-                    + "1 to 5 (more importance and less mastery get more minutes)") List<StudyCycleAssistant.TopicInput> topics,
+            @ToolParam(description = "1 to 30 subjects (a topic or a page inside one), by exact title or id, each "
+                    + "with importance and mastery 1 to 5 (more importance and less mastery get more minutes)")
+            List<StudyCycleAssistant.TopicInput> topics,
             @ToolParam(description = "Optional: longest block in minutes, 15 to 240. Defaults to 90", required = false)
             Integer maxBlockMinutes,
             @ToolParam(description = "Optional: GOAL (each block aims at understanding the topic's next roadmap page) "
@@ -1078,10 +1082,12 @@ public class Tools {
         return studyCycleAssistant.create(user, name, days, topics, maxBlockMinutes, defaultMode);
     }
 
-    @Tool(description = "Log study done outside the app on a notebook topic (a class, a book, exercises on paper). "
-            + "The minutes go into the topic's study cycle at once. Only for study the user said they did")
+    @Tool(description = "Log study done outside the app on a notebook topic or a page inside one (a class, a book, "
+            + "exercises on paper). The minutes go at once into the study cycle subject it is, or lives inside. Only "
+            + "for study the user said they did")
     Map<String, Object> logStudySession(
-            @ToolParam(description = "The notebook topic, by exact title or id") String topic,
+            @ToolParam(description = "The subject studied: a notebook topic or a page inside one, by exact title or id")
+            String topic,
             @ToolParam(description = "Minutes studied, 1 to 600") Integer minutes,
             @ToolParam(description = "Optional: a short note, max 200 characters", required = false) String note,
             @ToolParam(description = "Optional: the day as yyyy-MM-dd, within the last 30 days. Omit for today",

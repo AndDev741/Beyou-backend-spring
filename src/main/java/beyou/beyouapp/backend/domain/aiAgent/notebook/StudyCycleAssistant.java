@@ -33,6 +33,7 @@ import beyou.beyouapp.backend.domain.notebook.cycle.dto.StudyCycleDTO;
 import beyou.beyouapp.backend.domain.notebook.cycle.dto.StudyCycleSummaryDTO;
 import beyou.beyouapp.backend.domain.notebook.cycle.dto.StudyTodayCycleDTO;
 import beyou.beyouapp.backend.domain.notebook.cycle.dto.StudyTodayDTO;
+import beyou.beyouapp.backend.domain.notebook.cycle.dto.SubjectRefDTO;
 import beyou.beyouapp.backend.domain.notebook.cycle.dto.TodayEntryDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.user.User;
@@ -43,10 +44,14 @@ import lombok.RequiredArgsConstructor;
  * "what do I study today", "make me a cycle with Constitutional Law and Portuguese, three hours
  * on weekdays", "log 45 minutes of Portuguese".
  *
- * <p>Everything goes through {@link StudyCycleService}, so the planner, the topic rules and the
+ * <p>Everything goes through {@link StudyCycleService}, so the planner, the subject rules and the
  * credit walk are the ones the screens use. What lives here is the translation from names and
- * loose values to ids and DTOs, and the refusals that keep a model from guessing: a topic name
- * that matches nothing lists the topics there are, and one that matches two asks which.
+ * loose values to ids and DTOs, and the refusals that keep a model from guessing: a subject name
+ * that matches nothing lists the topics there are, and one that matches two pages names each
+ * with the topic it lives in and asks which.
+ *
+ * <p>A subject is any page, a topic or an area inside one, so names are matched across every
+ * page. Two areas called "Fundamentos" in two topics are the common case, not an edge one.
  *
  * <p>Lenient where a near miss is obviously meant (weekdays in any case or in Portuguese, "7:00"
  * for 07:00, minutes rounded to the 5-minute steps the week uses), strict where a guess would
@@ -68,7 +73,7 @@ public class StudyCycleAssistant {
     public record DayInput(String weekday, Integer minutes, String startTime) {
     }
 
-    /** A topic for {@code createStudyCycle}, by title or id. */
+    /** A subject for {@code createStudyCycle}: a topic or a page inside one, by title or id. */
     public record TopicInput(String topic, Integer importance, Integer mastery) {
     }
 
@@ -123,12 +128,13 @@ public class StudyCycleAssistant {
     public Map<String, Object> create(User user, String name, List<DayInput> days, List<TopicInput> topics,
             Integer maxBlockMinutes, String defaultMode) {
         if (topics == null || topics.isEmpty()) {
-            throw new IllegalArgumentException("Send at least one topic: its title as listStudyTopics shows it, or its id");
+            throw new IllegalArgumentException("Send at least one subject: a topic or a page inside one, by its exact "
+                    + "title or its id");
         }
         List<CycleTopicDTO> topicDtos = new ArrayList<>();
         for (TopicInput topic : topics) {
             if (topic == null) continue;
-            NotebookPage page = topic(user, topic.topic());
+            NotebookPage page = subject(user, topic.topic());
             topicDtos.add(new CycleTopicDTO(page.getId(), scale(topic.importance(), "importance"),
                     scale(topic.mastery(), "mastery"), null));
         }
@@ -144,15 +150,18 @@ public class StudyCycleAssistant {
         out.put("success", "Created the study cycle \"" + cycle.name() + "\" with " + cycle.blocks().size()
                 + " blocks; one lap is " + cycle.lap().plannedMinutes() + " minutes");
         out.put("blocks", cycle.blocks().stream()
-                .map(b -> b.position() + ". " + b.topic().title() + " " + b.plannedMinutes() + " min "
+                .map(b -> b.position() + ". " + label(b.topic()) + " " + b.plannedMinutes() + " min "
                         + (b.mode() == BlockMode.GOAL ? "(understand)" : "(time)"))
                 .toList());
         return out;
     }
 
-    /** A manual session on a topic, credited to the cycle that holds it. */
+    /**
+     * A manual session on a subject, credited to the cycle that holds it. A page inside a subject
+     * works too: the minutes go to the subject it lives in, as a pomodoro on it would.
+     */
     public Map<String, Object> logSession(User user, String topic, Integer minutes, String note, String date) {
-        NotebookPage page = topic(user, topic);
+        NotebookPage page = subject(user, topic);
         if (minutes == null || minutes < 1 || minutes > 600) {
             throw new IllegalArgumentException("minutes is a whole number from 1 to 600");
         }
@@ -162,7 +171,7 @@ public class StudyCycleAssistant {
         Map<String, Object> out = new LinkedHashMap<>();
         if (response.credited() == null) {
             out.put("success", "Logged " + minutes + " minutes of \"" + page.getTitle()
-                    + "\". The topic is in no active study cycle, so no block moved");
+                    + "\". No active study cycle holds it or a page above it, so no block moved");
         } else {
             SessionResponseDTO.Credited c = response.credited();
             out.put("success", "Logged " + minutes + " minutes of \"" + page.getTitle() + "\" in \"" + c.cycleName()
@@ -174,28 +183,52 @@ public class StudyCycleAssistant {
 
     // ------------------------------------------------------------- resolving
 
-    /** A notebook topic by id or exact title, in any case. Refuses rather than guesses. */
-    NotebookPage topic(User user, String ref) {
+    /**
+     * A subject by id or exact title, in any case: a topic or any page inside one. Refuses rather
+     * than guesses. An ambiguous title lists each candidate with the topic it lives in, which is
+     * what tells "Fundamentos" in one topic from "Fundamentos" in another.
+     */
+    NotebookPage subject(User user, String ref) {
         if (ref == null || ref.isBlank()) {
-            throw new IllegalArgumentException("Say which topic: its title as listStudyTopics shows it, or its id");
+            throw new IllegalArgumentException("Say which subject: a topic or a page inside one, by its exact title "
+                    + "or its id");
         }
-        List<NotebookPage> topics = pageRepository.findByUserIdAndKindOrderByCreatedAtAsc(user.getId(), NotebookPageKind.TOPIC);
         Matcher id = UUID_PATTERN.matcher(ref);
         if (id.find()) {
             UUID wanted = UUID.fromString(id.group());
-            return topics.stream().filter(t -> t.getId().equals(wanted)).findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("No notebook topic has the id " + wanted
-                            + ". The topics are " + quoted(topics)));
+            return pageRepository.findById(wanted)
+                    .filter(p -> p.getUser() != null && user.getId().equals(p.getUser().getId()))
+                    .orElseThrow(() -> new IllegalArgumentException("No notebook page has the id " + wanted
+                            + ". " + topicsLine(user)));
         }
         String title = ref.strip();
-        List<NotebookPage> matches = topics.stream().filter(t -> t.getTitle().equalsIgnoreCase(title)).toList();
+        List<NotebookPage> matches = pageRepository.findByUserIdAndTitleIgnoreCase(user.getId(), title);
         if (matches.size() == 1) return matches.get(0);
         if (matches.size() > 1) {
-            throw new IllegalArgumentException("Several topics are titled \"" + title + "\". Ask which one, or use its id: "
-                    + matches.stream().map(t -> t.getId().toString()).collect(Collectors.joining(", ")));
+            Map<UUID, String> roots = pageRepository.findByIdIn(matches.stream().map(NotebookPage::rootId).distinct().toList())
+                    .stream().collect(Collectors.toMap(NotebookPage::getId, NotebookPage::getTitle));
+            throw new IllegalArgumentException("Several pages are titled \"" + title + "\": "
+                    + matches.stream().map(p -> candidate(p, roots)).collect(Collectors.joining("; "))
+                    + ". Ask which one, or use its id");
         }
-        throw new IllegalArgumentException("No notebook topic is titled \"" + title + "\". "
-                + (topics.isEmpty() ? "The user has no topics yet" : "The topics are " + quoted(topics)));
+        throw new IllegalArgumentException("No notebook page is titled \"" + title + "\". " + topicsLine(user));
+    }
+
+    private static String candidate(NotebookPage page, Map<UUID, String> roots) {
+        String where = page.isTopic() ? "a topic" : "in \"" + roots.getOrDefault(page.rootId(), "?") + "\"";
+        return "\"" + page.getTitle() + "\" (" + where + ", id " + page.getId() + ")";
+    }
+
+    private String topicsLine(User user) {
+        List<NotebookPage> topics = pageRepository.findByUserIdAndKindOrderByCreatedAtAsc(user.getId(), NotebookPageKind.TOPIC);
+        return topics.isEmpty() ? "The user has no topics yet"
+                : "The topics are " + quoted(topics) + "; a page inside one works too (getStudyBoard lists a board's pages)";
+    }
+
+    /** "Root › Subject" for a subject inside a topic, the title alone for a topic. */
+    private static String label(SubjectRefDTO subject) {
+        if (subject == null) return null;
+        return subject.rootTitle() == null ? subject.title() : subject.rootTitle() + " › " + subject.title();
     }
 
     /** Seven days; a day left out rests. Minutes snap to the 5-minute steps the week uses. */
@@ -262,7 +295,7 @@ public class StudyCycleAssistant {
     private static Map<String, Object> entry(TodayEntryDTO entry) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("block", entry.position());
-        row.put("topic", entry.topic() == null ? null : entry.topic().title());
+        row.put("topic", label(entry.topic()));
         row.put("mode", entry.mode());
         if (entry.target() != null) {
             row.put(entry.targetPreview() ? "conceptIfStillOpen" : "concept", entry.target().title());

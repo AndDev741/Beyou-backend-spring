@@ -16,26 +16,26 @@ public sealed interface HistoryEntryDTO permits HistoryEntryDTO.Focus, HistoryEn
 
     Instant at();
 
-    /** A finished pomodoro run on a page of one of the cycle's topics. */
-    record Focus(String kind, Instant at, PageRefDTO topic, PageRefDTO page, int minutes) implements HistoryEntryDTO {
-        public static Focus of(Instant at, PageRefDTO topic, PageRefDTO page, int minutes) {
+    /** A finished pomodoro run on a page inside one of the cycle's subjects. */
+    record Focus(String kind, Instant at, SubjectRefDTO topic, PageRefDTO page, int minutes) implements HistoryEntryDTO {
+        public static Focus of(Instant at, SubjectRefDTO topic, PageRefDTO page, int minutes) {
             return new Focus("FOCUS", at, topic, page, minutes);
         }
     }
 
     /** A logged session. Every session can be deleted by its owner. */
-    record Manual(String kind, Instant at, UUID sessionId, PageRefDTO topic, PageRefDTO page, int minutes,
+    record Manual(String kind, Instant at, UUID sessionId, SubjectRefDTO topic, PageRefDTO page, int minutes,
             String note) implements HistoryEntryDTO {
-        public static Manual of(Instant at, UUID sessionId, PageRefDTO topic, PageRefDTO page, int minutes,
+        public static Manual of(Instant at, UUID sessionId, SubjectRefDTO topic, PageRefDTO page, int minutes,
                 String note) {
             return new Manual("MANUAL", at, sessionId, topic, page, minutes, note);
         }
     }
 
     /** A GOAL block closed as understood: the concept and the minutes it took. */
-    record Understood(String kind, Instant at, PageRefDTO topic, PageRefDTO page, int minutes)
+    record Understood(String kind, Instant at, SubjectRefDTO topic, PageRefDTO page, int minutes)
             implements HistoryEntryDTO {
-        public static Understood of(Instant at, PageRefDTO topic, PageRefDTO page, int minutes) {
+        public static Understood of(Instant at, SubjectRefDTO topic, PageRefDTO page, int minutes) {
             return new Understood("UNDERSTOOD", at, topic, page, minutes);
         }
     }

@@ -17,9 +17,9 @@ import beyou.beyouapp.backend.domain.notebook.dto.PageRefDTO;
  * @param credited     minutes the block holds in its lap
  * @param minutesToday its share of what is left of today; 0 for a block done today
  * @param start        "HH:mm" when the day has a start time, else null. Null for blocks done today
- * @param cardsDue     flashcards due in the block's topic
+ * @param cardsDue     flashcards due on the pages of the block's subject (its home subtree)
  */
-public record TodayEntryDTO(UUID blockId, int position, PageRefDTO topic, BlockMode mode, GoalSource goalSource,
+public record TodayEntryDTO(UUID blockId, int position, SubjectRefDTO topic, BlockMode mode, GoalSource goalSource,
         PageRefDTO page, String note, boolean requireQuiz, int plannedMinutes, int credited, int minutesToday,
         LapBlockState state, boolean doneToday, boolean nextLap, String start, String end, TargetDTO target,
         boolean targetPreview, Boolean quizPassed, int cardsDue) {

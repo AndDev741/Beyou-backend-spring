@@ -27,11 +27,14 @@ import beyou.beyouapp.backend.domain.focus.dto.RecordCycleRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService;
 import beyou.beyouapp.backend.domain.notebook.board.dto.CreateNodeRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.card.NotebookCardService;
+import beyou.beyouapp.backend.domain.notebook.card.dto.CreateCardRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.cycle.BlockMode;
 import beyou.beyouapp.backend.domain.notebook.cycle.GoalSource;
 import beyou.beyouapp.backend.domain.notebook.cycle.LapBlockState;
 import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleHistoryService;
 import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleService;
+import beyou.beyouapp.backend.domain.notebook.cycle.StudySessionRepository;
 import beyou.beyouapp.backend.domain.notebook.cycle.dto.BlockPatchDTO;
 import beyou.beyouapp.backend.domain.notebook.cycle.dto.BlockRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.cycle.dto.CycleConfigRequestDTO;
@@ -61,7 +64,7 @@ import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserRepository;
 
 /**
- * Study cycles against a real Postgres: the rules that cross tables (one active cycle per topic,
+ * Study cycles against a real Postgres: the rules that cross tables (subjects that never overlap,
  * ownership), and the hooks that move a lap from elsewhere in the notebook (a pomodoro, a page
  * marked done, a quiz passed, a session logged and deleted). The arithmetic itself is unit
  * tested in {@code StudyLapTest}; here each test names the wire it guards.
@@ -78,6 +81,8 @@ class StudyCycleServiceIT extends AbstractIntegrationTest {
     @Autowired private FocusService focusService;
     @Autowired private NotebookStudyService studyService;
     @Autowired private NotebookStudyOutputRepository outputRepository;
+    @Autowired private NotebookCardService cardService;
+    @Autowired private StudySessionRepository sessionRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private JdbcTemplate jdbc;
 
@@ -182,14 +187,212 @@ class StudyCycleServiceIT extends AbstractIntegrationTest {
                         e -> assertThat(e.getErrorKey()).isEqualTo(ErrorKey.STUDY_SESSION_NOT_FOUND));
     }
 
-    @Test
-    void aPageCanBeATopicOnlyWhenItIsOne() {
-        UUID topic = topic("Física");
-        UUID page = page(topic, "Cinemática");
+    // ------------------------------------------------------------- subjects
 
-        assertThatThrownBy(() -> cycleService.create(user, config("Física", BlockMode.TIME, 90, 60, topic(page))))
+    /**
+     * A subject can be any page. With "Implementação" (inside "Software Engineer") as the subject,
+     * a pomodoro on a page two levels below it credits its block, and one on the sibling area
+     * "Produto" credits nothing. Today's minutes, the cards due and the history count the same
+     * subtree the credit does, so the card and the queue never disagree.
+     */
+    @Test
+    void aPageInsideATopicIsASubjectAndOnlyItsSubtreeCounts() {
+        UUID root = topic("Software Engineer");
+        UUID produto = node(root, "Produto", 0);
+        UUID implementacao = node(root, "Implementação", 240);
+        UUID testes = node(implementacao, "Testes", 0);
+        UUID mocks = page(testes, "Mocks");
+        UUID roadmap = node(produto, "Roadmap", 0);
+        StudyCycleDTO cycle = cycleService.create(user, config("Senior", BlockMode.TIME, 60, 60,
+                new CycleTopicDTO(implementacao, 3, 3, 60)));
+        assertThat(cycle.topics()).singleElement().satisfies(t -> {
+            assertThat(t.topic().title()).isEqualTo("Implementação");
+            assertThat(t.topic().rootTitle()).isEqualTo("Software Engineer");
+        });
+        card(mocks);
+        card(roadmap);
+
+        focusService.recordCycle(user, pomodoro(mocks, 25, CycleKind.POMODORO));
+        focusService.recordCycle(user, pomodoro(roadmap, 20, CycleKind.POMODORO));
+
+        assertThat(cycleService.get(user, cycle.id()).blocks().get(0).progress().minutes())
+                .as("the page two levels down credits; the sibling area does not").isEqualTo(25);
+        StudyTodayCycleDTO today = cycleService.today(user).cycles().get(0);
+        assertThat(today.studiedMinutes()).isEqualTo(25);
+        assertThat(today.entries()).first().satisfies(e -> assertThat(e.cardsDue()).isEqualTo(1));
+        LocalDate day = LocalDate.now(ZoneOffset.UTC);
+        StudyHistoryDTO.Day history = historyService.history(user, cycle.id(), day, day).days().get(0);
+        assertThat(history.minutes()).isEqualTo(25);
+        assertThat(history.byTopic()).containsExactly(new StudyHistoryDTO.TopicMinutes(implementacao, 25));
+        assertThat(history.entries()).singleElement().isInstanceOfSatisfying(HistoryEntryDTO.Focus.class, f -> {
+            assertThat(f.topic().id()).isEqualTo(implementacao);
+            assertThat(f.topic().rootTitle()).isEqualTo("Software Engineer");
+            assertThat(f.page().id()).isEqualTo(mocks);
+        });
+    }
+
+    /** NEXT reads the subject's own roadmap. The topic's would start with Produto, laid out first. */
+    @Test
+    void aNestedSubjectTakesItsNextConceptFromItsOwnRoadmap() {
+        UUID root = topic("Software Engineer");
+        UUID produto = node(root, "Produto", 0);
+        UUID implementacao = node(root, "Implementação", 240);
+        node(produto, "Discovery", 0);
+        UUID testes = node(implementacao, "Testes", 0);
+        node(implementacao, "Refatoração", 240);
+
+        StudyCycleDTO cycle = cycleService.create(user, config("Senior", BlockMode.GOAL, 60, 60,
+                new CycleTopicDTO(implementacao, 3, 3, 60)));
+
+        assertThat(cycle.blocks().get(0).progress().target().id()).isEqualTo(testes);
+    }
+
+    /** A block's page is the subject or a page below it. The same topic is not enough any more. */
+    @Test
+    void aBlocksPageMustLieInsideItsSubject() {
+        UUID root = topic("Software Engineer");
+        UUID produto = node(root, "Produto", 0);
+        UUID implementacao = node(root, "Implementação", 240);
+        UUID mocks = page(node(implementacao, "Testes", 0), "Mocks");
+        StudyCycleDTO cycle = cycleService.create(user, config("Senior", BlockMode.GOAL, 90, 60, topic(implementacao)));
+        UUID blockId = cycle.blocks().get(0).id();
+
+        assertThatThrownBy(() -> cycleService.patchBlock(user, cycle.id(), blockId, aimAt(produto)))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorKey()).isEqualTo(ErrorKey.NOTEBOOK_TOPIC_REQUIRED));
+                        e -> assertThat(e.getErrorKey()).isEqualTo(ErrorKey.INVALID_REQUEST));
+        assertThat(cycleService.patchBlock(user, cycle.id(), blockId, aimAt(mocks)).blocks().get(0).page().id())
+                .isEqualTo(mocks);
+        assertThat(cycleService.patchBlock(user, cycle.id(), blockId, aimAt(implementacao)).blocks().get(0).page().id())
+                .as("the subject itself is allowed").isEqualTo(implementacao);
+    }
+
+    /**
+     * Subjects never overlap across cycles: one inside another cycle's subject, or one holding it,
+     * is refused and the refusal names both. A sibling area is free, and a cycle's own subjects
+     * never block its own edit.
+     */
+    @Test
+    void aSubjectThatContainsOrSitsInsideAnotherCyclesSubjectIsTaken() {
+        UUID root = topic("Software Engineer");
+        UUID implementacao = node(root, "Implementação", 0);
+        UUID produto = node(root, "Produto", 240);
+        UUID testes = node(implementacao, "Testes", 0);
+        StudyCycleDTO areas = cycleService.create(user, config("Areas", BlockMode.TIME, 90, 60, topic(implementacao)));
+
+        for (UUID overlapping : List.of(root, testes)) {
+            assertThatThrownBy(() -> cycleService.create(user, config("Other", BlockMode.TIME, 90, 60, topic(overlapping))))
+                    .isInstanceOfSatisfying(BusinessException.class, e -> {
+                        assertThat(e.getErrorKey()).isEqualTo(ErrorKey.STUDY_CYCLE_TOPIC_TAKEN);
+                        assertThat(e.getDetails()).containsEntry("topicId", overlapping.toString())
+                                .containsEntry("cycleId", areas.id().toString())
+                                .containsEntry("cycleName", "Areas")
+                                .containsEntry("takenTopicId", implementacao.toString())
+                                .containsEntry("takenTopicTitle", "Implementação");
+                    });
+        }
+
+        StudyCycleDTO product = cycleService.create(user, config("Product", BlockMode.TIME, 90, 60, topic(produto)));
+        StudyCycleDTO narrowed = cycleService.update(user, areas.id(), config("Areas", BlockMode.TIME, 90, 60, topic(testes)));
+        assertThat(narrowed.topics()).extracting(t -> t.topicId()).containsExactly(testes);
+        assertThatThrownBy(() -> cycleService.update(user, areas.id(), config("Areas", BlockMode.TIME, 90, 60, topic(root))))
+                .isInstanceOfSatisfying(BusinessException.class, e -> {
+                    assertThat(e.getErrorKey()).isEqualTo(ErrorKey.STUDY_CYCLE_TOPIC_TAKEN);
+                    assertThat(e.getDetails()).containsEntry("cycleId", product.id().toString())
+                            .containsEntry("takenTopicId", produto.toString());
+                });
+    }
+
+    /** Two subjects of one request where one lives inside the other, whichever comes first. */
+    @Test
+    void twoSubjectsOfOneRequestThatOverlapAreRefused() {
+        UUID root = topic("Software Engineer");
+        UUID implementacao = node(root, "Implementação", 0);
+        UUID testes = node(implementacao, "Testes", 0);
+
+        assertThatThrownBy(() -> cycleService.create(user, config("Mixed", BlockMode.TIME, 90, 60,
+                topic(testes), topic(root))))
+                .isInstanceOfSatisfying(BusinessException.class, e -> {
+                    assertThat(e.getErrorKey()).isEqualTo(ErrorKey.STUDY_CYCLE_TOPIC_OVERLAP);
+                    assertThat(e.getDetails()).containsEntry("ancestorId", root.toString())
+                            .containsEntry("descendantId", testes.toString());
+                });
+        assertThatThrownBy(() -> cycleService.create(user, config("Mixed", BlockMode.TIME, 90, 60,
+                topic(implementacao), topic(testes))))
+                .isInstanceOfSatisfying(BusinessException.class, e -> {
+                    assertThat(e.getErrorKey()).isEqualTo(ErrorKey.STUDY_CYCLE_TOPIC_OVERLAP);
+                    assertThat(e.getDetails()).containsEntry("ancestorId", implementacao.toString())
+                            .containsEntry("descendantId", testes.toString());
+                });
+        assertThat(cycleService.list(user)).isEmpty();
+    }
+
+    @Test
+    void aSessionsPageMustLieInsideItsSubject() {
+        UUID root = topic("Software Engineer");
+        UUID produto = node(root, "Produto", 0);
+        UUID implementacao = node(root, "Implementação", 240);
+        UUID testes = node(implementacao, "Testes", 0);
+        cycleService.create(user, config("Senior", BlockMode.TIME, 60, 60, new CycleTopicDTO(implementacao, 3, 3, 60)));
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+
+        assertThatThrownBy(() -> cycleService.logSession(user, new SessionRequestDTO(implementacao, produto, 20, today, null)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorKey()).isEqualTo(ErrorKey.INVALID_REQUEST));
+        SessionResponseDTO logged = cycleService.logSession(user, new SessionRequestDTO(implementacao, testes, 20, today, null));
+        assertThat(logged.credited().minutesAfter()).isEqualTo(20);
+    }
+
+    /**
+     * A session naming a page inside a subject (the assistant's "20 minutes of Testes") lands on
+     * the subject, the row says so, and its delete takes the minutes back from there.
+     */
+    @Test
+    void aSessionNamingAPageInsideASubjectLandsOnTheSubject() {
+        UUID root = topic("Software Engineer");
+        UUID implementacao = node(root, "Implementação", 0);
+        UUID testes = node(implementacao, "Testes", 0);
+        StudyCycleDTO cycle = cycleService.create(user, config("Senior", BlockMode.TIME, 60, 60,
+                new CycleTopicDTO(implementacao, 3, 3, 60)));
+
+        SessionResponseDTO logged = cycleService.logSession(user, session(testes, 20, LocalDate.now(ZoneOffset.UTC)));
+
+        assertThat(logged.credited().minutesAfter()).isEqualTo(20);
+        assertThat(sessionRepository.findById(logged.id())).hasValueSatisfying(row -> {
+            assertThat(row.getTopicId()).isEqualTo(implementacao);
+            assertThat(row.getPageId()).isEqualTo(testes);
+        });
+        cycleService.deleteSession(user, logged.id());
+        assertThat(cycleService.get(user, cycle.id()).blocks().get(0).progress().minutes()).isZero();
+    }
+
+    /**
+     * A page linked onto a subject's board from another topic counts under its home, never under
+     * the board that shows it: one pomodoro, one subject.
+     */
+    @Test
+    void aLinkedPageCreditsUnderItsHomeNotUnderTheBoardThatShowsIt() {
+        UUID root = topic("Software Engineer");
+        UUID implementacao = node(root, "Implementação", 0);
+        UUID espanhol = topic("Espanhol C1");
+        UUID subjuntivo = node(espanhol, "Subjuntivo", 0);
+        link(implementacao, subjuntivo, 240);
+        card(subjuntivo);
+        StudyCycleDTO senior = cycleService.create(user, config("Senior", BlockMode.TIME, 60, 60,
+                new CycleTopicDTO(implementacao, 3, 3, 60)));
+
+        focusService.recordCycle(user, pomodoro(subjuntivo, 25, CycleKind.POMODORO));
+
+        assertThat(cycleService.get(user, senior.id()).blocks().get(0).progress().minutes()).isZero();
+        StudyTodayCycleDTO today = cycleService.today(user).cycles().get(0);
+        assertThat(today.studiedMinutes()).isZero();
+        assertThat(today.entries()).first().satisfies(e -> assertThat(e.cardsDue()).isZero());
+
+        StudyCycleDTO idiomas = cycleService.create(user, config("Idiomas", BlockMode.TIME, 60, 60,
+                new CycleTopicDTO(espanhol, 3, 3, 60)));
+        focusService.recordCycle(user, pomodoro(subjuntivo, 25, CycleKind.POMODORO));
+
+        assertThat(cycleService.get(user, idiomas.id()).blocks().get(0).progress().minutes()).isEqualTo(25);
+        assertThat(cycleService.get(user, senior.id()).blocks().get(0).progress().minutes()).isZero();
     }
 
     // --------------------------------------------------------------- hooks
@@ -519,6 +722,21 @@ class StudyCycleServiceIT extends AbstractIntegrationTest {
     private UUID node(UUID board, String title, double x) {
         return boardService.addNode(user, board, new CreateNodeRequestDTO(null, title, null, null, x, 0d, null, null, null))
                 .node().pageId();
+    }
+
+    private void link(UUID board, UUID page, double x) {
+        boardService.addNode(user, board, new CreateNodeRequestDTO(null, null, page, null, x, 0d, null, null, null));
+    }
+
+    private void card(UUID page) {
+        cardService.create(user, page, new CreateCardRequestDTO("Front", "Back", null));
+    }
+
+    private static BlockPatchDTO aimAt(UUID page) {
+        BlockPatchDTO patch = new BlockPatchDTO();
+        patch.setGoalSource(GoalSource.PAGE);
+        patch.setPageId(page);
+        return patch;
     }
 
     private UUID quiz(UUID page) {

@@ -171,9 +171,13 @@ public enum ErrorKey {
     // Study cycles (StudyCycleService). Not-owned and not-found stay separate, like the notebook's.
     STUDY_CYCLE_NOT_FOUND,
     STUDY_CYCLE_NOT_OWNED,
-    // The topic is already in another active cycle. The refusal names that cycle in details
-    // (cycleId, cycleName, topicId) so the client can say which one.
+    // A subject is, contains, or sits inside a subject of another active cycle. The refusal
+    // names both in details (topicId: the one asked for; cycleId, cycleName: the cycle holding
+    // the other; takenTopicId, takenTopicTitle: the subject it holds) so the client can say which.
     STUDY_CYCLE_TOPIC_TAKEN,
+    // Two subjects of one request overlap: one is a page inside the other. details carries
+    // ancestorId and descendantId. Exactly the same page twice stays INVALID_REQUEST.
+    STUDY_CYCLE_TOPIC_OVERLAP,
     // Ten active cycles per account, thirty topics or sixty blocks per cycle.
     STUDY_CYCLE_LIMIT,
     // Also the answer for another user's session: nothing about it is the caller's to learn.

@@ -103,10 +103,12 @@ public class FocusService {
         cycle.setNotebookPageId(notebookPageId);
         FocusCycle saved = cycleRepository.save(cycle);
 
-        // A pomodoro on a notebook page is study time for that page's topic, and its study cycle
-        // (if one holds the topic) moves on by these minutes. Breaks are rest, not study.
+        // A pomodoro on a notebook page is study time for the study cycle subject the page lives
+        // in (the subject itself or a page below it), and that cycle moves on by these minutes.
+        // The page goes as it is: which subject it belongs to is the cycle's rule, not this one's.
+        // Breaks are rest, not study.
         if (notebookPage != null && request.kind() == CycleKind.POMODORO) {
-            studyCycleService.credit(user, notebookPage.rootId(), request.minutes(), Instant.now());
+            studyCycleService.credit(user, notebookPage.getId(), request.minutes(), Instant.now());
         }
         return FocusCycleResponseDTO.from(saved);
     }
