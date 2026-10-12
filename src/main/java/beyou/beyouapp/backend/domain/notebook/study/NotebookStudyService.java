@@ -45,11 +45,28 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * The study room: grounded chat on a page, and the studio's outputs.
+ * The study room: the chat on a page, and the studio's outputs.
  *
- * <p>Grounded means the model is given numbered passages (the page's notes and the sources it may
- * read) and told to answer only from them, citing [n]. {@link StudyContextBuilder} owns the
- * numbering and drops any citation the model invents.
+ * <p>Both hand the model numbered passages (the page's notes and the sources it may read), and
+ * {@link StudyContextBuilder} owns the numbering and drops any citation the model invents. What
+ * the model may add on top of them differs, and so does the mode each one sends
+ * ({@code prompts/notebookTutor.st}).
+ *
+ * <p>The studio's outputs (summary, study guide, quiz, overview) are GROUNDED: made from the
+ * passages alone, and a page with nothing to read is refused with
+ * {@link ErrorKey#NOTEBOOK_NOTHING_TO_STUDY} before the model is called. They exist to work on
+ * the person's own material.
+ *
+ * <p>The chat is TUTOR. It answers from the passages where they cover the question, citing [n],
+ * and from the model's own knowledge of the subject where they stop, opening that part with a
+ * sentence that says it goes beyond the person's notes and sources. It was GROUNDED until
+ * October 2026, and a tutor that refuses whatever the notes do not already say is no tutor:
+ * asked for a Spanish level test on a page that only stated the goal of becoming fluent, it
+ * answered that the passages held no level test and stopped. The citations still mark what came
+ * from the person's material, so the line between their notes and the model's knowledge stays
+ * visible. The chat also works on a page with no notes and no sources yet. The message then says
+ * so and still names the page, its topic and the room's goal, which keeps the answer on the
+ * subject.
  *
  * <p>Outputs are stored as JSON (see the Stored records below). A quiz keeps its answers on the
  * server: the client gets the questions, sends its picks to {@link #grade}, and only then sees
@@ -164,14 +181,18 @@ public class NotebookStudyService {
         Prompt prompt = tx.read(() -> {
             NotebookPage page = ownership.page(user.getId(), pageId);
             StudyContextBuilder.Context context = contextBuilder.forQuestion(user, page, question);
-            if (context.isEmpty()) {
-                throw new BusinessException(ErrorKey.NOTEBOOK_NOTHING_TO_STUDY, "No notes or sources to answer from");
-            }
             List<NotebookChatMessage> earlier = new ArrayList<>(messageRepository
                     .findByPageIdOrderByCreatedAtDesc(pageId, PageRequest.of(0, CONTEXT_TURNS)));
             Collections.reverse(earlier);
 
-            StringBuilder message = new StringBuilder("GROUNDED\n").append(context.render());
+            // TUTOR, and an empty page goes to the model too: see the class comment. render()
+            // already carries the room's goal, so only the page and its topic are added here.
+            StringBuilder message = new StringBuilder("TUTOR\n")
+                    .append(subject(user, page))
+                    .append(context.render());
+            if (context.isEmpty()) {
+                message.append("(none: this page has no notes and no sources yet)\n\n");
+            }
             if (!earlier.isEmpty()) {
                 message.append("The conversation so far:\n");
                 for (NotebookChatMessage m : earlier) {
@@ -199,6 +220,21 @@ public class NotebookStudyService {
                     objectMapper.writeValueAsString(citations));
             return new ChatTurnDTO(toMessage(asked), toMessage(answered));
         });
+    }
+
+    /**
+     * Which page and topic the person is studying. Sent with every question, passages or not.
+     * When the model answers from its own knowledge, this line is what keeps it on the subject.
+     */
+    private String subject(User user, NotebookPage page) {
+        if (page.isTopic()) {
+            return "The person is studying the topic \"" + page.getTitle() + "\".\n";
+        }
+        String line = "The person is studying the page \"" + page.getTitle() + "\"";
+        if (page.getTopicId() != null) {
+            line += ", in the topic \"" + ownership.page(user.getId(), page.getTopicId()).getTitle() + "\"";
+        }
+        return line + ".\n";
     }
 
     @Transactional

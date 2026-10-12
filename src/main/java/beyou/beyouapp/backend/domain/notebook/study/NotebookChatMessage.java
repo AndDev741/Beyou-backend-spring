@@ -20,7 +20,9 @@ import lombok.ToString;
 
 /**
  * One turn of a page's study-room chat. Separate from the assistant's chats on purpose: this
- * conversation belongs to a page, answers only from that page's sources, and has no tools.
+ * conversation belongs to a page and has no tools. It answers from that page's notes and sources
+ * first, citing them, and from the model's own knowledge where they stop, since a tutor that
+ * refuses what the notes do not say is no tutor (see {@link NotebookStudyService}).
  */
 @Entity
 @Table(name = "notebook_chat_messages")

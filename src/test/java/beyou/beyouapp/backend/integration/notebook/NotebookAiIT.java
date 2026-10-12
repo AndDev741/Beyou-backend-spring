@@ -5,7 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,6 +17,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,9 +48,11 @@ import beyou.beyouapp.backend.domain.notebook.dto.PageResponseDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.UpdateContentRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.study.NotebookStudyService;
 import beyou.beyouapp.backend.domain.notebook.study.StudyOutputKind;
+import beyou.beyouapp.backend.domain.notebook.study.StudyScope;
 import beyou.beyouapp.backend.domain.notebook.study.dto.ChatTurnDTO;
 import beyou.beyouapp.backend.domain.notebook.study.dto.QuizResultDTO;
 import beyou.beyouapp.backend.domain.notebook.study.dto.StudyOutputDTO;
+import beyou.beyouapp.backend.domain.notebook.study.dto.StudySetupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
@@ -161,31 +165,78 @@ class NotebookAiIT extends AbstractIntegrationTest {
 
     // ------------------------------------------------------------------- chat
 
-    /** A citation the reader cannot open is worse than none: [7] was never given, so it goes. */
+    /**
+     * A citation the reader cannot open is worse than none. The answer leans on the notes for one
+     * claim and on the model's own knowledge for the next, and the number the model put on the
+     * second, [7], was never given, so it goes.
+     */
     @Test
     void aChatAnswerKeepsOnlyCitationsThatPointAtSomething() {
         UUID trees = pageWithNotes("Trees", "To delete a node with two children use the in-order successor.");
         when(llm.call(eq(LlmPayloads.AnswerPayload.class), anyString(), any())).thenReturn(
-                new LlmPayloads.AnswerPayload("Use the successor [1]. Also this [7].", List.of(1, 7)));
+                new LlmPayloads.AnswerPayload("Use the successor [1]. Beyond your notes, an AVL tree then rebalances [7].",
+                        List.of(1, 7)));
 
         ChatTurnDTO turn = studyService.chat(user, trees, "How do I delete a node with two children?");
 
-        assertThat(turn.answer().content()).isEqualTo("Use the successor [1]. Also this.");
+        assertThat(turn.answer().content()).isEqualTo("Use the successor [1]. Beyond your notes, an AVL tree then rebalances.");
         assertThat(turn.answer().citations()).singleElement()
                 .satisfies(c -> assertThat(c.pageId()).isEqualTo(trees));
         assertThat(studyService.study(user, trees).messages()).extracting(m -> m.role())
                 .containsExactly("USER", "ASSISTANT");
     }
 
-    /** Grounded means grounded: with nothing to stand on, the model is not even asked. */
+    /**
+     * The chat is a tutor and may go past the notes (TUTOR); the studio's outputs work on the
+     * person's material alone (GROUNDED). One page, both calls, so neither mode leaks into the other.
+     */
     @Test
-    void anEmptyPageWithNoSourcesIsNotSentToTheModel() {
-        UUID empty = node(topic("Empty"), "Nothing yet");
+    void theChatIsATutorWhileTheStudioStaysGrounded() {
+        UUID trees = pageWithNotes("Trees", "A heap keeps the smallest key at the root.");
+        when(llm.call(eq(LlmPayloads.AnswerPayload.class), anyString(), any())).thenReturn(
+                new LlmPayloads.AnswerPayload("At the root [1].", List.of(1)));
 
-        assertThatThrownBy(() -> studyService.chat(user, empty, "What is this?"))
+        studyService.chat(user, trees, "Where is the smallest key?");
+        studyService.generate(user, trees, StudyOutputKind.STUDY_GUIDE);
+
+        List<String> prompts = answerPrompts();
+        assertThat(prompts).hasSize(2);
+        assertThat(prompts.get(0)).startsWith("TUTOR\n")
+                .contains("The person is studying the page \"Trees\", in the topic \"Data Structures\".")
+                .contains("A heap keeps the smallest key at the root.");
+        assertThat(prompts.get(1)).startsWith("GROUNDED\n");
+    }
+
+    /**
+     * A tutor that refuses what the notes do not say is no tutor. A page with no notes and no
+     * sources still reaches the model, told there are none and told what is being studied, and
+     * the turn is kept. A number the model puts on its own knowledge points at nothing and goes.
+     * The studio on the same page still refuses: it has nothing of the person's to work on.
+     */
+    @Test
+    void anEmptyPageStillReachesTheTutorAndKeepsTheTurn() {
+        UUID spanish = node(topic("Languages"), "Spanish");
+        studyService.saveSetup(user, spanish, new StudySetupRequestDTO("Become fluent in Spanish", StudyScope.PAGE));
+        when(llm.call(eq(LlmPayloads.AnswerPayload.class), anyString(), any())).thenReturn(
+                new LlmPayloads.AnswerPayload("This goes beyond your notes. A short level test [1].", List.of(1)));
+
+        ChatTurnDTO turn = studyService.chat(user, spanish, "Give me a level test");
+
+        assertThat(answerPrompts()).singleElement().satisfies(prompt -> assertThat(prompt)
+                .startsWith("TUTOR\n")
+                .contains("The person is studying the page \"Spanish\", in the topic \"Languages\".")
+                .contains("The person's goal for studying this: Become fluent in Spanish")
+                .contains("this page has no notes and no sources yet")
+                .contains("The person asks: Give me a level test"));
+        assertThat(turn.answer().content()).isEqualTo("This goes beyond your notes. A short level test.");
+        assertThat(turn.answer().citations()).isEmpty();
+        assertThat(studyService.study(user, spanish).messages()).extracting(m -> m.content())
+                .containsExactly("Give me a level test", "This goes beyond your notes. A short level test.");
+
+        assertThatThrownBy(() -> studyService.generate(user, spanish, StudyOutputKind.SUMMARY))
                 .extracting(e -> ((BusinessException) e).getErrorKey())
                 .isEqualTo(ErrorKey.NOTEBOOK_NOTHING_TO_STUDY);
-        verify(llm, never()).call(any(), anyString(), any());
+        verify(llm, times(1)).call(any(), anyString(), any());
     }
 
     // ------------------------------------------------------------------ quiz
@@ -286,6 +337,13 @@ class NotebookAiIT extends AbstractIntegrationTest {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /** Every message sent for an answer-shaped call (chat, summary, study guide), in order. */
+    private List<String> answerPrompts() {
+        ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
+        verify(llm, atLeastOnce()).call(eq(LlmPayloads.AnswerPayload.class), prompt.capture(), any());
+        return prompt.getAllValues();
+    }
 
     private static LlmPayloads.QuizQuestion question(int answer) {
         return new LlmPayloads.QuizQuestion("Question " + answer + "?", List.of("a", "b", "c", "d"), answer, "Because.", 1);
