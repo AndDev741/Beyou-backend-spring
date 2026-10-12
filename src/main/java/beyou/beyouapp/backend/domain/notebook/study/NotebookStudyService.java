@@ -201,7 +201,9 @@ public class NotebookStudyService {
                 }
             }
             message.append("\nThe person asks: ").append(question.strip()).append('\n')
-                    .append("Answer in at most 250 words.\n")
+                    // Room for a level test or a set of exercises, which a tutor now writes from its
+                    // own knowledge; 250 words cut those off. The answer is clipped at 8000 chars anyway.
+                    .append("Answer in at most 400 words.\n")
                     .append("JSON: {\"answer\":\"markdown\",\"citations\":[numbers you used]}\n");
             return new Prompt(message.toString(), context);
         });
