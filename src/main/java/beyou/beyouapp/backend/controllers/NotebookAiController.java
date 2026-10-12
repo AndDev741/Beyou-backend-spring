@@ -43,8 +43,10 @@ import lombok.RequiredArgsConstructor;
 /**
  * Study notebook: every route that calls a model, under {@code /notebook/ai}, which is how the rate
  * limiter files them all under the {@code notebook-ai:} tier with one prefix check. Each answers
- * {@code AI_UNAVAILABLE} when the fallback chain is exhausted, and {@code NOTEBOOK_NOTHING_TO_STUDY}
- * when a grounded call has no notes and no sources to stand on.
+ * {@code AI_UNAVAILABLE} when the fallback chain is exhausted, and the calls that work on the
+ * person's own material (studio outputs, AI flashcards, suggestions from sources) answer
+ * {@code NOTEBOOK_NOTHING_TO_STUDY} when there are no notes and no sources to stand on. The
+ * study-room chat never does: it falls back on the model's own knowledge.
  */
 @RestController
 @RequestMapping("/notebook")
@@ -129,7 +131,10 @@ public class NotebookAiController {
                 .body(aiService.cards(authenticatedUser.getAuthenticatedUser(), pageId, request));
     }
 
-    /** One grounded question in the study room. */
+    /**
+     * One question in the study room. Answered from the page's notes and sources where they cover
+     * it, with citations, and from the model's own knowledge where they do not.
+     */
     @PostMapping("/ai/pages/{pageId}/chat")
     public ResponseEntity<ChatTurnDTO> chat(@PathVariable UUID pageId, @Valid @RequestBody ChatRequestDTO request) {
         return ResponseEntity.ok(studyService.chat(authenticatedUser.getAuthenticatedUser(), pageId, request.message()));

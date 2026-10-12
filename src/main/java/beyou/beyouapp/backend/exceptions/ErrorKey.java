@@ -152,7 +152,8 @@ public enum ErrorKey {
     NOTEBOOK_SOURCE_INTERRUPTED,
     NOTEBOOK_SOURCE_LIMIT_REACHED,
     NOTEBOOK_OUTPUT_NOT_FOUND,
-    // An AI action on a page with no text of its own and no sources to read.
+    // An AI action on a page with no text of its own and no sources to read. The study-room
+    // chat never raises it: it answers from the model's own knowledge then.
     NOTEBOOK_NOTHING_TO_STUDY,
     // Roadmap drafts for "New topic with AI" (RoadmapDraftService).
     NOTEBOOK_DRAFT_NOT_FOUND,
