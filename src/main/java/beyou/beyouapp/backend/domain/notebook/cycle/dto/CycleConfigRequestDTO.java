@@ -14,7 +14,9 @@ import jakarta.validation.constraints.Size;
  * Create a cycle, or change one. The name's length is checked after trimming, by the service.
  *
  * @param days   exactly seven, one per weekday
- * @param topics 1..30 notebook topics, in display order, none of them in another active cycle.
+ * @param topics 1..30 subjects (notebook pages, a topic or any page inside one), in display
+ *               order. None may contain or sit inside another one, here
+ *               (STUDY_CYCLE_TOPIC_OVERLAP) or in another active cycle (STUDY_CYCLE_TOPIC_TAKEN).
  *               More than 30 is refused by the service as STUDY_CYCLE_LIMIT, the key of the
  *               cycle's other limits, rather than here as a plain validation error
  */

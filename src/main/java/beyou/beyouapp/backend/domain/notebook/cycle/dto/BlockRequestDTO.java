@@ -14,8 +14,8 @@ import jakarta.validation.constraints.Size;
  *
  * @param id         an existing block of the cycle (its lap progress stays), or null for a new one
  * @param goalSource GOAL blocks: NEXT (the default when null) or PAGE. Ignored for TIME
- * @param pageId     GOAL + PAGE: the page to understand. TIME: an optional hint. Either way a page
- *                   of the block's topic, the topic itself allowed
+ * @param pageId     GOAL + PAGE: the page to understand. TIME: an optional hint. Either way the
+ *                   block's subject or a page below it in the home tree
  */
 public record BlockRequestDTO(
         UUID id,

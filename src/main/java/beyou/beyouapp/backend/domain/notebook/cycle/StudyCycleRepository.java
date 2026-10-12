@@ -40,6 +40,20 @@ public interface StudyCycleRepository extends JpaRepository<StudyCycle, UUID> {
     @Query("select c from StudyCycle c where c.user.id = :userId and c.archivedAt is null order by c.id")
     List<StudyCycle> lockActive(@Param("userId") UUID userId);
 
+    /**
+     * Serialises the writes that choose a user's subjects (create and configuration update).
+     *
+     * <p>Whether a new subject overlaps one of another cycle is a read of every active cycle's
+     * subjects followed by a write the read decided on, and two of those running at once would
+     * both read before either commits. The partial unique index catches the same page twice, not
+     * a page inside another. Advisory rather than {@link #lockActive}, because a user with no
+     * active cycle yet has no row to lock. Taken before any cycle row lock, and the credit paths
+     * never take it, so the two kinds of lock cannot wait on each other in opposite orders.
+     * {@code hashtext} can collide; two users sharing a key wait for one save, and nothing else.
+     */
+    @Query(value = "SELECT pg_advisory_xact_lock(hashtext(:key))", nativeQuery = true)
+    void lockSubjects(@Param("key") String key);
+
     /** Every cycle the user ever made, archived ones included, for the data export. */
     @Query("select c from StudyCycle c where c.user.id = :userId order by c.createdAt asc")
     List<StudyCycle> findAllForExport(@Param("userId") UUID userId);

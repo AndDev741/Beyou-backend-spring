@@ -25,6 +25,14 @@ public interface NotebookPageRepository extends JpaRepository<NotebookPage, UUID
      */
     List<NotebookPage> findByUserId(UUID userId);
 
+    /**
+     * Every page's id and home parent, [id, parentId], and nothing else. What the study cycle
+     * walks to find the subject a page belongs to: a pomodoro credit asks it on every finish, and
+     * the whole rows ({@link #findByUserId}) carry every document with them.
+     */
+    @Query("select p.id, p.parentId from NotebookPage p where p.user.id = :userId")
+    List<Object[]> findHomeLinks(@Param("userId") UUID userId);
+
     List<NotebookPage> findByParentIdOrderByPositionAscCreatedAtAsc(UUID parentId);
 
     List<NotebookPage> findByIdIn(Collection<UUID> ids);

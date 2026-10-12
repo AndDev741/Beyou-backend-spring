@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,8 @@ import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService;
 import beyou.beyouapp.backend.domain.notebook.board.dto.CreateNodeRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.CreateTopicRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.dto.SetStatusRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.dto.StatusChoice;
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
@@ -102,12 +105,13 @@ class StudyCycleApiIT extends AbstractIntegrationTest {
                 .containsEntry("weekday", "MONDAY").containsEntry("startTime", "19:00");
         Map<String, Object> cycleTopic = first(cycle, "topics");
         assertThat(cycleTopic).containsOnlyKeys("topicId", "importance", "mastery", "minutesOverride", "topic");
-        assertThat(map(cycleTopic, "topic")).containsOnlyKeys("id", "title", "icon");
+        assertThat(map(cycleTopic, "topic")).containsOnlyKeys("id", "title", "icon", "rootTitle");
         assertThat(map(cycle, "lap")).containsOnlyKeys("number", "startedAt", "closedAt", "minutes", "plannedMinutes",
                 "blocksClosed", "blocks", "understood", "turnsUsed");
         Map<String, Object> block = first(cycle, "blocks");
         assertThat(block).containsOnlyKeys("id", "position", "topic", "mode", "plannedMinutes", "goalSource", "page",
                 "requireQuiz", "note", "progress");
+        assertThat(map(block, "topic")).containsOnlyKeys("id", "title", "icon", "rootTitle");
         Map<String, Object> progress = map(block, "progress");
         assertThat(progress).containsOnlyKeys("lapNumber", "minutes", "state", "closedAt", "target", "targetPreview",
                 "quizPassed");
@@ -130,6 +134,7 @@ class StudyCycleApiIT extends AbstractIntegrationTest {
                 "requireQuiz", "plannedMinutes", "credited", "minutesToday", "state", "doneToday", "nextLap", "start",
                 "end", "target", "targetPreview", "quizPassed", "cardsDue");
         assertThat(entry).containsEntry("start", "19:00");
+        assertThat(map(entry, "topic")).containsOnlyKeys("id", "title", "icon", "rootTitle");
         // Dates as YYYY-MM-DD and instants as ISO strings, never arrays or epoch numbers.
         assertThat(today.get("date")).isEqualTo(LocalDate.now(ZoneOffset.UTC).toString());
         assertThat((String) map(cycle, "lap").get("startedAt")).matches("\\d{4}-\\d{2}-\\d{2}T.*Z");
@@ -147,28 +152,85 @@ class StudyCycleApiIT extends AbstractIntegrationTest {
         Map<String, Object> history = call(get("/notebook/cycles/" + id + "/history")
                 .param("from", day.minusDays(6).toString()).param("to", day.toString()), 200);
         assertThat(history).containsOnlyKeys("cycleId", "from", "to", "topics", "days");
+        assertThat(first(history, "topics")).containsOnlyKeys("id", "title", "icon", "rootTitle");
         List<Map<String, Object>> days = list(history, "days");
         Map<String, Object> lastDay = days.get(days.size() - 1);
         assertThat(lastDay).containsOnlyKeys("date", "plannedMinutes", "minutes", "byTopic", "entries");
         assertThat(first(lastDay, "byTopic")).containsOnlyKeys("topicId", "minutes");
         assertThat(first(lastDay, "entries")).containsOnlyKeys("kind", "at", "sessionId", "topic", "page", "minutes", "note")
                 .containsEntry("kind", "MANUAL");
+        assertThat(map(first(lastDay, "entries"), "topic")).containsOnlyKeys("id", "title", "icon", "rootTitle");
 
         mockMvc.perform(delete("/notebook/sessions/" + session.get("id"))).andExpect(status().isNoContent());
         mockMvc.perform(post("/notebook/cycles/" + id + "/archive")).andExpect(status().isNoContent());
         mockMvc.perform(delete("/notebook/cycles/" + id)).andExpect(status().isNoContent());
     }
 
-    /** The refusal for a taken topic names the cycle that holds it, so the client can say which. */
+    /**
+     * The refusal for a taken subject names the cycle that holds it and the subject it holds, so
+     * the client can say which: here a page inside the topic another cycle holds whole.
+     */
     @Test
     void aTakenTopicIsRefusedWithTheCycleInDetails() throws Exception {
         call(post("/notebook/cycles").content(config("Concurso TRT")), 201);
 
-        mockMvc.perform(json(post("/notebook/cycles").content(config("Faculdade"))))
+        mockMvc.perform(json(post("/notebook/cycles").content(config("Faculdade", concept))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorKey").value("STUDY_CYCLE_TOPIC_TAKEN"))
                 .andExpect(jsonPath("$.details.cycleName").value("Concurso TRT"))
-                .andExpect(jsonPath("$.details.topicId").value(topic.toString()));
+                .andExpect(jsonPath("$.details.topicId").value(concept.toString()))
+                .andExpect(jsonPath("$.details.takenTopicId").value(topic.toString()))
+                .andExpect(jsonPath("$.details.takenTopicTitle").value("Dir. Constitucional"));
+    }
+
+    @Test
+    void overlappingSubjectsInOneRequestAreRefusedWithBothIds() throws Exception {
+        mockMvc.perform(json(post("/notebook/cycles").content(config("Mixed", topic, concept))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("STUDY_CYCLE_TOPIC_OVERLAP"))
+                .andExpect(jsonPath("$.details.ancestorId").value(topic.toString()))
+                .andExpect(jsonPath("$.details.descendantId").value(concept.toString()));
+    }
+
+    /**
+     * Every subject ref says which topic it lives in: {@code rootTitle} is the topic's title for a
+     * page inside one, and null (present, not missing) for a topic, in the cycle, today and the
+     * history alike.
+     */
+    @Test
+    void everySubjectRefCarriesItsRootTitle() throws Exception {
+        UUID portugues = pageService.createTopic(user, new CreateTopicRequestDTO("Português", null, null, null, null, null)).id();
+        Map<String, Object> cycle = call(post("/notebook/cycles").content(config("Concurso", portugues, concept)), 201);
+        String id = (String) cycle.get("id");
+        LocalDate day = LocalDate.now(ZoneOffset.UTC);
+        for (UUID subject : List.of(portugues, concept)) {
+            call(post("/notebook/sessions").content("""
+                    {"topicId": "%s", "pageId": null, "minutes": 10, "studiedOn": "%s", "note": null}
+                    """.formatted(subject, day)), 201);
+        }
+        pageService.setStatus(user, concept, new SetStatusRequestDTO(StatusChoice.DONE));
+
+        cycle = call(get("/notebook/cycles/" + id), 200);
+        List<Map<String, Object>> refs = new ArrayList<>();
+        list(cycle, "topics").forEach(t -> refs.add(map(t, "topic")));
+        list(cycle, "blocks").forEach(b -> refs.add(map(b, "topic")));
+        list(first(call(get("/notebook/cycles/today"), 200), "cycles"), "entries").forEach(e -> refs.add(map(e, "topic")));
+        Map<String, Object> history = call(get("/notebook/cycles/" + id + "/history")
+                .param("from", day.toString()).param("to", day.toString()), 200);
+        refs.addAll(list(history, "topics"));
+        List<Map<String, Object>> entries = list(first(history, "days"), "entries");
+        assertThat(entries).extracting(e -> e.get("kind")).contains("MANUAL", "UNDERSTOOD");
+        entries.stream().filter(e -> e.containsKey("topic")).forEach(e -> refs.add(map(e, "topic")));
+
+        assertThat(refs).allSatisfy(ref -> {
+            assertThat(ref).containsOnlyKeys("id", "title", "icon", "rootTitle");
+            if (ref.get("id").equals(concept.toString())) {
+                assertThat(ref).containsEntry("rootTitle", "Dir. Constitucional");
+            } else {
+                assertThat(ref).containsEntry("id", portugues.toString()).containsEntry("rootTitle", null);
+            }
+        });
+        assertThat(refs).extracting(ref -> ref.get("id")).contains(concept.toString(), portugues.toString());
     }
 
     /** In a PATCH, a field left out stays and a field sent as null is cleared. */
@@ -205,10 +267,19 @@ class StudyCycleApiIT extends AbstractIntegrationTest {
     // --------------------------------------------------------------- helpers
 
     private String config(String name) {
+        return config(name, topic);
+    }
+
+    private static String config(String name, UUID... subjects) {
+        StringBuilder topics = new StringBuilder();
+        for (UUID subject : subjects) {
+            if (topics.length() > 0) topics.append(',');
+            topics.append("{\"topicId\": \"").append(subject)
+                    .append("\", \"importance\": 5, \"mastery\": 2, \"minutesOverride\": 60}");
+        }
         return """
-                {"name": "%s", "defaultMode": "GOAL", "maxBlockMinutes": 90, "days": %s,
-                 "topics": [{"topicId": "%s", "importance": 5, "mastery": 2, "minutesOverride": 60}]}
-                """.formatted(name, week(120, "19:00"), topic);
+                {"name": "%s", "defaultMode": "GOAL", "maxBlockMinutes": 90, "days": %s, "topics": [%s]}
+                """.formatted(name, week(120, "19:00"), topics);
     }
 
     private static String week(int minutes, String start) {

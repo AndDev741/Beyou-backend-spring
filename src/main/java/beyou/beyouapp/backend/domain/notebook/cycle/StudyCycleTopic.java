@@ -13,10 +13,14 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * A notebook topic inside a cycle, with the two numbers the planner weighs it by.
+ * A subject inside a cycle, with the two numbers the planner weighs it by. The column keeps the
+ * name {@code topic_id} from when only a topic could be one; it holds any notebook page now, a
+ * topic or a page inside one.
  *
  * <p>{@code active} goes false when the cycle is archived. The partial unique index on
- * {@code topic_id WHERE active} (V39) is what keeps a topic in one active cycle at a time.
+ * {@code topic_id WHERE active} (V39) still keeps the exact same page out of two active cycles
+ * when two saves race. Overlap through the home tree (a subject inside another) has no index that
+ * could express it, so {@link StudyCycleService} checks it under a per-user lock instead.
  */
 @Entity
 @Table(name = "study_cycle_topics")
