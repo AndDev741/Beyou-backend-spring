@@ -74,10 +74,16 @@ public final class AgentToolDomains {
             Map.entry("reorderStudyBoard", List.of("notebook")),
             Map.entry("addStudyNotes", List.of("notebook")),
             Map.entry("generateStudyCards", List.of("notebook")),
-            // Study cycles. getStudyToday and listStudyCycles only read (getStudyToday fixes the
-            // concept of each topic's first open block, which changes nothing a client shows).
+            // Study cycles. getStudyToday, listStudyCycles, getStudyCycle and listStudySessions only
+            // read (getStudyToday fixes the concept of each topic's first open block, which changes
+            // nothing a client shows).
             Map.entry("createStudyCycle", List.of("studyCycles")),
-            Map.entry("logStudySession", List.of("studyCycles")));
+            Map.entry("editStudyCycle", List.of("studyCycles")),
+            Map.entry("editStudyBlock", List.of("studyCycles")),
+            Map.entry("archiveStudyCycle", List.of("studyCycles")),
+            Map.entry("deleteStudyCycle", List.of("studyCycles")),
+            Map.entry("logStudySession", List.of("studyCycles")),
+            Map.entry("deleteStudySession", List.of("studyCycles")));
 
     private AgentToolDomains() {}
 
