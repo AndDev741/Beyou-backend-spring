@@ -1098,6 +1098,108 @@ public class Tools {
         return studyCycleAssistant.logSession(user, topic, minutes, note, date);
     }
 
+    @Tool(description = "One active study cycle in full: id, name, default mode, longest block, the week (minutes and "
+            + "start time per weekday), the subjects with importance and mastery, and every block of the lap with its "
+            + "number, subject, mode, concept, minutes done of planned, state and note. Read it before editing. Read only")
+    Map<String, Object> getStudyCycle(
+            @ToolParam(description = "The cycle's name (any case) or id") String cycle,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is reading a study cycle for user: {}", user.getId());
+        return studyCycleAssistant.detail(user, cycle);
+    }
+
+    @Tool(description = "Change a study cycle's settings: name, week, subjects, longest block or default mode. "
+            + "Whatever is left out stays as it is. The planner lays the blocks out again when the week's total, the "
+            + "longest block or the subjects change, and blocks of a subject that stays keep their progress. Confirm "
+            + "the change with the user first")
+    Map<String, Object> editStudyCycle(
+            @ToolParam(description = "The cycle's name (any case) or id") String cycle,
+            @ToolParam(description = "Optional: the new name, max 80 characters", required = false) String name,
+            @ToolParam(description = "Optional: only the weekdays that change. Minutes 0 to 720 in steps of 5 (0 makes it "
+                    + "a rest day) and startTime HH:mm, or \"none\" to take the start time away. A field left out "
+                    + "keeps its value, and days not sent stay as they are", required = false)
+            List<StudyCycleAssistant.DayInput> days,
+            @ToolParam(description = "Optional: the WHOLE new list of subjects, in order (a topic or a page inside one, "
+                    + "by exact title or id). A subject left out leaves the cycle. Importance and mastery 1 to 5; left "
+                    + "out, a subject already in the cycle keeps its own. Call getStudyCycle first for the current list",
+                    required = false)
+            List<StudyCycleAssistant.TopicInput> topics,
+            @ToolParam(description = "Optional: longest block in minutes, 15 to 240", required = false)
+            Integer maxBlockMinutes,
+            @ToolParam(description = "Optional: GOAL or TIME, the mode new blocks get", required = false)
+            String defaultMode,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is editing a study cycle for user: {}", user.getId());
+        return studyCycleAssistant.edit(user, cycle, name, days, topics, maxBlockMinutes, defaultMode);
+    }
+
+    @Tool(description = "Change one block of a study cycle, by its number in the queue (getStudyCycle lists them): "
+            + "its mode, its planned minutes, the concept to understand, whether the quiz is required, its note. "
+            + "Whatever is left out stays as it is")
+    Map<String, Object> editStudyBlock(
+            @ToolParam(description = "The cycle's name (any case) or id") String cycle,
+            @ToolParam(description = "The block's number in the queue, from 1") Integer block,
+            @ToolParam(description = "Optional: GOAL (a concept to understand) or TIME (minutes only)", required = false)
+            String mode,
+            @ToolParam(description = "Optional: planned minutes, 5 to 600", required = false) Integer plannedMinutes,
+            @ToolParam(description = "Optional: the concept, which makes it a GOAL block: a page inside the block's "
+                    + "subject by exact title or id, or NEXT for whatever the roadmap says is next when its turn "
+                    + "comes", required = false) String concept,
+            @ToolParam(description = "Optional: true to also require the page's quiz on a GOAL block", required = false)
+            Boolean requireQuiz,
+            @ToolParam(description = "Optional: a note, max 200 characters; an empty string removes it", required = false)
+            String note,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is editing a study cycle block for user: {}", user.getId());
+        return studyCycleAssistant.editBlock(user, cycle, block, mode, plannedMinutes, concept, requireQuiz, note);
+    }
+
+    @Tool(description = "Archive a study cycle: it leaves the list and its subjects are free for another cycle, and "
+            + "its history stays in the account. It cannot be reopened. Confirm the cycle's name with the user first")
+    Map<String, Object> archiveStudyCycle(
+            @ToolParam(description = "The cycle's name (any case) or id") String cycle,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is archiving a study cycle for user: {}", user.getId());
+        return studyCycleAssistant.archive(user, cycle);
+    }
+
+    @Tool(description = "Delete a study cycle for good, with its blocks, laps and history. Pomodoros and logged "
+            + "sessions stay in the account. Only when the user asks to delete it, and confirm the cycle's name "
+            + "first; if they may want the history, offer archiveStudyCycle instead")
+    Map<String, Object> deleteStudyCycle(
+            @ToolParam(description = "The cycle's name (any case) or id") String cycle,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is deleting a study cycle for user: {}", user.getId());
+        return studyCycleAssistant.delete(user, cycle);
+    }
+
+    @Tool(description = "The study sessions the user logged by hand over the last days, oldest first: id, date, "
+            + "subject, page, minutes, note and the cycle that got the minutes. Pomodoros are not listed. Read only")
+    Map<String, Object> listStudySessions(
+            @ToolParam(description = "Optional: how many days back, today included, 1 to 31. Defaults to 7",
+                    required = false) Integer days,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is listing study sessions for user: {}", user.getId());
+        return studyCycleAssistant.sessions(user, days);
+    }
+
+    @Tool(description = "Delete a study session the user logged by hand, by its id (listStudySessions lists them). "
+            + "Its minutes come off the cycle's lap if that lap is still running. To correct a session, delete it "
+            + "and log it again with logStudySession. Pomodoros cannot be deleted here. Confirm with the user first")
+    Map<String, Object> deleteStudySession(
+            @ToolParam(description = "The session's id") String sessionId,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is deleting a study session for user: {}", user.getId());
+        return studyCycleAssistant.deleteSession(user, sessionId);
+    }
+
     // Feedback
     @Tool(description = "Send feedback to the Beyou team on the user's behalf (bug report, feature "
             + "request or anything else). Only call when the user explicitly asks to send feedback, "

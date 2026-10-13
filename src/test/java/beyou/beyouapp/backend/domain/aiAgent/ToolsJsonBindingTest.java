@@ -461,6 +461,30 @@ public class ToolsJsonBindingTest {
                 org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull());
     }
 
+    /** An edit sends only what changes: the rest of the parameters arrive as null, never as defaults. */
+    @Test
+    void aStudyCycleEditBindsOnlyWhatTheModelSent() {
+        User user = new User();
+        when(userService.findUserById(userId)).thenReturn(user);
+
+        callback("editStudyCycle").call("""
+                {"cycle": "Concurso", "days": [{"weekday": "sábado", "minutes": 0}]}
+                """, toolContext);
+        callback("editStudyBlock").call("""
+                {"cycle": "Concurso", "block": 3, "concept": "NEXT", "requireQuiz": true}
+                """, toolContext);
+        callback("deleteStudyCycle").call("""
+                {"cycle": "Concurso"}
+                """, toolContext);
+
+        verify(studyCycleAssistant).edit(eq(user), eq("Concurso"), org.mockito.ArgumentMatchers.isNull(),
+                eq(List.of(new StudyCycleAssistant.DayInput("sábado", 0, null))),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull());
+        verify(studyCycleAssistant).editBlock(user, "Concurso", 3, null, null, "NEXT", true, null);
+        verify(studyCycleAssistant).delete(user, "Concurso");
+    }
+
     @Test
     void aStudySessionBindsWithoutItsOptionalFields() {
         User user = new User();
@@ -482,15 +506,16 @@ public class ToolsJsonBindingTest {
     @Test
     void everyNotebookWriteToolTellsTheClientToRefreshTheNotebook() {
         Set<String> reads = Set.of("listStudyTopics", "getStudyPlanForToday", "getStudyBoard",
-                "getStudyToday", "listStudyCycles");
-        Set<String> cycleWrites = Set.of("createStudyCycle", "logStudySession");
+                "getStudyToday", "listStudyCycles", "getStudyCycle", "listStudySessions");
+        Set<String> cycleWrites = Set.of("createStudyCycle", "editStudyCycle", "editStudyBlock", "archiveStudyCycle",
+                "deleteStudyCycle", "logStudySession", "deleteStudySession");
         List<String> studyTools = Arrays.stream(
                         MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks())
                 .map(c -> c.getToolDefinition().name())
                 .filter(name -> name.contains("Study"))
                 .toList();
 
-        assertEquals(16, studyTools.size(), studyTools.toString());
+        assertEquals(23, studyTools.size(), studyTools.toString());
         for (String tool : studyTools) {
             if (reads.contains(tool)) {
                 assertEquals(List.of(), AgentToolDomains.domainsOf(tool), tool);
