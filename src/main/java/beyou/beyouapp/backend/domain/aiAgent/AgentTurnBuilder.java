@@ -2,9 +2,11 @@ package beyou.beyouapp.backend.domain.aiAgent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
 import beyou.beyouapp.backend.domain.aiAgent.dto.AgentEvent;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSpec;
 
 /**
  * Turns the ordered event stream into a structured transcript. Every event
@@ -28,7 +30,10 @@ class AgentTurnBuilder {
                     segments.add(AgentSegment.tool(
                             (String) event.data().get("tool"),
                             (String) event.data().get("error"),
-                            (List<String>) event.data().get("domains")));
+                            (List<String>) event.data().get("domains"),
+                            (DiagramSpec) event.data().get("diagram"),
+                            (UUID) event.data().get("pageId"),
+                            (String) event.data().get("pageTitle")));
                 }
             }
             default -> { /* done/error are not part of the transcript */ }

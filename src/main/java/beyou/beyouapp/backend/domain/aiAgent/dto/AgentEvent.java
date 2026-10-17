@@ -19,10 +19,20 @@ public record AgentEvent(
     }
 
     public static AgentEvent toolFinished(String name, String error, List<String> domains) {
+        return toolFinished(name, error, domains, Map.of());
+    }
+
+    /**
+     * {@code display} is what the tool showed the user (ToolDisplay.fields): {@code diagram},
+     * {@code pageId}, {@code pageTitle}, each present only when the tool set it.
+     */
+    public static AgentEvent toolFinished(String name, String error, List<String> domains,
+            Map<String, Object> display) {
         Map<String, Object> data = new HashMap<>(
                 Map.of("tool", name, "status", "finished", "domains", domains));
         if (error != null)
             data.put("error", error);
+        data.putAll(display);
         return new AgentEvent("tool", data);
     }
 

@@ -73,6 +73,8 @@ public final class AgentToolDomains {
             Map.entry("removeStudyNode", List.of("notebook", "perfil")),
             Map.entry("reorderStudyBoard", List.of("notebook")),
             Map.entry("addStudyNotes", List.of("notebook")),
+            // showDiagram only draws in the chat and stays out of this map, like the other reads.
+            Map.entry("addStudyDiagram", List.of("notebook")),
             Map.entry("generateStudyCards", List.of("notebook")),
             // Study cycles. getStudyToday, listStudyCycles, getStudyCycle and listStudySessions only
             // read (getStudyToday fixes the concept of each topic's first open block, which changes
