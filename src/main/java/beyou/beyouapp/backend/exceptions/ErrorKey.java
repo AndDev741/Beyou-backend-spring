@@ -36,6 +36,14 @@ public enum ErrorKey {
     CALENDAR_TASK_NOT_FOUND,
     // GET /calendar with a bound missing, 'to' before 'from', or more days than one read may span.
     CALENDAR_RANGE_INVALID,
+    // Quick notes (the Ideas board). Someone else's note answers this too, as 404, like the
+    // calendar's key above.
+    QUICK_NOTE_NOT_FOUND,
+    // Creating or restoring a note when QuickNote.MAX_ACTIVE are already on the board. 409:
+    // the request is fine, the board is full. Archiving a note makes room.
+    QUICK_NOTE_LIMIT_REACHED,
+    // "Make it a task" on a note that already became one. 409, and no second task is made.
+    QUICK_NOTE_ALREADY_CONVERTED,
     MOOD_NOT_FOUND,
     // A mood is a report, not a plan: MoodService refuses days after the owner's today.
     MOOD_FUTURE_DATE,

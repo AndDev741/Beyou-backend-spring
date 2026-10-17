@@ -178,6 +178,10 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
         UUID itemGroupId = jdbc.queryForObject("SELECT hg.id FROM habit_groups hg "
                 + "JOIN habits h ON h.id = hg.habit_id WHERE h.user_id = ?", UUID.class, userId);
         UserOwnedRows.seed(jdbc, userId, itemGroupId, routineId, habitId, categoryId);
+        // The archived quick note became the task above, so the delete also has to get past the
+        // note's link to tasks, not only its link to users.
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM quick_notes WHERE user_id = ? AND converted_task_id = ?",
+                Long.class, userId, taskId)).isEqualTo(1L);
 
         // The two plain foreign keys that used to block the delete outright.
         chatService.createChat("A conversation with the agent", userId);
@@ -229,6 +233,7 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
         }
 
         assertThat(rowsFor("users", "id", userId)).isZero();
+        assertThat(rowsFor("quick_notes", "user_id", userId)).as("the Ideas board goes with the account").isZero();
         // Every column in the schema that points at a user, read from the schema itself, so a
         // table added next year is checked here without anyone editing this line.
         for (UserOwnedRows.UserForeignKey fk : UserOwnedRows.foreignKeysToUsers(jdbc)) {

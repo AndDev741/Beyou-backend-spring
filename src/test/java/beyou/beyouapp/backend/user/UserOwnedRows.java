@@ -18,7 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *
  * <p>Exists because the deletion tests used to seed only what existed when they were written.
  * Every table added after that (mood, focus, the whole notebook, federated sign-ins, the
- * briefing, calendar tasks) cascades from {@code users} in its migration, and two of those migrations say a
+ * briefing, calendar tasks, quick notes) cascades from {@code users} in its migration, and two of those migrations say a
  * deletion test proves it. None did. A cascade nobody exercises is a comment, so both deletion
  * tests now seed a row here per table and check every one is gone.
  *
@@ -44,7 +44,7 @@ public final class UserOwnedRows {
             "daily_briefing", "notebook_pages", "notebook_board_nodes", "notebook_board_edges",
             "notebook_cards", "notebook_card_reviews", "notebook_sources", "notebook_source_chunks",
             "notebook_study_outputs", "notebook_chat_messages", "notebook_roadmap_drafts",
-            "study_cycles", "study_sessions", "calendar_tasks");
+            "study_cycles", "study_sessions", "calendar_tasks", "quick_notes");
 
     /** What the export assertions need to find again. */
     public record Seeded(UUID topicId, UUID pageId, UUID sectionNodeId, UUID pageNodeId, UUID cardId,
@@ -203,6 +203,17 @@ public final class UserOwnedRows {
                 + "advance_minutes, completed_at, xp_awarded, created_at, updated_at) "
                 + "VALUES (?, ?, 'Renew the passport', 'bring two photos', ?, '10:00', 60, ?, 10, ?, ?)",
                 UUID.randomUUID(), userId, day, now, now, now);
+
+        // One note on the board and one archived that became a task. The task link is a subquery
+        // so the row points at a real task when the account has one: the deletions then remove
+        // the task before or alongside the user, and only ON DELETE SET NULL (V42) lets that pass.
+        jdbc.update("INSERT INTO quick_notes (id, user_id, text, color, x, y, z, created_at, updated_at) "
+                + "VALUES (?, ?, 'learn to juggle', 'PINK', 224, 0, 3, ?, ?)",
+                UUID.randomUUID(), userId, now, now);
+        jdbc.update("INSERT INTO quick_notes (id, user_id, text, color, x, y, z, archived_at, converted_task_id, "
+                + "created_at, updated_at) VALUES (?, ?, 'call the plumber', 'YELLOW', -40, 900, 0, ?, "
+                + "(SELECT id FROM tasks WHERE user_id = ? ORDER BY id LIMIT 1), ?, ?)",
+                UUID.randomUUID(), userId, now, userId, now, now);
 
         return new Seeded(topicId, pageId, sectionNodeId, pageNodeId, cardId, itemGroupId, day);
     }

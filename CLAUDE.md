@@ -35,6 +35,7 @@ Base package: `beyou.beyouapp.backend`
 | `domain/goal/` | Goal entity with status (`GoalStatus`) and term (`GoalTerm`) enums |
 | `domain/routine/` | Polymorphic routine system (see below) |
 | `domain/calendar/` | Calendar tasks (`CalendarTask`, table `calendar_tasks`, V40), the range overview (`CalendarOverviewBuilder`), the one reminder-instant function (`CalendarReminderTime`) and the reminder mail pass (`CalendarReminderEmailScheduler` + `CalendarReminderEmailService`) |
+| `domain/quicknote/` | The Ideas board (`QuickNote`, table `quick_notes`, V42): post-it notes with a spot (x, y) and a stacking order (z), the grid rules in `QuickNotePlacement` (first free cell, tidy by colour), archive, and conversion to a task under a row lock. Uncached; 200 active notes per account |
 | `domain/common/` | Shared: `XpProgress` (embeddable), `XpCalculatorService`, `RefreshUiDtoBuilder`, DTOs for UI refresh |
 | `security/` | JWT auth (`TokenService`, `SecurityFilter`), refresh tokens, password reset, `AuthenticatedUser` helper, `DocsImportSecretFilter`, `E2eSafetyCheck` |
 | `user/` | `User` entity (implements `UserDetails`), `UserService`, Google OAuth |
@@ -67,7 +68,7 @@ The table predates several packages that also live under `domain/`: mood, focus,
 
 **User id in every log line** (2026-08-21): `monitoring/UserContextLogFilter` (plain servlet filter, order 0, i.e. after Spring Security's chain at -100 and before `RateLimitFilter` at 1) puts the authenticated user's id in the MDC for the request, and `logging.pattern.correlation` in `application.yaml` renders it into Boot's default console and file patterns as `[userId=<uuid>]`. No user in scope prints `[userId=anonymous]`, so every line has the same shape for the log shipper (Loki). Two known blanks by construction: `TokenService.validateToken` (logged before the token becomes a user) and the agent SSE stream (async re-dispatch + reactor thread). Locked in by `integration/config/UserIdLogPatternTest` and `unit/monitoring/UserContextLogFilterTest`. Sentry's Logback integration copies the MDC onto breadcrumbs/events, so the id reaches the self-hosted collector too — deliberate, and no user-written content rides along.
 
-**Error handling**: Domain errors use `BusinessException(ErrorKey, message)`. `GlobalExceptionHandler` maps exceptions to `ApiErrorResponse` with structured error keys that the frontend can match for i18n. A `BusinessException` answers 400 unless its key is in `GlobalExceptionHandler.NOT_FOUND_KEYS`, which answers 404; today that set holds only `CALENDAR_TASK_NOT_FOUND`. The older not-found keys stay 400 because both clients were written against that. A new domain puts its not-found key in the set from the start. AOP layer (`ServiceMethodsLogging`, `ControllerLogging`) logs expected client errors at WARN without stack traces — see `isExpectedClientError`.
+**Error handling**: Domain errors use `BusinessException(ErrorKey, message)`. `GlobalExceptionHandler` maps exceptions to `ApiErrorResponse` with structured error keys that the frontend can match for i18n. A `BusinessException` answers 400 unless its key is in `GlobalExceptionHandler.NOT_FOUND_KEYS`, which answers 404 (`CALENDAR_TASK_NOT_FOUND`, `QUICK_NOTE_NOT_FOUND`), or in `CONFLICT_KEYS`, which answers 409 (`QUICK_NOTE_LIMIT_REACHED`, `QUICK_NOTE_ALREADY_CONVERTED`). The older not-found keys stay 400 because both clients were written against that. A new domain puts its not-found key in the set from the start. AOP layer (`ServiceMethodsLogging`, `ControllerLogging`) logs expected client errors at WARN without stack traces — see `isExpectedClientError`.
 
 ### Entity Ownership
 
@@ -76,6 +77,7 @@ All domain entities (categories, habits, tasks, goals, routines) belong to a `Us
 - `HabitService` — throws `HABIT_NOT_OWNED`
 - `DiaryRoutineService.getDiaryRoutineById/ModelById/ByScheduleId(id, userId)` — throws `ROUTINE_NOT_OWNED`
 - `GoalService.checkIfGoalIsFromTheUserInContext` — throws `GOAL_NOT_OWNED`
+- `QuickNoteService` does the same with `QuickNoteRepository.findByIdAndUserId` (and its locking twin for the task conversion): 404 `QUICK_NOTE_NOT_FOUND`
 - `CalendarService` looks every task up by id AND owner (`CalendarTaskRepository.findByIdAndUserId`), so someone else's task reads as missing: 404 `CALENDAR_TASK_NOT_FOUND`, never a NOT_OWNED key
 
 The `User` entity cascades deletes to all owned entities.

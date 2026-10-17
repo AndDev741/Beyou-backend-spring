@@ -34,6 +34,7 @@ import beyou.beyouapp.backend.domain.notebook.diagram.DiagramJson;
 import beyou.beyouapp.backend.domain.notebook.study.NotebookChatMessageRepository;
 import beyou.beyouapp.backend.domain.notebook.study.NotebookStudyOutputRepository;
 import beyou.beyouapp.backend.domain.mood.MoodService;
+import beyou.beyouapp.backend.domain.quicknote.QuickNoteRepository;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
@@ -105,6 +106,7 @@ public class UserExportService {
     private final DailyBriefingService dailyBriefingService;
     private final NotificationSendRepository notificationSendRepository;
     private final CalendarTaskRepository calendarTaskRepository;
+    private final QuickNoteRepository quickNoteRepository;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -263,6 +265,24 @@ public class UserExportService {
                     map.put("reminderClickedAt", t.getAcknowledgedAt());
                     map.put("reminderEmailSentAt", t.getReminderEmailSentAt());
                     map.put("createdAt", t.getCreatedAt());
+                    return map;
+                }).toList());
+
+        // The Ideas board, archived notes included: an idea the person put away is still theirs.
+        // Every column, the spot on the board too, so the file can rebuild the board. One query.
+        export.put("quickNotes", quickNoteRepository.findByUserIdOrderByCreatedAtAscIdAsc(userId)
+                .stream().map(n -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("id", n.getId());
+                    map.put("text", n.getText());
+                    map.put("color", n.getColor());
+                    map.put("x", n.getX());
+                    map.put("y", n.getY());
+                    map.put("z", n.getZ());
+                    map.put("archivedAt", n.getArchivedAt());
+                    map.put("convertedTaskId", n.getConvertedTaskId());
+                    map.put("createdAt", n.getCreatedAt());
+                    map.put("updatedAt", n.getUpdatedAt());
                     return map;
                 }).toList());
 

@@ -15,10 +15,11 @@
 -- nothing below names them: feedback and its children, agent_message, entity_check_day,
 -- account_deletion_codes, entity_xp_day, and everything from V24 on (notification
 -- preferences and sends, focus cycles and micro-tasks, federated sign-ins, mood entries,
--- the daily briefing, and every notebook table). feedback_reply.author_id nulls instead.
--- Two of them also hang off rows deleted here: focus_micro_tasks goes with its item group
--- in step 3, and focus_cycles.item_group_id plus the notebook's links to goals, habits and
--- categories null themselves.
+-- the daily briefing, every notebook table, calendar tasks and quick notes).
+-- feedback_reply.author_id nulls instead. Some of them also hang off rows deleted here:
+-- focus_micro_tasks goes with its item group in step 3, and focus_cycles.item_group_id,
+-- the notebook's links to goals, habits and categories, and quick_notes.converted_task_id
+-- (step 6 deletes the task a note became) null themselves.
 --
 -- This file is executed verbatim by ManualAccountDeleteRunbookTest against a real
 -- schema, on an account that holds a row in every table pointing at users. The test

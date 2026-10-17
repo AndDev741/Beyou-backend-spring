@@ -63,12 +63,33 @@ public class GlobalExceptionHandler {
      * moving them is a coordinated change of its own. A domain designed after this list existed
      * puts its not-found key here from the start.
      */
-    static final Set<ErrorKey> NOT_FOUND_KEYS = EnumSet.of(ErrorKey.CALENDAR_TASK_NOT_FOUND);
+    static final Set<ErrorKey> NOT_FOUND_KEYS = EnumSet.of(
+            ErrorKey.CALENDAR_TASK_NOT_FOUND,
+            ErrorKey.QUICK_NOTE_NOT_FOUND);
+
+    /**
+     * Business errors whose answer is 409: the request was well formed and the caller's data
+     * refused it (a full board, a note that already became a task).
+     *
+     * <p>Opt-in per key, like {@link #NOT_FOUND_KEYS} and for the same reason. Older limit and
+     * conflict keys (the notebook's, the study cycles') answer 400 and their clients match on
+     * that. {@code DATA_CONFLICT} answers 409 from its own handler below, not from here.
+     */
+    static final Set<ErrorKey> CONFLICT_KEYS = EnumSet.of(
+            ErrorKey.QUICK_NOTE_LIMIT_REACHED,
+            ErrorKey.QUICK_NOTE_ALREADY_CONVERTED);
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusinessException(BusinessException ex){
         ApiErrorResponse response = new ApiErrorResponse(ex.getErrorKey().name(), ex.getMessage(), ex.getDetails());
-        HttpStatus status = NOT_FOUND_KEYS.contains(ex.getErrorKey()) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+        HttpStatus status;
+        if (NOT_FOUND_KEYS.contains(ex.getErrorKey())) {
+            status = HttpStatus.NOT_FOUND;
+        } else if (CONFLICT_KEYS.contains(ex.getErrorKey())) {
+            status = HttpStatus.CONFLICT;
+        } else {
+            status = HttpStatus.BAD_REQUEST;
+        }
         return ResponseEntity.status(status).body(response);
     }
 
