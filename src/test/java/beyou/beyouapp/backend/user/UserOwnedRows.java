@@ -146,6 +146,13 @@ public final class UserOwnedRows {
                 UUID.randomUUID(), userId, pageId, now);
         jdbc.update("INSERT INTO notebook_chat_messages (id, user_id, page_id, role, content, created_at) "
                 + "VALUES (?, ?, ?, 'USER', 'when do I use estar?', ?)", UUID.randomUUID(), userId, pageId, now);
+        // The answer drew a diagram (V41), so the export has one to carry.
+        jdbc.update("INSERT INTO notebook_chat_messages (id, user_id, page_id, role, content, diagram, created_at) "
+                + "VALUES (?, ?, ?, 'ASSISTANT', 'Estar is for states.', ?, ?)", UUID.randomUUID(), userId, pageId,
+                "{\"v\":1,\"kind\":\"MAP\",\"title\":\"Ser or estar\",\"nodes\":[{\"id\":\"n1\",\"label\":\"Ser\","
+                        + "\"detail\":null,\"tone\":\"NEUTRAL\"},{\"id\":\"n2\",\"label\":\"Estar\",\"detail\":\"states\","
+                        + "\"tone\":\"ACCENT\"}],\"links\":[]}",
+                Timestamp.from(now.toInstant().plusSeconds(1)));
         jdbc.update("INSERT INTO notebook_roadmap_drafts (id, user_id, title, status, request, started_at, "
                 + "created_at, updated_at) VALUES (?, ?, 'Spanish in a month', 'READY', "
                 + "'{\"title\":\"Spanish in a month\"}', ?, ?, ?)",

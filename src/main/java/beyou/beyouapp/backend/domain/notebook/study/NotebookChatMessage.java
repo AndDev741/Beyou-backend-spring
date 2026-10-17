@@ -60,6 +60,14 @@ public class NotebookChatMessage {
     @ToString.Exclude
     private String citations;
 
+    /**
+     * The diagram the tutor drew with an answer, as JSON, already cleaned by DiagramSanitizer.
+     * Null on questions and on answers without one. Added by V41.
+     */
+    @Column(columnDefinition = "text")
+    @ToString.Exclude
+    private String diagram;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 }

@@ -81,8 +81,8 @@ class NotebookStudySetupIT extends AbstractIntegrationTest {
         notes(algorithms, "Big O describes how cost grows with the input.");
         notes(sorting, "Merge sort splits the list in half and merges the sorted halves.");
         notes(networks, "TCP retransmits lost segments.");
-        when(llm.call(eq(LlmPayloads.AnswerPayload.class), anyString(), any()))
-                .thenReturn(new LlmPayloads.AnswerPayload("An answer [1].", List.of(1)));
+        when(llm.call(eq(LlmPayloads.ChatPayload.class), anyString(), any()))
+                .thenReturn(new LlmPayloads.ChatPayload("An answer [1].", List.of(1), null));
         when(fetcher.validate(anyString())).thenAnswer(inv -> URI.create(inv.getArgument(0)));
     }
 
@@ -177,7 +177,7 @@ class NotebookStudySetupIT extends AbstractIntegrationTest {
 
     private String lastPrompt() {
         ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
-        verify(llm, org.mockito.Mockito.atLeastOnce()).call(eq(LlmPayloads.AnswerPayload.class), prompt.capture(), any());
+        verify(llm, org.mockito.Mockito.atLeastOnce()).call(eq(LlmPayloads.ChatPayload.class), prompt.capture(), any());
         return prompt.getValue();
     }
 
