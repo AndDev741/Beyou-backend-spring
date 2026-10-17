@@ -6,7 +6,14 @@ import org.junit.jupiter.api.Test;
 
 import beyou.beyouapp.backend.domain.notebook.BlockText;
 import beyou.beyouapp.backend.domain.notebook.MarkdownBlocks;
+import java.util.List;
+
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramKind;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramNode;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSpec;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramTone;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
 
 /** "Save to page": AI markdown into BlockNote blocks. */
@@ -79,5 +86,31 @@ class MarkdownBlocksTest {
         tools.jackson.databind.json.JsonMapper.builder().build().readTree(doc).forEach(block -> ids.add(block.path("id").asString()));
 
         assertThat(ids).hasSize(7).doesNotContain("").doesNotHaveDuplicates();
+    }
+
+    /**
+     * The diagram block the editors register: no inline content, the spec as a JSON string in its
+     * one prop, empty children, its own id. After the markdown, never before it.
+     */
+    @Test
+    void aDiagramBlockGoesAfterTheMarkdownWithTheSpecAsAStringProp() {
+        DiagramSpec spec = new DiagramSpec(1, DiagramKind.CYCLE, "Water cycle", List.of(
+                new DiagramNode("n1", "Evaporation", null, DiagramTone.ACCENT),
+                new DiagramNode("n2", "Rain", "falls back", DiagramTone.NEUTRAL)), List.of());
+
+        String doc = MarkdownBlocks.append(null, "Notes first", spec);
+        JsonNode blocks = JsonMapper.builder().build().readTree(doc);
+
+        assertThat(blocks).hasSize(2);
+        assertThat(blocks.get(0).path("type").asString()).isEqualTo("paragraph");
+        JsonNode diagram = blocks.get(1);
+        assertThat(diagram.path("type").asString()).isEqualTo(MarkdownBlocks.DIAGRAM_BLOCK_TYPE).isEqualTo("diagram");
+        assertThat(diagram.path("id").asString()).isNotBlank();
+        assertThat(diagram.has("content")).isFalse();
+        assertThat(diagram.path("children").isArray()).isTrue();
+        assertThat(diagram.path("children")).isEmpty();
+        assertThat(diagram.path("props").path("spec").isString()).isTrue();
+        assertThat(JsonMapper.builder().build().readValue(diagram.path("props").path("spec").asString(), DiagramSpec.class))
+                .isEqualTo(spec);
     }
 }

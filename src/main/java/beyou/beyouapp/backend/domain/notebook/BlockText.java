@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.domain.notebook;
 
+import java.util.List;
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -14,6 +16,11 @@ import tools.jackson.databind.json.JsonMapper;
  * field is inline text, any {@code content} or {@code children} is walked, and a table's
  * {@code rows} are walked cell by cell. A block type added to the editor later is still read
  * correctly, and a custom block with no text (the roadmap board) contributes nothing.
+ *
+ * <p>One custom block is read by type: a diagram ({@link MarkdownBlocks#DIAGRAM_BLOCK_TYPE}) keeps
+ * its words in a JSON string prop, where the walk cannot see them. It contributes its title, a
+ * line per node ({@code label: detail}, or the label alone) and its link labels, so a diagram is
+ * found by search, read by the AI and carried by the export like any other text on the page.
  *
  * <p>A document that does not parse yields an empty string rather than an error. The page is
  * still saved: losing the text the AI sees is better than losing what the person typed.
@@ -56,12 +63,58 @@ public final class BlockText {
 
     private static void block(JsonNode block, StringBuilder out) {
         if (block == null || !block.isObject()) return;
+        if (isDiagram(block)) {
+            diagram(block.get("props"), out);
+            blocks(block.get("children"), out);
+            return;
+        }
         int before = out.length();
         inline(block.get("content"), out);
         if (out.length() > before) {
             out.append('\n');
         }
         blocks(block.get("children"), out);
+    }
+
+    private static boolean isDiagram(JsonNode block) {
+        JsonNode type = block.get("type");
+        return type != null && type.isString() && MarkdownBlocks.DIAGRAM_BLOCK_TYPE.equals(type.asString());
+    }
+
+    /** A diagram's words, from the spec in its props. A spec that does not parse contributes nothing. */
+    private static void diagram(JsonNode props, StringBuilder out) {
+        if (props == null || !props.isObject()) return;
+        JsonNode spec = props.get("spec");
+        if (spec == null || !spec.isString()) return;
+        JsonNode root;
+        try {
+            root = MAPPER.readTree(spec.asString());
+        } catch (RuntimeException unreadable) {
+            return;
+        }
+        if (root == null || !root.isObject()) return;
+        line(out, text(root.get("title")));
+        for (JsonNode node : items(root.get("nodes"))) {
+            String label = text(node.get("label"));
+            if (label.isEmpty()) continue;
+            String detail = text(node.get("detail"));
+            line(out, detail.isEmpty() ? label : label + ": " + detail);
+        }
+        for (JsonNode link : items(root.get("links"))) {
+            line(out, text(link.get("label")));
+        }
+    }
+
+    private static Iterable<JsonNode> items(JsonNode array) {
+        return array != null && array.isArray() ? array : List.of();
+    }
+
+    private static String text(JsonNode node) {
+        return node != null && node.isString() ? node.asString().strip() : "";
+    }
+
+    private static void line(StringBuilder out, String text) {
+        if (!text.isEmpty()) out.append(text).append('\n');
     }
 
     private static void inline(JsonNode node, StringBuilder out) {

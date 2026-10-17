@@ -288,7 +288,7 @@ public class StudyBoardEditor {
             pageId = target.pageId();
             title = target.title();
         }
-        pageService.append(user, pageId, new AppendRequestDTO(notes));
+        pageService.append(user, pageId, new AppendRequestDTO(notes, null));
         return success("Added the notes at the end of \"" + title + "\"");
     }
 

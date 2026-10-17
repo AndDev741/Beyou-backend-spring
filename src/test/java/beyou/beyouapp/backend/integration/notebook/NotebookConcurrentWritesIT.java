@@ -76,7 +76,7 @@ class NotebookConcurrentWritesIT extends AbstractIntegrationTest {
     void openingAPageKeepsTheTextSavedWhileItWasLoading() {
         outer.executeWithoutResult(status -> {
             pageRepository.findById(topicId).orElseThrow();
-            inner.executeWithoutResult(s -> pageService.append(user, topicId, new AppendRequestDTO(APPENDED)));
+            inner.executeWithoutResult(s -> pageService.append(user, topicId, new AppendRequestDTO(APPENDED, null)));
             pageService.open(user, topicId);
         });
 
@@ -96,7 +96,7 @@ class NotebookConcurrentWritesIT extends AbstractIntegrationTest {
 
         outer.executeWithoutResult(status -> {
             progressService.graphFor(user.getId());
-            inner.executeWithoutResult(s -> pageService.append(user, topicId, new AppendRequestDTO(APPENDED)));
+            inner.executeWithoutResult(s -> pageService.append(user, topicId, new AppendRequestDTO(APPENDED, null)));
             pageService.setStatus(user, nodePageId, new SetStatusRequestDTO(StatusChoice.DONE));
         });
 
@@ -124,7 +124,7 @@ class NotebookConcurrentWritesIT extends AbstractIntegrationTest {
     @Test
     void aSaveFromBeforeAnAppendIsRefusedAndTheAppendStays() {
         long read = pageService.open(user, topicId).contentRevision();
-        pageService.append(user, topicId, new AppendRequestDTO(APPENDED));
+        pageService.append(user, topicId, new AppendRequestDTO(APPENDED, null));
 
         assertThatThrownBy(() -> pageService.saveContent(user, topicId, new UpdateContentRequestDTO(doc("Typed before"), read)))
                 .isInstanceOf(BusinessException.class)
@@ -174,7 +174,7 @@ class NotebookConcurrentWritesIT extends AbstractIntegrationTest {
         outer.executeWithoutResult(status -> {
             pageRepository.findById(topicId).orElseThrow();
             inner.executeWithoutResult(s -> pageService.saveContent(user, topicId, new UpdateContentRequestDTO(doc("Saved meanwhile"), read)));
-            pageService.append(user, topicId, new AppendRequestDTO(APPENDED));
+            pageService.append(user, topicId, new AppendRequestDTO(APPENDED, null));
         });
 
         NotebookPage stored = pageRepository.findById(topicId).orElseThrow();
