@@ -515,7 +515,7 @@ public class ToolsJsonBindingTest {
                 .filter(name -> name.contains("Study"))
                 .toList();
 
-        assertEquals(23, studyTools.size(), studyTools.toString());
+        assertEquals(24, studyTools.size(), studyTools.toString());
         for (String tool : studyTools) {
             if (reads.contains(tool)) {
                 assertEquals(List.of(), AgentToolDomains.domainsOf(tool), tool);

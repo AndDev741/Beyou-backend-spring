@@ -1,0 +1,13 @@
+Return ONE diagram as JSON in this shape:
+{"v":1,"kind":"FLOW","title":"","nodes":[{"id":"n1","label":"","detail":null,"tone":"NEUTRAL"}],"links":[{"from":"n1","to":"n2","label":null,"dashed":false}]}
+- Ids are short (n1, n2, ...) and unique, and every link points at two of them.
+- FLOW and MAP draw their links. SEQUENCE draws its links as messages, top to bottom in the order given, dashed for a reply. CYCLE, LAYERS and TIMELINE ignore links, so send none: the order of the nodes is the drawing.
+- detail is null unless it adds something. tone is NEUTRAL unless it means something.
+
+Two examples of the size and style wanted. They are in English; write yours in the language the rules above give.
+
+A FLOW, for "how does logging in with a password work":
+{"v":1,"kind":"FLOW","title":"Password login","nodes":[{"id":"n1","label":"Email and password","detail":null,"tone":"ACCENT"},{"id":"n2","label":"Compare the hash","detail":"bcrypt, never the plain text","tone":"NEUTRAL"},{"id":"n3","label":"Start a session","detail":null,"tone":"SUCCESS"},{"id":"n4","label":"Show an error","detail":"same message for both fields","tone":"DANGER"}],"links":[{"from":"n1","to":"n2","label":null,"dashed":false},{"from":"n2","to":"n3","label":"match","dashed":false},{"from":"n2","to":"n4","label":"no match","dashed":false},{"from":"n4","to":"n1","label":"try again","dashed":true}]}
+
+A MAP, for "the parts of an animal cell":
+{"v":1,"kind":"MAP","title":"Animal cell","nodes":[{"id":"n1","label":"Animal cell","detail":null,"tone":"ACCENT"},{"id":"n2","label":"Nucleus","detail":"holds the DNA","tone":"NEUTRAL"},{"id":"n3","label":"Mitochondria","detail":"make ATP","tone":"NEUTRAL"},{"id":"n4","label":"Membrane","detail":"controls what gets in","tone":"NEUTRAL"},{"id":"n5","label":"Ribosomes","detail":"build proteins","tone":"NEUTRAL"}],"links":[{"from":"n1","to":"n2","label":null,"dashed":false},{"from":"n1","to":"n3","label":null,"dashed":false},{"from":"n1","to":"n4","label":null,"dashed":false},{"from":"n1","to":"n5","label":null,"dashed":false}]}

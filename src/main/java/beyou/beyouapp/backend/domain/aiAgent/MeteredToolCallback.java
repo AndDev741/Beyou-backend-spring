@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.domain.aiAgent;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import org.springframework.ai.chat.model.ToolContext;
@@ -51,18 +53,28 @@ public class MeteredToolCallback implements ToolCallback {
     public String call(String toolInput, ToolContext toolContext) {
         Consumer<AgentEvent> events = eventsFrom(toolContext);
         String name = delegate.getToolDefinition().name();
+        // A fresh display per call, handed to the tool in its context. What the tool puts in it
+        // (a diagram, the page it went to) rides on this call's finished event. See ToolDisplay.
+        ToolDisplay display = new ToolDisplay();
+        ToolContext context = withDisplay(toolContext, display);
 
         try{
             emit(events, AgentEvent.toolStarted(name));
-            String timedResult = timed(() -> delegate.call(toolInput, toolContext));
+            String timedResult = timed(() -> delegate.call(toolInput, context));
             
-            emit(events, AgentEvent.toolFinished(name, null, AgentToolDomains.domainsOf(name)));
+            emit(events, AgentEvent.toolFinished(name, null, AgentToolDomains.domainsOf(name), display.fields()));
             
             return timedResult;
         }catch(RuntimeException e){
             emit(events, AgentEvent.toolFinished(name, e.getClass().getSimpleName(), AgentToolDomains.domainsOf(name)));
             throw e;
         }
+    }
+
+    private static ToolContext withDisplay(ToolContext toolContext, ToolDisplay display) {
+        Map<String, Object> context = new HashMap<>(toolContext == null ? Map.of() : toolContext.getContext());
+        context.put(ToolDisplay.KEY, display);
+        return new ToolContext(context);
     }
 
     private void emit(Consumer<AgentEvent> events, AgentEvent event){

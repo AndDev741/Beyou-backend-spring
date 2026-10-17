@@ -6,6 +6,8 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramJson;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSpec;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -115,6 +117,14 @@ public final class MarkdownBlocks {
      * nothing in it the editor could show, so keeping it would only keep the page broken.
      */
     public static String append(String existingJson, String markdown) {
+        return append(existingJson, markdown, null);
+    }
+
+    /**
+     * {@code existing} with {@code markdown}'s blocks and then a diagram block at the end. Either
+     * may be null. The diagram must already be clean (DiagramSanitizer): this only wraps it.
+     */
+    public static String append(String existingJson, String markdown, DiagramSpec diagram) {
         ArrayNode document = MAPPER.createArrayNode();
         if (existingJson != null && !existingJson.isBlank()) {
             try {
@@ -127,7 +137,27 @@ public final class MarkdownBlocks {
             }
         }
         document.addAll(toBlocks(markdown));
+        if (diagram != null) {
+            document.add(diagramBlock(diagram));
+        }
         return MAPPER.writeValueAsString(document);
+    }
+
+    /**
+     * The block type the editors register for a diagram (web schema, mobile DOM editor, mobile
+     * read view). Must match {@code DIAGRAM_BLOCK_TYPE} in {@code @beyou/types/notebook/diagram}.
+     */
+    public static final String DIAGRAM_BLOCK_TYPE = "diagram";
+
+    /**
+     * A diagram block: BlockNote's custom block with no inline content, the spec as a JSON string
+     * in its one prop, because BlockNote props are strings. The editors parse it back to draw it.
+     */
+    public static ObjectNode diagramBlock(DiagramSpec diagram) {
+        ObjectNode block = block(DIAGRAM_BLOCK_TYPE);
+        block.putObject("props").put("spec", DiagramJson.write(diagram));
+        block.putArray("children");
+        return block;
     }
 
     /**

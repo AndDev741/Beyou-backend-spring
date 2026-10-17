@@ -34,6 +34,12 @@ import beyou.beyouapp.backend.domain.notebook.ai.dto.StudyLevel;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.SuggestNodesRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardService;
 import beyou.beyouapp.backend.domain.notebook.board.dto.CreateNodeRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramKind;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramLink;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramNode;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramService;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSpec;
+import beyou.beyouapp.backend.domain.notebook.diagram.dto.DiagramRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.CreateTopicRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.UpdateContentRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.study.NotebookStudyService;
@@ -64,6 +70,7 @@ class NotebookModelCallTransactionIT extends AbstractIntegrationTest {
 
     @Autowired private NotebookAiService aiService;
     @Autowired private NotebookStudyService studyService;
+    @Autowired private DiagramService diagramService;
     @Autowired private StudyBoardEditor boardEditor;
     @Autowired private NotebookPageService pageService;
     @Autowired private NotebookBoardService boardService;
@@ -90,6 +97,10 @@ class NotebookModelCallTransactionIT extends AbstractIntegrationTest {
         answer(LlmPayloads.SuggestionsPayload.class, () -> new LlmPayloads.SuggestionsPayload(List.of(
                 new LlmPayloads.Suggestion("Graphs", "Next after trees."))));
         answer(LlmPayloads.AnswerPayload.class, () -> new LlmPayloads.AnswerPayload("At the root [1].", List.of(1)));
+        answer(LlmPayloads.ChatPayload.class, () -> new LlmPayloads.ChatPayload("At the root [1].", List.of(1), null));
+        answer(DiagramSpec.class, () -> new DiagramSpec(1, DiagramKind.MAP, "Heap", List.of(
+                new DiagramNode("n1", "Heap", null, null), new DiagramNode("n2", "Root", "smallest key", null)),
+                List.of(new DiagramLink("n1", "n2", null, null))));
         answer(LlmPayloads.CardsPayload.class, () -> new LlmPayloads.CardsPayload(List.of(
                 new LlmPayloads.Card("Where is the smallest key in a min-heap?", "At the root.", 1))));
         answer(LlmPayloads.OverviewPayload.class, () -> new LlmPayloads.OverviewPayload(
@@ -148,6 +159,13 @@ class NotebookModelCallTransactionIT extends AbstractIntegrationTest {
 
         assertNoTransactionDuringTheCall();
         assertThat(count("notebook_chat_messages", "page_id", trees)).isEqualTo(2);
+    }
+
+    @Test
+    void drawingADiagramCallsTheModelWithNoTransactionOpen() {
+        assertThat(diagramService.generate(user, trees, new DiagramRequestDTO("The heap", null, true, null)).fromNotes())
+                .isTrue();
+        assertNoTransactionDuringTheCall();
     }
 
     @Test

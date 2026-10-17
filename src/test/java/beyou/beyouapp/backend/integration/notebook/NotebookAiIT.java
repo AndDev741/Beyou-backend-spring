@@ -173,9 +173,9 @@ class NotebookAiIT extends AbstractIntegrationTest {
     @Test
     void aChatAnswerKeepsOnlyCitationsThatPointAtSomething() {
         UUID trees = pageWithNotes("Trees", "To delete a node with two children use the in-order successor.");
-        when(llm.call(eq(LlmPayloads.AnswerPayload.class), anyString(), any())).thenReturn(
-                new LlmPayloads.AnswerPayload("Use the successor [1]. Beyond your notes, an AVL tree then rebalances [7].",
-                        List.of(1, 7)));
+        when(llm.call(eq(LlmPayloads.ChatPayload.class), anyString(), any())).thenReturn(
+                new LlmPayloads.ChatPayload("Use the successor [1]. Beyond your notes, an AVL tree then rebalances [7].",
+                        List.of(1, 7), null));
 
         ChatTurnDTO turn = studyService.chat(user, trees, "How do I delete a node with two children?");
 
@@ -193,18 +193,20 @@ class NotebookAiIT extends AbstractIntegrationTest {
     @Test
     void theChatIsATutorWhileTheStudioStaysGrounded() {
         UUID trees = pageWithNotes("Trees", "A heap keeps the smallest key at the root.");
+        when(llm.call(eq(LlmPayloads.ChatPayload.class), anyString(), any())).thenReturn(
+                new LlmPayloads.ChatPayload("At the root [1].", List.of(1), null));
         when(llm.call(eq(LlmPayloads.AnswerPayload.class), anyString(), any())).thenReturn(
                 new LlmPayloads.AnswerPayload("At the root [1].", List.of(1)));
 
         studyService.chat(user, trees, "Where is the smallest key?");
         studyService.generate(user, trees, StudyOutputKind.STUDY_GUIDE);
 
-        List<String> prompts = answerPrompts();
-        assertThat(prompts).hasSize(2);
-        assertThat(prompts.get(0)).startsWith("TUTOR\n")
+        assertThat(chatPrompts()).singleElement().satisfies(prompt -> assertThat(prompt).startsWith("TUTOR\n")
                 .contains("The person is studying the page \"Trees\", in the topic \"Data Structures\".")
-                .contains("A heap keeps the smallest key at the root.");
-        assertThat(prompts.get(1)).startsWith("GROUNDED\n");
+                .contains("A heap keeps the smallest key at the root."));
+        // The studio does not draw: its message never asks for a diagram.
+        assertThat(answerPrompts()).singleElement().satisfies(prompt -> assertThat(prompt)
+                .startsWith("GROUNDED\n").doesNotContain("diagram"));
     }
 
     /**
@@ -217,12 +219,12 @@ class NotebookAiIT extends AbstractIntegrationTest {
     void anEmptyPageStillReachesTheTutorAndKeepsTheTurn() {
         UUID spanish = node(topic("Languages"), "Spanish");
         studyService.saveSetup(user, spanish, new StudySetupRequestDTO("Become fluent in Spanish", StudyScope.PAGE));
-        when(llm.call(eq(LlmPayloads.AnswerPayload.class), anyString(), any())).thenReturn(
-                new LlmPayloads.AnswerPayload("This goes beyond your notes. A short level test [1].", List.of(1)));
+        when(llm.call(eq(LlmPayloads.ChatPayload.class), anyString(), any())).thenReturn(
+                new LlmPayloads.ChatPayload("This goes beyond your notes. A short level test [1].", List.of(1), null));
 
         ChatTurnDTO turn = studyService.chat(user, spanish, "Give me a level test");
 
-        assertThat(answerPrompts()).singleElement().satisfies(prompt -> assertThat(prompt)
+        assertThat(chatPrompts()).singleElement().satisfies(prompt -> assertThat(prompt)
                 .startsWith("TUTOR\n")
                 .contains("The person is studying the page \"Spanish\", in the topic \"Languages\".")
                 .contains("The person's goal for studying this: Become fluent in Spanish")
@@ -338,7 +340,14 @@ class NotebookAiIT extends AbstractIntegrationTest {
 
     // ---------------------------------------------------------------- helpers
 
-    /** Every message sent for an answer-shaped call (chat, summary, study guide), in order. */
+    /** Every message sent for a study-room chat question, in order. */
+    private List<String> chatPrompts() {
+        ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
+        verify(llm, atLeastOnce()).call(eq(LlmPayloads.ChatPayload.class), prompt.capture(), any());
+        return prompt.getAllValues();
+    }
+
+    /** Every message sent for an answer-shaped studio call (explain, summary, study guide), in order. */
     private List<String> answerPrompts() {
         ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
         verify(llm, atLeastOnce()).call(eq(LlmPayloads.AnswerPayload.class), prompt.capture(), any());

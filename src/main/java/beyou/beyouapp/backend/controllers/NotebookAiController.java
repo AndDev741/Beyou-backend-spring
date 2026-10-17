@@ -32,6 +32,9 @@ import beyou.beyouapp.backend.domain.notebook.ai.dto.RoadmapDraftRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.SuggestNodesRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.SuggestedNodeDTO;
 import beyou.beyouapp.backend.domain.notebook.card.dto.CardDTO;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramService;
+import beyou.beyouapp.backend.domain.notebook.diagram.dto.DiagramRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.diagram.dto.DiagramResultDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.PageResponseDTO;
 import beyou.beyouapp.backend.domain.notebook.study.NotebookStudyService;
 import beyou.beyouapp.backend.domain.notebook.study.dto.ChatTurnDTO;
@@ -57,6 +60,7 @@ public class NotebookAiController {
     private final RoadmapDraftService draftService;
     private final SourceDiscoveryService discoveryService;
     private final NotebookStudyService studyService;
+    private final DiagramService diagramService;
     private final AuthenticatedUser authenticatedUser;
 
     /**
@@ -129,6 +133,17 @@ public class NotebookAiController {
     public ResponseEntity<List<CardDTO>> cards(@PathVariable UUID pageId, @Valid @RequestBody AiCardsRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(aiService.cards(authenticatedUser.getAuthenticatedUser(), pageId, request));
+    }
+
+    /**
+     * A diagram drawn by the AI for the page, from its notes and sources (grounded, the default)
+     * or from the model's own knowledge. Nothing is saved: the client puts the result in the page.
+     * With {@code base}, an adjustment of that diagram.
+     */
+    @PostMapping("/ai/pages/{pageId}/diagram")
+    public ResponseEntity<DiagramResultDTO> diagram(@PathVariable UUID pageId,
+            @Valid @RequestBody DiagramRequestDTO request) {
+        return ResponseEntity.ok(diagramService.generate(authenticatedUser.getAuthenticatedUser(), pageId, request));
     }
 
     /**

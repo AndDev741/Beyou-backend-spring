@@ -44,6 +44,7 @@ import beyou.beyouapp.backend.domain.goal.GoalStatus;
 import beyou.beyouapp.backend.domain.goal.GoalTerm;
 import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.card.CardRating;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSpec;
 import beyou.beyouapp.backend.domain.notebook.study.StudyOutputKind;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineItemRequestDTO;
 import beyou.beyouapp.backend.notification.engagement.NudgeKind;
@@ -531,6 +532,15 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         assertThat(output.get("kind")).isEqualTo(StudyOutputKind.QUIZ);
         assertThat(output.get("score")).isEqualTo(4);
         assertThat(output.get("total")).isEqualTo(5);
+
+        // The study chat, with the diagram the tutor drew on its answer.
+        List<Map<String, Object>> studyChats = (List<Map<String, Object>>) notebook.get("studyChats");
+        assertThat(studyChats).extracting(m -> m.get("role")).containsExactly("USER", "ASSISTANT");
+        assertThat(studyChats.get(0).get("diagram")).as("a question has no diagram").isNull();
+        DiagramSpec drawn = (DiagramSpec) studyChats.get(1).get("diagram");
+        assertThat(drawn).as("the export dropped the diagram the tutor drew").isNotNull();
+        assertThat(drawn.title()).isEqualTo("Ser or estar");
+        assertThat(drawn.nodes()).extracting(n -> n.label()).containsExactly("Ser", "Estar");
 
         // The study cycle with everything under it, and the session logged by hand.
         Map<String, Object> studyCycle = ((List<Map<String, Object>>) notebook.get("studyCycles")).get(0);

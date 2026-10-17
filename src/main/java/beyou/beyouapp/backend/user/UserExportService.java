@@ -30,6 +30,7 @@ import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleRepository;
 import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleTopicRepository;
 import beyou.beyouapp.backend.domain.notebook.cycle.StudySessionRepository;
 import beyou.beyouapp.backend.domain.notebook.source.NotebookSourceRepository;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramJson;
 import beyou.beyouapp.backend.domain.notebook.study.NotebookChatMessageRepository;
 import beyou.beyouapp.backend.domain.notebook.study.NotebookStudyOutputRepository;
 import beyou.beyouapp.backend.domain.mood.MoodService;
@@ -608,6 +609,8 @@ public class UserExportService {
             map.put("pageId", m.getPageId());
             map.put("role", m.getRole());
             map.put("content", m.getContent());
+            // A picture the tutor drew with an answer, as the spec the app draws it from.
+            map.put("diagram", DiagramJson.read(m.getDiagram()).orElse(null));
             map.put("at", m.getCreatedAt());
             return map;
         }).toList());

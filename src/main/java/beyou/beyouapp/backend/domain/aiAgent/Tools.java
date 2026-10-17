@@ -49,6 +49,8 @@ import beyou.beyouapp.backend.domain.habit.dto.HabitResponseDTO;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageService;
 import beyou.beyouapp.backend.domain.aiAgent.notebook.StudyBoardEditor;
 import beyou.beyouapp.backend.domain.aiAgent.notebook.StudyCycleAssistant;
+import beyou.beyouapp.backend.domain.aiAgent.notebook.StudyDiagramEditor;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSpec;
 import beyou.beyouapp.backend.domain.notebook.dto.HomeResponseDTO;
 import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.mood.dto.SetMoodLevelDTO;
@@ -108,6 +110,8 @@ public class Tools {
     private StudyBoardEditor studyBoardEditor;
     @Autowired
     private StudyCycleAssistant studyCycleAssistant;
+    @Autowired
+    private StudyDiagramEditor studyDiagramEditor;
     @Autowired
     private Validator validator;
 
@@ -1019,6 +1023,45 @@ public class Tools {
         User user = loadUser(toolContext);
         log.info("AI agent is drafting study cards for user: {}", user.getId());
         return studyBoardEditor.generateCards(user, board, node, count, focus);
+    }
+
+    // Diagrams. The model fills a spec and the app draws it; ToolDisplay carries the cleaned spec
+    // (and for addStudyDiagram the page) to the finished event, so the chat can draw it as a card.
+    @Tool(description = "Draw a diagram in this chat for the user: steps and decisions, a hierarchy, a cycle, messages "
+            + "between actors, layers or a timeline. The app draws it from the spec, with the theme's colors. Nothing "
+            + "is saved. Use it when the user asks to draw, see or visualize something, or when a picture explains "
+            + "clearly better than text. Read only")
+    Map<String, String> showDiagram(
+            @ToolParam(description = "The diagram. Labels a few words each, a detail only when it adds something, "
+                    + "usually 3 to 12 nodes, tones only where they mean something") DiagramSpec diagram,
+            ToolContext toolContext) {
+        log.info("AI agent is showing a diagram for user: {}", userId(toolContext));
+        DiagramSpec drawn = studyDiagramEditor.show(diagram);
+        ToolDisplay display = ToolDisplay.of(toolContext);
+        if (display != null) display.diagram(drawn);
+        return Map.of("success", "The diagram \"" + drawn.title() + "\" (" + drawn.kind() + ", "
+                + drawn.nodes().size() + " nodes) is on the user's screen. Do not repeat it as a list. It is not "
+                + "saved; addStudyDiagram puts it on a page if the user asks");
+    }
+
+    @Tool(description = "Add a diagram at the end of a notebook page, as a diagram block the user can open, edit "
+            + "and export. Only when the user asks to save a diagram or names a page for it. Appends only: nothing "
+            + "already on the page changes")
+    Map<String, String> addStudyDiagram(
+            @ToolParam(description = "The page: the page id from the route the user is on (/notebook/<id>), or the exact title of the page") String page,
+            @ToolParam(description = "The diagram. Labels a few words each, a detail only when it adds something, "
+                    + "usually 3 to 12 nodes, tones only where they mean something") DiagramSpec diagram,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is adding a diagram to a study page for user: {}", user.getId());
+        StudyDiagramEditor.Added added = studyDiagramEditor.add(user, page, diagram);
+        ToolDisplay display = ToolDisplay.of(toolContext);
+        if (display != null) {
+            display.diagram(added.diagram());
+            display.page(added.pageId(), added.pageTitle());
+        }
+        return Map.of("success", "Added the diagram \"" + added.diagram().title() + "\" at the end of \""
+                + added.pageTitle() + "\"");
     }
 
     @Tool(description = "What the user could study today in their notebook: the page they last opened "

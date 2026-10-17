@@ -37,6 +37,8 @@ import beyou.beyouapp.backend.domain.notebook.card.NotebookCardRepository;
 import beyou.beyouapp.backend.domain.notebook.card.NotebookCardReviewRepository;
 import beyou.beyouapp.backend.domain.notebook.card.ReviewStreak;
 import beyou.beyouapp.backend.domain.notebook.dto.AppendRequestDTO;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSanitizer;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSpec;
 import beyou.beyouapp.backend.domain.notebook.dto.ContentSavedDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.ContinueDTO;
 import beyou.beyouapp.backend.domain.notebook.dto.CreatePageRequestDTO;
@@ -351,11 +353,22 @@ public class NotebookPageService {
         return new ContentSavedDTO(page.getId(), now, read + 1);
     }
 
-    /** "Save to page": markdown from the study room or the assistant, appended to the document as blocks. */
+    /**
+     * "Save to page": markdown and a diagram from the study room or the assistant, appended to the
+     * document as blocks, markdown first. The diagram is cleaned here, on the one path every
+     * append takes, so neither client nor the assistant can store one the editors cannot draw.
+     */
     @Transactional
     public PageResponseDTO append(User user, UUID pageId, AppendRequestDTO request) {
         ownership.page(user.getId(), pageId);
-        rewriteContent(pageId, existing -> MarkdownBlocks.append(existing, request.markdown()));
+        String markdown = request.markdown() == null || request.markdown().isBlank() ? null : request.markdown();
+        DiagramSpec diagram = request.diagram() == null ? null : DiagramSanitizer.clean(request.diagram())
+                .orElseThrow(() -> new BusinessException(ErrorKey.INVALID_REQUEST,
+                        "A diagram needs at least two nodes with a label"));
+        if (markdown == null && diagram == null) {
+            throw new BusinessException(ErrorKey.INVALID_REQUEST, "Send markdown, a diagram, or both");
+        }
+        rewriteContent(pageId, existing -> MarkdownBlocks.append(existing, markdown, diagram));
         return page(user, pageId, false);
     }
 

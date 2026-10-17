@@ -25,6 +25,9 @@ import beyou.beyouapp.backend.domain.notebook.ai.dto.CitationDTO;
 import beyou.beyouapp.backend.domain.notebook.ai.dto.LlmPayloads;
 import beyou.beyouapp.backend.domain.notebook.card.NotebookCardRepository;
 import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleService;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramJson;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSanitizer;
+import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSpec;
 import beyou.beyouapp.backend.domain.notebook.source.NotebookSourceService;
 import beyou.beyouapp.backend.domain.notebook.study.dto.ChatMessageDTO;
 import beyou.beyouapp.backend.domain.notebook.study.dto.ChatTurnDTO;
@@ -67,6 +70,13 @@ import tools.jackson.databind.ObjectMapper;
  * visible. The chat also works on a page with no notes and no sources yet. The message then says
  * so and still names the page, its topic and the room's goal, which keeps the answer on the
  * subject.
+ *
+ * <p>A chat answer may carry a diagram: the tutor draws when the person asks to see something or
+ * a picture is clearly easier than prose (the rules are in the prompt). It is cleaned by
+ * DiagramSanitizer and stored on the answer, and one that does not survive the cleaning is
+ * dropped while the answer stays. The studio's outputs never draw; they share
+ * {@link LlmPayloads.AnswerPayload}, which has no diagram, while the chat asks for its own
+ * {@link LlmPayloads.ChatPayload}.
  *
  * <p>Outputs are stored as JSON (see the Stored records below). A quiz keeps its answers on the
  * server: the client gets the questions, sends its picks to {@link #grade}, and only then sees
@@ -197,32 +207,54 @@ public class NotebookStudyService {
                 message.append("The conversation so far:\n");
                 for (NotebookChatMessage m : earlier) {
                     message.append(NotebookChatMessage.USER.equals(m.getRole()) ? "Person: " : "Tutor: ")
-                            .append(m.getContent()).append('\n');
+                            .append(m.getContent());
+                    // The picture goes back too, so "add the error case to that diagram" has
+                    // something to change. It was cleaned before it was stored.
+                    if (m.getDiagram() != null) {
+                        message.append("\n(The tutor drew this diagram with that answer: ").append(m.getDiagram()).append(')');
+                    }
+                    message.append('\n');
                 }
             }
             message.append("\nThe person asks: ").append(question.strip()).append('\n')
                     // Room for a level test or a set of exercises, which a tutor now writes from its
                     // own knowledge; 250 words cut those off. The answer is clipped at 8000 chars anyway.
                     .append("Answer in at most 400 words.\n")
-                    .append("JSON: {\"answer\":\"markdown\",\"citations\":[numbers you used]}\n");
+                    .append("JSON: {\"answer\":\"markdown\",\"citations\":[numbers you used],\"diagram\":null}\n")
+                    .append(CHAT_DIAGRAM_FORMAT);
             return new Prompt(message.toString(), context);
         });
-        LlmPayloads.AnswerPayload payload = llm.call(LlmPayloads.AnswerPayload.class, prompt.message(), user);
+        LlmPayloads.ChatPayload payload = llm.call(LlmPayloads.ChatPayload.class, prompt.message(), user);
         String markdown = contextBuilder.withoutDeadMarkers(prompt.context(), clip(payload.answer(), 8000));
         if (markdown.isBlank()) {
             throw new BusinessException(ErrorKey.AI_UNAVAILABLE, "The answer came back empty");
         }
         List<CitationDTO> citations = contextBuilder.citations(prompt.context(), markdown, payload.citations());
+        // A diagram that does not survive cleaning is dropped and the answer kept: the words are
+        // what the person asked for, and a broken picture is not worth an error.
+        String diagram = DiagramSanitizer.clean(payload.diagram()).map(DiagramJson::write).orElse(null);
 
         return tx.write(() -> {
             // Loaded again: the page from the read is detached by now.
             NotebookPage page = ownership.page(user.getId(), pageId);
-            NotebookChatMessage asked = save(page, NotebookChatMessage.USER, question.strip(), null);
+            NotebookChatMessage asked = save(page, NotebookChatMessage.USER, question.strip(), null, null);
             NotebookChatMessage answered = save(page, NotebookChatMessage.ASSISTANT, markdown,
-                    objectMapper.writeValueAsString(citations));
+                    objectMapper.writeValueAsString(citations), diagram);
             return new ChatTurnDTO(toMessage(asked), toMessage(answered));
         });
     }
+
+    /**
+     * The chat's diagram field, in the message because the system prompt is a template and cannot
+     * hold a brace. When to draw and how lives in {@code prompts/notebookTutor.st}.
+     */
+    static final String CHAT_DIAGRAM_FORMAT = """
+            diagram stays null unless a picture helps (see "Drawing a diagram"). When it does, it is \
+            {"kind":"FLOW","title":"","nodes":[{"id":"n1","label":"","detail":null,"tone":"NEUTRAL"}],\
+            "links":[{"from":"n1","to":"n2","label":null,"dashed":false}]}. Ids are short and unique and every link \
+            points at two of them; CYCLE, LAYERS and TIMELINE take no links, the node order is the drawing. \
+            The answer always has text, with or without a diagram.
+            """;
 
     /**
      * Which page and topic the person is studying. Sent with every question, passages or not.
@@ -245,13 +277,15 @@ public class NotebookStudyService {
         messageRepository.deleteByPageId(pageId);
     }
 
-    private NotebookChatMessage save(NotebookPage page, String role, String content, String citations) {
+    private NotebookChatMessage save(NotebookPage page, String role, String content, String citations,
+            String diagram) {
         NotebookChatMessage m = new NotebookChatMessage();
         m.setUser(page.getUser());
         m.setPageId(page.getId());
         m.setRole(role);
         m.setContent(content);
         m.setCitations(citations);
+        m.setDiagram(diagram);
         // Distinct instants, so the question always sorts before its answer.
         m.setCreatedAt(Instant.now().plusNanos(NotebookChatMessage.USER.equals(role) ? 0 : 1000));
         return messageRepository.save(m);
@@ -411,7 +445,8 @@ public class NotebookStudyService {
     private ChatMessageDTO toMessage(NotebookChatMessage m) {
         List<CitationDTO> citations = m.getCitations() == null ? List.of()
                 : objectMapper.readValue(m.getCitations(), new TypeReference<List<CitationDTO>>() { });
-        return new ChatMessageDTO(m.getId(), m.getRole(), m.getContent(), citations, m.getCreatedAt());
+        DiagramSpec diagram = DiagramJson.read(m.getDiagram()).orElse(null);
+        return new ChatMessageDTO(m.getId(), m.getRole(), m.getContent(), citations, m.getCreatedAt(), diagram);
     }
 
     private OverviewDTO toOverview(NotebookStudyOutput o) {
