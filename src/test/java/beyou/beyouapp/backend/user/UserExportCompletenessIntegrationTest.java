@@ -62,6 +62,7 @@ import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessageService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
+import beyou.beyouapp.backend.domain.quicknote.QuickNoteColor;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 
@@ -120,6 +121,7 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
             entry("entity_check_day", "checkHistory"),
             entry("mood_entries", "moodEntries"),
             entry("calendar_tasks", "calendarTasks"),
+            entry("quick_notes", "quickNotes"),
             entry("notification_preferences", "profile.engagementEmails"),
             entry("notification_sends", "engagementEmailsSent"),
             entry("federated_identities", "profile.linkedSignIns"),
@@ -503,6 +505,28 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         assertThat(calendarTask.get("advanceMinutes")).isEqualTo(60);
         assertThat(calendarTask.get("completedAt")).as("it was done").isNotNull();
         assertThat(calendarTask.get("xpAwarded")).isEqualTo(10.0);
+
+        // The Ideas board, the archive included, every field: the note that became a task says which.
+        List<Map<String, Object>> quickNotes = (List<Map<String, Object>>) export.get("quickNotes");
+        assertThat(quickNotes).hasSize(2);
+        assertThat(quickNotes).anySatisfy(note -> {
+            assertThat(note.get("text")).isEqualTo("learn to juggle");
+            assertThat(note.get("color")).isEqualTo(QuickNoteColor.PINK);
+            assertThat(note.get("x")).isEqualTo(224);
+            assertThat(note.get("y")).isEqualTo(0);
+            assertThat(note.get("z")).isEqualTo(3);
+            assertThat(note.get("archivedAt")).isNull();
+            assertThat(note.get("convertedTaskId")).isNull();
+        });
+        assertThat(quickNotes).anySatisfy(note -> {
+            assertThat(note.get("text")).isEqualTo("call the plumber");
+            assertThat(note.get("x")).isEqualTo(-40);
+            assertThat(note.get("y")).isEqualTo(900);
+            assertThat(note.get("archivedAt")).as("an archived note is still the person's").isNotNull();
+            assertThat(note.get("convertedTaskId")).isEqualTo(taskId);
+        });
+        assertThat(quickNotes.get(0)).containsOnlyKeys("id", "text", "color", "x", "y", "z", "archivedAt",
+                "convertedTaskId", "createdAt", "updatedAt");
 
         Map<String, Object> mail = ((List<Map<String, Object>>) export.get("engagementEmailsSent")).get(0);
         assertThat(mail.get("kind")).isEqualTo(NudgeKind.STREAK_RECORD_AT_RISK);

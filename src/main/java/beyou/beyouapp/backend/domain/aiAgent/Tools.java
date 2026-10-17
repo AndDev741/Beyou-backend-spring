@@ -6,8 +6,10 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -54,6 +56,10 @@ import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSpec;
 import beyou.beyouapp.backend.domain.notebook.dto.HomeResponseDTO;
 import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.mood.dto.SetMoodLevelDTO;
+import beyou.beyouapp.backend.domain.quicknote.QuickNoteColor;
+import beyou.beyouapp.backend.domain.quicknote.QuickNoteService;
+import beyou.beyouapp.backend.domain.quicknote.dto.QuickNoteCreateRequestDTO;
+import beyou.beyouapp.backend.domain.quicknote.dto.QuickNoteResponseDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.ScheduleResponseDTO;
@@ -104,6 +110,8 @@ public class Tools {
     private FocusService focusService;
     @Autowired
     private MoodService moodService;
+    @Autowired
+    private QuickNoteService quickNoteService;
     @Autowired
     private NotebookPageService notebookPageService;
     @Autowired
@@ -876,6 +884,59 @@ public class Tools {
                     return row;
                 })
                 .toList();
+    }
+
+    // Quick notes (the Ideas board)
+    @Tool(description = "Put an idea on the user's Ideas board (/ideas) as a post-it note, in their own words. "
+            + "For a raw thought to keep for later, not a to-do: use createUserTask when they want a task. "
+            + "The note lands in the board's first free spot, in front. No XP. Fails when the board already "
+            + "holds 200 notes: tell the user to archive some")
+    Map<String, Object> createQuickNote(
+            @ToolParam(description = "The note's text, 1 to 500 characters. Keep the user's wording") String text,
+            @ToolParam(description = "Optional: YELLOW, PINK, BLUE, GREEN, PURPLE or ORANGE. Omit for YELLOW",
+                    required = false) String color,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is creating a quick note for user: {}", user.getId());
+        QuickNoteResponseDTO note = quickNoteService.create(user,
+                valid(new QuickNoteCreateRequestDTO(text, parseNoteColor(color), null, null)));
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", "Note added to the Ideas board");
+        result.put("id", note.id());
+        result.put("color", note.color());
+        return result;
+    }
+
+    @Tool(description = "Read the notes on the user's Ideas board (/ideas): id, text and colour of each, back to "
+            + "front. Archived notes are not included. Read only")
+    List<Map<String, Object>> getQuickNotes(ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is reading quick notes for user: {}", user.getId());
+        return quickNoteService.listActive(user).stream()
+                .map(note -> {
+                    Map<String, Object> row = new LinkedHashMap<String, Object>();
+                    row.put("id", note.id());
+                    row.put("text", note.text());
+                    row.put("color", note.color());
+                    return row;
+                })
+                .toList();
+    }
+
+    /**
+     * Null and blank mean "no colour asked for", which the service turns into yellow. Any letter
+     * case binds; anything else comes back naming the six it could have been.
+     */
+    private static QuickNoteColor parseNoteColor(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return QuickNoteColor.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid color \"" + value + "\": use one of "
+                    + Arrays.toString(QuickNoteColor.values()) + ", or omit it for YELLOW");
+        }
     }
 
     // Study notebook

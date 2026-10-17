@@ -173,6 +173,25 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleBusinessException_quickNoteKeys_are404And409AndOlderLimitKeysStay400() {
+        assertEquals(HttpStatus.NOT_FOUND, handler.handleBusinessException(
+                new BusinessException(ErrorKey.QUICK_NOTE_NOT_FOUND, "Quick note not found")).getStatusCode());
+
+        ResponseEntity<ApiErrorResponse> full = handler.handleBusinessException(
+                new BusinessException(ErrorKey.QUICK_NOTE_LIMIT_REACHED, "The board is full"));
+        assertEquals(HttpStatus.CONFLICT, full.getStatusCode());
+        assertNotNull(full.getBody());
+        assertEquals(ErrorKey.QUICK_NOTE_LIMIT_REACHED.name(), full.getBody().errorKey());
+
+        assertEquals(HttpStatus.CONFLICT, handler.handleBusinessException(
+                new BusinessException(ErrorKey.QUICK_NOTE_ALREADY_CONVERTED, "Already a task")).getStatusCode());
+
+        // The conflict set is opt-in: the older domains' limit keys keep the 400 their clients read.
+        assertEquals(HttpStatus.BAD_REQUEST, handler.handleBusinessException(
+                new BusinessException(ErrorKey.NOTEBOOK_SOURCE_LIMIT_REACHED, "Too many sources")).getStatusCode());
+    }
+
+    @Test
     void handleBusinessException_googleOAuthFailed_returnsStructuredResponseWith400() {
         ResponseEntity<ApiErrorResponse> response = handler.handleBusinessException(
                 new BusinessException(ErrorKey.GOOGLE_OAUTH_FAILED, "Error trying login with Google, try again"));
