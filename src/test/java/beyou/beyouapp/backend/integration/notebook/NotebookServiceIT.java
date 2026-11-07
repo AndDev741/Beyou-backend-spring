@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
@@ -111,6 +113,34 @@ class NotebookServiceIT extends AbstractIntegrationTest {
                 .satisfies(i -> assertThat(i.onBoard()).isTrue());
         assertThat(items).filteredOn(i -> i.id().equals(loose.id())).singleElement()
                 .satisfies(i -> assertThat(i.onBoard()).isFalse());
+    }
+
+    /**
+     * The sidebar lists a board's pages by {@code position}, and that has to be the board's own
+     * order. Six nodes three to a row, as "Tidy up" leaves them, are listed row by row; sorting
+     * by x first had listed the first node of the second row second.
+     */
+    @Test
+    void theTreeListsABoardRowByRow() {
+        PageResponseDTO topic = topic("Swiss repo trading");
+        List<UUID> placed = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            NotebookBoardService.GridCell cell = NotebookBoardService.gridCell(i);
+            placed.add(node(topic.id(), "Step " + i, cell.x(), cell.y()).node().pageId());
+        }
+
+        assertThat(sidebarOrder(topic.id())).containsExactlyElementsOf(placed);
+    }
+
+    /** An arrow comes before the place, in the sidebar as on the board: the graph reads the edges too. */
+    @Test
+    void theTreeFollowsTheArrowsBeforeThePlace() {
+        PageResponseDTO topic = topic("Networks");
+        BoardChangeResponseDTO left = node(topic.id(), "Placed first", 40, 0);
+        BoardChangeResponseDTO right = node(topic.id(), "Studied first", 280, 0);
+        boardService.addEdge(user, topic.id(), new CreateEdgeRequestDTO(right.node().id(), left.node().id()));
+
+        assertThat(sidebarOrder(topic.id())).containsExactly(right.node().pageId(), left.node().pageId());
     }
 
     /**
@@ -509,6 +539,13 @@ class NotebookServiceIT extends AbstractIntegrationTest {
     private BoardChangeResponseDTO node(UUID boardPageId, String title, double x, double y) {
         return boardService.addNode(user, boardPageId,
                 new CreateNodeRequestDTO(null, title, null, null, x, y, null, null, null));
+    }
+
+    private List<UUID> sidebarOrder(UUID topicId) {
+        return pageService.tree(user, topicId).items().stream()
+                .sorted(Comparator.comparingInt(TreeItemDTO::position))
+                .map(TreeItemDTO::id)
+                .toList();
     }
 
     private StatusChangeResponseDTO status(UUID pageId, StatusChoice choice) {

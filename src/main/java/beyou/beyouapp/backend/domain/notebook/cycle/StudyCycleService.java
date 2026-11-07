@@ -30,6 +30,7 @@ import beyou.beyouapp.backend.domain.notebook.NotebookOwnership;
 import beyou.beyouapp.backend.domain.notebook.NotebookPage;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookStatus;
+import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardEdgeRepository;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardNodeRepository;
 import beyou.beyouapp.backend.domain.notebook.card.NotebookCardRepository;
 import beyou.beyouapp.backend.domain.notebook.cycle.dto.BlockPatchDTO;
@@ -124,6 +125,7 @@ public class StudyCycleService {
     private final NotebookOwnership ownership;
     private final NotebookPageRepository pageRepository;
     private final NotebookBoardNodeRepository nodeRepository;
+    private final NotebookBoardEdgeRepository edgeRepository;
     private final NotebookStudyOutputRepository outputRepository;
     private final NotebookCardRepository cardRepository;
     private final FocusCycleRepository focusCycleRepository;
@@ -622,7 +624,7 @@ public class StudyCycleService {
     // ============================================================ internals
 
     NotebookFacts facts(UUID userId) {
-        return new NotebookFacts(userId, pageRepository, nodeRepository, outputRepository, cardRepository);
+        return new NotebookFacts(userId, pageRepository, nodeRepository, edgeRepository, outputRepository, cardRepository);
     }
 
     private StudyLap currentLapOf(StudyCycle cycle) {
