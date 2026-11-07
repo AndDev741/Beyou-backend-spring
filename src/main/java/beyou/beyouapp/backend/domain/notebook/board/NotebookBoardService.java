@@ -2,7 +2,6 @@ package beyou.beyouapp.backend.domain.notebook.board;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -209,42 +208,12 @@ public class NotebookBoardService {
     public record ChainItem(String title, UUID linkPageId) {
     }
 
-    /**
-     * The page nodes in path order: every node after the nodes that point to it, and where the
-     * edges leave a choice, the node that comes first where the person put it (row, then left to
-     * right). A loop of edges is broken at its first node in that order, so every node still gets
-     * a place. The web's "Tidy up" reads a board the same way (pathOrder in boardLayout.ts).
-     */
+    /** The page nodes of a board as the client sees it, in path order ({@link BoardPath}). */
     public static List<BoardNodeDTO> pathOrder(BoardResponseDTO board) {
-        List<BoardNodeDTO> pages = board.nodes().stream()
-                .filter(n -> n.kind() == NotebookNodeKind.PAGE)
-                .sorted(Comparator.comparingLong((BoardNodeDTO n) -> Math.round(n.y() / ROW_STEP))
-                        .thenComparingDouble(BoardNodeDTO::x))
-                .toList();
-        Set<UUID> ids = pages.stream().map(BoardNodeDTO::id).collect(Collectors.toSet());
-        Map<UUID, Integer> incoming = new HashMap<>();
-        Map<UUID, List<UUID>> targets = new HashMap<>();
-        for (BoardEdgeDTO edge : board.edges()) {
-            if (!ids.contains(edge.source()) || !ids.contains(edge.target()) || edge.source().equals(edge.target())) {
-                continue;
-            }
-            incoming.merge(edge.target(), 1, Integer::sum);
-            targets.computeIfAbsent(edge.source(), k -> new ArrayList<>()).add(edge.target());
-        }
-        List<BoardNodeDTO> ordered = new ArrayList<>();
-        Set<UUID> placed = new HashSet<>();
-        while (ordered.size() < pages.size()) {
-            BoardNodeDTO next = pages.stream()
-                    .filter(n -> !placed.contains(n.id()) && incoming.getOrDefault(n.id(), 0) == 0)
-                    .findFirst()
-                    .orElseGet(() -> pages.stream().filter(n -> !placed.contains(n.id())).findFirst().orElseThrow());
-            placed.add(next.id());
-            ordered.add(next);
-            for (UUID target : targets.getOrDefault(next.id(), List.of())) {
-                incoming.merge(target, -1, Integer::sum);
-            }
-        }
-        return ordered;
+        return BoardPath.order(
+                board.nodes().stream().filter(n -> n.kind() == NotebookNodeKind.PAGE).toList(),
+                BoardNodeDTO::id, BoardNodeDTO::x, BoardNodeDTO::y,
+                board.edges().stream().map(e -> new BoardPath.Arrow(e.source(), e.target())).toList());
     }
 
     /**

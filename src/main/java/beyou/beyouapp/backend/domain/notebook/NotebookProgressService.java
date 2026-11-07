@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.domain.category.Category;
 import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
+import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardEdgeRepository;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardNodeRepository;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookNodeKind;
 import beyou.beyouapp.backend.domain.notebook.cycle.StudyCycleService;
@@ -48,15 +49,17 @@ public class NotebookProgressService {
 
     private final NotebookPageRepository pageRepository;
     private final NotebookBoardNodeRepository nodeRepository;
+    private final NotebookBoardEdgeRepository edgeRepository;
     private final NotebookRewards rewards;
     private final StudyCycleService studyCycles;
 
-    /** Everything the user has, as a graph. Two reads. */
+    /** Everything the user has, as a graph. Three reads. */
     @Transactional(readOnly = true)
     public ProgressGraph graphFor(UUID userId) {
         return ProgressGraph.of(
                 pageRepository.findByUserId(userId),
-                nodeRepository.findByUserIdAndKind(userId, NotebookNodeKind.PAGE));
+                nodeRepository.findByUserIdAndKind(userId, NotebookNodeKind.PAGE),
+                edgeRepository.findByUserId(userId));
     }
 
     /** The person picked a status (or AUTO) for a page. */

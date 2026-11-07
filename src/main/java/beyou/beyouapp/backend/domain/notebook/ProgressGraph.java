@@ -2,7 +2,6 @@ package beyou.beyouapp.backend.domain.notebook;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -11,6 +10,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import beyou.beyouapp.backend.domain.notebook.board.BoardPath;
+import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardEdge;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardNode;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookNodeKind;
 import beyou.beyouapp.backend.domain.notebook.dto.ProgressDTO;
@@ -18,7 +19,7 @@ import beyou.beyouapp.backend.domain.notebook.dto.ProgressDTO;
 /**
  * Who is on whose board, for one user, in memory.
  *
- * <p>Built from two reads (every page, every PAGE node) and then asked as many questions as a
+ * <p>Built from three reads (every page, every PAGE node, every edge) and then asked as many questions as a
  * screen needs. The board relation is a graph, not a tree: a linked node puts a page from one
  * topic on another topic's board, so the same page can be reached twice. Every walk here keeps a
  * visited set. NotebookBoardService refuses the links that would close a loop, and the visited
@@ -44,19 +45,32 @@ public final class ProgressGraph {
                 kid -> boardsShowing.computeIfAbsent(kid, k -> new ArrayList<>()).add(board)));
     }
 
-    public static ProgressGraph of(Collection<NotebookPage> pages, Collection<NotebookBoardNode> nodes) {
+    /**
+     * The graph, with each board's pages in the order the board is studied in ({@link BoardPath}).
+     * The edges are needed for that order alone: they do not feed progress.
+     */
+    public static ProgressGraph of(Collection<NotebookPage> pages, Collection<NotebookBoardNode> nodes,
+            Collection<NotebookBoardEdge> edges) {
         Map<UUID, NotebookPage> byId = new HashMap<>();
         for (NotebookPage page : pages) {
             byId.put(page.getId(), page);
         }
+        Map<UUID, List<NotebookBoardNode>> nodesByBoard = new LinkedHashMap<>();
+        for (NotebookBoardNode node : nodes) {
+            if (node.getKind() == NotebookNodeKind.PAGE && node.getPageId() != null) {
+                nodesByBoard.computeIfAbsent(node.getBoardPageId(), k -> new ArrayList<>()).add(node);
+            }
+        }
+        Map<UUID, List<BoardPath.Arrow>> arrowsByBoard = new HashMap<>();
+        for (NotebookBoardEdge edge : edges) {
+            arrowsByBoard.computeIfAbsent(edge.getBoardPageId(), k -> new ArrayList<>())
+                    .add(new BoardPath.Arrow(edge.getSourceNodeId(), edge.getTargetNodeId()));
+        }
         Map<UUID, List<UUID>> children = new LinkedHashMap<>();
-        nodes.stream()
-                .filter(n -> n.getKind() == NotebookNodeKind.PAGE && n.getPageId() != null)
-                // Left to right, then top to bottom: the order a person reads a board in.
-                .sorted(Comparator.comparingDouble(NotebookBoardNode::getX)
-                        .thenComparingDouble(NotebookBoardNode::getY))
-                .forEach(n -> children.computeIfAbsent(n.getBoardPageId(), k -> new ArrayList<>())
-                        .add(n.getPageId()));
+        nodesByBoard.forEach((board, onBoard) -> children.put(board,
+                BoardPath.order(onBoard, NotebookBoardNode::getId, NotebookBoardNode::getX, NotebookBoardNode::getY,
+                                arrowsByBoard.getOrDefault(board, List.of()))
+                        .stream().map(NotebookBoardNode::getPageId).toList()));
         return new ProgressGraph(byId, children);
     }
 
@@ -64,7 +78,7 @@ public final class ProgressGraph {
         return pages.get(id);
     }
 
-    /** The pages on this page's board, in reading order. Empty for a leaf. */
+    /** The pages on this page's board, in path order ({@link BoardPath}). Empty for a leaf. */
     public List<UUID> childrenOf(UUID pageId) {
         return children.getOrDefault(pageId, List.of());
     }
@@ -168,7 +182,7 @@ public final class ProgressGraph {
 
     /**
      * The leaf to suggest next under a page: the first leaf being studied, else the first not
-     * started, in reading order. Null when everything is done.
+     * started, in path order. Null when everything is done.
      */
     public UUID nextLeaf(UUID pageId) {
         UUID[] firstStudying = new UUID[1];

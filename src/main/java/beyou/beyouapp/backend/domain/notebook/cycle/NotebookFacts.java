@@ -10,6 +10,7 @@ import beyou.beyouapp.backend.domain.notebook.NotebookPage;
 import beyou.beyouapp.backend.domain.notebook.NotebookPageRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookStatus;
 import beyou.beyouapp.backend.domain.notebook.ProgressGraph;
+import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardEdgeRepository;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookBoardNodeRepository;
 import beyou.beyouapp.backend.domain.notebook.board.NotebookNodeKind;
 import beyou.beyouapp.backend.domain.notebook.card.NotebookCardRepository;
@@ -42,6 +43,7 @@ final class NotebookFacts implements StudyLap.Targets {
     private final UUID userId;
     private final NotebookPageRepository pageRepository;
     private final NotebookBoardNodeRepository nodeRepository;
+    private final NotebookBoardEdgeRepository edgeRepository;
     private final NotebookStudyOutputRepository outputRepository;
     private final NotebookCardRepository cardRepository;
 
@@ -51,10 +53,11 @@ final class NotebookFacts implements StudyLap.Targets {
     private Map<UUID, Integer> dueBelow;
 
     NotebookFacts(UUID userId, NotebookPageRepository pageRepository, NotebookBoardNodeRepository nodeRepository,
-            NotebookStudyOutputRepository outputRepository, NotebookCardRepository cardRepository) {
+            NotebookBoardEdgeRepository edgeRepository, NotebookStudyOutputRepository outputRepository, NotebookCardRepository cardRepository) {
         this.userId = userId;
         this.pageRepository = pageRepository;
         this.nodeRepository = nodeRepository;
+        this.edgeRepository = edgeRepository;
         this.outputRepository = outputRepository;
         this.cardRepository = cardRepository;
     }
@@ -62,7 +65,8 @@ final class NotebookFacts implements StudyLap.Targets {
     ProgressGraph graph() {
         if (graph == null) {
             graph = ProgressGraph.of(pageRepository.findByUserId(userId),
-                    nodeRepository.findByUserIdAndKind(userId, NotebookNodeKind.PAGE));
+                    nodeRepository.findByUserIdAndKind(userId, NotebookNodeKind.PAGE),
+                    edgeRepository.findByUserId(userId));
         }
         return graph;
     }

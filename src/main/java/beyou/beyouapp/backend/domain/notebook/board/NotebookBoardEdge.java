@@ -21,8 +21,9 @@ import lombok.ToString;
  * "Study this before that" between two nodes of the same board.
  *
  * <p>Order only. An edge does not lock anything and does not feed progress: a person can
- * open a node whose prerequisites are unfinished, and the clients only use edges to draw the
- * board and to sort the mobile path into levels.
+ * open a node whose prerequisites are unfinished. The clients use edges to draw the board and to
+ * sort the mobile path into levels; the server uses them to list a board's pages in path order
+ * ({@link BoardPath}), which is the sidebar's order and the order "next" is picked in.
  */
 @Entity
 @Table(name = "notebook_board_edges")
