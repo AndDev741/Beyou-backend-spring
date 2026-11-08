@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.domain.routine.snapshot;
 
+import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroup;
+import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import tools.jackson.databind.ObjectMapper;
@@ -11,6 +13,7 @@ import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -24,12 +27,20 @@ public class SnapshotStructureSerializer {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private final ObjectMapper objectMapper;
 
-    public String serializeStructure(DiaryRoutine routine) {
+    /**
+     * The routine as the user had it on {@code day}: items limited to other days are left out,
+     * and so is a section they leave empty. A snapshot is the record of one day, and Sunday's
+     * history listing a Saturday-only item would show it as missed when the user never had it.
+     * {@link #createSnapshotChecks} applies the same filter, so the structure and the checks
+     * always name the same items.
+     */
+    public String serializeStructure(DiaryRoutine routine, LocalDate day) {
         ObjectNode root = objectMapper.createObjectNode();
         ArrayNode sectionsNode = root.putArray("sections");
 
         routine.getRoutineSections().stream()
             .sorted(Comparator.comparingInt(RoutineSection::getOrderIndex))
+            .filter(section -> !emptiedOn(section, day))
             .forEach(section -> {
                 ObjectNode sectionNode = sectionsNode.addObject();
                 sectionNode.put("name", section.getName());
@@ -41,7 +52,7 @@ public class SnapshotStructureSerializer {
                 ArrayNode itemsNode = sectionNode.putArray("items");
 
                 if (section.getHabitGroups() != null) {
-                    section.getHabitGroups().forEach(hg -> {
+                    section.getHabitGroups().stream().filter(hg -> activeOn(hg, day)).forEach(hg -> {
                         ObjectNode item = itemsNode.addObject();
                         item.put("type", "HABIT");
                         item.put("groupId", hg.getId().toString());
@@ -53,7 +64,7 @@ public class SnapshotStructureSerializer {
                     });
                 }
                 if (section.getTaskGroups() != null) {
-                    section.getTaskGroups().forEach(tg -> {
+                    section.getTaskGroups().stream().filter(tg -> activeOn(tg, day)).forEach(tg -> {
                         ObjectNode item = itemsNode.addObject();
                         item.put("type", "TASK");
                         item.put("groupId", tg.getId().toString());
@@ -75,13 +86,19 @@ public class SnapshotStructureSerializer {
         }
     }
 
+    /**
+     * One unchecked row per item that runs on the snapshot's day. Items limited to other days
+     * get no row, which is what keeps {@code SnapshotCheckService.recalculateCompleted} able to
+     * call a COMPLETE-mode day finished.
+     */
     public List<SnapshotCheck> createSnapshotChecks(DiaryRoutine routine, RoutineSnapshot snapshot) {
+        LocalDate day = snapshot.getSnapshotDate();
         List<SnapshotCheck> checks = new ArrayList<>();
         routine.getRoutineSections().stream()
             .sorted(Comparator.comparingInt(RoutineSection::getOrderIndex))
             .forEach(section -> {
                 if (section.getHabitGroups() != null) {
-                    section.getHabitGroups().forEach(hg -> {
+                    section.getHabitGroups().stream().filter(hg -> activeOn(hg, day)).forEach(hg -> {
                         SnapshotCheck check = new SnapshotCheck();
                         check.setSnapshot(snapshot);
                         check.setItemType(SnapshotItemType.HABIT);
@@ -99,7 +116,7 @@ public class SnapshotStructureSerializer {
                     });
                 }
                 if (section.getTaskGroups() != null) {
-                    section.getTaskGroups().forEach(tg -> {
+                    section.getTaskGroups().stream().filter(tg -> activeOn(tg, day)).forEach(tg -> {
                         SnapshotCheck check = new SnapshotCheck();
                         check.setSnapshot(snapshot);
                         check.setItemType(SnapshotItemType.TASK);
@@ -121,6 +138,23 @@ public class SnapshotStructureSerializer {
                 }
             });
         return checks;
+    }
+
+    /** Null day: no filter, every item. Only a snapshot built without a date reaches it. */
+    private static boolean activeOn(ItemGroup group, LocalDate day) {
+        return day == null || ScheduledOnDayResolver.itemActiveOn(group, day);
+    }
+
+    /** The section had items and none of them runs on the day. */
+    private static boolean emptiedOn(RoutineSection section, LocalDate day) {
+        List<ItemGroup> items = new ArrayList<>();
+        if (section.getHabitGroups() != null) {
+            items.addAll(section.getHabitGroups());
+        }
+        if (section.getTaskGroups() != null) {
+            items.addAll(section.getTaskGroups());
+        }
+        return !items.isEmpty() && items.stream().noneMatch(item -> activeOn(item, day));
     }
 
     private String formatTime(LocalTime time) {

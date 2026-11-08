@@ -152,8 +152,8 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
         diaryRoutineService.createDiaryRoutine(new DiaryRoutineRequestDTO(
                 "Morning", "lucide:sun", RoutineType.DAILY, List.of(new RoutineSectionRequestDTO(
                         null, "Wake up", "lucide:sunrise", LocalTime.of(7, 0), LocalTime.of(8, 0),
-                        List.of(new TaskGroupDTO(null, taskId, LocalTime.of(7, 30), LocalTime.of(7, 40), null)),
-                        List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null)),
+                        List.of(new TaskGroupDTO(null, taskId, LocalTime.of(7, 30), LocalTime.of(7, 40), null, null)),
+                        List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null, null)),
                         false)), List.of()), userId);
 
         // Scheduled, because an unscheduled routine cannot leave a schedule behind.

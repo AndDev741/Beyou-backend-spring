@@ -63,6 +63,8 @@ public enum ErrorKey {
     ROUTINE_ITEM_AMBIGUOUS,
     // Sections sent for a LIST routine, or items sent for a DAILY one.
     ROUTINE_SHAPE_MISMATCH,
+    // A check or skip on a day the item's own days leave out (ItemGroup.days)
+    ROUTINE_ITEM_NOT_ACTIVE_ON_DAY,
     ITEM_END_BEFORE_START,
     ITEM_START_OUT_OF_SECTION,
     ITEM_END_OUT_OF_SECTION,

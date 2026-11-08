@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -78,7 +79,8 @@ public class RoutineController {
     @GetMapping("/today")
     public ResponseEntity<DiaryRoutineResponseDTO> getTodayRoutineScheduled(){
         User userAuth = authenticatedUser.getAuthenticatedUser();
-        return ResponseEntity.ok().body(diaryRoutineService.getTodayRoutineScheduled(userAuth.getId()));
+        return ResponseEntity.ok().body(diaryRoutineService.getTodayRoutineScheduled(
+                userAuth.getId(), UserDateResolver.today(userAuth)));
     }
 
     @PostMapping("/check")

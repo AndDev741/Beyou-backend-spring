@@ -4,9 +4,9 @@ import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.xpday.XpDayOwnerType;
 import beyou.beyouapp.backend.domain.xpday.XpDayRecorder;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
-import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.routine.checks.CheckItemService;
 import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroup;
+import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver;
 import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.habit.HabitService;
@@ -39,9 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.format.TextStyle;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -251,11 +249,13 @@ public class DiaryRoutineService {
                         existing.setHabit(getOwnedHabit(item.habitId(), userId));
                     }
                     existing.setOrderIndex(position++);
+                    existing.applyDays(item.days());
                 } else {
                     HabitGroup group = new HabitGroup();
                     group.setHabit(getOwnedHabit(item.habitId(), userId));
                     group.setRoutineSection(section);
                     group.setOrderIndex(position++);
+                    group.applyDays(item.days());
                     section.getHabitGroups().add(group);
                 }
             } else {
@@ -265,11 +265,13 @@ public class DiaryRoutineService {
                         existing.setTask(getOwnedTask(item.taskId(), userId));
                     }
                     existing.setOrderIndex(position++);
+                    existing.applyDays(item.days());
                 } else {
                     TaskGroup group = new TaskGroup();
                     group.setTask(getOwnedTask(item.taskId(), userId));
                     group.setRoutineSection(section);
                     group.setOrderIndex(position++);
+                    group.applyDays(item.days());
                     section.getTaskGroups().add(group);
                 }
             }
@@ -301,6 +303,7 @@ public class DiaryRoutineService {
                 if (!existing.getHabit().getId().equals(dto.habitId())) {
                     existing.setHabit(getOwnedHabit(dto.habitId(), userId));
                 }
+                existing.applyDays(dto.days());
             } else {
                 // Create new group
                 HabitGroup newGroup = new HabitGroup();
@@ -308,6 +311,7 @@ public class DiaryRoutineService {
                 newGroup.setStartTime(dto.startTime());
                 newGroup.setEndTime(dto.endTime());
                 newGroup.setRoutineSection(section);
+                newGroup.applyDays(dto.days());
                 section.getHabitGroups().add(newGroup);
             }
         }
@@ -338,6 +342,7 @@ public class DiaryRoutineService {
                 if (!existing.getTask().getId().equals(dto.taskId())) {
                     existing.setTask(getOwnedTask(dto.taskId(), userId));
                 }
+                existing.applyDays(dto.days());
             } else {
                 // Create new group
                 TaskGroup newGroup = new TaskGroup();
@@ -345,6 +350,7 @@ public class DiaryRoutineService {
                 newGroup.setStartTime(dto.startTime());
                 newGroup.setEndTime(dto.endTime());
                 newGroup.setRoutineSection(section);
+                newGroup.applyDays(dto.days());
                 section.getTaskGroups().add(newGroup);
             }
         }
@@ -382,9 +388,23 @@ public class DiaryRoutineService {
         userCacheEvictService.evictAllUserCaches(userId);
     }
 
-    @Cacheable(cacheNames = "todayRoutine", key = "#userId", unless = "#result == null")
+    /**
+     * The routine the owner has today, holding only the items that run today.
+     *
+     * <p>{@code ownerToday} is the owner's own date ({@code UserDateResolver.today}), resolved
+     * by the caller, which holds the {@code User} already. It is part of the cache key, and it
+     * has to be: the answer changes at the owner's midnight with no write to evict it, and a
+     * key of the user alone served yesterday's routine, and now yesterday's items, for up to
+     * the cache's 30 minutes. {@code UserCacheEvictService} evicts the dates a user's today
+     * can fall on.
+     *
+     * <p>A routine counts when {@link ScheduledOnDayResolver#runsOn} says so, so a routine
+     * whose every item is limited to other days does not come back as an empty "today".
+     */
+    @Cacheable(cacheNames = "todayRoutine", key = "#userId.toString() + '_' + #ownerToday.toString()",
+            unless = "#result == null")
     @Transactional
-    public DiaryRoutineResponseDTO getTodayRoutineScheduled(UUID userId) {
+    public DiaryRoutineResponseDTO getTodayRoutineScheduled(UUID userId, LocalDate ownerToday) {
         List<DiaryRoutine> diaryRoutines = diaryRoutineRepository.findAllByUserId(userId);
         if (diaryRoutines.isEmpty()) {
             log.warn("NO ROUTINES SCHEDULED FOR TODAY");
@@ -392,15 +412,9 @@ public class DiaryRoutineService {
         }
 
         DiaryRoutine todaysRoutine = null;
-        // Which weekday "today" is depends on where the owner lives, not where the server runs.
-        // The owner rides along on the routines already loaded, so no extra lookup and no
-        // security context (agent tools call this off-request).
-        LocalDate ownerToday = UserDateResolver.today(diaryRoutines.get(0).getUser());
-        String dayOfWeek = ownerToday.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
-        log.info("Day: {} ", dayOfWeek);
+        log.info("Day: {} ", ownerToday.getDayOfWeek());
         for (DiaryRoutine diaryRoutine : diaryRoutines) {
-            if (diaryRoutine.getSchedule() != null
-                    && diaryRoutine.getSchedule().getDays().contains(WeekDay.valueOf(dayOfWeek))) {
+            if (ScheduledOnDayResolver.runsOn(diaryRoutine, ownerToday)) {
                 log.info("Routine {} are scheduled for today", diaryRoutine.getName());
                 todaysRoutine = diaryRoutine;
             }
@@ -410,7 +424,7 @@ public class DiaryRoutineService {
             log.warn("NO ROUTINES SCHEDULED FOR TODAY");
             return null;
         } else {
-            return mapper.toResponse(todaysRoutine);
+            return mapper.toResponseForDay(todaysRoutine, ownerToday);
         }
 
     }
@@ -424,6 +438,13 @@ public class DiaryRoutineService {
     @Transactional
     public DiaryRoutineResponseDTO addTaskToSection(UUID routineId, UUID sectionId, UUID taskId,
             LocalTime startTime, LocalTime endTime, UUID userId) {
+        return addTaskToSection(routineId, sectionId, taskId, startTime, endTime, null, userId);
+    }
+
+    /** As above, limited to {@code days} (null or empty: every day the routine runs). */
+    @Transactional
+    public DiaryRoutineResponseDTO addTaskToSection(UUID routineId, UUID sectionId, UUID taskId,
+            LocalTime startTime, LocalTime endTime, Set<WeekDay> days, UUID userId) {
         DiaryRoutine routine = getDiaryRoutineModelById(routineId, userId);
         RoutineSection section = findSection(routine, sectionId);
         validateItemTimeBounds(sectionView(section), startTime, endTime, "task");
@@ -433,6 +454,7 @@ public class DiaryRoutineService {
         group.setStartTime(startTime);
         group.setEndTime(endTime);
         group.setRoutineSection(section);
+        group.applyDays(days);
         section.getTaskGroups().add(group);
 
         // The group's UUID is assigned at insert time; without this flush the mapper
@@ -447,6 +469,13 @@ public class DiaryRoutineService {
     @Transactional
     public DiaryRoutineResponseDTO addHabitToSection(UUID routineId, UUID sectionId, UUID habitId,
             LocalTime startTime, LocalTime endTime, UUID userId) {
+        return addHabitToSection(routineId, sectionId, habitId, startTime, endTime, null, userId);
+    }
+
+    /** As above, limited to {@code days} (null or empty: every day the routine runs). */
+    @Transactional
+    public DiaryRoutineResponseDTO addHabitToSection(UUID routineId, UUID sectionId, UUID habitId,
+            LocalTime startTime, LocalTime endTime, Set<WeekDay> days, UUID userId) {
         DiaryRoutine routine = getDiaryRoutineModelById(routineId, userId);
         RoutineSection section = findSection(routine, sectionId);
         validateItemTimeBounds(sectionView(section), startTime, endTime, "habit");
@@ -456,6 +485,7 @@ public class DiaryRoutineService {
         group.setStartTime(startTime);
         group.setEndTime(endTime);
         group.setRoutineSection(section);
+        group.applyDays(days);
         section.getHabitGroups().add(group);
 
         // The group's UUID is assigned at insert time; without this flush the mapper
@@ -479,6 +509,26 @@ public class DiaryRoutineService {
             throw new BusinessException(ErrorKey.ROUTINE_ITEM_NOT_FOUND,
                     "No habit or task group with this id in the routine");
         }
+
+        userCacheEvictService.evictAllUserCaches(userId);
+        return mapper.toResponse(routine);
+    }
+
+    /**
+     * Sets the weekdays ONE item runs on, by its group id. Empty clears the limit, so the item
+     * runs every day its routine does again. Works for both routine shapes: a LIST routine's
+     * entries are groups in its one section.
+     */
+    @Transactional
+    public DiaryRoutineResponseDTO setItemDays(UUID routineId, UUID groupId, Set<WeekDay> days, UUID userId) {
+        DiaryRoutine routine = getDiaryRoutineModelById(routineId, userId);
+
+        ItemGroup group = ScheduledOnDayResolver.itemsOf(routine).stream()
+                .filter(g -> groupId.equals(g.getId()))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorKey.ROUTINE_ITEM_NOT_FOUND,
+                        "No habit or task group with this id in the routine"));
+        group.applyDays(days == null ? Set.of() : days);
 
         userCacheEvictService.evictAllUserCaches(userId);
         return mapper.toResponse(routine);

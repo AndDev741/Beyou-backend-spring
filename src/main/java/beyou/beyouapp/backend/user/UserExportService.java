@@ -36,6 +36,7 @@ import beyou.beyouapp.backend.domain.notebook.study.NotebookStudyOutputRepositor
 import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.quicknote.QuickNoteRepository;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
+import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
@@ -59,6 +60,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -461,7 +463,19 @@ public class UserExportService {
         // A LIST routine has no times, so its order is the only thing saying which item comes
         // first. A DAILY one orders by time and carries the number along anyway.
         map.put("orderIndex", group.getOrderIndex());
+        map.put("days", itemDays(group));
         return map;
+    }
+
+    /**
+     * The weekdays an item is limited to, in week order. Empty when it runs every day its
+     * routine does, which is the default and what every item written before V43 has.
+     */
+    private static List<String> itemDays(ItemGroup group) {
+        if (group.getDays() == null || group.getDays().isEmpty()) {
+            return List.of();
+        }
+        return EnumSet.copyOf(group.getDays()).stream().map(Enum::name).toList();
     }
 
     private Map<String, Object> taskGroup(TaskGroup group) {
@@ -471,6 +485,7 @@ public class UserExportService {
         map.put("startTime", group.getStartTime());
         map.put("endTime", group.getEndTime());
         map.put("orderIndex", group.getOrderIndex());
+        map.put("days", itemDays(group));
         return map;
     }
 

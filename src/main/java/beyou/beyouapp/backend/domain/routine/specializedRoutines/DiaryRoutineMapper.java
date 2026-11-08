@@ -14,13 +14,18 @@ import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.schedule.Schedule;
+import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver;
+import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.EnumSet;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -104,6 +109,7 @@ public class DiaryRoutineMapper {
                 group.setRoutineSection(section);
                 group.setOrderIndex(position++);
                 group.setHabitGroupChecks(new ArrayList<>());
+                group.applyDays(item.days());
                 section.getHabitGroups().add(group);
             } else {
                 TaskGroup group = new TaskGroup();
@@ -111,6 +117,7 @@ public class DiaryRoutineMapper {
                 group.setRoutineSection(section);
                 group.setOrderIndex(position++);
                 group.setTaskGroupChecks(new ArrayList<>());
+                group.applyDays(item.days());
                 section.getTaskGroups().add(group);
             }
         }
@@ -118,9 +125,28 @@ public class DiaryRoutineMapper {
     }
 
     public DiaryRoutineResponseDTO toResponse(DiaryRoutine entity) {
+        return toResponse(entity, group -> true);
+    }
+
+    /**
+     * The routine as it stands on one day: only the items whose own days allow the date
+     * ({@link ScheduledOnDayResolver#itemActiveOn}), and none of the sections those leave
+     * empty. What {@code GET /routine/today} serves.
+     *
+     * <p>Filtered here, on the server, so every client gets the day right without knowing the
+     * rule: both dashboards, focus mode and the progress counters all count what this
+     * returns, and so do mobile builds released before the field existed. A section that was
+     * already empty stays, since only the filter is allowed to change what a day looks like.
+     */
+    public DiaryRoutineResponseDTO toResponseForDay(DiaryRoutine entity, LocalDate date) {
+        return toResponse(entity, group -> ScheduledOnDayResolver.itemActiveOn(group, date));
+    }
+
+    private DiaryRoutineResponseDTO toResponse(DiaryRoutine entity, Predicate<ItemGroup> keep) {
         List<DiaryRoutineResponseDTO.RoutineSectionResponseDTO> sectionDTOs = entity.getRoutineSections().stream()
                 .sorted(java.util.Comparator.comparingInt(RoutineSection::getOrderIndex))
-                .map(this::mapSectionToResponse)
+                .filter(section -> !emptiedBy(section, keep))
+                .map(section -> mapSectionToResponse(section, keep))
                 .collect(Collectors.toList());
 
         return new DiaryRoutineResponseDTO(
@@ -129,12 +155,33 @@ public class DiaryRoutineMapper {
                 entity.getIconId(),
                 entity.getRoutineType(),
                 sectionDTOs,
-                entity.isList() ? mapListItems(entity) : List.of(),
+                entity.isList() ? mapListItems(entity, keep) : List.of(),
                 mapSchedule(entity.getSchedule()),
                 entity.getXpProgress().getXp(),
                 entity.getXpProgress().getActualLevelXp(),
                 entity.getXpProgress().getNextLevelXp(),
                 entity.getXpProgress().getLevel());
+    }
+
+    /** True when the section had items and the filter removed every one of them. */
+    private static boolean emptiedBy(RoutineSection section, Predicate<ItemGroup> keep) {
+        List<ItemGroup> items = new ArrayList<>();
+        if (section.getHabitGroups() != null) {
+            items.addAll(section.getHabitGroups());
+        }
+        if (section.getTaskGroups() != null) {
+            items.addAll(section.getTaskGroups());
+        }
+        return !items.isEmpty() && items.stream().noneMatch(keep);
+    }
+
+    /**
+     * An item's own days for the wire, in week order (EnumSet iterates by ordinal), empty when
+     * it follows the routine.
+     */
+    private static Set<WeekDay> daysOf(ItemGroup group) {
+        Set<WeekDay> days = group.getDays();
+        return days == null || days.isEmpty() ? Set.of() : EnumSet.copyOf(days);
     }
 
     /**
@@ -144,8 +191,9 @@ public class DiaryRoutineMapper {
      * <p>The same rows the section DTOs above already carry, in the shape its clients render.
      * See the note on {@code DiaryRoutineResponseDTO} for why both go out together.
      */
-    private List<DiaryRoutineResponseDTO.RoutineItemResponseDTO> mapListItems(DiaryRoutine entity) {
-        return entity.listItems().stream().map(group -> {
+    private List<DiaryRoutineResponseDTO.RoutineItemResponseDTO> mapListItems(DiaryRoutine entity,
+                                                                         Predicate<ItemGroup> keep) {
+        return entity.listItems().stream().filter(keep).map(group -> {
             boolean habitSide = group instanceof HabitGroup;
             List<BaseCheck> checks = new ArrayList<>(habitSide
                     ? nullSafe(((HabitGroup) group).getHabitGroupChecks())
@@ -158,7 +206,8 @@ public class DiaryRoutineMapper {
                     habitSide ? ((HabitGroup) group).getHabit().getId() : null,
                     habitSide ? null : ((TaskGroup) group).getTask().getId(),
                     group.getOrderIndex(),
-                    checks);
+                    checks,
+                    daysOf(group));
         }).collect(Collectors.toList());
     }
 
@@ -238,6 +287,7 @@ public class DiaryRoutineMapper {
             // Never null: toResponse maps it straight after the save, and a null list
             // NPE'd there before (DiaryRoutineUpdateOrphanIT covers that regression).
             taskGroup.setTaskGroupChecks(new ArrayList<>());
+            taskGroup.applyDays(taskDto.days());
 
             return taskGroup;
         }).collect(Collectors.toList());
@@ -258,14 +308,17 @@ public class DiaryRoutineMapper {
             habitGroup.setEndTime(habitDto.endTime());
             habitGroup.setRoutineSection(section);
             habitGroup.setHabitGroupChecks(new ArrayList<>());
+            habitGroup.applyDays(habitDto.days());
 
             return habitGroup;
         }).collect(Collectors.toList());
     }
 
-    private DiaryRoutineResponseDTO.RoutineSectionResponseDTO mapSectionToResponse(RoutineSection section) {
+    private DiaryRoutineResponseDTO.RoutineSectionResponseDTO mapSectionToResponse(RoutineSection section,
+                                                                                  Predicate<ItemGroup> keep) {
         List<DiaryRoutineResponseDTO.RoutineSectionResponseDTO.TaskGroupResponseDTO> taskGroupDTOs = section
                 .getTaskGroups().stream()
+                .filter(keep)
                 .map(taskGroup -> new DiaryRoutineResponseDTO.RoutineSectionResponseDTO.TaskGroupResponseDTO(
                         taskGroup.getId(),
                         taskGroup.getTask().getId(),
@@ -273,11 +326,13 @@ public class DiaryRoutineMapper {
                         formatTime(taskGroup.getEndTime()),
                         taskGroup.getTaskGroupChecks() == null
                                 ? new ArrayList<>()
-                                : new ArrayList<>(taskGroup.getTaskGroupChecks())))
+                                : new ArrayList<>(taskGroup.getTaskGroupChecks()),
+                        daysOf(taskGroup)))
                 .collect(Collectors.toList());
 
         List<DiaryRoutineResponseDTO.RoutineSectionResponseDTO.HabitGroupResponseDTO> habitGroupDTOs = section
                 .getHabitGroups().stream()
+                .filter(keep)
                 .map(habitGroup -> new DiaryRoutineResponseDTO.RoutineSectionResponseDTO.HabitGroupResponseDTO(
                         habitGroup.getId(),
                         habitGroup.getHabit().getId(),
@@ -285,7 +340,8 @@ public class DiaryRoutineMapper {
                         formatTime(habitGroup.getEndTime()),
                         habitGroup.getHabitGroupChecks() == null
                                 ? new ArrayList<>()
-                                : new ArrayList<>(habitGroup.getHabitGroupChecks())))
+                                : new ArrayList<>(habitGroup.getHabitGroupChecks()),
+                        daysOf(habitGroup)))
                 .collect(Collectors.toList());
 
         return new DiaryRoutineResponseDTO.RoutineSectionResponseDTO(

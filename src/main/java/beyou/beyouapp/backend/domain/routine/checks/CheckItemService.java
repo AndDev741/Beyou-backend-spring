@@ -25,6 +25,7 @@ import beyou.beyouapp.backend.domain.common.DTO.RefreshUiDTO;
 import beyou.beyouapp.backend.domain.habit.Habit;
 import beyou.beyouapp.backend.domain.routine.Routine;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
+import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroupService;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver;
@@ -92,6 +93,9 @@ public class CheckItemService {
                 return buildNoOpRefresh(habitGroup.getId(), null, date,
                         habitGroup.getRoutineSection().getRoutine());
             }
+            if (skipGroupDTO.skip()) {
+                requireActiveOn(habitGroup, date);
+            }
             return skipGroupDTO.skip()
                 ? skipHabitGroup(habitGroup, date)
                 : unskipHabitGroup(habitGroup, date);
@@ -108,11 +112,36 @@ public class CheckItemService {
                 return buildNoOpRefresh(taskGroup.getId(), null, date,
                         taskGroup.getRoutineSection().getRoutine());
             }
+            if (skipGroupDTO.skip()) {
+                requireActiveOn(taskGroup, date);
+            }
             return skipGroupDTO.skip()
                 ? skipTaskGroup(taskGroup, date)
                 : unskipTaskGroup(taskGroup, date);
         }else{
             throw new BusinessException(ErrorKey.ITEM_GROUP_REQUIRED, "No Item group found in the request");
+        }
+    }
+
+    /**
+     * Refuses to write a check or a skip for an item on a day its own days leave out.
+     *
+     * <p>Only the writes are guarded. Unchecking and unskipping stay open, so a check made
+     * before the item was limited can still be taken back on the same day.
+     *
+     * <p>Refused rather than accepted as an extra: the item is not in that day's routine
+     * anywhere else. {@code GET /routine/today} leaves it out, the snapshot written at
+     * midnight leaves it out (so the check would be lost from the history), and the day-close
+     * pass treats the day as not scheduled for it. Only the item's own days are checked here,
+     * not the routine's schedule: checking an item of a routine that is not scheduled today
+     * was allowed before this feature and still is.
+     *
+     * @throws BusinessException {@code ROUTINE_ITEM_NOT_ACTIVE_ON_DAY}
+     */
+    private static void requireActiveOn(ItemGroup group, LocalDate date) {
+        if (!ScheduledOnDayResolver.itemActiveOn(group, date)) {
+            throw new BusinessException(ErrorKey.ROUTINE_ITEM_NOT_ACTIVE_ON_DAY,
+                    "This routine item does not run on " + date.getDayOfWeek());
         }
     }
 
@@ -253,6 +282,7 @@ public class CheckItemService {
             // Uncheck: Remove check, subtract XP, adjust constance
             return uncheckHabitGroup(habitGroup, date);
         } else {
+            requireActiveOn(habitGroup, date);
             // XP earn formula lives in CheckXpCalculator
             return checkHabitGroup(habitGroup, date);
         }
@@ -267,8 +297,9 @@ public class CheckItemService {
             // Uncheck: Remove check, subtract XP, adjust constance
             return uncheckTaskGroup(taskGroupToCheckOrUncheck, date);
         } else {
+            requireActiveOn(taskGroupToCheckOrUncheck, date);
             // XP earn formula lives in CheckXpCalculator
-            return checkTaskGroup(taskGroupToCheckOrUncheck, date);            
+            return checkTaskGroup(taskGroupToCheckOrUncheck, date);
         }
     }
 
@@ -782,8 +813,14 @@ public class CheckItemService {
             .allMatch(section -> areAllHabitGroupsCompleted(section, date));
     }
 
+    /**
+     * Every item that runs on the date is done or skipped. Items limited to other days are not
+     * part of that day's routine, and counting them would leave a COMPLETE-mode day impossible
+     * to finish: nothing can check an item the day does not show.
+     */
     private boolean areAllHabitGroupsCompleted(RoutineSection section, LocalDate date) {
         return section.getHabitGroups().stream()
+            .filter(group -> ScheduledOnDayResolver.itemActiveOn(group, date))
             .allMatch(group -> isHabitGroupCompletedOrSkipped(group, date));
     }
 
@@ -815,8 +852,10 @@ public class CheckItemService {
             .allMatch(section -> areAllTaskGroupsCompleted(section, date));
     }
 
+    /** Same rule as {@link #areAllHabitGroupsCompleted}: only the items that run on the date. */
     private boolean areAllTaskGroupsCompleted(RoutineSection section, LocalDate date) {
         return section.getTaskGroups().stream()
+            .filter(group -> ScheduledOnDayResolver.itemActiveOn(group, date))
             .allMatch(group -> isTaskGroupCompletedOrSkipped(group, date));
     }
 

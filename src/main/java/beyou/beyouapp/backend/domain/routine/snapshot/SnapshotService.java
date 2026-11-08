@@ -45,7 +45,7 @@ public class SnapshotService {
     public RoutineSnapshot createSnapshot(DiaryRoutine routine, User user, LocalDate snapshotDate) {
         log.info("Creating snapshot for routine {} on date {}", routine.getId(), snapshotDate);
 
-        String structureJson = structureSerializer.serializeStructure(routine);
+        String structureJson = structureSerializer.serializeStructure(routine, snapshotDate);
 
         RoutineSnapshot snapshot = new RoutineSnapshot();
         snapshot.setRoutine(routine);

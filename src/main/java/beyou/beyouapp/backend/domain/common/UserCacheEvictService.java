@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.domain.common;
 
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import org.springframework.cache.Cache;
@@ -22,13 +24,13 @@ public class UserCacheEvictService {
         @CacheEvict(cacheNames = "tasks", key = "#userId"),
         @CacheEvict(cacheNames = "goals", key = "#userId"),
         @CacheEvict(cacheNames = "routines", key = "#userId"),
-        @CacheEvict(cacheNames = "todayRoutine", key = "#userId"),
         @CacheEvict(cacheNames = "schedules", key = "#userId")
     })
     public void evictAllUserCaches(UUID userId) {
         // AOP handles the @CacheEvict annotations above.
         // Programmatic eviction for 'routine' cache (composite key: userId_routineId)
         clearSharedRoutineCache();
+        evictTodayRoutine(userId);
     }
 
     /**
@@ -51,11 +53,37 @@ public class UserCacheEvictService {
         @CacheEvict(cacheNames = "tasks", key = "#userId"),
         @CacheEvict(cacheNames = "goals", key = "#userId"),
         @CacheEvict(cacheNames = "routines", key = "#userId"),
-        @CacheEvict(cacheNames = "todayRoutine", key = "#userId"),
         @CacheEvict(cacheNames = "schedules", key = "#userId")
     })
     public void evictUserScopedCaches(UUID userId) {
-        // AOP handles the @CacheEvict annotations above; nothing else to do here.
+        // AOP handles the @CacheEvict annotations above; todayRoutine is keyed by date too.
+        evictTodayRoutine(userId);
+    }
+
+    /**
+     * Drops the user's {@code todayRoutine} entries.
+     *
+     * <p>That cache is keyed {@code userId_ownerToday} (see
+     * {@code DiaryRoutineService.getTodayRoutineScheduled}), so an annotation keyed by the user
+     * alone matches nothing. The owner's today is never more than a day away from today in
+     * UTC (zones run from UTC-12 to UTC+14), so the three dates around UTC today cover every
+     * entry that can still be read. Anything older is a day no request asks for again and
+     * leaves with the cache's TTL.
+     */
+    public void evictTodayRoutine(UUID userId) {
+        Cache todayRoutine = cacheManager.getCache("todayRoutine");
+        if (todayRoutine == null || userId == null) {
+            return;
+        }
+        LocalDate utcToday = LocalDate.now(ZoneOffset.UTC);
+        for (int offset = -1; offset <= 1; offset++) {
+            todayRoutine.evict(todayRoutineKey(userId, utcToday.plusDays(offset)));
+        }
+    }
+
+    /** The key {@code getTodayRoutineScheduled} caches under. Both sides must build it alike. */
+    public static String todayRoutineKey(UUID userId, LocalDate ownerToday) {
+        return userId + "_" + ownerToday;
     }
 
     /**

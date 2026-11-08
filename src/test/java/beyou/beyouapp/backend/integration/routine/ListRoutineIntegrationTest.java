@@ -108,8 +108,8 @@ class ListRoutineIntegrationTest extends AbstractIntegrationTest {
 
     private DiaryRoutineResponseDTO createList() {
         return diaryRoutineService.createDiaryRoutine(listRequest("Errands", List.of(
-                new RoutineItemRequestDTO(null, habitId, null),
-                new RoutineItemRequestDTO(null, null, taskId))), user.getId());
+                new RoutineItemRequestDTO(null, habitId, null, null),
+                new RoutineItemRequestDTO(null, null, taskId, null))), user.getId());
     }
 
     // ── shape ────────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@ class ListRoutineIntegrationTest extends AbstractIntegrationTest {
     void listItemNamingBothAHabitAndATaskIsRejected() {
         BusinessException error = assertThrows(BusinessException.class, () ->
                 diaryRoutineService.createDiaryRoutine(listRequest("Ambiguous", List.of(
-                        new RoutineItemRequestDTO(null, habitId, taskId))), user.getId()));
+                        new RoutineItemRequestDTO(null, habitId, taskId, null))), user.getId()));
         assertEquals(ErrorKey.ROUTINE_ITEM_AMBIGUOUS, error.getErrorKey());
     }
 
@@ -206,7 +206,7 @@ class ListRoutineIntegrationTest extends AbstractIntegrationTest {
     void listItemNamingNeitherIsRejected() {
         BusinessException error = assertThrows(BusinessException.class, () ->
                 diaryRoutineService.createDiaryRoutine(listRequest("Empty entry", List.of(
-                        new RoutineItemRequestDTO(null, null, null))), user.getId()));
+                        new RoutineItemRequestDTO(null, null, null, null))), user.getId()));
         assertEquals(ErrorKey.ROUTINE_ITEM_AMBIGUOUS, error.getErrorKey());
     }
 
@@ -219,7 +219,7 @@ class ListRoutineIntegrationTest extends AbstractIntegrationTest {
                         new DiaryRoutineRequestDTO("Mixed", "ic", RoutineType.LIST,
                                 List.of(new RoutineSectionRequestDTO(null, "S", "ic",
                                         LocalTime.of(6, 0), null, List.of(), List.of(), false)),
-                                List.of(new RoutineItemRequestDTO(null, habitId, null))),
+                                List.of(new RoutineItemRequestDTO(null, habitId, null, null))),
                         user.getId()));
         assertEquals(ErrorKey.ROUTINE_SHAPE_MISMATCH, error.getErrorKey());
     }
@@ -233,7 +233,7 @@ class ListRoutineIntegrationTest extends AbstractIntegrationTest {
                         new DiaryRoutineRequestDTO("D", "ic", RoutineType.DAILY,
                                 List.of(new RoutineSectionRequestDTO(null, "S", "ic",
                                         LocalTime.of(6, 0), null, List.of(), List.of(), false)),
-                                List.of(new RoutineItemRequestDTO(null, habitId, null))),
+                                List.of(new RoutineItemRequestDTO(null, habitId, null, null))),
                         user.getId()));
         assertEquals(ErrorKey.ROUTINE_SHAPE_MISMATCH, error.getErrorKey());
     }
@@ -262,8 +262,8 @@ class ListRoutineIntegrationTest extends AbstractIntegrationTest {
         // Task first now, habit second.
         DiaryRoutineResponseDTO updated = diaryRoutineService.updateDiaryRoutine(routineId,
                 listRequest("Errands", List.of(
-                        new RoutineItemRequestDTO(taskGroupId, null, taskId),
-                        new RoutineItemRequestDTO(habitGroupId, habitId, null))),
+                        new RoutineItemRequestDTO(taskGroupId, null, taskId, null),
+                        new RoutineItemRequestDTO(habitGroupId, habitId, null, null))),
                 user.getId());
 
         assertEquals(taskGroupId, updated.items().get(0).id(), "same row, new position");
@@ -281,7 +281,7 @@ class ListRoutineIntegrationTest extends AbstractIntegrationTest {
         UUID habitGroupId = created.items().get(0).id();
 
         DiaryRoutineResponseDTO updated = diaryRoutineService.updateDiaryRoutine(created.id(),
-                listRequest("Errands", List.of(new RoutineItemRequestDTO(habitGroupId, habitId, null))),
+                listRequest("Errands", List.of(new RoutineItemRequestDTO(habitGroupId, habitId, null, null))),
                 user.getId());
 
         assertEquals(1, updated.items().size());
@@ -295,9 +295,9 @@ class ListRoutineIntegrationTest extends AbstractIntegrationTest {
 
         DiaryRoutineResponseDTO updated = diaryRoutineService.updateDiaryRoutine(created.id(),
                 listRequest("Errands", List.of(
-                        new RoutineItemRequestDTO(created.items().get(0).id(), habitId, null),
-                        new RoutineItemRequestDTO(created.items().get(1).id(), null, taskId),
-                        new RoutineItemRequestDTO(null, secondHabitId, null))),
+                        new RoutineItemRequestDTO(created.items().get(0).id(), habitId, null, null),
+                        new RoutineItemRequestDTO(created.items().get(1).id(), null, taskId, null),
+                        new RoutineItemRequestDTO(null, secondHabitId, null, null))),
                 user.getId());
 
         assertEquals(3, updated.items().size());
@@ -313,7 +313,7 @@ class ListRoutineIntegrationTest extends AbstractIntegrationTest {
 
         diaryRoutineService.updateDiaryRoutine(created.id(),
                 listRequest("Weekend errands", List.of(
-                        new RoutineItemRequestDTO(created.items().get(0).id(), habitId, null))),
+                        new RoutineItemRequestDTO(created.items().get(0).id(), habitId, null, null))),
                 user.getId());
 
         transactionTemplate.executeWithoutResult(tx -> {
@@ -439,7 +439,7 @@ class ListRoutineIntegrationTest extends AbstractIntegrationTest {
         UUID strangerId = stranger.getId();
         BusinessException error = assertThrows(BusinessException.class, () ->
                 diaryRoutineService.createDiaryRoutine(
-                        listRequest("Theft", List.of(new RoutineItemRequestDTO(null, habitId, null))),
+                        listRequest("Theft", List.of(new RoutineItemRequestDTO(null, habitId, null, null))),
                         strangerId));
         assertEquals(ErrorKey.HABIT_NOT_OWNED, error.getErrorKey());
     }

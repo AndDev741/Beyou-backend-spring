@@ -365,8 +365,10 @@ public class RoutineSnapshotScheduler {
 
         for (DiaryRoutine routine : routines) {
             // Same predicate the day-close pass uses, so the two can never disagree
-            // about whether a routine ran on a given day.
-            if (!ScheduledOnDayResolver.coversDay(routine, date)) {
+            // about whether a routine ran on a given day. runsOn rather than coversDay: a
+            // routine whose every item is limited to other days had nothing to do on this
+            // one, and an empty snapshot would show as an unfinished day in the history.
+            if (!ScheduledOnDayResolver.runsOn(routine, date)) {
                 log.debug("Routine {} not scheduled for {}", routine.getId(), weekDay);
                 continue;
             }

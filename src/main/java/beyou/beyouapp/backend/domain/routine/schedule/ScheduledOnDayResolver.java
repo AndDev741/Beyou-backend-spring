@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.routine.schedule;
 
 import java.time.LocalDate;
 import java.time.format.TextStyle;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -10,6 +11,7 @@ import java.util.UUID;
 import beyou.beyouapp.backend.domain.checkday.CheckDayOwnerType;
 import beyou.beyouapp.backend.domain.routine.Routine;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
+import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
@@ -68,6 +70,68 @@ public final class ScheduledOnDayResolver {
     }
 
     /**
+     * Whether an item's own days allow the date. Only the item's half of the rule: it says
+     * nothing about the routine's schedule, which {@link #runsOn} and {@link #itemRunsOn} add.
+     *
+     * <p>An item with no days of its own (the default, and every item written before
+     * {@code V43}) follows its routine, so it is active on every date.
+     *
+     * <p>The check path calls this half alone, on purpose: checking an item of a routine that
+     * is not scheduled today has always been allowed (the Routines page does it), and the
+     * per-item days are not the place to start refusing it.
+     */
+    public static boolean itemActiveOn(ItemGroup group, LocalDate date) {
+        if (group == null) {
+            return false;
+        }
+        Set<WeekDay> days = group.getDays();
+        return days == null || days.isEmpty() || days.contains(weekDayOf(date));
+    }
+
+    /** The routine's schedule covers the date and the item's own days allow it. */
+    public static boolean itemRunsOn(Routine routine, ItemGroup group, LocalDate date) {
+        return coversDay(routine, date) && itemActiveOn(group, date);
+    }
+
+    /**
+     * Whether the routine actually has something to do on the date: its schedule covers the
+     * day and at least one of its items is active on it.
+     *
+     * <p>Stricter than {@link #coversDay} in exactly one case: a routine whose every item is
+     * limited to other days. A Saturday-and-Sunday routine holding only Saturday items is not
+     * running on Sunday, and treating it as running would stamp the user's Sunday MISSED,
+     * write an empty snapshot for it and serve an empty routine as "today". A routine with no
+     * items at all keeps its old answer, so only the new feature can change what this says.
+     */
+    public static boolean runsOn(DiaryRoutine routine, LocalDate date) {
+        if (!coversDay(routine, date)) {
+            return false;
+        }
+        List<ItemGroup> items = itemsOf(routine);
+        return items.isEmpty() || items.stream().anyMatch(item -> itemActiveOn(item, date));
+    }
+
+    /** Every item of every section, habits and tasks together. Never null. */
+    public static List<ItemGroup> itemsOf(DiaryRoutine routine) {
+        if (routine == null || routine.getRoutineSections() == null) {
+            return List.of();
+        }
+        List<ItemGroup> items = new ArrayList<>();
+        for (RoutineSection section : routine.getRoutineSections()) {
+            if (section == null) {
+                continue;
+            }
+            if (section.getHabitGroups() != null) {
+                items.addAll(section.getHabitGroups());
+            }
+            if (section.getTaskGroups() != null) {
+                items.addAll(section.getTaskGroups());
+            }
+        }
+        return items;
+    }
+
+    /**
      * Where the given owner stands on the given day, judged against the routines supplied.
      *
      * <p>Membership is an OR across routines: a habit sitting in two routines is scheduled
@@ -89,13 +153,13 @@ public final class ScheduledOnDayResolver {
     }
 
     private static boolean anyRoutineCovers(List<DiaryRoutine> routines, LocalDate date) {
-        return routines.stream().anyMatch(routine -> coversDay(routine, date));
+        return routines.stream().anyMatch(routine -> runsOn(routine, date));
     }
 
     private static Standing routineStanding(UUID routineId, List<DiaryRoutine> routines, LocalDate date) {
         for (DiaryRoutine routine : routines) {
             if (routine != null && routine.getId() != null && routine.getId().equals(routineId)) {
-                return new Standing(true, coversDay(routine, date));
+                return new Standing(true, runsOn(routine, date));
             }
         }
         return Standing.ORPHANED;
@@ -104,6 +168,11 @@ public final class ScheduledOnDayResolver {
     /**
      * Walks every section of every routine looking for the item. {@code habitSide} picks
      * which group list to read; the two shapes are otherwise identical.
+     *
+     * <p>Scheduled when ANY group holding the item runs on the day, which takes the group's
+     * own days into account: a habit limited to Saturday inside a Saturday-and-Sunday routine
+     * is NOT_SCHEDULED on Sunday, so the day-close pass leaves its streak alone instead of
+     * stamping a MISSED nobody could have avoided.
      */
     private static Standing itemStanding(UUID itemId, List<DiaryRoutine> routines,
                                          LocalDate date, boolean habitSide) {
@@ -117,43 +186,39 @@ public final class ScheduledOnDayResolver {
             if (routine == null || routine.getRoutineSections() == null) {
                 continue;
             }
-            boolean inThisRoutine = false;
             for (RoutineSection section : routine.getRoutineSections()) {
                 if (section == null) {
                     continue;
                 }
-                inThisRoutine = habitSide
-                        ? sectionHoldsHabit(section, itemId)
-                        : sectionHoldsTask(section, itemId);
-                if (inThisRoutine) {
-                    break;
+                for (ItemGroup group : habitSide ? habitGroupsHolding(section, itemId)
+                                                 : taskGroupsHolding(section, itemId)) {
+                    found = true;
+                    scheduled |= itemRunsOn(routine, group, date);
                 }
-            }
-            if (inThisRoutine) {
-                found = true;
-                scheduled |= coversDay(routine, date);
             }
         }
         return found ? new Standing(true, scheduled) : Standing.ORPHANED;
     }
 
-    private static boolean sectionHoldsHabit(RoutineSection section, UUID habitId) {
+    private static List<HabitGroup> habitGroupsHolding(RoutineSection section, UUID habitId) {
         List<HabitGroup> groups = section.getHabitGroups();
         if (groups == null) {
-            return false;
+            return List.of();
         }
         return groups.stream()
-                .anyMatch(group -> group != null && group.getHabit() != null
-                        && habitId.equals(group.getHabit().getId()));
+                .filter(group -> group != null && group.getHabit() != null
+                        && habitId.equals(group.getHabit().getId()))
+                .toList();
     }
 
-    private static boolean sectionHoldsTask(RoutineSection section, UUID taskId) {
+    private static List<TaskGroup> taskGroupsHolding(RoutineSection section, UUID taskId) {
         List<TaskGroup> groups = section.getTaskGroups();
         if (groups == null) {
-            return false;
+            return List.of();
         }
         return groups.stream()
-                .anyMatch(group -> group != null && group.getTask() != null
-                        && taskId.equals(group.getTask().getId()));
+                .filter(group -> group != null && group.getTask() != null
+                        && taskId.equals(group.getTask().getId()))
+                .toList();
     }
 }

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -165,7 +166,40 @@ public class ToolsJsonBindingTest {
         callback("addHabitToRoutineSection").call(json, toolContext);
 
         verify(diaryRoutineService).addHabitToSection(eq(routineId), eq(sectionId), eq(habitId),
-                eq(LocalTime.of(7, 0)), eq(LocalTime.of(7, 30)), eq(userId));
+                eq(LocalTime.of(7, 0)), eq(LocalTime.of(7, 30)), isNull(), eq(userId));
+    }
+
+    /**
+     * Per-item days ride the real bind path as WeekDay values, so the lenient @JsonCreator
+     * applies: a model writing "sábado" or "SATURDAY" means the same day.
+     */
+    @Test
+    void addHabitBindsItemDaysInAnyCaseAndInPortuguese() {
+        UUID routineId = UUID.randomUUID();
+        UUID sectionId = UUID.randomUUID();
+        UUID habitId = UUID.randomUUID();
+        String json = """
+                {"routineId": "%s", "sectionId": "%s", "habitId": "%s", \
+                "startTime": "07:00", "endTime": "07:30", "days": ["sábado", "SATURDAY"]}"""
+                .formatted(routineId, sectionId, habitId);
+        callback("addHabitToRoutineSection").call(json, toolContext);
+
+        verify(diaryRoutineService).addHabitToSection(eq(routineId), eq(sectionId), eq(habitId),
+                eq(LocalTime.of(7, 0)), eq(LocalTime.of(7, 30)),
+                eq(java.util.Set.of(beyou.beyouapp.backend.domain.routine.schedule.WeekDay.Saturday)),
+                eq(userId));
+    }
+
+    @Test
+    void setRoutineItemDaysTreatsAnEmptyListAsClearingTheLimit() {
+        UUID routineId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        String json = """
+                {"routineId": "%s", "groupId": "%s", "days": []}"""
+                .formatted(routineId, groupId);
+        callback("setRoutineItemDays").call(json, toolContext);
+
+        verify(diaryRoutineService).setItemDays(eq(routineId), eq(groupId), eq(java.util.Set.of()), eq(userId));
     }
 
     @Test
@@ -179,7 +213,7 @@ public class ToolsJsonBindingTest {
 
         String chain = messageChain(error);
         assertTrue(chain.contains("startTime") && chain.contains("HH:mm"), chain);
-        verify(diaryRoutineService, never()).addHabitToSection(any(), any(), any(), any(), any(), any());
+        verify(diaryRoutineService, never()).addHabitToSection(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -192,7 +226,7 @@ public class ToolsJsonBindingTest {
 
         String chain = messageChain(error);
         assertTrue(chain.contains("startTime") && chain.contains("HH:mm"), chain);
-        verify(diaryRoutineService, never()).addHabitToSection(any(), any(), any(), any(), any(), any());
+        verify(diaryRoutineService, never()).addHabitToSection(any(), any(), any(), any(), any(), any(), any());
     }
 
     // ── LIST routines ────────────────────────────────────────────────────
