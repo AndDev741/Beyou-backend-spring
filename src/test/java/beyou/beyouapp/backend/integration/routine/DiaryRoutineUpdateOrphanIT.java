@@ -78,7 +78,7 @@ class DiaryRoutineUpdateOrphanIT extends AbstractIntegrationTest {
         RoutineSectionRequestDTO sectionA = new RoutineSectionRequestDTO(
                 null, "A", "ic", LocalTime.of(6, 0), LocalTime.of(7, 0),
                 List.of(),
-                List.of(new HabitGroupDTO(null, habitId, LocalTime.of(6, 0), LocalTime.of(6, 30), null)),
+                List.of(new HabitGroupDTO(null, habitId, LocalTime.of(6, 0), LocalTime.of(6, 30), null, null)),
                 false);
         RoutineSectionRequestDTO sectionB = new RoutineSectionRequestDTO(
                 null, "B", "ic", LocalTime.of(8, 0), LocalTime.of(9, 0), List.of(), List.of(), false);
@@ -128,7 +128,7 @@ class DiaryRoutineUpdateOrphanIT extends AbstractIntegrationTest {
 
         RoutineSectionRequestDTO withTask = new RoutineSectionRequestDTO(
                 sectionId, "A", "ic", LocalTime.of(6, 0), LocalTime.of(7, 0),
-                List.of(new TaskGroupDTO(null, taskId, LocalTime.of(6, 0), LocalTime.of(6, 30), null)),
+                List.of(new TaskGroupDTO(null, taskId, LocalTime.of(6, 0), LocalTime.of(6, 30), null, null)),
                 List.of(), false);
 
         DiaryRoutineResponseDTO updated = diaryRoutineService.updateDiaryRoutine(routineId,

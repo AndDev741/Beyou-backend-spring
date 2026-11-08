@@ -7,10 +7,12 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -64,6 +66,7 @@ import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.ScheduleResponseDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
+import beyou.beyouapp.backend.domain.routine.schedule.WeekDay;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineService;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.DiaryRoutineRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineItemRequestDTO;
@@ -512,7 +515,8 @@ public class Tools {
     @Tool(description = "Get the routine scheduled for today, or null if none is scheduled")
     DiaryRoutineResponseDTO getTodayRoutine(ToolContext toolContext) {
         log.info("AI agent is using today-routine tool for user: {}", userId(toolContext));
-        return diaryRoutineService.getTodayRoutineScheduled(userId(toolContext));
+        User user = loadUser(toolContext);
+        return diaryRoutineService.getTodayRoutineScheduled(user.getId(), UserDateResolver.today(user));
     }
 
     @Tool(description = "Create a new DAILY routine: sections with HH:mm windows. For a plain "
@@ -523,7 +527,9 @@ public class Tools {
             + "routine, the sections or the items; the server assigns them and ignores any id you "
             + "send here. If the routine needs a habit or task the user does "
             + "not have yet, create it first with createUserHabit/createUserTask — never point an "
-            + "item at an unrelated habit just because it exists")
+            + "item at an unrelated habit just because it exists. An item that belongs only on some "
+            + "of the routine's days (\"clean the fish tank only on Saturday\") carries days, e.g. "
+            + "[\"Saturday\"]; leave days out for an item that runs every day the routine does")
     DiaryRoutineResponseDTO createUserRoutine(DiaryRoutineRequestDTO routine, ToolContext toolContext) {
         log.info("AI agent is creating a routine for user: {}", userId(toolContext));
         return diaryRoutineService.createDiaryRoutine(valid(withIcons(routine)), userId(toolContext));
@@ -599,10 +605,13 @@ public class Tools {
     @Tool(description = "Add ONE existing task to a routine section. Times are HH:mm inside the "
             + "section window. routineId/sectionId come from getUserRoutines, taskId from getUserTasks")
     DiaryRoutineResponseDTO addTaskToRoutineSection(UUID routineId, UUID sectionId, UUID taskId,
-            String startTime, String endTime, ToolContext toolContext) {
+            String startTime, String endTime,
+            @ToolParam(description = ITEM_DAYS_PARAM, required = false) List<WeekDay> days,
+            ToolContext toolContext) {
         log.info("AI agent is adding task {} to routine {} for user: {}", taskId, routineId, userId(toolContext));
         return diaryRoutineService.addTaskToSection(routineId, sectionId, taskId,
-                parseTime(startTime, "startTime"), parseTime(endTime, "endTime"), userId(toolContext));
+                parseTime(startTime, "startTime"), parseTime(endTime, "endTime"), daySet(days),
+                userId(toolContext));
     }
 
     @Tool(description = "Add ONE existing habit to a routine section. Times are HH:mm inside the "
@@ -610,11 +619,44 @@ public class Tools {
             + "If the user has no habit for what they asked for, create it with createUserHabit first "
             + "rather than adding a habit that only looks close")
     DiaryRoutineResponseDTO addHabitToRoutineSection(UUID routineId, UUID sectionId, UUID habitId,
-            String startTime, String endTime, ToolContext toolContext) {
+            String startTime, String endTime,
+            @ToolParam(description = ITEM_DAYS_PARAM, required = false) List<WeekDay> days,
+            ToolContext toolContext) {
         log.info("AI agent is adding habit {} to routine {} for user: {}", habitId, routineId, userId(toolContext));
         return diaryRoutineService.addHabitToSection(routineId, sectionId, habitId,
-                parseTime(startTime, "startTime"), parseTime(endTime, "endTime"), userId(toolContext));
+                parseTime(startTime, "startTime"), parseTime(endTime, "endTime"), daySet(days),
+                userId(toolContext));
     }
+
+    @Tool(description = "Limit ONE routine item to some week days, by its GROUP id (habitGroup/taskGroup "
+            + "id, or a list item's id, from getUserRoutines). The item then shows only on those days, "
+            + "and only when the routine itself is scheduled on them: \"clean the fish tank only on "
+            + "Saturday\" in a Saturday-and-Sunday routine is days [\"Saturday\"]. Send an empty list "
+            + "to make the item run every day the routine does again. Works for daily and list routines")
+    DiaryRoutineResponseDTO setRoutineItemDays(UUID routineId, UUID groupId,
+            @ToolParam(description = "Week days, Monday..Sunday (any letter case; Portuguese day names "
+                    + "work too). Empty list = every day the routine runs") List<WeekDay> days,
+            ToolContext toolContext) {
+        log.info("AI agent is setting the days of group {} in routine {} for user: {}",
+                groupId, routineId, userId(toolContext));
+        Set<WeekDay> wanted = daySet(days);
+        return diaryRoutineService.setItemDays(routineId, groupId,
+                wanted == null ? Set.of() : wanted, userId(toolContext));
+    }
+
+    /** The optional per-item days a tool received, as the set the service takes. */
+    private static Set<WeekDay> daySet(List<WeekDay> days) {
+        if (days == null) {
+            return null;
+        }
+        Set<WeekDay> set = new HashSet<>();
+        days.stream().filter(Objects::nonNull).forEach(set::add);
+        return set;
+    }
+
+    private static final String ITEM_DAYS_PARAM = "Optional. Week days this item runs on, inside the "
+            + "routine's own days (Monday..Sunday, any letter case; Portuguese day names work too). Omit "
+            + "it for an item that runs every day the routine does";
 
     @Tool(description = "Remove ONE item from a routine by its GROUP id (habitGroup/taskGroup id from "
             + "the routine structure, NOT the habit/task id). The habit/task itself is kept. Confirm "

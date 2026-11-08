@@ -116,14 +116,14 @@ class DiaryRoutineServiceUnitTest {
                                                 UUID.randomUUID(),
                                                 LocalTime.of(6, 30),
                                                 LocalTime.of(7, 0),
-                                                null)),
+                                                null, null)),
 
                                         List.of(new HabitGroupDTO(
                                                 UUID.randomUUID(),
                                                 UUID.randomUUID(),
                                                 LocalTime.of(6, 15),
                                                 LocalTime.of(6, 45),
-                                                null)),
+                                                null, null)),
                                         false
                                         ))), List.of());
 
@@ -248,7 +248,7 @@ class DiaryRoutineServiceUnitTest {
                                         UUID.randomUUID(),
                                         LocalTime.of(8, 0),
                                         LocalTime.of(7, 0),
-                                        null)),
+                                        null, null)),
                                 List.of(),
                                 false
                         )), List.of());
@@ -281,7 +281,7 @@ class DiaryRoutineServiceUnitTest {
                                         UUID.randomUUID(),
                                         LocalTime.of(11, 0),
                                         LocalTime.of(13, 0),
-                                        null)),
+                                        null, null)),
                                 false
                         )), List.of());
 
@@ -351,14 +351,14 @@ class DiaryRoutineServiceUnitTest {
                                                 UUID.randomUUID(),
                                                 LocalTime.of(6, 30),
                                                 LocalTime.of(7, 0),
-                                                null)),
+                                                null, null)),
 
                                         List.of(new HabitGroupDTO(
                                                 UUID.randomUUID(),
                                                 UUID.randomUUID(),
                                                 LocalTime.of(6, 15),
                                                 LocalTime.of(6, 45),
-                                                null)),
+                                                null, null)),
                                         false
                 ))), List.of());
 
@@ -491,7 +491,7 @@ class DiaryRoutineServiceUnitTest {
                 .thenReturn(List.of(diaryRoutine));
 
         // Act
-        DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId);
+        DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId, LocalDate.now());
 
         // Assert — comportamento esperado
         assertNotNull(result);
@@ -516,13 +516,13 @@ class DiaryRoutineServiceUnitTest {
                 .thenReturn(List.of(otherRoutine));
 
         // Act & Assert
-        DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId);
+        DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId, LocalDate.now());
 
         assertNull(result);
     }
 
     @Test
-    @DisplayName("R15: today's routine is picked by the owner's local weekday, not the server's")
+    @DisplayName("R15: today's routine is picked by the day it is asked about, not the server's")
     void shouldPickTodaysRoutineByTheOwnersLocalWeekday() {
         ZoneId ownerZone = zoneWhoseTodayDiffersFromServer();
         UUID userId = UUID.randomUUID();
@@ -543,7 +543,7 @@ class DiaryRoutineServiceUnitTest {
 
         when(diaryRoutineRepository.findAllByUserId(userId)).thenReturn(List.of(diaryRoutine));
 
-        DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId);
+        DiaryRoutineResponseDTO result = diaryRoutineService.getTodayRoutineScheduled(userId, LocalDate.now(ownerZone));
 
         assertNotNull(result, "Routine scheduled for the owner's local weekday should be returned");
         assertEquals("Owner Local Routine", result.name());
@@ -588,7 +588,7 @@ class DiaryRoutineServiceUnitTest {
                         LocalTime.of(12, 0),
                         List.of(new TaskGroupDTO(taskGroupId,
                                 existingSection.getTaskGroups().get(0).getTask().getId(),
-                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null, null)),
                         List.of(), // empty habitGroup — should remove the existing one
                         false)), List.of());
 
@@ -622,7 +622,7 @@ class DiaryRoutineServiceUnitTest {
                         List.of(), // empty taskGroup — should remove the existing one
                         List.of(new HabitGroupDTO(habitGroupId,
                                 existingSection.getHabitGroups().get(0).getHabit().getId(),
-                                LocalTime.of(6, 15), LocalTime.of(6, 45), null)),
+                                LocalTime.of(6, 15), LocalTime.of(6, 45), null, null)),
                         false)), List.of());
 
         when(diaryRoutineRepository.findById(routineId)).thenReturn(Optional.of(diaryRoutine));
@@ -663,14 +663,14 @@ class DiaryRoutineServiceUnitTest {
                         LocalTime.of(12, 0),
                         List.of(new TaskGroupDTO(existingTaskGroupId,
                                 existingSection.getTaskGroups().get(0).getTask().getId(),
-                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null, null)),
                         List.of(
                                 new HabitGroupDTO(existingHabitGroupId,
                                         existingSection.getHabitGroups().get(0).getHabit().getId(),
-                                        LocalTime.of(6, 15), LocalTime.of(6, 45), null),
+                                        LocalTime.of(6, 15), LocalTime.of(6, 45), null, null),
                                 new HabitGroupDTO(null, // new group — no ID
                                         newHabitId,
-                                        LocalTime.of(7, 0), LocalTime.of(7, 30), null)),
+                                        LocalTime.of(7, 0), LocalTime.of(7, 30), null, null)),
                         false)), List.of());
 
         DiaryRoutineResponseDTO response = diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId);
@@ -704,10 +704,10 @@ class DiaryRoutineServiceUnitTest {
                         LocalTime.of(12, 0),
                         List.of(new TaskGroupDTO(taskGroupId,
                                 existingSection.getTaskGroups().get(0).getTask().getId(),
-                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null, null)),
                         List.of(new HabitGroupDTO(habitGroupId,
                                 existingSection.getHabitGroups().get(0).getHabit().getId(),
-                                newStart, newEnd, null)),
+                                newStart, newEnd, null, null)),
                         false)), List.of());
 
         diaryRoutineService.updateDiaryRoutine(routineId, updateDTO, userId);
@@ -776,10 +776,10 @@ class DiaryRoutineServiceUnitTest {
                         LocalTime.of(12, 0),
                         List.of(new TaskGroupDTO(existingTaskGroupId,
                                 existingSection.getTaskGroups().get(0).getTask().getId(),
-                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null, null)),
                         List.of(new HabitGroupDTO(null, // new group with foreign habit
                                 foreignHabitId,
-                                LocalTime.of(7, 0), LocalTime.of(7, 30), null)),
+                                LocalTime.of(7, 0), LocalTime.of(7, 30), null, null)),
                         false)), List.of());
 
         BusinessException exception = assertThrows(
@@ -816,10 +816,10 @@ class DiaryRoutineServiceUnitTest {
                         LocalTime.of(12, 0),
                         List.of(new TaskGroupDTO(null, // new group with foreign task
                                 foreignTaskId,
-                                LocalTime.of(6, 30), LocalTime.of(7, 0), null)),
+                                LocalTime.of(6, 30), LocalTime.of(7, 0), null, null)),
                         List.of(new HabitGroupDTO(existingHabitGroupId,
                                 existingSection.getHabitGroups().get(0).getHabit().getId(),
-                                LocalTime.of(6, 15), LocalTime.of(6, 45), null)),
+                                LocalTime.of(6, 15), LocalTime.of(6, 45), null, null)),
                         false)), List.of());
 
         BusinessException exception = assertThrows(

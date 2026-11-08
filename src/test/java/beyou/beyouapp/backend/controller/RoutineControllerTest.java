@@ -3,6 +3,7 @@ package beyou.beyouapp.backend.controller;
 import beyou.beyouapp.backend.domain.routine.RoutineType;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -43,6 +44,7 @@ import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineSect
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.TaskGroupRequestDTO;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.utils.RefreshUiDtoBuilder;
@@ -94,13 +96,15 @@ class RoutineControllerTest extends AbstractIntegrationTest {
                                         UUID.randomUUID(),
                                         "06:30",
                                         "07:00",
-                                        List.of())),
+                                        List.of(),
+                                        java.util.Set.of())),
                                 List.of(new DiaryRoutineResponseDTO.RoutineSectionResponseDTO.HabitGroupResponseDTO(
                                         UUID.randomUUID(),
                                         UUID.randomUUID(),
                                         "06:15",
                                         "06:45",
-                                        List.of())),
+                                        List.of(),
+                                        java.util.Set.of())),
                                 false)),
                 null,
                 0,
@@ -200,13 +204,34 @@ class RoutineControllerTest extends AbstractIntegrationTest {
 
     @Test
     void shouldGetTodayRoutineScheduled() throws Exception {
-        when(diaryRoutineService.getTodayRoutineScheduled(userId)).thenReturn(responseDto);
+        LocalDate ownerToday = UserDateResolver.today(user);
+        when(diaryRoutineService.getTodayRoutineScheduled(userId, ownerToday)).thenReturn(responseDto);
 
         mockMvc.perform(get("/routine/today"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(routineId.toString()));
 
-        verify(diaryRoutineService).getTodayRoutineScheduled(userId);
+        verify(diaryRoutineService).getTodayRoutineScheduled(userId, ownerToday);
+    }
+
+    /**
+     * R15 moved here with the date: the service takes the day it is asked about (it is the
+     * cache key), so the controller is the one place that has to resolve it in the owner's
+     * zone. UTC+14 and UTC-12 are 26 hours apart, so one of them is always on another date
+     * than the server, and a controller passing the server's date fails this.
+     */
+    @Test
+    void shouldAskForTodayInTheOwnersZone() throws Exception {
+        LocalDate serverToday = LocalDate.now();
+        String zone = LocalDate.now(java.time.ZoneId.of("Etc/GMT-14")).equals(serverToday)
+                ? "Etc/GMT+12" : "Etc/GMT-14";
+        user.setTimezone(zone);
+        LocalDate ownerToday = LocalDate.now(java.time.ZoneId.of(zone));
+
+        mockMvc.perform(get("/routine/today")).andExpect(status().isOk());
+
+        verify(diaryRoutineService).getTodayRoutineScheduled(userId, ownerToday);
+        verify(diaryRoutineService, never()).getTodayRoutineScheduled(userId, serverToday);
     }
 
     @Test

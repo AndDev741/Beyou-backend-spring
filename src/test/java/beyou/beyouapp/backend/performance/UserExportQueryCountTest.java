@@ -199,7 +199,7 @@ class UserExportQueryCountTest extends AbstractIntegrationTest {
                     "routine-" + i, "lucide:sun", RoutineType.DAILY,
                     List.of(new RoutineSectionRequestDTO(null, "section", "lucide:sunrise",
                             LocalTime.of(7, 0), LocalTime.of(8, 0), List.of(),
-                            List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null)),
+                            List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null, null)),
                             false)), List.of()),
                     userId);
         }

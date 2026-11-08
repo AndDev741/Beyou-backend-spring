@@ -260,8 +260,8 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         diaryRoutineService.createDiaryRoutine(new DiaryRoutineRequestDTO(
                 "Morning", "lucide:sun", RoutineType.DAILY, List.of(new RoutineSectionRequestDTO(
                         null, "Wake up", "lucide:sunrise", LocalTime.of(7, 0), LocalTime.of(8, 0),
-                        List.of(new TaskGroupDTO(null, taskId, LocalTime.of(7, 30), LocalTime.of(7, 40), null)),
-                        List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null)),
+                        List.of(new TaskGroupDTO(null, taskId, LocalTime.of(7, 30), LocalTime.of(7, 40), null, null)),
+                        List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null, null)),
                         false)), List.of()), userId);
         UUID routineId = diaryRoutineService.getAllDiaryRoutines(userId).get(0).id();
 
@@ -431,8 +431,8 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         // A LIST routine: no times anywhere, so the order is the only shape it has.
         diaryRoutineService.createDiaryRoutine(new DiaryRoutineRequestDTO(
                 "Errands", "lucide:list", RoutineType.LIST, null, List.of(
-                        new RoutineItemRequestDTO(null, habitId, null),
-                        new RoutineItemRequestDTO(null, null, taskId))), userId);
+                        new RoutineItemRequestDTO(null, habitId, null, null),
+                        new RoutineItemRequestDTO(null, null, taskId, null))), userId);
         UUID routineId = diaryRoutineService.getAllDiaryRoutines(userId).get(0).id();
 
         UUID parentGoalId = createGoal("Speak Spanish", null, categoryId);

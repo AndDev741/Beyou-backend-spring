@@ -286,4 +286,111 @@ class ScheduledOnDayResolverUnitTest {
                     .standingOf(CheckDayOwnerType.HABIT, null, List.of(routine), MONDAY));
         }
     }
+    /** A habit group in its own section, limited to {@code days} (none: follows the routine). */
+    private static HabitGroup putHabitOn(DiaryRoutine routine, UUID habitId, WeekDay... days) {
+        putHabit(routine, habitId);
+        RoutineSection section = routine.getRoutineSections().get(routine.getRoutineSections().size() - 1);
+        HabitGroup group = section.getHabitGroups().get(0);
+        group.applyDays(Set.of(days));
+        return group;
+    }
+
+    /**
+     * Per-item days (V43). The fish-tank case: a Monday-and-Tuesday routine whose habit belongs
+     * only on Monday. Every reader of "did this run on day D" goes through these answers, so a
+     * wrong one here is a wrong streak, a wrong snapshot and a wrong dashboard at once.
+     */
+    @Nested
+    class ItemDays {
+
+        @Test
+        void anItemWithNoDaysOfItsOwnRunsWheneverItsRoutineDoes() {
+            DiaryRoutine routine = routine(scheduleOf(WeekDay.Monday, WeekDay.Tuesday));
+            HabitGroup group = putHabitOn(routine, UUID.randomUUID());
+
+            assertTrue(ScheduledOnDayResolver.itemActiveOn(group, TUESDAY));
+            assertTrue(ScheduledOnDayResolver.itemRunsOn(routine, group, TUESDAY));
+            assertFalse(ScheduledOnDayResolver.itemRunsOn(routine, group, WEDNESDAY),
+                    "still bound by the routine's own schedule");
+        }
+
+        @Test
+        void anItemLimitedToMondayIsInactiveOnTuesday() {
+            DiaryRoutine routine = routine(scheduleOf(WeekDay.Monday, WeekDay.Tuesday));
+            HabitGroup group = putHabitOn(routine, UUID.randomUUID(), WeekDay.Monday);
+
+            assertTrue(ScheduledOnDayResolver.itemRunsOn(routine, group, MONDAY));
+            assertFalse(ScheduledOnDayResolver.itemActiveOn(group, TUESDAY));
+            assertFalse(ScheduledOnDayResolver.itemRunsOn(routine, group, TUESDAY));
+        }
+
+        @Test
+        void itsHabitIsNotScheduledOnTheDayItsDaysLeaveOut() {
+            DiaryRoutine routine = routine(scheduleOf(WeekDay.Monday, WeekDay.Tuesday));
+            UUID habitId = UUID.randomUUID();
+            putHabitOn(routine, habitId, WeekDay.Monday);
+            putHabitOn(routine, UUID.randomUUID());
+
+            // NOT_SCHEDULED, which the streak walk treats as neutral. Before V43 this habit
+            // was scheduled on Tuesday and the day-close pass stamped it MISSED.
+            assertEquals(new Standing(true, false), ScheduledOnDayResolver
+                    .standingOf(CheckDayOwnerType.HABIT, habitId, List.of(routine), TUESDAY));
+            assertEquals(new Standing(true, true), ScheduledOnDayResolver
+                    .standingOf(CheckDayOwnerType.HABIT, habitId, List.of(routine), MONDAY));
+        }
+
+        @Test
+        void aHabitIsScheduledWhenAnyOfItsGroupsRunsThatDay() {
+            DiaryRoutine routine = routine(scheduleOf(WeekDay.Monday, WeekDay.Tuesday));
+            UUID habitId = UUID.randomUUID();
+            putHabitOn(routine, habitId, WeekDay.Monday);
+            putHabitOn(routine, habitId, WeekDay.Tuesday);
+
+            assertTrue(ScheduledOnDayResolver
+                    .standingOf(CheckDayOwnerType.HABIT, habitId, List.of(routine), TUESDAY).scheduled());
+        }
+
+        @Test
+        void aRoutineWhoseEveryItemIsLimitedAwayDoesNotRunThatDay() {
+            DiaryRoutine routine = routine(scheduleOf(WeekDay.Monday, WeekDay.Tuesday));
+            putHabitOn(routine, UUID.randomUUID(), WeekDay.Monday);
+
+            assertTrue(ScheduledOnDayResolver.coversDay(routine, TUESDAY), "the schedule still lists Tuesday");
+            assertFalse(ScheduledOnDayResolver.runsOn(routine, TUESDAY));
+            assertTrue(ScheduledOnDayResolver.runsOn(routine, MONDAY));
+            // So neither the account nor the routine owes anything on Tuesday.
+            assertFalse(ScheduledOnDayResolver
+                    .standingOf(CheckDayOwnerType.USER, UUID.randomUUID(), List.of(routine), TUESDAY).scheduled());
+            assertFalse(ScheduledOnDayResolver
+                    .standingOf(CheckDayOwnerType.ROUTINE, routine.getId(), List.of(routine), TUESDAY).scheduled());
+        }
+
+        @Test
+        void aRoutineWithNoItemsKeepsItsOldAnswer() {
+            DiaryRoutine routine = routine(scheduleOf(WeekDay.Tuesday));
+
+            assertTrue(ScheduledOnDayResolver.runsOn(routine, TUESDAY));
+        }
+
+        @Test
+        void allSevenDaysAreStoredAsNoLimit() {
+            HabitGroup group = new HabitGroup();
+            group.applyDays(Set.of(WeekDay.values()));
+
+            assertTrue(group.getDays().isEmpty(), "all seven days mean the same as none");
+        }
+
+        @Test
+        void nullDaysLeaveTheItemAsItIs() {
+            HabitGroup group = new HabitGroup();
+            group.applyDays(Set.of(WeekDay.Saturday));
+            group.applyDays(null);
+
+            assertEquals(Set.of(WeekDay.Saturday), group.getDays(),
+                    "an older client that never sends the field must not wipe the choice");
+
+            group.applyDays(Set.of());
+            assertTrue(group.getDays().isEmpty(), "an empty set clears it");
+        }
+    }
 }

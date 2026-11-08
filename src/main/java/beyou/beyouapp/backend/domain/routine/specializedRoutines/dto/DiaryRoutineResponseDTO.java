@@ -71,6 +71,9 @@ public record DiaryRoutineResponseDTO(
      * <p>{@code checks} is typed to {@link BaseCheck} because habit and task checks are
      * mixed in one list here. Both subclasses add nothing but a {@code @JsonIgnore} back
      * reference, so the two serialize identically and no client can tell which it received.
+     *
+     * <p>{@code days} is the entry's own weekdays, empty when it follows the routine. The
+     * same field rides on the section groups below.
      */
     public record RoutineItemResponseDTO(
             UUID id,
@@ -78,7 +81,8 @@ public record DiaryRoutineResponseDTO(
             UUID habitId,
             UUID taskId,
             int orderIndex,
-            List<BaseCheck> checks) {}
+            List<BaseCheck> checks,
+            Set<WeekDay> days) {}
 
     public record RoutineSectionResponseDTO(
             UUID id,
@@ -95,7 +99,8 @@ public record DiaryRoutineResponseDTO(
                 UUID taskId,
                 String startTime,
                 String endTime,
-                List<TaskGroupCheck> taskGroupChecks) {
+                List<TaskGroupCheck> taskGroupChecks,
+                Set<WeekDay> days) {
         }
 
         public record HabitGroupResponseDTO(
@@ -103,7 +108,8 @@ public record DiaryRoutineResponseDTO(
                 UUID habitId,
                 String startTime,
                 String endTime,
-                List<HabitGroupCheck> habitGroupChecks) {
+                List<HabitGroupCheck> habitGroupChecks,
+                Set<WeekDay> days) {
         }
     }
 }

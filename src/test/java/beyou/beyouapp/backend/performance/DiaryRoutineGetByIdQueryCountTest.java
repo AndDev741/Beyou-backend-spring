@@ -150,12 +150,16 @@ class DiaryRoutineGetByIdQueryCountTest extends AbstractIntegrationTest {
         //                   scaling linearly with section count.
         // With @BatchSize on taskGroups/habitGroups: 1 + 1 + 1 + 1 = 4 statements,
         //   constant regardless of section count.
-        // Threshold of 6 catches any per-section growth.
+        // Threshold of 7 catches any per-section growth. It was 6 until V43: every item now
+        // carries its weekdays (ItemGroup.days, item_group_days), and the mapper reads them
+        // for every item, which costs one batched statement per 50 items (@BatchSize), not
+        // one per item or per section. Measured: 7 statements for 4 sections x 6 items, 8 for
+        // 10 sections x 6 items (60 items, two batches of 50).
         int unfixedEstimate = 2 + 2 * SECTION_COUNT;
         assertThat(stats.statementCount())
-                .as("Should be bounded (≤6) — current N+1 would mean ~%d statements for %d sections. Stats: %s",
+                .as("Should be bounded (≤7) — current N+1 would mean ~%d statements for %d sections. Stats: %s",
                         unfixedEstimate, SECTION_COUNT, stats)
-                .isLessThanOrEqualTo(6);
+                .isLessThanOrEqualTo(7);
 
         System.out.println("[N+1 fix] DiaryRoutineService.getDiaryRoutineById with "
                 + SECTION_COUNT + " sections × " + GROUPS_PER_SECTION + " groups → " + stats);

@@ -133,7 +133,8 @@ class CalendarOverviewBuilder {
             return List.of();
         }
         return routines.stream()
-                .filter(routine -> ScheduledOnDayResolver.coversDay(routine, day))
+                // runsOn: a routine holding only items limited to other days has nothing on this one.
+                .filter(routine -> ScheduledOnDayResolver.runsOn(routine, day))
                 .map(routine -> new CalendarRoutineDTO(routine.getId(), routine.getName(), routine.getIconId(),
                         CalendarRoutineSource.SCHEDULE, null, null, false))
                 .sorted(ROUTINE_ORDER)

@@ -100,7 +100,7 @@ class SnapshotStructureSerializerTest {
 
     @Test
     void serializeStructure_producesValidJsonWithCorrectSectionFields() throws Exception {
-        String json = serializer.serializeStructure(routine);
+        String json = serializer.serializeStructure(routine, java.time.LocalDate.now());
 
         JsonNode root = objectMapper.readTree(json);
         assertTrue(root.has("sections"));
@@ -119,7 +119,7 @@ class SnapshotStructureSerializerTest {
 
     @Test
     void serializeStructure_containsHabitItemWithCorrectFields() throws Exception {
-        String json = serializer.serializeStructure(routine);
+        String json = serializer.serializeStructure(routine, java.time.LocalDate.now());
 
         JsonNode items = objectMapper.readTree(json).get("sections").get(0).get("items");
         assertTrue(items.isArray());
@@ -136,7 +136,7 @@ class SnapshotStructureSerializerTest {
 
     @Test
     void serializeStructure_containsTaskItemWithCorrectFields() throws Exception {
-        String json = serializer.serializeStructure(routine);
+        String json = serializer.serializeStructure(routine, java.time.LocalDate.now());
 
         JsonNode items = objectMapper.readTree(json).get("sections").get(0).get("items");
 
@@ -167,7 +167,7 @@ class SnapshotStructureSerializerTest {
         // Put them in reverse order to verify sorting
         routine.setRoutineSections(List.of(section2, section0));
 
-        String json = serializer.serializeStructure(routine);
+        String json = serializer.serializeStructure(routine, java.time.LocalDate.now());
         JsonNode sections = objectMapper.readTree(json).get("sections");
 
         assertEquals("Morning", sections.get(0).get("name").asText());
@@ -188,7 +188,7 @@ class SnapshotStructureSerializerTest {
 
         routine.setRoutineSections(List.of(sectionNoTimes));
 
-        String json = serializer.serializeStructure(routine);
+        String json = serializer.serializeStructure(routine, java.time.LocalDate.now());
         JsonNode section = objectMapper.readTree(json).get("sections").get(0);
 
         assertTrue(section.get("startTime").isNull());

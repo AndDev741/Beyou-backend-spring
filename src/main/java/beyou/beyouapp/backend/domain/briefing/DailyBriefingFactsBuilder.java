@@ -40,7 +40,6 @@ import beyou.beyouapp.backend.domain.routine.snapshot.SnapshotCheck;
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayCalculator;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
-import beyou.beyouapp.backend.domain.routine.specializedRoutines.RoutineSection;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserLanguage;
 import lombok.RequiredArgsConstructor;
@@ -246,11 +245,13 @@ public class DailyBriefingFactsBuilder {
         int scheduledItems = 0;
         boolean scheduledToday = false;
         for (DiaryRoutine routine : routines) {
-            if (!ScheduledOnDayResolver.coversDay(routine, today)) {
+            // runsOn, and only today's items counted: an item limited to other days is not
+            // part of today's routine and the panel must not promise it.
+            if (!ScheduledOnDayResolver.runsOn(routine, today)) {
                 continue;
             }
             scheduledToday = true;
-            scheduledItems += countItems(routine);
+            scheduledItems += countItems(routine, today);
         }
 
         UserStreakService.UserStreak streak = userStreakService.streakOf(user, today);
@@ -308,20 +309,10 @@ public class DailyBriefingFactsBuilder {
      * drag order, and a DAILY routine has several sections and no such order. Counting is a
      * different question from ordering and works for both shapes.
      */
-    private static int countItems(DiaryRoutine routine) {
-        List<RoutineSection> sections = routine.getRoutineSections();
-        if (sections == null) {
-            return 0;
-        }
-        int total = 0;
-        for (RoutineSection section : sections) {
-            if (section == null) {
-                continue;
-            }
-            total += section.getHabitGroups() == null ? 0 : section.getHabitGroups().size();
-            total += section.getTaskGroups() == null ? 0 : section.getTaskGroups().size();
-        }
-        return total;
+    private static int countItems(DiaryRoutine routine, LocalDate day) {
+        return (int) ScheduledOnDayResolver.itemsOf(routine).stream()
+                .filter(item -> ScheduledOnDayResolver.itemActiveOn(item, day))
+                .count();
     }
 
     /**

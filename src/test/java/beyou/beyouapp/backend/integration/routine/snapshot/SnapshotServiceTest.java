@@ -101,7 +101,7 @@ class SnapshotServiceTest {
     @Test
     void createSnapshot_savesSnapshotWithCorrectFields() {
         String structureJson = "{\"sections\":[]}";
-        when(structureSerializer.serializeStructure(routine)).thenReturn(structureJson);
+        when(structureSerializer.serializeStructure(eq(routine), any(java.time.LocalDate.class))).thenReturn(structureJson);
         when(snapshotRepository.save(any(RoutineSnapshot.class))).thenAnswer(invocation -> {
             RoutineSnapshot saved = invocation.getArgument(0);
             saved.setId(UUID.randomUUID());
@@ -123,13 +123,13 @@ class SnapshotServiceTest {
         assertFalse(result.isCompleted());
 
         verify(snapshotRepository).save(any(RoutineSnapshot.class));
-        verify(structureSerializer).serializeStructure(routine);
+        verify(structureSerializer).serializeStructure(eq(routine), any(java.time.LocalDate.class));
     }
 
     @Test
     void createSnapshot_createsAndSavesSnapshotChecks() {
         String structureJson = "{\"sections\":[]}";
-        when(structureSerializer.serializeStructure(routine)).thenReturn(structureJson);
+        when(structureSerializer.serializeStructure(eq(routine), any(java.time.LocalDate.class))).thenReturn(structureJson);
         when(snapshotRepository.save(any(RoutineSnapshot.class))).thenAnswer(invocation -> {
             RoutineSnapshot saved = invocation.getArgument(0);
             saved.setId(UUID.randomUUID());
@@ -154,7 +154,7 @@ class SnapshotServiceTest {
     @Test
     void createSnapshot_passesCorrectSnapshotToSerializerForChecks() {
         String structureJson = "{\"sections\":[]}";
-        when(structureSerializer.serializeStructure(routine)).thenReturn(structureJson);
+        when(structureSerializer.serializeStructure(eq(routine), any(java.time.LocalDate.class))).thenReturn(structureJson);
         when(snapshotRepository.save(any(RoutineSnapshot.class))).thenAnswer(invocation -> {
             RoutineSnapshot saved = invocation.getArgument(0);
             saved.setId(UUID.randomUUID());

@@ -188,7 +188,7 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
                 sectionId, "Morning", "ic", LocalTime.of(6, 0), LocalTime.of(9, 0),
                 List.of(),
                 List.of(new HabitGroupDTO(habitGroupId, habitId,
-                        LocalTime.of(6, 0), LocalTime.of(6, 30), null)),
+                        LocalTime.of(6, 0), LocalTime.of(6, 30), null, null)),
                 false);
 
         DiaryRoutineResponseDTO copy = diaryRoutineService.createDiaryRoutine(
@@ -228,7 +228,7 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
                 null, "Manha", "ic", LocalTime.of(6, 0), LocalTime.of(9, 0),
                 List.of(),
                 List.of(new HabitGroupDTO(habitGroupId, habitId,
-                        LocalTime.of(6, 0), LocalTime.of(6, 30), null)),
+                        LocalTime.of(6, 0), LocalTime.of(6, 30), null, null)),
                 false);
 
         DiaryRoutineResponseDTO copy = diaryRoutineService.createDiaryRoutine(
@@ -261,7 +261,7 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
                 clientSectionId, "Evening", "ic", LocalTime.of(20, 0), LocalTime.of(22, 0),
                 List.of(),
                 List.of(new HabitGroupDTO(clientGroupId, habitId,
-                        LocalTime.of(20, 0), LocalTime.of(20, 30), null)),
+                        LocalTime.of(20, 0), LocalTime.of(20, 30), null, null)),
                 false);
 
         DiaryRoutineResponseDTO updated = diaryRoutineService.updateDiaryRoutine(routineId,
@@ -297,7 +297,7 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
                 UUID.randomUUID(), "Morning", "ic", LocalTime.of(6, 0), LocalTime.of(9, 0),
                 List.of(),
                 List.of(new HabitGroupDTO(UUID.randomUUID(), habitId,
-                        LocalTime.of(6, 0), LocalTime.of(6, 30), null)),
+                        LocalTime.of(6, 0), LocalTime.of(6, 30), null, null)),
                 false);
 
         diaryRoutineService.updateDiaryRoutine(routineId,
@@ -320,7 +320,7 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
                         null, "Morning", "ic", LocalTime.of(6, 0), LocalTime.of(9, 0),
                         List.of(),
                         List.of(new HabitGroupDTO(null, habitId,
-                                LocalTime.of(6, 0), LocalTime.of(6, 30), null)),
+                                LocalTime.of(6, 0), LocalTime.of(6, 30), null, null)),
                         false)), List.of()),
                 user);
     }
@@ -334,7 +334,7 @@ class DiaryRoutineClientSuppliedIdTest extends AbstractIntegrationTest {
         return new RoutineSectionRequestDTO(null, "Evening", "ic",
                 LocalTime.of(20, 0), LocalTime.of(22, 0), List.of(),
                 List.of(new HabitGroupDTO(groupId, habitId,
-                        LocalTime.of(20, 0), LocalTime.of(20, 30), checks)),
+                        LocalTime.of(20, 0), LocalTime.of(20, 30), checks, null)),
                 false);
     }
 

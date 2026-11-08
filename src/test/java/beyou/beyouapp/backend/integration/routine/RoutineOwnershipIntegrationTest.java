@@ -172,9 +172,9 @@ class RoutineOwnershipIntegrationTest extends AbstractIntegrationTest {
         return new RoutineSectionRequestDTO(
                 null, name, "lucide:sunrise", LocalTime.of(7, 0), LocalTime.of(8, 0),
                 taskId == null ? List.of()
-                        : List.of(new TaskGroupDTO(null, taskId, LocalTime.of(7, 30), LocalTime.of(7, 40), null)),
+                        : List.of(new TaskGroupDTO(null, taskId, LocalTime.of(7, 30), LocalTime.of(7, 40), null, null)),
                 habitId == null ? List.of()
-                        : List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null)),
+                        : List.of(new HabitGroupDTO(null, habitId, LocalTime.of(7, 0), LocalTime.of(7, 10), null, null)),
                 false);
     }
 
