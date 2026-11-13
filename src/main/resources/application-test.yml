@@ -140,3 +140,12 @@ notebook:
   discovery:
     tavily-api-key: ""
     gemini-api-key: ""
+
+# The LLM endpoint pinned unset, for the same reason as the embeddings above: LLM_BASE_URL
+# and friends exported in a developer's shell would bind through the defaults and let the
+# suite call a real gateway. Tests that need an answer mock ChatModel.
+ai:
+  llm:
+    base-url: ""
+    api-key: ""
+    model: ""

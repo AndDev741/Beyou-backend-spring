@@ -25,7 +25,7 @@ import lombok.RequiredArgsConstructor;
  * <p>{@code GET} is get-or-create and may spend up to
  * {@code DailyBriefingService.NARRATIVE_DEADLINE} waiting on the model, which is why it has
  * a rate-limit tier of its own rather than falling into the generic 60-a-minute read bucket.
- * It answers 200 whatever the chain does — the facts are computed from the database and the
+ * It answers 200 whatever the model does — the facts are computed from the database and the
  * generated prose is the optional half, so there is no failure here worth showing a user.
  */
 @RestController

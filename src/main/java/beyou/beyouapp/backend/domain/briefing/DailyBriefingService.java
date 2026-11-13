@@ -32,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>The shape of this class is one decision. The facts cost about ten indexed queries, flat
  * in the size of the routine (pinned by DailyBriefingServiceIT), and the user can change them
- * from inside the dialog, so they are recomputed on every call and never cached. The prose costs an LLM call against a free-tier chain, and nothing the
+ * from inside the dialog, so they are recomputed on every call and never cached. The prose costs an LLM call against free-tier quota, and nothing the
  * user does during the day makes yesterday's recap wrong enough to pay for again, so it is
  * generated once and read from the row afterwards.
  *
@@ -175,7 +175,7 @@ public class DailyBriefingService {
      * trap. The first request stops waiting at eight seconds and the call carries on and
      * stores itself, which was meant to be found "on the next open". There is no next open:
      * the dialog shows once a day. In production every narration for weeks landed READY in
-     * the row and none of them reached a screen, because the free chain answers in more than
+     * the row and none of them reached a screen, because the free tiers answer in more than
      * eight seconds and the skeleton was never asked to look again.
      *
      * <p>Read only. It never starts a narration, never recomputes the facts, and so it sits in
@@ -259,9 +259,9 @@ public class DailyBriefingService {
         if (isReady(row)) {
             return readStored(row);
         }
-        // UNAVAILABLE is not retried for the rest of the day. A chain in cooldown refuses
-        // the retry too, and the panel reads identically either way — so a retry spends a
-        // request to change nothing the user can see.
+        // UNAVAILABLE is not retried for the rest of the day. The panel reads identically
+        // with or without the prose, so a retry spends a request to change nothing the
+        // user can see.
         if (row.getNarrativeStatus() == NarrativeStatus.UNAVAILABLE || !narrationEnabled) {
             return BriefingNarrative.absent(row.getNarrativeStatus());
         }

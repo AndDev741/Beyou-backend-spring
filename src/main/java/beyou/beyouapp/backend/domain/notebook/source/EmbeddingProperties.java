@@ -9,8 +9,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * uses full-text search instead (see {@code NotebookRetriever}).
  *
  * <p>Any OpenAI-compatible {@code /embeddings} endpoint works. The default is Mistral's, keyed by
- * the same {@code MISTRAL_API_KEY} the chat chain already uses. No key: embeddings are off, which
- * is how dev, CI and the e2e stack run.
+ * {@code MISTRAL_API_KEY}, which nothing else reads now that chat goes through the one endpoint
+ * in {@code LlmProperties}. No key: embeddings are off, which is how dev, CI and the e2e stack
+ * run.
  */
 @ConfigurationProperties(prefix = "notebook.embedding")
 public record EmbeddingProperties(String baseUrl, String apiKey, String model, Integer batchSize) {

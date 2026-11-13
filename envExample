@@ -47,27 +47,25 @@ PASSWORD_RESET_COOLDOWN_MINUTES=5
 ACCOUNT_DELETION_CODE_TTL_MINUTES=15
 ACCOUNT_DELETION_COOLDOWN_SECONDS=60
 
-# The assistant's model fallback chain, tried left to right. The values below are
-# the local ones — the whole chain. Production overrides them in application-prod.yaml
-# (mistral,gemini, with glm,deepseek blocked): the two Chinese providers have no EU
-# adequacy decision and the assistant carries whatever a person typed.
+# The one LLM endpoint behind the assistant, onboarding, the study notebook and the
+# briefing prose. Any OpenAI-compatible server works: a gateway such as OmniRoute, or a
+# provider's own API. Which provider answers, and what happens when one fails, is
+# decided by that gateway. The app keeps no provider list.
 #
-# The chain needs at least one provider with a key or the app refuses to boot, so
-# prod needs MISTRAL_API_KEY or GEMINI_API_KEY.
-LLM_CHAIN_ORDER=mistral,gemini,glm,nvidia,deepseek
-LLM_CHAIN_BLOCKED=
-MISTRAL_API_KEY=
-GEMINI_API_KEY=
-GLM_API_KEY=
-NVIDIA_API_KEY=
-# Optional model overrides: MISTRAL_MODEL, GEMINI_MODEL, GLM_MODEL, NVIDIA_MODEL
-# Optional cooldowns (seconds): LLM_COOLDOWN_RATELIMIT=300, LLM_COOLDOWN_ERROR=30
+# Leave them empty and the app still boots; the AI features answer as unavailable.
+# Whoever fills these in for production chooses where a person's messages are sent,
+# so the providers behind the URL have to match what the privacy policy says.
+LLM_BASE_URL=
+LLM_API_KEY=
+LLM_MODEL=
 
-# Study notebook embeddings. They reuse MISTRAL_API_KEY with mistral-embed unless
+# Study notebook embeddings. They use MISTRAL_API_KEY with mistral-embed unless
 # overridden, and with no key at all the notebook falls back to full-text search.
-# Left as comments on purpose: an empty NOTEBOOK_EMBEDDING_API_KEY= line would
+# Embeddings are the only thing that reads MISTRAL_API_KEY. The three overrides are
+# left as comments on purpose: an empty NOTEBOOK_EMBEDDING_API_KEY= line would
 # override that fallback with an empty key. Pick the model once. Stored vectors
 # only compare with vectors from the same model.
+MISTRAL_API_KEY=
 # NOTEBOOK_EMBEDDING_API_KEY=
 # NOTEBOOK_EMBEDDING_BASE_URL=https://api.mistral.ai/v1
 # NOTEBOOK_EMBEDDING_MODEL=mistral-embed

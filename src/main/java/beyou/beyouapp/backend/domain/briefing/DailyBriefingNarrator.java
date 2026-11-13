@@ -75,7 +75,7 @@ public class DailyBriefingNarrator {
      * and the fallback is decent copy the user will not notice missing, so a retry buys a
      * slower dialog to avoid a cosmetic loss.
      *
-     * @throws RuntimeException whatever the chain raises. The caller turns it into
+     * @throws RuntimeException whatever the model call raises. The caller turns it into
      *                          {@link NarrativeStatus#UNAVAILABLE}
      */
     public BriefingNarrative narrate(DailyBriefingFactsBuilder.Facts facts, User user) {

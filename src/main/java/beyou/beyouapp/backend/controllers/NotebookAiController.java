@@ -46,7 +46,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * Study notebook: every route that calls a model, under {@code /notebook/ai}, which is how the rate
  * limiter files them all under the {@code notebook-ai:} tier with one prefix check. Each answers
- * {@code AI_UNAVAILABLE} when the fallback chain is exhausted, and the calls that work on the
+ * {@code AI_UNAVAILABLE} when the LLM endpoint gives no usable answer, and the calls that work on the
  * person's own material (studio outputs, AI flashcards, suggestions from sources) answer
  * {@code NOTEBOOK_NOTHING_TO_STUDY} when there are no notes and no sources to stand on. The
  * study-room chat never does: it falls back on the model's own knowledge.

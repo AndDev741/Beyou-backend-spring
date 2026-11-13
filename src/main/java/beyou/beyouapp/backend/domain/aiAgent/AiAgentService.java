@@ -14,13 +14,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -34,7 +34,7 @@ import beyou.beyouapp.backend.domain.aiAgent.chat.Chat;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
-import beyou.beyouapp.backend.domain.aiAgent.llm.FallbackChatModel;
+import beyou.beyouapp.backend.domain.aiAgent.llm.LlmErrors;
 import beyou.beyouapp.backend.domain.aiAgent.dto.AgentEvent;
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.user.User;
@@ -54,7 +54,7 @@ public class AiAgentService {
 
     /**
      * How long one turn may take end to end, tool rounds included. Public because
-     * {@code LlmChainConfig} sizes the upstream call cap just under it — an upstream call
+     * {@code LlmConfig} sizes the upstream call cap just under it — an upstream call
      * allowed to outlive this one dies without anyone left to hear it.
      */
     public static final Duration STREAM_TIMEOUT = Duration.ofMinutes(5);
@@ -79,19 +79,6 @@ public class AiAgentService {
     private final AgentMessageService agentMessageService;
     private final Object[] toolCallbacks;
     private final Resource systemTemplate;
-
-    /**
-     * {@code tool_choice} sent with every agent turn. Blank (the default) leaves the
-     * provider on {@code auto}, where answering without calling a tool is a legal move —
-     * which is how a turn once told a user their goal was updated without ever attempting
-     * the write. {@code required} removes that move.
-     *
-     * <p>Off by default because {@code required} forces a tool call on *every* message,
-     * including "thanks", and the model picks which tool. With 47 registered tools the
-     * likely pick for an ambiguous message is a read, but it is the model's choice, not
-     * ours. Enable it deliberately and watch what the agent reaches for.
-     */
-    private final String toolChoice;
 
     // emitter.send() is BLOCKING: a stalled client applies TCP backpressure and
     // holds its scheduler thread until the emitter times out. A pool bounds the
@@ -122,10 +109,32 @@ public class AiAgentService {
                 .map(callback -> (Object) new MeteredToolCallback(callback, meterRegistry))
                 .toArray();
         this.systemTemplate = systemTemplate;
-        this.toolChoice = toolChoice;
-        this.chatClient = ChatClient.builder(chatModel)
-                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-                .build();
+        this.chatClient = agentClient(chatModel, chatMemory, toolChoice);
+    }
+
+    /**
+     * The agent's client, carrying the {@code tool_choice} sent with every agent turn. Blank
+     * (the default) leaves the provider on {@code auto}, where answering without calling a
+     * tool is a legal move — which is how a turn once told a user their goal was updated
+     * without ever attempting the write. {@code required} removes that move.
+     *
+     * <p>Off by default because {@code required} forces a tool call on *every* message,
+     * including "thanks", and the model picks which tool. With 47 registered tools the
+     * likely pick for an ambiguous message is a read, but it is the model's choice, not
+     * ours. Enable it deliberately and watch what the agent reaches for.
+     *
+     * <p>Set on this client only. The other AI features share the same model and send no
+     * tools, and an OpenAI-compatible endpoint may refuse {@code tool_choice} without them.
+     */
+    static ChatClient agentClient(ChatModel chatModel, ChatMemory chatMemory, String toolChoice) {
+        ChatClient.Builder builder = ChatClient.builder(chatModel)
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build());
+        if (toolChoice != null && !toolChoice.isBlank()) {
+            // Combined onto the model's own options for every prompt, so the model id
+            // set in LlmConfig stays and only tool_choice is added.
+            builder.defaultOptions(OpenAiChatOptions.builder().toolChoice(toolChoice));
+        }
+        return builder.build();
     }
 
     public SseEmitter streamMessage(UUID chatId, String userInput, UUID userId, String currentPage,
@@ -174,15 +183,6 @@ public class AiAgentService {
         UUID focusItem = parseFocusItem(selectedItemGroupId);
         Map<String, Object> toolContext = toolContext(userId, chatId, currentPage, focusItem);
         toolContext.put(MeteredToolCallback.EVENTS_KEY, send);
-        // The chain reports which provider it attempted, so the persisted turn can name
-        // the model that produced it. Read after the stream ends, on whichever thread
-        // the subscriber lands on — an AtomicReference rather than a ThreadLocal for
-        // exactly that reason.
-        AtomicReference<String> provider = new AtomicReference<>();
-        toolContext.put(FallbackChatModel.PROVIDER_KEY, provider);
-        if (toolChoice != null && !toolChoice.isBlank()) {
-            toolContext.put(FallbackChatModel.TOOL_CHOICE_KEY, toolChoice);
-        }
         Flux<String> tokens = buildPrompt(chat, userInput, currentPage, focusItem, toolContext)
                 .stream()
                 .content();
@@ -193,9 +193,9 @@ public class AiAgentService {
                     log.error("Error on agent stream subscription -> {}", error.getMessage(), error);
                     // Tool side-effects already committed; persist the partial turn
                     // (if anything streamed) so history isn't lost, THEN report error.
-                    persistTurnSafely(chatId, userInput, turn.build(), provider.get());
+                    persistTurnSafely(chatId, userInput, turn.build());
                     try {
-                        send.accept(AgentEvent.error(FallbackChatModel.isRateLimit(error)
+                        send.accept(AgentEvent.error(LlmErrors.isRateLimit(error)
                                 ? ERROR_QUOTA_EXHAUSTED
                                 : ERROR_STREAM_FAILED));
                     } catch (RuntimeException e) {
@@ -211,7 +211,7 @@ public class AiAgentService {
                     // If persistence fails, the client must learn it failed rather
                     // than get a clean close with committed tool side-effects but
                     // no chat record — so emit an error event instead of done.
-                    boolean persisted = persistTurnSafely(chatId, userInput, segments, provider.get());
+                    boolean persisted = persistTurnSafely(chatId, userInput, segments);
                     try {
                         send.accept(persisted
                                 ? AgentEvent.done(segments)
@@ -287,11 +287,10 @@ public class AiAgentService {
 
     /** Persist a turn without letting a DB failure escape; returns whether it stuck.
      *  Empty segments (nothing streamed before an early error) are skipped. */
-    private boolean persistTurnSafely(UUID chatId, String userInput, List<AgentSegment> segments,
-                                      String provider) {
+    private boolean persistTurnSafely(UUID chatId, String userInput, List<AgentSegment> segments) {
         if (segments.isEmpty()) return false;
         try {
-            agentMessageService.recordTurn(chatId, userInput, segments, provider);
+            agentMessageService.recordTurn(chatId, userInput, segments);
             return true;
         } catch (RuntimeException e) {
             log.error("Failed to persist agent transcript for chat {}", chatId, e);

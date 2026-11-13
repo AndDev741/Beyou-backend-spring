@@ -28,7 +28,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Every model call the notebook makes goes through here: the fallback chain, one structured
+ * Every model call the notebook makes goes through here: the shared chat model, one structured
  * answer, one retry asking for valid JSON, then {@link ErrorKey#AI_UNAVAILABLE}.
  *
  * <p>The same contract as the onboarding suggestions, on purpose: no tools, no streaming, no
@@ -36,8 +36,8 @@ import lombok.extern.slf4j.Slf4j;
  * the chat so far) is assembled by the caller and sent in full every time.
  *
  * <p>The whole call, retry included, has {@link #BUDGET}. Without one, a provider that hangs
- * can hold a request for minutes: up to two minutes of silence per attempt, per provider in the
- * chain, twice. Long before that the request is dead anyway. Cloudflare drops a request to
+ * can hold a request for minutes: up to two minutes of silence per attempt, twice. Long
+ * before that the request is dead anyway. Cloudflare drops a request to
  * the API after 100 seconds, and the web client gives up at 100 too (`AI_TIMEOUT` in
  * `@beyou/api` notebook studyApi). Past that point the person sees an error for work the
  * server may still finish, and for the calls that save something (studio outputs, AI

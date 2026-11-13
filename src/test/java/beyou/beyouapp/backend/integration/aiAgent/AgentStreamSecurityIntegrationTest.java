@@ -84,7 +84,7 @@ class AgentStreamSecurityIntegrationTest extends AbstractIntegrationTest {
     @Test
     void rejectsStreamingIntoAnotherUsersChat() throws Exception {
         // getChat's ownership check runs first, so this fails before any emitter
-        // opens or DeepSeek is called — no API key needed for this path.
+        // opens or the model is called — no LLM endpoint needed for this path.
         mockMvc.perform(post("/ai/agent/chats/" + ownerChatId + "/stream")
                         .header("authorization", "Bearer " + otherUserToken)
                         .content("{\"userInput\":\"hello\"}")

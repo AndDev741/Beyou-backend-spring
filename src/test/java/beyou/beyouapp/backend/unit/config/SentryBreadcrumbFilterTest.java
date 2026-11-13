@@ -173,11 +173,11 @@ class SentryBreadcrumbFilterTest {
         assertNotNull(filter.execute(emailFailure, new Hint()),
                 "a failed async e-mail send is exactly the invisible failure this exists for");
 
-        Breadcrumb llmFallback = breadcrumb(beyou.beyouapp.backend.domain.aiAgent.llm.FallbackChatModel.class,
-                Level.WARN, "LLM provider '{}' failed ({}), falling back to next in chain", "gemini", "429");
+        Breadcrumb agentStreamFailure = breadcrumb(beyou.beyouapp.backend.domain.aiAgent.AiAgentService.class,
+                Level.ERROR, "Error on agent stream subscription -> {}", "429 Too Many Requests");
 
-        assertNotNull(filter.execute(llmFallback, new Hint()),
-                "provider fallbacks are not recoverable from a stack trace — keep them");
+        assertNotNull(filter.execute(agentStreamFailure, new Hint()),
+                "a failed assistant turn is part of the trail that explains the next error");
     }
 
     @Test
