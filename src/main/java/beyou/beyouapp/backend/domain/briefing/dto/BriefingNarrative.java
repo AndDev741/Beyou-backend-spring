@@ -14,7 +14,7 @@ import beyou.beyouapp.backend.domain.briefing.NarrativeStatus;
  * and a different answer each morning for identical data.
  *
  * <p>Two payoffs. The numbers on screen are always right, because nothing generated touched
- * them. And when the chain is down the panel still works: it degrades to facts plus a
+ * them. And when the LLM endpoint is down the panel still works: it degrades to facts plus a
  * translated line, which is why {@code GET /daily-briefing} answers 200 with an empty
  * narrative rather than raising {@code AI_UNAVAILABLE}.
  *

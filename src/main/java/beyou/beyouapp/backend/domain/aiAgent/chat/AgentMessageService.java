@@ -38,18 +38,9 @@ public class AgentMessageService {
     private final ChatMemory chatMemory;
     private final ObjectMapper objectMapper;
 
-    /**
-     * Persist one user->assistant exchange as two ordered rows.
-     *
-     * <p>{@code provider} is stamped on the assistant row only — the user did not come
-     * from a model — and may be null when the chain never reported one (a turn that
-     * failed before any provider was attempted). It is what lets a reported incident be
-     * attributed to a specific model afterwards, instead of guessing from the
-     * {@code beyou.ai.llm.calls} counter which only knows totals.
-     */
+    /** Persist one user->assistant exchange as two ordered rows. */
     @Transactional
-    public void recordTurn(UUID chatId, String userInput, List<AgentSegment> assistantSegments,
-                           String provider) {
+    public void recordTurn(UUID chatId, String userInput, List<AgentSegment> assistantSegments) {
         // Lock this chat's transcript writes so concurrent turns can't read the
         // same count and assign duplicate sequence ids (uq constraint is the backstop).
         agentMessageRepository.lockChatForTranscript(chatId.toString());
@@ -57,7 +48,7 @@ public class AgentMessageService {
         agentMessageRepository.save(new AgentMessage(
                 chatId, USER, toJson(List.of(AgentSegment.text(userInput))), seq));
         agentMessageRepository.save(new AgentMessage(
-                chatId, ASSISTANT, toJson(assistantSegments), seq + 1, provider));
+                chatId, ASSISTANT, toJson(assistantSegments), seq + 1));
     }
 
     @Transactional(readOnly = true)

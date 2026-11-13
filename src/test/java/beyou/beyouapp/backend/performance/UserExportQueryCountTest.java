@@ -169,7 +169,7 @@ class UserExportQueryCountTest extends AbstractIntegrationTest {
         for (int i = 0; i < n; i++) {
             UUID chatId = chatService.createChat("chat-" + i, userId).id();
             agentMessageService.recordTurn(chatId, "question " + i,
-                    List.of(AgentSegment.text("answer " + i)), "test-provider");
+                    List.of(AgentSegment.text("answer " + i)));
         }
         for (int i = 0; i < n; i++) {
             chatService.createChat("never used " + i, userId);

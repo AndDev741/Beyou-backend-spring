@@ -51,7 +51,7 @@ import jakarta.validation.Validation;
  * construction it can never catch the class of bug where the JSON bind itself is
  * what fails — a weekday in the wrong case, a time without its leading zero, the
  * argument fields sent without their wrapper object. Every such miss costs a real
- * LLM round trip on the free-tier chain, so what this locks in is that the common
+ * LLM round trip on free-tier quota, so what this locks in is that the common
  * near-misses bind and the genuine mistakes come back as messages the model can
  * act on.
  */

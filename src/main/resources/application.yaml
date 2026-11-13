@@ -25,21 +25,14 @@ spring:
     baseline-on-migrate: false
     validate-on-migrate: true
   ai:
-    # Only DeepSeek is auto-configured as a chat model; the free providers in
-    # the fallback chain are built manually in LlmChainConfig from the
-    # spring-ai-openai lib.
+    # No chat model is auto-configured. The only one is built by hand in LlmConfig
+    # from the spring-ai-openai lib, against the endpoint under ai.llm below.
     model:
-      chat: deepseek
+      chat: none
     openai:
-      # No OpenAI consumer remains (routine generation was removed), but the
-      # starter's other modality autoconfigs (audio/embedding/image) still
+      # The starter's other modality autoconfigs (audio/embedding/image) still
       # demand a credential at boot. Noop key keeps them quiet.
       api-key: dev-noop
-    deepseek:
-      api-key: ${DEEP_API_KEY:dev-noop}
-      chat:
-        options:
-          model: ${AI_AGENT_MODEL:deepseek-v4-flash}
     chat:
       client:
         enabled: false
@@ -251,9 +244,9 @@ notebook:
     # Off only in the integration-test profile, where tests run the draft's model call themselves.
     background: true
   # "Find sources for me" (DiscoveryProperties). Tavily when its key is set, otherwise Gemini
-  # with Google Search when its own key is; neither key, and the feature is off. No fallback to
-  # GEMINI_API_KEY on purpose: Google Search needs a billing-enabled project, and a free chain
-  # key would show the button and fail every search with 429.
+  # with Google Search when its own key is; neither key, and the feature is off. It takes its
+  # own key on purpose: Google Search needs a billing-enabled project, and a free-tier key
+  # would show the button and fail every search with 429.
   discovery:
     tavily-api-key: ${TAVILY_API_KEY:}
     gemini-api-key: ${NOTEBOOK_DISCOVERY_GEMINI_API_KEY:}
@@ -269,35 +262,13 @@ ai:
     # message including "thanks", with the model choosing which tool. Flip it
     # deliberately and watch what the agent reaches for.
     tool-choice: ${AI_AGENT_TOOL_CHOICE:}
-  llm-chain:
-    order: ${LLM_CHAIN_ORDER:mistral,gemini,glm,nvidia,deepseek}
-    # Providers this environment refuses to call, whatever `order` says. Empty
-    # here so local and e2e can exercise the whole chain; application-prod.yaml
-    # fills it in.
-    blocked: ${LLM_CHAIN_BLOCKED:}
-    cooldown-rate-limit-seconds: ${LLM_COOLDOWN_RATELIMIT:300}
-    cooldown-error-seconds: ${LLM_COOLDOWN_ERROR:30}
-    providers:
-      gemini:
-        base-url: https://generativelanguage.googleapis.com/v1beta/openai
-        api-key: ${GEMINI_API_KEY:}
-        model: ${GEMINI_MODEL:gemini-2.5-flash}
-      mistral:
-        base-url: https://api.mistral.ai/v1
-        api-key: ${MISTRAL_API_KEY:}
-        model: ${MISTRAL_MODEL:mistral-small-latest}
-      glm:
-        base-url: https://api.z.ai/api/paas/v4
-        api-key: ${GLM_API_KEY:}
-        model: ${GLM_MODEL:glm-4.7-flash}
-      generic:
-        base-url: ${GENERIC_BASE_URL:}
-        api-key: ${GENERIC_API_KEY:}
-        model: ${GENERIC_MODEL:}
-      nvidia:
-        base-url: https://integrate.api.nvidia.com/v1
-        api-key: ${NVIDIA_API_KEY:}
-        model: ${NVIDIA_MODEL:meta/llama-3.3-70b-instruct}
+  # The one OpenAI-compatible endpoint behind every AI feature (LlmProperties). Which
+  # provider answers, and what happens when one fails, is decided by the gateway at this
+  # URL. All three unset: the app still boots and every AI feature answers as unavailable.
+  llm:
+    base-url: ${LLM_BASE_URL:}
+    api-key: ${LLM_API_KEY:}
+    model: ${LLM_MODEL:}
 
 docs:
   import:
@@ -355,7 +326,7 @@ sentry:
   #
   # It also drags whatever a log line interpolates into the collector, which is why
   # SentryBreadcrumbFilter exists. Both thresholds below are load-bearing:
-  #   * breadcrumbs at INFO — the app's useful trail (LLM provider fallbacks, failed
+  #   * breadcrumbs at INFO — the app's useful trail (failed assistant turns, failed
   #     e-mail sends, snapshot decisions, connection-pool warnings) is logged at INFO/WARN.
   #   * events at ERROR — GlobalExceptionHandler logs an upstream response body at WARN.
   #     Lowering this would turn that body into an event message, which no breadcrumb

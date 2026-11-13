@@ -55,7 +55,7 @@ import lombok.RequiredArgsConstructor;
  * <p>What that buys is not tidiness. A free-tier model asked to work out which goals are at
  * risk gets the arithmetic wrong, invents goals that are not there, and answers differently
  * each morning for identical data. Deriving it here means the numbers on screen are always
- * right, and it means a morning where the whole chain is in cooldown still produces a usable
+ * right, and it means a morning where the LLM endpoint is down still produces a usable
  * dialog instead of an empty one.
  *
  * <p>Recomputed on every read and never cached. The user can change these numbers from

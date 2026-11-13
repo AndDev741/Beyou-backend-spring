@@ -29,11 +29,10 @@ public enum NarrativeStatus {
     READY,
 
     /**
-     * The chain refused or failed twice.
+     * The model call refused or failed twice.
      *
-     * <p>Not retried for the rest of that day. A chain in cooldown refuses the retry too,
-     * and the panel reads identically with or without the prose, so a retry spends a
-     * request to change nothing the user can see.
+     * <p>Not retried for the rest of that day. The panel reads identically with or without
+     * the prose, so a retry spends a request to change nothing the user can see.
      */
     UNAVAILABLE
 }

@@ -9,10 +9,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * room hides the button).
  *
  * <p>Tavily wins because it answers with the pages themselves, while Gemini answers with Google's
- * redirect links that have to be followed first. Gemini's key is its own and does not fall back
- * to the chat chain's {@code GEMINI_API_KEY}: Google Search needs a project with billing, and on
- * a free key every grounded call answers 429, which is how this was found. A fallback would put a
- * button in front of people that fails every time.
+ * redirect links that have to be followed first. Gemini's key is its own, and it has to come
+ * from a project with billing: on a free key every grounded call answers 429, which is how this
+ * was found, and the button would fail every time.
  */
 @ConfigurationProperties(prefix = "notebook.discovery")
 public record DiscoveryProperties(

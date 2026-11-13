@@ -7,7 +7,7 @@ import java.time.LocalDate;
  * One morning's briefing, as the clients read it.
  *
  * <p>Two halves with very different guarantees, and telling them apart is what makes the
- * dialog survive a bad day for the LLM chain. {@link #yesterday()} and {@link #today()} are
+ * dialog survive a bad day for the LLM endpoint. {@link #yesterday()} and {@link #today()} are
  * computed from the database and always answer. {@link #narrative()} is generated prose and
  * may be absent; a client that finds nothing there renders its own translated copy rather
  * than an empty panel.
