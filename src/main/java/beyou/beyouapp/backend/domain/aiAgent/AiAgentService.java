@@ -32,6 +32,7 @@ import beyou.beyouapp.backend.domain.aiAgent.AiIconCatalog;
 import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessageService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.Chat;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainStore;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
 import beyou.beyouapp.backend.domain.aiAgent.llm.LlmErrors;
@@ -77,6 +78,7 @@ public class AiAgentService {
     private final ChatClient chatClient;
     private final ChatService chatService;
     private final AgentMessageService agentMessageService;
+    private final SecondBrainStore secondBrainStore;
     private final Object[] toolCallbacks;
     private final Resource systemTemplate;
 
@@ -99,12 +101,14 @@ public class AiAgentService {
             ChatMemory chatMemory,
             ChatService chatService,
             AgentMessageService agentMessageService,
+            SecondBrainStore secondBrainStore,
             Tools tools,
             MeterRegistry meterRegistry,
             @Value("classpath:/prompts/aiAgent.st") Resource systemTemplate,
             @Value("${ai.agent.tool-choice:}") String toolChoice) {
         this.chatService = chatService;
         this.agentMessageService = agentMessageService;
+        this.secondBrainStore = secondBrainStore;
         this.toolCallbacks = Arrays.stream(ToolCallbacks.from(tools))
                 .map(callback -> (Object) new MeteredToolCallback(callback, meterRegistry))
                 .toArray();
@@ -307,6 +311,9 @@ public class AiAgentService {
                 .param("iconCatalog", AiIconCatalog.promptCatalog())
                 .param("userContext", orNone(user.getUserContext()))
                 .param("userChatContext", orNone(chat.getUserContextInChat()))
+                // Read on every turn and not cached: the person edits these lines on the
+                // Second Brain page and expects the next message to know.
+                .param("secondBrainProfile", orNone(secondBrainStore.profileForChat(user.getId())))
                 .param("currentPage", orNone(currentPage))
                 .param("focusItem", orNone(selectedItemGroupId == null ? null : selectedItemGroupId.toString()))
                 .param("today", UserDateResolver.today(user).toString()))

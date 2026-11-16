@@ -35,6 +35,10 @@ import beyou.beyouapp.backend.domain.notebook.study.NotebookChatMessageRepositor
 import beyou.beyouapp.backend.domain.notebook.study.NotebookStudyOutputRepository;
 import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.quicknote.QuickNoteRepository;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactRepository;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainInsightRepository;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainQuestionRepository;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainStore;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.ItemGroup;
 import beyou.beyouapp.backend.domain.routine.itemGroup.TaskGroup;
@@ -109,6 +113,10 @@ public class UserExportService {
     private final NotificationSendRepository notificationSendRepository;
     private final CalendarTaskRepository calendarTaskRepository;
     private final QuickNoteRepository quickNoteRepository;
+    private final SecondBrainStore secondBrainStore;
+    private final SecondBrainFactRepository secondBrainFactRepository;
+    private final SecondBrainQuestionRepository secondBrainQuestionRepository;
+    private final SecondBrainInsightRepository secondBrainInsightRepository;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -288,6 +296,10 @@ public class UserExportService {
                     return map;
                 }).toList());
 
+        // Second Brain: what Beyou was told and what it concluded about the person. Four
+        // queries whatever the account holds.
+        export.put("secondBrain", secondBrain(userId));
+
         // The study notebook: one query per table, never per page, so the export stays flat in
         // query count however big the notebook grows (UserExportQueryCountTest).
         export.put("notebook", notebook(userId));
@@ -335,6 +347,54 @@ public class UserExportService {
         export.put("notIncluded", omitted);
 
         return export;
+    }
+
+    /**
+     * Second Brain's four tables. The questions travel with their answers, closed ones
+     * included: an answer is something the person wrote. {@code insight} is null for an account
+     * that never generated one, and {@code sources} lists all six switches with the value in
+     * effect, so the file says what Second Brain was allowed to read even where the person
+     * never touched a switch.
+     */
+    private Map<String, Object> secondBrain(UUID userId) {
+        Map<String, Object> secondBrain = new LinkedHashMap<>();
+        secondBrain.put("facts", secondBrainFactRepository.findByUserIdOrderByCreatedAtAscIdAsc(userId)
+                .stream().map(f -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("id", f.getId());
+                    map.put("kind", f.getKind());
+                    map.put("text", f.getText());
+                    map.put("origin", f.getOrigin());
+                    map.put("createdAt", f.getCreatedAt());
+                    map.put("updatedAt", f.getUpdatedAt());
+                    return map;
+                }).toList());
+        secondBrain.put("questions", secondBrainQuestionRepository.findByUserIdOrderByCreatedAtAscIdAsc(userId)
+                .stream().map(q -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("id", q.getId());
+                    map.put("kind", q.getKind());
+                    map.put("text", q.getText());
+                    map.put("status", q.getStatus());
+                    map.put("answer", q.getAnswer());
+                    map.put("createdAt", q.getCreatedAt());
+                    map.put("answeredAt", q.getAnsweredAt());
+                    return map;
+                }).toList());
+        secondBrain.put("insight", secondBrainInsightRepository.findById(userId).map(i -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("text", i.getText());
+            map.put("verdict", i.getVerdict());
+            map.put("generatedAt", i.getGeneratedAt());
+            return map;
+        }).orElse(null));
+        secondBrain.put("sources", secondBrainStore.effectiveSources(userId).entrySet().stream().map(e -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("source", e.getKey());
+            map.put("enabled", e.getValue());
+            return map;
+        }).toList());
+        return secondBrain;
     }
 
     /**

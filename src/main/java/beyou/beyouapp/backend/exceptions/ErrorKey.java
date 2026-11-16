@@ -44,6 +44,15 @@ public enum ErrorKey {
     QUICK_NOTE_LIMIT_REACHED,
     // "Make it a task" on a note that already became one. 409, and no second task is made.
     QUICK_NOTE_ALREADY_CONVERTED,
+    // Second Brain. A fact or a question that belongs to someone else answers its NOT_FOUND key
+    // too, as 404, like the quick notes' key above.
+    SECOND_BRAIN_FACT_NOT_FOUND,
+    // A new fact when SecondBrainFact.MAX_PER_USER are already kept. 409: the request is fine,
+    // the profile is full. Deleting a fact makes room.
+    SECOND_BRAIN_FACT_LIMIT_REACHED,
+    SECOND_BRAIN_QUESTION_NOT_FOUND,
+    // Answering or skipping a question that was already answered or skipped. 409.
+    SECOND_BRAIN_QUESTION_CLOSED,
     MOOD_NOT_FOUND,
     // A mood is a report, not a plan: MoodService refuses days after the owner's today.
     MOOD_FUTURE_DATE,

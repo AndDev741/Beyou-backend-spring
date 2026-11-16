@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -71,6 +72,14 @@ public interface CalendarTaskRepository extends JpaRepository<CalendarTask, UUID
             """)
     int markReminderEmailSent(@Param("id") UUID id, @Param("seenUpdatedAt") Instant seenUpdatedAt,
                               @Param("sentAt") Instant sentAt);
+
+    /**
+     * Open tasks dated up to a day, latest day first, capped by the caller. For Second Brain's
+     * signals: what is coming up and what is overdue. Latest first so that a cap drops the
+     * oldest overdue tasks, not the ones about to happen.
+     */
+    List<CalendarTask> findByUserIdAndCompletedAtIsNullAndTaskDateLessThanEqualOrderByTaskDateDescCreatedAtDesc(
+            UUID userId, LocalDate to, Limit limit);
 
     /** Everything, for the account export, oldest day first. */
     List<CalendarTask> findByUserIdOrderByTaskDateAscCreatedAtAsc(UUID userId);

@@ -246,6 +246,11 @@ class UserExportQueryCountTest extends AbstractIntegrationTest {
         assertThat((List<?>) export.get("engagementEmailsSent")).hasSize(n);
         assertThat((List<?>) export.get("calendarTasks")).hasSize(n);
         assertThat((List<?>) export.get("quickNotes")).hasSize(2 * n);
+        Map<String, Object> secondBrain = (Map<String, Object>) export.get("secondBrain");
+        assertThat((List<?>) secondBrain.get("facts")).hasSize(n);
+        assertThat((List<?>) secondBrain.get("questions")).hasSize(n);
+        assertThat(secondBrain.get("insight")).isNotNull();
+        assertThat((List<?>) secondBrain.get("sources")).hasSize(6);
         assertThat((List<?>) ((Map<String, Object>) export.get("profile")).get("linkedSignIns")).hasSize(n);
         Map<String, Object> notebook = (Map<String, Object>) export.get("notebook");
         Map<String, Object> board = (Map<String, Object>) notebook.get("board");

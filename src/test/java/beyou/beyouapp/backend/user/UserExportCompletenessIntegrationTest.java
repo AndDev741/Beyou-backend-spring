@@ -46,6 +46,10 @@ import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.notebook.card.CardRating;
 import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSpec;
 import beyou.beyouapp.backend.domain.notebook.study.StudyOutputKind;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactKind;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactOrigin;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainQuestionStatus;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainSource;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineItemRequestDTO;
 import beyou.beyouapp.backend.notification.engagement.NudgeKind;
 import beyou.beyouapp.backend.domain.habit.HabitService;
@@ -122,6 +126,10 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
             entry("mood_entries", "moodEntries"),
             entry("calendar_tasks", "calendarTasks"),
             entry("quick_notes", "quickNotes"),
+            entry("second_brain_facts", "secondBrain.facts"),
+            entry("second_brain_questions", "secondBrain.questions"),
+            entry("second_brain_insights", "secondBrain.insight"),
+            entry("second_brain_sources", "secondBrain.sources"),
             entry("notification_preferences", "profile.engagementEmails"),
             entry("notification_sends", "engagementEmailsSent"),
             entry("federated_identities", "profile.linkedSignIns"),
@@ -527,6 +535,29 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         });
         assertThat(quickNotes.get(0)).containsOnlyKeys("id", "text", "color", "x", "y", "z", "archivedAt",
                 "convertedTaskId", "createdAt", "updatedAt");
+
+        // Second Brain: the profile, the interview with its answers, the overview, and all six
+        // switches with the value in effect (IDEAS was turned on; the rest are the defaults).
+        Map<String, Object> secondBrain = (Map<String, Object>) export.get("secondBrain");
+        assertThat(secondBrain).containsOnlyKeys("facts", "questions", "insight", "sources");
+        Map<String, Object> fact = ((List<Map<String, Object>>) secondBrain.get("facts")).get(0);
+        assertThat(fact).containsOnlyKeys("id", "kind", "text", "origin", "createdAt", "updatedAt");
+        assertThat(fact.get("kind")).isEqualTo(SecondBrainFactKind.OBJECTIVE);
+        assertThat(fact.get("text")).isEqualTo("Run a half marathon by June");
+        assertThat(fact.get("origin")).isEqualTo(SecondBrainFactOrigin.USER);
+        Map<String, Object> question = ((List<Map<String, Object>>) secondBrain.get("questions")).get(0);
+        assertThat(question).containsOnlyKeys("id", "kind", "text", "status", "answer", "createdAt", "answeredAt");
+        assertThat(question.get("text")).isEqualTo("What is the half marathon for?");
+        assertThat(question.get("status")).isEqualTo(SecondBrainQuestionStatus.ANSWERED);
+        assertThat(question.get("answer")).as("an answer is something the person wrote").isEqualTo("To prove I can");
+        Map<String, Object> insight = (Map<String, Object>) secondBrain.get("insight");
+        assertThat(insight.get("text")).isEqualTo("Your mornings hold.");
+        assertThat(insight.get("generatedAt")).isNotNull();
+        List<Map<String, Object>> sources = (List<Map<String, Object>>) secondBrain.get("sources");
+        assertThat(sources).extracting(source -> source.get("source"))
+                .containsExactly((Object[]) SecondBrainSource.values());
+        assertThat(sources).extracting(source -> source.get("enabled"))
+                .containsExactly(true, true, true, false, false, true);
 
         Map<String, Object> mail = ((List<Map<String, Object>>) export.get("engagementEmailsSent")).get(0);
         assertThat(mail.get("kind")).isEqualTo(NudgeKind.STREAK_RECORD_AT_RISK);
