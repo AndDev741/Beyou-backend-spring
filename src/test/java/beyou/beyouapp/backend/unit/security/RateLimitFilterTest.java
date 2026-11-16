@@ -97,6 +97,16 @@ class RateLimitFilterTest {
         }
     }
 
+    // Sign in with Apple is the same kind of door: anonymous, and it can create an account.
+    @Test
+    void shouldThrottleAppleSignInPerAddress() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            assertEquals(200, callFilterFrom("POST", "/auth/apple/mobile", "10.0.0.17").getStatus());
+        }
+        MockHttpServletResponse sixth = callFilterFrom("POST", "/auth/apple/mobile", "10.0.0.17");
+        assertEquals(429, sixth.getStatus(), "/auth/apple/mobile is not in the auth bucket");
+    }
+
     // One bucket for every sign-in door, so switching from the password form to a federated
     // button cannot hand the same address a second allowance.
     @Test

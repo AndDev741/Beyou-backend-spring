@@ -899,8 +899,9 @@ public class UserExportService {
      * <p>The provider's subject goes in. It is how that provider names this person, which
      * makes it personal data under the same rule as an email address, and it is not a
      * credential: signing in still takes a token the provider signs. Leaving it out would hide
-     * the one value that says which account at the provider is linked. No token of any kind is
-     * stored here, so none can leave.
+     * the one value that says which account at the provider is linked. The one token this table
+     * can hold, the provider refresh token Sign in with Apple leaves for revocation, is not
+     * in the map below and must stay out of it.
      */
     private List<Map<String, Object>> linkedSignIns(UUID userId) {
         return federatedIdentityRepository.findAllByUserId(userId).stream().map(f -> {

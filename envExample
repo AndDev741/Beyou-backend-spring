@@ -11,6 +11,16 @@ GOOGLE_CLIENT_SECRET=
 # Add the Android/iOS OAuth client ids here once provisioned.
 GOOGLE_MOBILE_AUDIENCES=
 
+# Sign in with Apple (iOS). Accepted audiences for Apple identity tokens, comma-separated;
+# defaults to the iOS bundle id com.beyou.mobile.
+# APPLE_AUDIENCES=com.beyou.mobile
+# Optional "Sign in with Apple" key (.p8), so deleting an account revokes its Apple link
+# (App Store guideline 5.1.1(v)). Leave blank to skip revocation; it is logged per account.
+# APPLE_PRIVATE_KEY is the PEM text, with "\n" for the newlines when it has to fit one line.
+APPLE_TEAM_ID=
+APPLE_KEY_ID=
+APPLE_PRIVATE_KEY=
+
 # Federated sign-in (OIDC) beyond Google. Leave the issuer or the client id blank and the
 # provider does not exist: no login button, and its routes answer OIDC_PROVIDER_UNKNOWN.
 # Keep TRUST_EMAIL_VERIFIED false unless you trust that issuer's word on e-mail addresses;

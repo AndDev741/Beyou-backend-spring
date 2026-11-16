@@ -14,6 +14,7 @@ import beyou.beyouapp.backend.docs.project.imp.ProjectDocsImportService;
 import beyou.beyouapp.backend.exceptions.GlobalExceptionHandler;
 import beyou.beyouapp.backend.monitoring.SnapshotJobHeartbeat;
 import beyou.beyouapp.backend.user.GoogleIdTokenVerifierServiceImpl;
+import beyou.beyouapp.backend.user.apple.AppleTokenClient;
 import beyou.beyouapp.backend.user.UserService;
 
 import java.util.Set;
@@ -65,6 +66,8 @@ public final class SentryLoggerExclusions {
      *   <li>{@link GoogleIdTokenVerifierServiceImpl} — logs {@code e.getMessage()} of a
      *       Google API client exception, which for a {@code GoogleJsonResponseException}
      *       is built from Google's response body.</li>
+     *   <li>{@link AppleTokenClient} — logs {@code e.getMessage()} of a failed call to
+     *       Apple's token or revoke endpoint, which embeds Apple's response body.</li>
      * </ul>
      *
      * <p><b>Secrets.</b> {@link SnapshotJobHeartbeat} logs {@code e.toString()} of a
@@ -101,6 +104,7 @@ public final class SentryLoggerExclusions {
             BlogDocsImportService.class,
             ProjectDocsImportService.class,
             GoogleIdTokenVerifierServiceImpl.class,
+            AppleTokenClient.class,
             SnapshotJobHeartbeat.class,
             GoalService.class,
             TaskService.class,

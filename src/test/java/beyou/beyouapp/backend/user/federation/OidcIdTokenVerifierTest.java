@@ -125,6 +125,34 @@ class OidcIdTokenVerifierTest {
     }
 
     @Test
+    @DisplayName("several accepted audiences: a token for any one of them passes")
+    void acceptsAnyConfiguredAudience() {
+        // Sign in with Apple mints for the bundle id on iOS and a Services ID on the web.
+        String token = sign(validToken().withAudience("beyou-ios"));
+
+        assertEquals("subject-1",
+                verifier.verifySignedToken(token, ISSUER, List.of(CLIENT_ID, "beyou-ios")).getSubject());
+    }
+
+    @Test
+    @DisplayName("several accepted audiences: a token for none of them is still refused")
+    void refusesAudienceOutsideTheList() {
+        String token = sign(validToken().withAudience("someone-elses-app"));
+
+        assertThrows(BusinessException.class,
+                () -> verifier.verifySignedToken(token, ISSUER, List.of(CLIENT_ID, "beyou-ios")));
+    }
+
+    @Test
+    @DisplayName("an empty audience list refuses everything instead of accepting anything")
+    void refusesWhenNoAudienceIsConfigured() {
+        String token = sign(validToken());
+
+        assertThrows(BusinessException.class, () -> verifier.verifySignedToken(token, ISSUER, List.of()));
+        assertThrows(BusinessException.class, () -> verifier.verifySignedToken(token, ISSUER, List.of(" ")));
+    }
+
+    @Test
     @DisplayName("an expired token is refused once it is past the clock leeway")
     void refusesAnExpiredToken() {
         Instant tenMinutesAgo = Instant.now().minusSeconds(600);

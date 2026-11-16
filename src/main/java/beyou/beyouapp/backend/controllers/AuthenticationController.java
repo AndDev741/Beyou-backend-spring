@@ -4,6 +4,8 @@ import beyou.beyouapp.backend.security.RefreshToken.RefreshTokenService;
 import beyou.beyouapp.backend.security.passwordreset.PasswordResetService;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.UserServiceGoogleOAuth;
+import beyou.beyouapp.backend.user.apple.AppleSignInService;
+import beyou.beyouapp.backend.user.apple.dto.AppleMobileLoginDTO;
 import beyou.beyouapp.backend.user.federation.OidcAuthService;
 import beyou.beyouapp.backend.user.federation.dto.OidcLoginDTO;
 import beyou.beyouapp.backend.security.AuthenticatedUser;
@@ -29,6 +31,7 @@ public class AuthenticationController {
 
     private final UserService userService;
     private final UserServiceGoogleOAuth userServiceGoogleOAuth;
+    private final AppleSignInService appleSignInService;
     private final RefreshTokenService refreshTokenService;
     private final PasswordResetService passwordResetService;
     private final OidcAuthService oidcAuthService;
@@ -77,6 +80,17 @@ public class AuthenticationController {
                                 HttpServletResponse response){
         return userServiceGoogleOAuth.googleMobileAuth(request.idToken(), request.timezone(),
                 request.language(), response);
+    }
+
+    /**
+     * Sign in with Apple from the iOS app, on the mobile contract (X-Access-Token header and
+     * refreshToken in the body). Finds the account by its Apple link, else links or creates
+     * it by the address Apple verified; see {@code AppleAccountResolver} for the rule.
+     */
+    @PostMapping("/apple/mobile")
+    public ResponseEntity<Map<String, Object>> appleMobileAuth(@RequestBody @Valid AppleMobileLoginDTO request,
+                                HttpServletResponse response){
+        return appleSignInService.mobileSignIn(request, response);
     }
 
     @PostMapping("/refresh")
