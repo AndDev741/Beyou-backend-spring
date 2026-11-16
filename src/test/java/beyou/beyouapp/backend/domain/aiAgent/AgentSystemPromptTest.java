@@ -32,6 +32,7 @@ public class AgentSystemPromptTest {
         params.put("iconCatalog", "lucide:target - goal, focus");
         params.put("userContext", "(none yet)");
         params.put("userChatContext", "(none yet)");
+        params.put("secondBrainProfile", "- Objective: Pass the visa interview");
         params.put("currentPage", "/focus");
         params.put("focusItem", "3f1a6f1e-0000-4000-8000-000000000001");
         params.put("today", "2026-08-30");
@@ -51,6 +52,8 @@ public class AgentSystemPromptTest {
         assertTrue(rendered.contains("3f1a6f1e-0000-4000-8000-000000000001"),
                 "the entry open in Focus Mode is what lets the agent resolve \"add a step here\"");
         assertTrue(rendered.contains("/focus"), rendered);
+        assertTrue(rendered.contains("- Objective: Pass the visa interview"),
+                "the Second Brain profile is the general layer every chat starts from");
     }
 
     /** The guard above only means something if a missing value really is refused. */

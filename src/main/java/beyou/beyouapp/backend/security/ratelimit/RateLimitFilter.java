@@ -132,6 +132,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return path.startsWith("/ai/agent/chats/");
     }
 
+    /**
+     * The Second Brain routes that can call the model: the question refill, an answer, and the
+     * overview refresh. Named one by one, so the cheap writes beside them (the switches, the
+     * facts, a skip) stay in the generic write bucket.
+     */
+    private static boolean isSecondBrainLlmPath(String path) {
+        return path.equals("/second-brain/questions/refill")
+                || path.equals("/second-brain/insight/refresh")
+                || (path.startsWith("/second-brain/questions/") && path.endsWith("/answer"));
+    }
+
     /** {@code /notebook/pages/{id}/sources/pdf|link|text}: adding a study source. */
     private static boolean isNotebookSourcePath(String path) {
         return path.startsWith("/notebook/pages/") && path.contains("/sources/");
@@ -194,6 +205,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 return;
             }
             bucketKey = "onboarding:" + userId;
+            bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAgentChatBucket());
+        } else if ("POST".equals(method) && isSecondBrainLlmPath(path)) {
+            // The agent's quota shape under a key of its own, like onboarding above. One key for
+            // all three routes, so alternating between them cannot buy a second budget.
+            String userId = getUserIdFromRequest(request);
+            if (userId == null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            bucketKey = "second-brain:" + userId;
             bucket = rateLimitCache.get(bucketKey, k -> RateLimitConfig.createAgentChatBucket());
         } else if ("POST".equals(method) && path.startsWith("/user/deletion/")) {
             // Ahead of the generic write branch: a deletion code is six digits, and the

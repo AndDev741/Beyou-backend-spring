@@ -41,6 +41,9 @@ public interface QuickNoteRepository extends JpaRepository<QuickNote, UUID> {
     /** The active notes among {@code ids} that are this user's. A layout save compares the size. */
     List<QuickNote> findByUserIdAndArchivedAtIsNullAndIdIn(UUID userId, Collection<UUID> ids);
 
+    /** The newest active notes, capped by the caller. For Second Brain's signals. */
+    List<QuickNote> findByUserIdAndArchivedAtIsNullOrderByCreatedAtDescIdAsc(UUID userId, Limit limit);
+
     /** Everything, archived included, for the account export, oldest first. */
     List<QuickNote> findByUserIdOrderByCreatedAtAscIdAsc(UUID userId);
 

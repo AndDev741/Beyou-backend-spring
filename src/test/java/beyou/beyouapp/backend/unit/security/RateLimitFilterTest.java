@@ -300,6 +300,48 @@ class RateLimitFilterTest {
                 "polling for prose ate the allowance the briefing itself needs");
     }
 
+    // Second Brain's refill, answer and overview refresh can each call the model, so they
+    // spend one hourly budget between them. Thirty split three ways proves the key is shared:
+    // with a bucket per route every one of these would still have twenty left.
+    @Test
+    void shouldShareOneHourlyBudgetAcrossTheSecondBrainModelRoutes() throws Exception {
+        authenticateUser();
+
+        for (int i = 0; i < 10; i++) {
+            assertEquals(200, callFilter("POST", "/second-brain/questions/refill").getStatus());
+            assertEquals(200, callFilter("POST", "/second-brain/questions/" + UUID.randomUUID() + "/answer").getStatus());
+            assertEquals(200, callFilter("POST", "/second-brain/insight/refresh").getStatus());
+        }
+
+        assertEquals(429, callFilter("POST", "/second-brain/questions/refill").getStatus());
+        assertEquals(429, callFilter("POST", "/second-brain/questions/" + UUID.randomUUID() + "/answer").getStatus());
+        MockHttpServletResponse blocked = callFilter("POST", "/second-brain/insight/refresh");
+        assertEquals(429, blocked.getStatus());
+        assertNotNull(blocked.getHeader("Retry-After"));
+    }
+
+    // The switches, the facts and a skip never reach the model, and the page read is a plain
+    // read. None of them may eat the model budget, and that budget is not the assistant's.
+    @Test
+    void shouldKeepTheCheapSecondBrainRequestsOffTheModelBudget() throws Exception {
+        authenticateUser();
+        UUID id = UUID.randomUUID();
+
+        callFilter("GET", "/second-brain");
+        callFilter("PUT", "/second-brain/sources/MOOD");
+        callFilter("POST", "/second-brain/facts");
+        callFilter("PUT", "/second-brain/facts/" + id);
+        callFilter("DELETE", "/second-brain/facts/" + id);
+        callFilter("POST", "/second-brain/questions/" + id + "/skip");
+
+        for (int i = 0; i < 30; i++) {
+            assertEquals(200, callFilter("POST", "/second-brain/insight/refresh").getStatus(),
+                    "the Second Brain model budget was consumed by a request that calls no model");
+        }
+        assertEquals(200, callFilter("POST", "/ai/agent/chats/" + id + "/stream").getStatus(),
+                "Second Brain spent the assistant's budget");
+    }
+
     private void authenticateUser() {
         User user = new User();
         user.setId(UUID.randomUUID());

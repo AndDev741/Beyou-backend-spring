@@ -104,7 +104,7 @@ public class DailyBriefingFactsBuilder {
      * <p>Widens the one snapshot query rather than adding a second. The retroactive window
      * is the most recent seven of these days and is filtered out of the same list.
      */
-    static final int SIGNAL_DAYS = 14;
+    public static final int SIGNAL_DAYS = 14;
 
     /** How many slipping or steady items the prompt names. More than three is a list. */
     static final int MAX_PATTERNS = 3;
@@ -374,6 +374,15 @@ public class DailyBriefingFactsBuilder {
                 .toList();
     }
 
+    /**
+     * {@link #goalsAhead(List, LocalDate)} on its own, for Second Brain, which shows where the
+     * goals are heading without building a whole briefing around them.
+     */
+    @Transactional(readOnly = true)
+    public List<GoalAhead> goalsAhead(User user, LocalDate today) {
+        return goalsAhead(openGoals(user), today);
+    }
+
     private GoalAhead toGoalAhead(Goal goal, LocalDate today) {
         double target = goal.getTargetValue() == null ? 0d : goal.getTargetValue();
         double current = goal.getCurrentValue() == null ? 0d : goal.getCurrentValue();
@@ -489,9 +498,12 @@ public class DailyBriefingFactsBuilder {
      * still be checked from the dialog. That is the honest reading of the week as it stands
      * when the prose is written, and the prose is only ever about a pattern, never about
      * whether one particular item is still open.
+     *
+     * <p>Public and static because Second Brain reads the same two weeks the same way. It passes
+     * its own snapshot list and mood levels, each empty when the person switched that source off.
      */
-    private WeekSignals buildSignals(List<RoutineSnapshot> fortnight, Map<LocalDate, Integer> moods,
-                                     LocalDate yesterday) {
+    public static WeekSignals buildSignals(List<RoutineSnapshot> fortnight, Map<LocalDate, Integer> moods,
+                                           LocalDate yesterday) {
         LocalDate weekStart = yesterday.minusDays(6);
         List<RoutineSnapshot> thisWeek = fortnight.stream()
                 .filter(s -> !s.getSnapshotDate().isBefore(weekStart))

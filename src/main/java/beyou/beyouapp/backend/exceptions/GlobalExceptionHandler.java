@@ -65,11 +65,14 @@ public class GlobalExceptionHandler {
      */
     static final Set<ErrorKey> NOT_FOUND_KEYS = EnumSet.of(
             ErrorKey.CALENDAR_TASK_NOT_FOUND,
-            ErrorKey.QUICK_NOTE_NOT_FOUND);
+            ErrorKey.QUICK_NOTE_NOT_FOUND,
+            ErrorKey.SECOND_BRAIN_FACT_NOT_FOUND,
+            ErrorKey.SECOND_BRAIN_QUESTION_NOT_FOUND);
 
     /**
      * Business errors whose answer is 409: the request was well formed and the caller's data
-     * refused it (a full board, a note that already became a task).
+     * refused it (a full board, a note that already became a task, a full Second Brain profile,
+     * a question that was already closed).
      *
      * <p>Opt-in per key, like {@link #NOT_FOUND_KEYS} and for the same reason. Older limit and
      * conflict keys (the notebook's, the study cycles') answer 400 and their clients match on
@@ -77,7 +80,9 @@ public class GlobalExceptionHandler {
      */
     static final Set<ErrorKey> CONFLICT_KEYS = EnumSet.of(
             ErrorKey.QUICK_NOTE_LIMIT_REACHED,
-            ErrorKey.QUICK_NOTE_ALREADY_CONVERTED);
+            ErrorKey.QUICK_NOTE_ALREADY_CONVERTED,
+            ErrorKey.SECOND_BRAIN_FACT_LIMIT_REACHED,
+            ErrorKey.SECOND_BRAIN_QUESTION_CLOSED);
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusinessException(BusinessException ex){

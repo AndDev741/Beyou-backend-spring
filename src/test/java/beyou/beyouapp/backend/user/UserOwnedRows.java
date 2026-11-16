@@ -18,7 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *
  * <p>Exists because the deletion tests used to seed only what existed when they were written.
  * Every table added after that (mood, focus, the whole notebook, federated sign-ins, the
- * briefing, calendar tasks, quick notes) cascades from {@code users} in its migration, and two of those migrations say a
+ * briefing, calendar tasks, quick notes, Second Brain) cascades from {@code users} in its migration, and two of those migrations say a
  * deletion test proves it. None did. A cascade nobody exercises is a comment, so both deletion
  * tests now seed a row here per table and check every one is gone.
  *
@@ -44,7 +44,8 @@ public final class UserOwnedRows {
             "daily_briefing", "notebook_pages", "notebook_board_nodes", "notebook_board_edges",
             "notebook_cards", "notebook_card_reviews", "notebook_sources", "notebook_source_chunks",
             "notebook_study_outputs", "notebook_chat_messages", "notebook_roadmap_drafts",
-            "study_cycles", "study_sessions", "calendar_tasks", "quick_notes");
+            "study_cycles", "study_sessions", "calendar_tasks", "quick_notes",
+            "second_brain_sources", "second_brain_facts", "second_brain_questions", "second_brain_insights");
 
     /** What the export assertions need to find again. */
     public record Seeded(UUID topicId, UUID pageId, UUID sectionNodeId, UUID pageNodeId, UUID cardId,
@@ -214,6 +215,20 @@ public final class UserOwnedRows {
                 + "created_at, updated_at) VALUES (?, ?, 'call the plumber', 'YELLOW', -40, 900, 0, ?, "
                 + "(SELECT id FROM tasks WHERE user_id = ? ORDER BY id LIMIT 1), ?, ?)",
                 UUID.randomUUID(), userId, now, userId, now, now);
+
+        // Second Brain (V45): a switch turned on, a typed fact, an answered question and the
+        // overview. The switch and the overview are one row per account, so a later copy for
+        // the same account leaves them as they are.
+        jdbc.update("INSERT INTO second_brain_sources (user_id, source, enabled, updated_at) "
+                + "VALUES (?, 'IDEAS', true, ?) ON CONFLICT DO NOTHING", userId, now);
+        jdbc.update("INSERT INTO second_brain_facts (id, user_id, kind, text, origin, created_at, updated_at) "
+                + "VALUES (?, ?, 'OBJECTIVE', 'Run a half marathon by June', 'USER', ?, ?)",
+                UUID.randomUUID(), userId, now, now);
+        jdbc.update("INSERT INTO second_brain_questions (id, user_id, kind, text, status, answer, created_at, "
+                + "answered_at) VALUES (?, ?, 'FOLLOW_UP', 'What is the half marathon for?', 'ANSWERED', "
+                + "'To prove I can', ?, ?)", UUID.randomUUID(), userId, now, now);
+        jdbc.update("INSERT INTO second_brain_insights (user_id, text, verdict, generated_at) "
+                + "VALUES (?, 'Your mornings hold.', 'ON_COURSE', ?) ON CONFLICT DO NOTHING", userId, now);
 
         return new Seeded(topicId, pageId, sectionNodeId, pageNodeId, cardId, itemGroupId, day);
     }

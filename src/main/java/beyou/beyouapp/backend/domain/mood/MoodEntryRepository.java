@@ -26,6 +26,18 @@ public interface MoodEntryRepository extends JpaRepository<MoodEntry, UUID> {
     List<MoodEntry> findByUserIdAndEntryDateBetweenOrderByEntryDateDesc(
             UUID userId, LocalDate from, LocalDate to);
 
+    /**
+     * The levels of a window of days, as {@code [entryDate, mood]} pairs, without the journal.
+     *
+     * <p>For Second Brain, which may read how a week felt and must never read what was written
+     * about it. The note is not in the select list, so the text does not leave the database.
+     */
+    @Query("select m.entryDate, m.mood from MoodEntry m "
+            + "where m.user.id = :userId and m.entryDate between :from and :to")
+    List<Object[]> findLevels(@Param("userId") UUID userId,
+                              @Param("from") LocalDate from,
+                              @Param("to") LocalDate to);
+
     /** Used by the account export, which wants everything and has its own rate-limit tier. */
     List<MoodEntry> findByUserIdOrderByEntryDateDesc(UUID userId);
 
