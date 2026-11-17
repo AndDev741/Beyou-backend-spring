@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import beyou.beyouapp.backend.domain.briefing.DailyBriefingFactsBuilder;
+import beyou.beyouapp.backend.domain.briefing.DailyBriefingNarrator;
 import beyou.beyouapp.backend.domain.briefing.WeekSignals;
 import beyou.beyouapp.backend.domain.briefing.dto.GoalAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.GoalPace;
@@ -171,7 +172,7 @@ public class SecondBrainSignals {
     }
 
     private static SecondBrainRoutineItemDTO toItem(WeekSignals.ItemPattern pattern) {
-        return new SecondBrainRoutineItemDTO(pattern.name(), pattern.asked(), pattern.checked());
+        return new SecondBrainRoutineItemDTO(pattern.name(), pattern.asked(), pattern.checked(), pattern.skipped());
     }
 
     /**
@@ -252,19 +253,18 @@ public class SecondBrainSignals {
             if (week.previousWeekPercent() != null) {
                 sb.append(" (the seven days before: ").append(week.previousWeekPercent()).append("%)");
             }
-            sb.append(". A skip is a choice the person made and is left out of both.\n");
+            sb.append(". A skip is a choice the person made and is left out of both percentages.\n");
         } else {
             sb.append("- Nothing was asked this week; the week before, ")
               .append(week.previousWeekPercent()).append("% of the items asked were checked.\n");
         }
         for (WeekSignals.ItemPattern item : week.slipping()) {
-            sb.append("- Slipping: \"").append(SecondBrainData.inline(item.name())).append("\" was left open on ")
-              .append(item.missed()).append(" of the ").append(item.asked())
-              .append(" days it came up this week.\n");
+            sb.append("- Slipping: \"").append(SecondBrainData.inline(item.name())).append("\" ")
+              .append(DailyBriefingNarrator.slippingDetail(item));
         }
         for (WeekSignals.ItemPattern item : week.steady()) {
-            sb.append("- Steady: \"").append(SecondBrainData.inline(item.name())).append("\" was checked on all ")
-              .append(item.asked()).append(" days it came up this week.\n");
+            sb.append("- Steady: \"").append(SecondBrainData.inline(item.name())).append("\" was done all ")
+              .append(item.asked()).append(" times it came up this week.\n");
         }
         for (SecondBrainAreaDTO area : areas) {
             sb.append("- Life area \"").append(SecondBrainData.inline(area.name())).append("\": ")

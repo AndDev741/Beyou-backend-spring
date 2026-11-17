@@ -110,10 +110,10 @@ public class DailyBriefingFactsBuilder {
     static final int MAX_PATTERNS = 3;
 
     /**
-     * How many days an item has to have come up before "checked every time" says anything.
+     * How many times an item has to have come up before "done every time" says anything.
      * Two out of two is luck; four out of four is a habit holding.
      */
-    static final int STEADY_MIN_DAYS = 4;
+    static final int STEADY_MIN_TIMES = 4;
 
     /**
      * Percentage points a goal may trail its straight line before it counts as behind.
@@ -515,28 +515,30 @@ public class DailyBriefingFactsBuilder {
         // Keyed by the live item when the snapshot kept its id, by name otherwise, so a habit
         // that sits in two routines still reads as one habit. Snapshots arrive oldest first,
         // so the name kept is the most recent one, which is what the user calls it now.
+        // Every time an item came up counts, skips included: the percentage above leaves skips
+        // out because one skip is a choice, but these lists look for patterns, and an item
+        // skipped day after day is a habit being dropped. [asked, checked, skipped]
         Map<String, int[]> counts = new LinkedHashMap<>();
         Map<String, String> names = new HashMap<>();
         for (RoutineSnapshot snapshot : thisWeek) {
             for (SnapshotCheck check : snapshot.getChecks()) {
-                if (check.isSkipped()) {
-                    continue;
-                }
                 String key = itemKey(check);
-                int[] askedAndChecked = counts.computeIfAbsent(key, k -> new int[2]);
-                askedAndChecked[0]++;
+                int[] tally = counts.computeIfAbsent(key, k -> new int[3]);
+                tally[0]++;
                 if (check.isChecked()) {
-                    askedAndChecked[1]++;
+                    tally[1]++;
+                } else if (check.isSkipped()) {
+                    tally[2]++;
                 }
                 names.put(key, check.getItemName());
             }
         }
         List<WeekSignals.ItemPattern> patterns = counts.entrySet().stream()
                 .map(e -> new WeekSignals.ItemPattern(
-                        names.get(e.getKey()), e.getValue()[0], e.getValue()[1]))
+                        names.get(e.getKey()), e.getValue()[0], e.getValue()[1], e.getValue()[2]))
                 .toList();
 
-        // Slipping: open on at least two days, and on at least half the days it came up. Both
+        // Slipping: not done at least twice, and on at least half the times it came up. Both
         // conditions, because one miss in two is noise and two misses in fourteen are fine.
         List<WeekSignals.ItemPattern> slipping = patterns.stream()
                 .filter(p -> p.missed() >= 2 && p.missed() * 2 >= p.asked())
@@ -544,8 +546,9 @@ public class DailyBriefingFactsBuilder {
                         .thenComparing(WeekSignals.ItemPattern::name))
                 .limit(MAX_PATTERNS)
                 .toList();
+        // Steady: done every time, so a skip takes an item off this list.
         List<WeekSignals.ItemPattern> steady = patterns.stream()
-                .filter(p -> p.asked() >= STEADY_MIN_DAYS && p.missed() == 0)
+                .filter(p -> p.asked() >= STEADY_MIN_TIMES && p.missed() == 0)
                 .sorted(Comparator.comparingInt(WeekSignals.ItemPattern::asked).reversed()
                         .thenComparing(WeekSignals.ItemPattern::name))
                 .limit(MAX_PATTERNS)

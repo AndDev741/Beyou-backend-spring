@@ -441,8 +441,9 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
     // ---- signals for the narrator ----
 
     /**
-     * Two weeks read from one query, skips out of both sides of every fraction, and an item
-     * counted as one habit across days by the id the snapshot kept.
+     * Two weeks read from one query, skips out of both sides of the percentages, skips counted
+     * in the slipping and steady lists, and an item counted as one habit across days by the id
+     * the snapshot kept.
      */
     @Test
     void signals_readTheWeekAgainstTheOneBefore() {
@@ -484,12 +485,14 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
 
         WeekSignals signals = factsBuilder.build(user, TODAY).signals();
 
-        // Asked this week: Reading 5, Water 5, Stretch 1 (four skips left out). Checked: 1 + 5 + 1.
+        // The percentage: asked Reading 5, Water 5, Stretch 1 (four skips left out). Checked: 1 + 5 + 1.
         assertThat(signals.thisWeekPercent()).isEqualTo(64);
         assertThat(signals.previousWeekPercent()).isEqualTo(100);
-        assertThat(signals.slipping()).extracting(WeekSignals.ItemPattern::name)
-                .containsExactly("Reading");
-        assertThat(signals.slipping().get(0).missed()).isEqualTo(4);
+        // The lists count the skips: Stretch skipped four times out of five is being dropped.
+        assertThat(signals.slipping()).containsExactly(
+                new WeekSignals.ItemPattern("Reading", 5, 1, 0),
+                new WeekSignals.ItemPattern("Stretch", 5, 1, 4));
+        assertThat(signals.slipping().get(1).leftOpen()).isZero();
         assertThat(signals.steady()).extracting(WeekSignals.ItemPattern::name)
                 .containsExactly("Water");
     }

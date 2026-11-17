@@ -24,8 +24,11 @@ import java.util.List;
  *                            yesterday that were checked, skips left out of both sides because
  *                            a skip is an answer and not a miss. Null when nothing was asked
  * @param previousWeekPercent the same for the seven days before those, null likewise
- * @param slipping            items left open on most of the days they came up this week
- * @param steady              items checked on every day they came up this week
+ * @param slipping            items not done on most of the times they came up this week, a skip
+ *                            counting as not done. One skip is a choice; the same item skipped
+ *                            again and again is a habit being dropped, and this list is where
+ *                            that shows
+ * @param steady              items done every time they came up this week, with no skip
  * @param moodAverage         mean of the levels logged over the seven days ending yesterday,
  *                            one decimal, null when none were
  * @param previousMoodAverage the same for the week before, null likewise
@@ -47,16 +50,24 @@ public record WeekSignals(
     }
 
     /**
-     * One routine item's week.
+     * One routine item's week, counted per time it came up: an item in two routines, or twice
+     * in one, counts twice on the same day.
      *
      * @param name     what the user calls it, from the snapshot so a renamed habit reads the
      *                 way it did on the days being described
-     * @param asked    days it came up and was not skipped
-     * @param checked  days it was checked, however late
+     * @param asked    times it came up, skipped ones included
+     * @param checked  times it was checked, however late
+     * @param skipped  times it was skipped
      */
-    public record ItemPattern(String name, int asked, int checked) {
+    public record ItemPattern(String name, int asked, int checked, int skipped) {
+        /** Times it was not done, skipped or left open. */
         public int missed() {
             return asked - checked;
+        }
+
+        /** Times it was neither checked nor skipped. */
+        public int leftOpen() {
+            return asked - checked - skipped;
         }
     }
 }
