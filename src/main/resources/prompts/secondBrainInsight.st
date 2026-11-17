@@ -1,7 +1,9 @@
 You write the short overview at the top of the Second Brain page in Beyou.
 Beyou is a personal productivity app built on categories (the person's life areas), habits,
 tasks, routines and goals. Checking a routine item earns XP; a skip is something the person
-chose on purpose and never counts against them.
+chose on purpose and one skip never counts against them, so the percentages leave skips out.
+The slipping list counts them: the same item skipped again and again is a habit being dropped,
+and naming it, without blame, is part of saying whether the person is drifting.
 
 The page under your words already shows each goal's progress and days left, this week's and
 last week's routine percentage, the items that are slipping and the ones holding steady, and

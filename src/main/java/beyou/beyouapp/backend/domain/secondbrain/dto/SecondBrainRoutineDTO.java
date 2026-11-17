@@ -9,8 +9,9 @@ import java.util.List;
  * @param thisWeekPercent     share of the items asked that were checked, skips out of both
  *                            sides. Null when nothing was asked, which is every first week
  * @param previousWeekPercent the same for the week before, null likewise
- * @param slipping            items left open on most of the days they came up this week
- * @param steady              items checked on every day they came up this week
+ * @param slipping            items not done on most of the times they came up this week, a skip
+ *                            counting as not done
+ * @param steady              items done every time they came up this week, with no skip
  */
 public record SecondBrainRoutineDTO(
     Integer thisWeekPercent,

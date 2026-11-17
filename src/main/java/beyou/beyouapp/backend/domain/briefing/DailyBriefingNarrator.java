@@ -2,6 +2,7 @@ package beyou.beyouapp.backend.domain.briefing;
 
 import java.time.LocalDate;
 import java.time.format.TextStyle;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -166,18 +167,16 @@ public class DailyBriefingNarrator {
                 sb.append(" (the seven days before: ").append(signals.previousWeekPercent())
                   .append("%)");
             }
-            sb.append(". Skips are left out of both.\n");
+            sb.append(". Skips are left out of both percentages.\n");
         }
         for (WeekSignals.ItemPattern item : signals.slipping()) {
             any = true;
-            sb.append("- Slipping: \"").append(item.name()).append("\" was left open on ")
-              .append(item.missed()).append(" of the ").append(item.asked())
-              .append(" days it came up this week.\n");
+            sb.append("- Slipping: \"").append(item.name()).append("\" ").append(slippingDetail(item));
         }
         for (WeekSignals.ItemPattern item : signals.steady()) {
             any = true;
-            sb.append("- Steady: \"").append(item.name()).append("\" was checked on all ")
-              .append(item.asked()).append(" days it came up this week.\n");
+            sb.append("- Steady: \"").append(item.name()).append("\" was done all ")
+              .append(item.asked()).append(" times it came up this week.\n");
         }
         if (yesterday.focusCycles() > 0) {
             any = true;
@@ -295,5 +294,26 @@ public class DailyBriefingNarrator {
                 .map(line -> line.length() <= MAX_LINE_LENGTH ? line : line.substring(0, MAX_LINE_LENGTH))
                 .limit(MAX_LINES)
                 .toList();
+    }
+
+    /**
+     * The rest of a slipping item's line, per time and with the skips named: "skipped three
+     * times" and "left open three times" ask for different conversations. Public because
+     * Second Brain writes the same line.
+     */
+    public static String slippingDetail(WeekSignals.ItemPattern item) {
+        StringBuilder sb = new StringBuilder("was done ").append(item.checked()).append(" of the ")
+                .append(item.asked()).append(" times it came up this week");
+        List<String> parts = new ArrayList<>();
+        if (item.skipped() > 0) {
+            parts.add(item.skipped() + " skipped");
+        }
+        if (item.leftOpen() > 0) {
+            parts.add(item.leftOpen() + " left open");
+        }
+        if (!parts.isEmpty()) {
+            sb.append(" (").append(String.join(", ", parts)).append(')');
+        }
+        return sb.append(".\n").toString();
     }
 }

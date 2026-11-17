@@ -6,7 +6,7 @@ import java.util.UUID;
  * One life area (a category) over the last 14 days ending yesterday.
  *
  * @param asked   routine items of this category that came up and were not skipped, counted once
- *                per day they came up
+ *                per time they came up
  * @param checked how many of those were checked
  * @param percent checked over asked, rounded
  */

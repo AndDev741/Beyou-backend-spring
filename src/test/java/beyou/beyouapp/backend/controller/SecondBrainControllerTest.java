@@ -108,8 +108,8 @@ class SecondBrainControllerTest extends AbstractIntegrationTest {
                 List.of(new GoalAhead(GOAL_ID, "Read twelve books", "lucide:book", 4d, 10d, "books",
                         LocalDate.of(2026, 11, 16), 5, 40, 6d, 1.0, 86, GoalPace.BEHIND)),
                 new SecondBrainRoutineDTO(72, 64,
-                        List.of(new SecondBrainRoutineItemDTO("Read", 5, 1)),
-                        List.of(new SecondBrainRoutineItemDTO("Gym", 3, 3))),
+                        List.of(new SecondBrainRoutineItemDTO("Read", 5, 1, 3)),
+                        List.of(new SecondBrainRoutineItemDTO("Gym", 3, 3, 0))),
                 List.of(new SecondBrainAreaDTO(CATEGORY_ID, "Health", "lucide:heart", 12, 9, 75)),
                 List.of(question(SecondBrainQuestionStatus.OPEN, null, null)),
                 List.of(fact()),
@@ -132,7 +132,8 @@ class SecondBrainControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.routine.slipping[0].name").value("Read"))
                 .andExpect(jsonPath("$.routine.slipping[0].asked").value(5))
                 .andExpect(jsonPath("$.routine.slipping[0].checked").value(1))
-                .andExpect(jsonPath("$.routine.slipping[0].length()").value(3))
+                .andExpect(jsonPath("$.routine.slipping[0].skipped").value(3))
+                .andExpect(jsonPath("$.routine.slipping[0].length()").value(4))
                 .andExpect(jsonPath("$.routine.steady[0].name").value("Gym"))
                 .andExpect(jsonPath("$.areas[0].categoryId").value(CATEGORY_ID.toString()))
                 .andExpect(jsonPath("$.areas[0].name").value("Health"))

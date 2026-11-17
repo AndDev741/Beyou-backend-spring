@@ -198,21 +198,40 @@ class DailyBriefingNarratorTest {
 
         assertThat(message).contains("72% of the items asked were checked");
         assertThat(message).contains("the seven days before: 85%");
-        assertThat(message).contains("Skips are left out of both");
+        assertThat(message).contains("Skips are left out of both percentages");
     }
 
     @Test
     void factsMessage_namesWhatIsSlippingAndWhatIsHolding() {
         WeekSignals signals = new WeekSignals(60, null,
-                List.of(new WeekSignals.ItemPattern("Reading", 6, 2)),
-                List.of(new WeekSignals.ItemPattern("Water", 7, 7)),
+                List.of(new WeekSignals.ItemPattern("Reading", 6, 2, 0)),
+                List.of(new WeekSignals.ItemPattern("Water", 7, 7, 0)),
                 null, null, 0);
 
         String message = DailyBriefingNarrator.factsMessage(facts(
                 recap(true, false, 1, 0, 10d, List.of()), today(List.of(), null), signals));
 
-        assertThat(message).contains("Slipping: \"Reading\" was left open on 4 of the 6 days");
-        assertThat(message).contains("Steady: \"Water\" was checked on all 7 days");
+        // Per time, not per day: an item in two routines comes up twice on one day.
+        assertThat(message).contains("Slipping: \"Reading\" was done 2 of the 6 times it came up this week (4 left open).");
+        assertThat(message).contains("Steady: \"Water\" was done all 7 times it came up this week.");
+        assertThat(message).doesNotContain(" days it came up");
+    }
+
+    /**
+     * "Skipped three times" and "left open three times" ask for different conversations, so
+     * the model is told which one it is looking at.
+     */
+    @Test
+    void factsMessage_saysHowMuchOfASlippingItemWasSkipped() {
+        WeekSignals signals = new WeekSignals(80, null,
+                List.of(new WeekSignals.ItemPattern("Gym", 5, 1, 3), new WeekSignals.ItemPattern("Stretch", 4, 0, 4)),
+                List.of(), null, null, 0);
+
+        String message = DailyBriefingNarrator.factsMessage(facts(
+                recap(true, false, 1, 0, 10d, List.of()), today(List.of(), null), signals));
+
+        assertThat(message).contains("Slipping: \"Gym\" was done 1 of the 5 times it came up this week (3 skipped, 1 left open).");
+        assertThat(message).contains("Slipping: \"Stretch\" was done 0 of the 4 times it came up this week (4 skipped).");
     }
 
     /** Levels and their trend, and nothing else about the user's mood. */
