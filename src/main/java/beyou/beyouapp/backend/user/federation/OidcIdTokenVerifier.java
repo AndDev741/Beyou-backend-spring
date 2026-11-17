@@ -18,6 +18,7 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.spec.RSAPublicKeySpec;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -71,6 +72,39 @@ public class OidcIdTokenVerifier {
      * @throws BusinessException if anything about the token fails to check out
      */
     public FederatedPrincipal verify(String idToken, OidcProviderProperties.Provider provider) {
+        DecodedJWT decoded = verifySignedToken(idToken, provider.getIssuer(), List.of(provider.getClientId()));
+
+        return new FederatedPrincipal(
+                decoded.getIssuer(),
+                decoded.getSubject(),
+                decoded.getClaim("email").asString(),
+                Boolean.TRUE.equals(decoded.getClaim("email_verified").asBoolean()),
+                decoded.getClaim("name").asString(),
+                decoded.getClaim("picture").asString());
+    }
+
+    /**
+     * The checks every ID token gets, for a caller that reads provider-specific claims
+     * itself: signature against the issuer's published keys, issuer, audience, expiry,
+     * subject present, and {@code azp} (when present) naming one of {@code audiences}.
+     *
+     * <p>Several audiences, because one provider can mint tokens for more than one of our
+     * clients: Sign in with Apple puts the iOS bundle id in {@code aud} for the app and a
+     * Services ID for the web. Any one of them is enough, and nothing outside the list is.
+     *
+     * @return the decoded token, once every check above has passed
+     * @throws BusinessException {@code OIDC_TOKEN_INVALID} if any of them fails
+     */
+    public DecodedJWT verifySignedToken(String idToken, String issuer, Collection<String> audiences) {
+        List<String> accepted = audiences == null ? List.of() : audiences.stream()
+                .filter(a -> a != null && !a.isBlank())
+                .toList();
+        if (accepted.isEmpty()) {
+            // An empty list would make withAnyOfAudience accept nothing at best and, with a
+            // different library version, anything at worst. Configuration error, so refuse.
+            throw invalid("no audience configured for issuer " + issuer);
+        }
+
         DecodedJWT decoded;
         try {
             decoded = JWT.decode(idToken);
@@ -85,12 +119,12 @@ public class OidcIdTokenVerifier {
             throw invalid("unsupported algorithm " + decoded.getAlgorithm());
         }
 
-        RSAPublicKey key = resolveKey(provider.getIssuer(), decoded.getKeyId());
+        RSAPublicKey key = resolveKey(issuer, decoded.getKeyId());
 
         try {
             JWT.require(Algorithm.RSA256(key, null))
-                    .withIssuer(provider.getIssuer())
-                    .withAudience(provider.getClientId())
+                    .withIssuer(issuer)
+                    .withAnyOfAudience(accepted.toArray(String[]::new))
                     .acceptLeeway(LEEWAY_SECONDS)
                     .build()
                     .verify(idToken);
@@ -106,17 +140,11 @@ public class OidcIdTokenVerifier {
         // azp, when present, names the party the token was actually issued to. A token
         // with our id in a multi-valued aud but somebody else's azp is not ours.
         String azp = decoded.getClaim("azp").asString();
-        if (azp != null && !azp.equals(provider.getClientId())) {
+        if (azp != null && !accepted.contains(azp)) {
             throw invalid("authorized party is not this client");
         }
 
-        return new FederatedPrincipal(
-                decoded.getIssuer(),
-                subject,
-                decoded.getClaim("email").asString(),
-                Boolean.TRUE.equals(decoded.getClaim("email_verified").asBoolean()),
-                decoded.getClaim("name").asString(),
-                decoded.getClaim("picture").asString());
+        return decoded;
     }
 
     private RSAPublicKey resolveKey(String issuer, String kid) {

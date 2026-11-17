@@ -108,6 +108,9 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
     /** Nothing here should try to reach an SMTP server. */
     @MockitoBean EmailService emailService;
 
+    /** Nor Apple: the revocation call is observed instead of made. */
+    @MockitoBean beyou.beyouapp.backend.user.apple.AppleTokenClient appleTokenClient;
+
     @Value("${spring.datasource.url}") String jdbcUrl;
     @Value("${spring.datasource.username}") String jdbcUsername;
     @Value("${spring.datasource.password}") String jdbcPassword;
@@ -296,6 +299,30 @@ class AccountDeletionIntegrationTest extends AbstractIntegrationTest {
      * see it (a mock repository has no transaction to roll back) and the first version
      * of this test never sent a wrong code at all.
      */
+    @Test
+    @DisplayName("an Apple-linked account is deleted, and its Apple token revoked only after the commit")
+    void deletingAnAppleLinkedAccountRevokesTheAppleToken() {
+        UUID userId = user.getId();
+        jdbc.update("INSERT INTO federated_identities (id, user_id, issuer, subject, email_at_link, created_at, "
+                        + "last_login_at, provider_refresh_token, provider_client_id) "
+                        + "VALUES (?, ?, 'https://appleid.apple.com', ?, ?, now(), now(), 'apple-refresh', 'com.beyou.mobile')",
+                UUID.randomUUID(), userId, "apple-sub-" + userId, "x7k2@privaterelay.appleid.com");
+        org.mockito.Mockito.when(appleTokenClient.isConfigured()).thenReturn(true);
+        org.mockito.Mockito.when(appleTokenClient.revokeRefreshToken("apple-refresh", "com.beyou.mobile"))
+                .thenAnswer(inv -> {
+                    // Called from afterCommit: the account must already be gone for good.
+                    assertThat(rowsFor("users", "id", userId)).isZero();
+                    return true;
+                });
+
+        String code = accountDeletionService.requestCode(user);
+        assertThatCode(() -> accountDeletionService.confirm(user, code)).doesNotThrowAnyException();
+
+        assertThat(rowsFor("users", "id", userId)).isZero();
+        assertThat(rowsFor("federated_identities", "user_id", userId)).isZero();
+        org.mockito.Mockito.verify(appleTokenClient).revokeRefreshToken("apple-refresh", "com.beyou.mobile");
+    }
+
     @Test
     @DisplayName("a wrong code is counted across requests, and the sixth one closes the code")
     void wrongCodesAreCountedAndEventuallyCloseTheCode() {

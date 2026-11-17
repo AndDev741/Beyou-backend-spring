@@ -66,7 +66,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
      */
     private static final Set<String> AUTH_PATHS = Set.of(
             "/auth/login", "/auth/register", "/auth/forgot-password", "/auth/resend-verification",
-            "/auth/google", "/auth/google/mobile"
+            "/auth/google", "/auth/google/mobile", "/auth/apple/mobile"
     );
 
     /**

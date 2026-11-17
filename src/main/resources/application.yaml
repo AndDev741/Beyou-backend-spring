@@ -110,6 +110,23 @@ google:
     oauth: ${OAUTH_GOOGLE_URL}
     userInfo: ${USER_INFO_GOOGLE_URL}
 
+# Sign in with Apple (the iOS app; POST /auth/apple/mobile).
+#
+# audiences: the aud values an Apple identity token may carry, comma-separated. The iOS
+# bundle id by default; add a Services ID here if the web ever offers Apple too.
+#
+# team-id / key-id / private-key: a "Sign in with Apple" key from the Apple Developer
+# account (Certificates, Identifiers & Profiles > Keys), the .p8 as PEM text. Optional.
+# With it, sign-in exchanges the authorization code for a refresh token and account
+# deletion revokes it at Apple, as App Store guideline 5.1.1(v) asks. Without it, sign-in
+# and deletion both work and each skipped revocation is logged.
+apple:
+  sign-in:
+    audiences: ${APPLE_AUDIENCES:com.beyou.mobile}
+    team-id: ${APPLE_TEAM_ID:}
+    key-id: ${APPLE_KEY_ID:}
+    private-key: ${APPLE_PRIVATE_KEY:}
+
 # Federated sign-in providers, beyond Google.
 #
 # A block with no issuer or no client id is treated as absent: /auth/oidc/providers

@@ -62,6 +62,21 @@ public class FederatedIdentity {
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
+    /**
+     * The provider's refresh token, kept only so the link can be revoked at the provider
+     * when the account is deleted. Sign in with Apple is the one provider that fills it
+     * (see V46 and {@code AppleSignInService}); null everywhere else.
+     *
+     * <p>Never exported and never logged. It opens nothing here, and at Apple it is useless
+     * without the private key that signs our client secret.
+     */
+    @Column(name = "provider_refresh_token", columnDefinition = "text")
+    private String providerRefreshToken;
+
+    /** The {@code aud} the refresh token above was issued to, which revoking it must name. */
+    @Column(name = "provider_client_id", columnDefinition = "text")
+    private String providerClientId;
+
     public FederatedIdentity(User user, FederatedPrincipal principal, LocalDateTime now) {
         this.user = user;
         this.issuer = principal.issuer();

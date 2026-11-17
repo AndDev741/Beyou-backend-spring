@@ -21,6 +21,7 @@ import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.notification.EmailService;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserService;
+import beyou.beyouapp.backend.user.apple.AppleTokenRevocation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -51,6 +52,7 @@ public class AccountDeletionService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final UserService userService;
+    private final AppleTokenRevocation appleTokenRevocation;
 
     @Value("${account-deletion.code-ttl-minutes:15}")
     private long codeTtlMinutes;
@@ -150,6 +152,9 @@ public class AccountDeletionService {
         }
 
         log.info("Deleting account {} after a confirmed deletion code", user.getId());
+        // Reads the Apple refresh token now, before the cascade takes its row, and calls
+        // Apple only once this transaction commits. App Store guideline 5.1.1(v).
+        appleTokenRevocation.revokeAfterCommit(user);
         return userService.deleteUser(user);
     }
 

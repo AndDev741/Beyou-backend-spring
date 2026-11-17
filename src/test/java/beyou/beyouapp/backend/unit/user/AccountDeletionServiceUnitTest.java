@@ -51,6 +51,7 @@ class AccountDeletionServiceUnitTest {
     @Mock beyou.beyouapp.backend.user.deletion.AccountDeletionCodeWrites codeWrites;
     @Mock EmailService emailService;
     @Mock UserService userService;
+    @Mock beyou.beyouapp.backend.user.apple.AppleTokenRevocation appleTokenRevocation;
 
     /** The real encoder: what is stored must not be the code itself. */
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -130,6 +131,24 @@ class AccountDeletionServiceUnitTest {
     }
 
     /**
+     * The Apple refresh token lives on the federated row, which the delete cascades away,
+     * so it has to be read before the delete runs. The revocation itself is deferred to
+     * after the commit inside AppleTokenRevocation.
+     */
+    @Test
+    void theAppleLinkIsQueuedForRevocationBeforeTheAccountIsDeleted() {
+        AccountDeletionCode code = storedCode("123456", Instant.now().plusSeconds(900), 0, null);
+        when(codeRepository.findTopByUserIdOrderByCreatedAtDesc(user.getId())).thenReturn(Optional.of(code));
+        when(userService.deleteUser(user)).thenReturn(ResponseEntity.ok(Map.of("success", "User deleted successfully")));
+
+        service.confirm(user, "123456");
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(appleTokenRevocation, userService);
+        order.verify(appleTokenRevocation).revokeAfterCommit(user);
+        order.verify(userService).deleteUser(user);
+    }
+
+    /**
      * Counting happens through the collaborator that owns its own transaction, and
      * NOT on this entity: the refusal below is a throw, and the throw rolls back
      * whatever the surrounding transaction wrote. That the count then survives is a
@@ -146,6 +165,7 @@ class AccountDeletionServiceUnitTest {
         verify(codeWrites).record(code.getId());
         verify(codeRepository, never()).save(any());
         verify(userService, never()).deleteUser(any());
+        verify(appleTokenRevocation, never()).revokeAfterCommit(any());
     }
 
     @Test
