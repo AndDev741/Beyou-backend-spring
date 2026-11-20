@@ -4,6 +4,8 @@ import beyou.beyouapp.backend.domain.routine.RoutineType;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
@@ -25,6 +27,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
+import beyou.beyouapp.backend.domain.calendar.CalendarService;
+import beyou.beyouapp.backend.domain.calendar.dto.CalendarDayDTO;
+import beyou.beyouapp.backend.domain.calendar.dto.CalendarOverviewDTO;
+import beyou.beyouapp.backend.domain.calendar.dto.CalendarRoutineDTO;
+import beyou.beyouapp.backend.domain.calendar.dto.CalendarRoutineSource;
+import beyou.beyouapp.backend.domain.calendar.dto.CalendarTaskCompletionDTO;
+import beyou.beyouapp.backend.domain.calendar.dto.CalendarTaskRequestDTO;
+import beyou.beyouapp.backend.domain.calendar.dto.CalendarTaskResponseDTO;
 import beyou.beyouapp.backend.domain.category.CategoryService;
 import beyou.beyouapp.backend.domain.category.dto.CategoryEditRequestDTO;
 import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
@@ -78,6 +88,8 @@ import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.domain.task.dto.CreateTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.EditTaskRequestDTO;
 import beyou.beyouapp.backend.domain.task.dto.TaskResponseDTO;
+import beyou.beyouapp.backend.notification.preferences.NotificationPreferencesService;
+import beyou.beyouapp.backend.notification.preferences.ReminderSettings;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
@@ -115,6 +127,10 @@ public class Tools {
     private MoodService moodService;
     @Autowired
     private QuickNoteService quickNoteService;
+    @Autowired
+    private CalendarService calendarService;
+    @Autowired
+    private NotificationPreferencesService notificationPreferencesService;
     @Autowired
     private NotebookPageService notebookPageService;
     @Autowired
@@ -306,7 +322,8 @@ public class Tools {
                 .toList();
     }
 
-    @Tool(description = "Create a new user task")
+    @Tool(description = "Create a new user task: an item that routines hold and repeat. For a one-off thing on "
+            + "a date (a bill on Friday, an appointment, \"remind me to...\") use createCalendarTask instead")
     Map<String, String> createUserTask(CreateTaskRequestDTO task, ToolContext toolContext) {
         log.info("AI agent is creating a task for user: {}", userId(toolContext));
         return taskService.createTask(valid(task), userId(toolContext)).getBody();
@@ -926,6 +943,336 @@ public class Tools {
                     return row;
                 })
                 .toList();
+    }
+
+    // Calendar: dated one-off tasks and their reminders
+    //
+    // A calendar task is NOT a Task with a date. A routine task completes only through a routine
+    // check and a one-time one deletes itself the next day, so "pay the bill on Friday" created as
+    // a routine task has no day, no reminder and is gone by the weekend. These tools are the only
+    // way the assistant puts something on a day.
+
+    /** How far back and ahead a title is looked for when the model names no day. */
+    private static final int CALENDAR_LOOKBACK_DAYS = 31;
+    private static final int CALENDAR_LOOKAHEAD_DAYS = 92;
+    /** How many tasks a "which one did you mean" message lists before it stops. */
+    private static final int MAX_CALENDAR_CANDIDATES = 40;
+    private static final DateTimeFormatter LOCAL_MINUTE = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
+    private static final DateTimeFormatter HOUR_MINUTE = DateTimeFormatter.ofPattern("HH:mm");
+
+    @Tool(description = "Read the user's calendar over a range of days: calendar tasks (id, title, time, "
+            + "reminder, done), the routine of each day and the goals that end that day. Days with none of "
+            + "these are left out. At most 62 days. Also says how reminders reach this user. Read only")
+    Map<String, Object> getCalendar(
+            @ToolParam(description = "First day as yyyy-MM-dd. Omit for the user's today", required = false) String from,
+            @ToolParam(description = "Last day as yyyy-MM-dd. Omit for six days after the first", required = false) String to,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        LocalDate askedFrom = parseDate(from, "from");
+        LocalDate askedTo = parseDate(to, "to");
+        LocalDate start = askedFrom != null ? askedFrom
+                : askedTo != null ? askedTo.minusDays(6) : UserDateResolver.today(user);
+        LocalDate end = askedTo != null ? askedTo : start.plusDays(6);
+        log.info("AI agent is reading the calendar for user: {} from {} to {}", user.getId(), start, end);
+
+        CalendarOverviewDTO overview = calendarService.getOverview(user, start, end);
+        ZoneId zone = UserDateResolver.zoneOf(user);
+        List<Map<String, Object>> days = overview.days().stream()
+                .filter(day -> !day.tasks().isEmpty() || !day.routines().isEmpty() || !day.goals().isEmpty())
+                .map(day -> calendarDayRow(day, zone))
+                .toList();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("today", overview.today().toString());
+        result.put("from", overview.from().toString());
+        result.put("to", overview.to().toString());
+        result.put("days", days);
+        result.put("reminders", reminderChannels(user));
+        return result;
+    }
+
+    @Tool(description = "Put a one-off task on the user's calendar: a day, optionally a time, and a reminder. "
+            + "For anything tied to a date (pay a bill on Friday, dentist tomorrow at 15:00, remind me to...). "
+            + "Not for something that repeats: that is a routine task (createUserTask) inside a routine. "
+            + "Asking twice for the same title, day and time returns the open task already there instead of "
+            + "a copy. No XP until it is completed")
+    Map<String, Object> createCalendarTask(
+            @ToolParam(description = "What to do, 2 to 255 characters, in the user's words") String title,
+            @ToolParam(description = "The day as yyyy-MM-dd. Omit for the user's today", required = false) String date,
+            @ToolParam(description = "The time as HH:mm. Omit for a task with no time, which reminds at the "
+                    + "user's default reminder time", required = false) String time,
+            @ToolParam(description = "How many minutes before the time the reminder comes. The app offers 0, 15, "
+                    + "30, 60, 120 and 1440 (a day before); up to 10080. Omit for none", required = false)
+            Integer advanceMinutes,
+            @ToolParam(description = "A longer note, up to 1000 characters. Omit for none", required = false) String note,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        LocalDate parsed = parseDate(date, "date");
+        LocalDate day = parsed != null ? parsed : UserDateResolver.today(user);
+        LocalTime at = time == null || time.isBlank() ? null : parseTime(time, "time").truncatedTo(ChronoUnit.MINUTES);
+        CalendarTaskRequestDTO request = valid(new CalendarTaskRequestDTO(title, note, day, at, advanceMinutes));
+        log.info("AI agent is creating a calendar task for user: {} on {}", user.getId(), day);
+
+        // A model that repeats its own call (a retry, a second turn that "makes sure") would
+        // otherwise leave two reminders for one bill. Same title, day and time, still open: the
+        // one already there is the answer.
+        String wanted = request.title().strip();
+        CalendarTaskResponseDTO existing = calendarService.tasksBetween(user, day, day).stream()
+                .filter(task -> !task.completed()
+                        && task.title().equalsIgnoreCase(wanted)
+                        && Objects.equals(task.time(), at))
+                .findFirst()
+                .orElse(null);
+        ZoneId zone = UserDateResolver.zoneOf(user);
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (existing != null) {
+            result.put("success", "This task was already on the calendar; nothing new was created");
+            result.put("task", calendarTaskRow(existing, zone));
+        } else {
+            result.put("success", "Calendar task created");
+            result.put("task", calendarTaskRow(calendarService.create(user, request), zone));
+        }
+        result.put("reminders", reminderChannels(user));
+        return result;
+    }
+
+    @Tool(description = "Change a calendar task, by id or by title. Only send what changes: every field left "
+            + "out keeps its value. Moving the day, the time or the advance notice re-arms the reminder. "
+            + "Done or not is changed with completeCalendarTask, not here")
+    Map<String, Object> editCalendarTask(
+            @ToolParam(description = "The task: its id from getCalendar, or its title as the user said it") String task,
+            @ToolParam(description = "The day the task is on now, as yyyy-MM-dd. Only needed when two tasks "
+                    + "share the title", required = false) String onDate,
+            @ToolParam(description = "New title. Omit to keep it", required = false) String title,
+            @ToolParam(description = "New day as yyyy-MM-dd. Omit to keep it", required = false) String date,
+            @ToolParam(description = "New time as HH:mm. Omit to keep it", required = false) String time,
+            @ToolParam(description = "true takes the time off, leaving a task for the whole day. Omit otherwise",
+                    required = false) Boolean clearTime,
+            @ToolParam(description = "New advance notice in minutes, 0 for none. Omit to keep it", required = false)
+            Integer advanceMinutes,
+            @ToolParam(description = "New note. Omit to keep it", required = false) String note,
+            @ToolParam(description = "true removes the note. Omit otherwise", required = false) Boolean clearNote,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        CalendarTaskResponseDTO current = resolveCalendarTask(task, onDate, user);
+        log.info("AI agent is editing calendar task {} for user: {}", current.id(), user.getId());
+
+        // PATCH on top of a PUT. The REST body replaces every field, so a null time there means
+        // "untimed"; a model that leaves the time out means "as it was", and reading it that way
+        // is what keeps a renamed dentist appointment at 15:00. Removing is asked for by name.
+        LocalDate newDate = parseDate(date, "date");
+        LocalTime newTime;
+        if (Boolean.TRUE.equals(clearTime)) {
+            newTime = null;
+        } else if (time != null && !time.isBlank()) {
+            newTime = parseTime(time, "time").truncatedTo(ChronoUnit.MINUTES);
+        } else {
+            newTime = current.time();
+        }
+        String newNote = Boolean.TRUE.equals(clearNote) ? null
+                : note != null && !note.isBlank() ? note : current.note();
+        CalendarTaskRequestDTO request = valid(new CalendarTaskRequestDTO(
+                title != null && !title.isBlank() ? title : current.title(),
+                newNote,
+                newDate != null ? newDate : current.date(),
+                newTime,
+                advanceMinutes != null ? advanceMinutes : current.advanceMinutes()));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", "Calendar task updated");
+        result.put("task", calendarTaskRow(calendarService.update(user, current.id(), request),
+                UserDateResolver.zoneOf(user)));
+        return result;
+    }
+
+    @Tool(description = "Mark a calendar task done, or open it again, by id or by title. Done pays the user "
+            + "10 XP and opening it again takes those back. Only when the user says they did it, or asks to "
+            + "undo that. Marking a done task done changes nothing")
+    Map<String, Object> completeCalendarTask(
+            @ToolParam(description = "The task: its id from getCalendar, or its title as the user said it") String task,
+            @ToolParam(description = "The day the task is on, as yyyy-MM-dd. Only needed when two tasks share "
+                    + "the title", required = false) String onDate,
+            @ToolParam(description = "true marks it done, false opens it again. Omit for true", required = false)
+            Boolean done,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        CalendarTaskResponseDTO current = resolveCalendarTask(task, onDate, user);
+        boolean wanted = done == null || done;
+        ZoneId zone = UserDateResolver.zoneOf(user);
+        Map<String, Object> result = new LinkedHashMap<>();
+
+        // The endpoint toggles. A model asked to "mark it done" on a task that already is would
+        // flip it back open and take the XP away, so the state asked for is compared first.
+        if (current.completed() == wanted) {
+            result.put("success", wanted ? "Already done; nothing changed" : "Already open; nothing changed");
+            result.put("task", calendarTaskRow(current, zone));
+            result.put("xpChange", 0);
+            return result;
+        }
+        log.info("AI agent is marking calendar task {} {} for user: {}", current.id(),
+                wanted ? "done" : "open", user.getId());
+        CalendarTaskCompletionDTO toggled = calendarService.toggleComplete(user, current.id());
+        result.put("success", wanted ? "Calendar task done" : "Calendar task open again");
+        result.put("task", calendarTaskRow(toggled.task(), zone));
+        result.put("xpChange", wanted ? toggled.task().xpAwarded() : -current.xpAwarded());
+        return result;
+    }
+
+    @Tool(description = "Delete a calendar task, by id or by title. XP it already paid stays paid. "
+            + "Confirm with the user first")
+    Map<String, String> deleteCalendarTask(
+            @ToolParam(description = "The task: its id from getCalendar, or its title as the user said it") String task,
+            @ToolParam(description = "The day the task is on, as yyyy-MM-dd. Only needed when two tasks share "
+                    + "the title", required = false) String onDate,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        CalendarTaskResponseDTO current = resolveCalendarTask(task, onDate, user);
+        log.info("AI agent is deleting calendar task {} for user: {}", current.id(), user.getId());
+        calendarService.delete(user, current.id());
+        return Map.of("success", "Deleted \"" + current.title() + "\" on " + current.date());
+    }
+
+    /**
+     * The calendar task the model meant, from an id or from a title.
+     *
+     * <p>Same reasoning as {@link #resolveGoalId}: a title is something the user said, and models
+     * invent ids. The title is matched in the given day, or about a month back and three months
+     * ahead when no day came, exactly first and then as a unique substring. Two hits is never a
+     * guess: the message lists them so the next call can send the id or the day.
+     */
+    private CalendarTaskResponseDTO resolveCalendarTask(String sent, String onDate, User user) {
+        String trimmed = sent == null ? "" : sent.trim();
+        LocalDate day = parseDate(onDate, "onDate");
+        LocalDate today = UserDateResolver.today(user);
+        List<CalendarTaskResponseDTO> candidates = day != null
+                ? calendarService.tasksBetween(user, day, day)
+                : calendarService.tasksBetween(user,
+                        today.minusDays(CALENDAR_LOOKBACK_DAYS), today.plusDays(CALENDAR_LOOKAHEAD_DAYS));
+
+        if (!trimmed.isEmpty()) {
+            UUID id = parseUuidOrNull(trimmed);
+            if (id != null) {
+                for (CalendarTaskResponseDTO candidate : candidates) {
+                    if (candidate.id().equals(id)) {
+                        return candidate;
+                    }
+                }
+                // An id from getCalendar can sit outside the window titles are matched in.
+                try {
+                    return calendarService.get(user, id);
+                } catch (BusinessException notFound) {
+                    // Falls through to the list of what is there.
+                }
+            } else {
+                List<CalendarTaskResponseDTO> exact = candidates.stream()
+                        .filter(c -> c.title().equalsIgnoreCase(trimmed))
+                        .toList();
+                if (exact.size() == 1) {
+                    return exact.get(0);
+                }
+                String lowered = trimmed.toLowerCase(Locale.ROOT);
+                List<CalendarTaskResponseDTO> hits = !exact.isEmpty() ? exact : candidates.stream()
+                        .filter(c -> c.title().toLowerCase(Locale.ROOT).contains(lowered))
+                        .toList();
+                if (hits.size() == 1) {
+                    return hits.get(0);
+                }
+                if (hits.size() > 1) {
+                    throw new IllegalArgumentException("More than one calendar task matches '" + trimmed
+                            + "'. Send the id, or the day as onDate. They are: " + describeCalendarTasks(hits));
+                }
+            }
+        }
+        String where = day != null ? "on " + day
+                : "between " + today.minusDays(CALENDAR_LOOKBACK_DAYS) + " and " + today.plusDays(CALENDAR_LOOKAHEAD_DAYS);
+        String message = candidates.isEmpty()
+                ? "No calendar task matches '" + trimmed + "': the user has no calendar tasks " + where
+                        + ". Do not invent an id; ask the user, or read another range with getCalendar"
+                : "No calendar task matches '" + trimmed + "' " + where + ". Do not invent an id or create "
+                        + "a replacement. The tasks there are: " + describeCalendarTasks(candidates);
+        throw new BusinessException(ErrorKey.CALENDAR_TASK_NOT_FOUND, message);
+    }
+
+    private static UUID parseUuidOrNull(String value) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private static String describeCalendarTasks(List<CalendarTaskResponseDTO> tasks) {
+        String listed = tasks.stream()
+                .limit(MAX_CALENDAR_CANDIDATES)
+                .map(task -> task.title() + " (" + task.date()
+                        + (task.time() == null ? "" : " " + task.time().format(HOUR_MINUTE))
+                        + (task.completed() ? ", done" : "") + ") -> " + task.id())
+                .collect(Collectors.joining("; "));
+        return tasks.size() > MAX_CALENDAR_CANDIDATES
+                ? listed + "; and " + (tasks.size() - MAX_CALENDAR_CANDIDATES) + " more"
+                : listed;
+    }
+
+    /**
+     * One task as the model reads it. The reminder is given in the user's own clock, because the
+     * stored instant is UTC and a model that reads "12:00Z" tells a person in Sao Paulo the wrong
+     * hour. A done task has no reminder left to describe.
+     */
+    private static Map<String, Object> calendarTaskRow(CalendarTaskResponseDTO task, ZoneId zone) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", task.id());
+        row.put("title", task.title());
+        row.put("date", task.date().toString());
+        row.put("time", task.time() == null ? null : task.time().format(HOUR_MINUTE));
+        if (task.advanceMinutes() > 0) {
+            row.put("advanceMinutes", task.advanceMinutes());
+        }
+        if (task.note() != null) {
+            row.put("note", task.note());
+        }
+        row.put("done", task.completed());
+        if (!task.completed() && task.notifyAt() != null) {
+            row.put("reminderAt", task.notifyAt().atZone(zone).format(LOCAL_MINUTE));
+        }
+        return row;
+    }
+
+    /**
+     * One day of the overview, without the mood. The mood tools carry their own rules about when
+     * a level may be read and talked about, and a calendar read is not where to bypass them.
+     */
+    private static Map<String, Object> calendarDayRow(CalendarDayDTO day, ZoneId zone) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("date", day.date().toString());
+        row.put("weekday", day.date().getDayOfWeek().toString());
+        if (!day.tasks().isEmpty()) {
+            row.put("tasks", day.tasks().stream().map(task -> calendarTaskRow(task, zone)).toList());
+        }
+        if (!day.routines().isEmpty()) {
+            row.put("routines", day.routines().stream().map(Tools::calendarRoutineLine).toList());
+        }
+        if (!day.goals().isEmpty()) {
+            row.put("goalsEnding", day.goals().stream()
+                    .map(goal -> goal.name() + (goal.complete() ? " (complete)" : ""))
+                    .toList());
+        }
+        return row;
+    }
+
+    private static String calendarRoutineLine(CalendarRoutineDTO routine) {
+        if (routine.source() == CalendarRoutineSource.SNAPSHOT && routine.totalItems() != null) {
+            return routine.name() + ": " + routine.checkedItems() + " of " + routine.totalItems() + " done";
+        }
+        return routine.name() + ": scheduled";
+    }
+
+    private Map<String, Object> reminderChannels(User user) {
+        ReminderSettings settings = notificationPreferencesService.reminderSettings(user.getId());
+        Map<String, Object> channels = new LinkedHashMap<>();
+        channels.put("browser", settings.web());
+        channels.put("email", settings.email());
+        channels.put("defaultTime", settings.defaultTime().format(HOUR_MINUTE));
+        return channels;
     }
 
     // Quick notes (the Ideas board)

@@ -62,6 +62,14 @@ public final class AgentToolDomains {
             Map.entry("reorderMicroTasks", List.of("focus")),
             // Mood. getUserMoodHistory only reads, so it stays out of this map.
             Map.entry("logUserMood", List.of("mood")),
+            // Calendar. getCalendar only reads. There is no calendar slice: the page and the widget
+            // hold their own range, and the client turns this domain into "re-read it" (and, on web,
+            // a reminder resync, so a task the chat set for ten minutes from now still reminds).
+            // Completing pays XP, so perfil rides along.
+            Map.entry("createCalendarTask", List.of("calendar")),
+            Map.entry("editCalendarTask", List.of("calendar")),
+            Map.entry("deleteCalendarTask", List.of("calendar")),
+            Map.entry("completeCalendarTask", List.of("calendar", "perfil")),
             // Quick notes (the Ideas board). getQuickNotes only reads.
             Map.entry("createQuickNote", List.of("quickNotes")),
             // Study notebook. listStudyTopics, getStudyPlanForToday and getStudyBoard only read.

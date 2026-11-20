@@ -74,6 +74,12 @@ public class CalendarService {
     /** How far ahead the browser schedules timers. It polls again long before this runs out. */
     static final Duration UPCOMING_LOOKAHEAD = Duration.ofHours(24);
 
+    /**
+     * The longest window {@link #tasksBetween} reads, inclusive. The assistant matches a title
+     * against about four months of tasks; this only stops a runaway caller.
+     */
+    static final int MAX_LOOKUP_DAYS = 400;
+
     private final CalendarTaskRepository taskRepository;
     private final CalendarTaskMapper taskMapper;
     private final CalendarOverviewBuilder overviewBuilder;
@@ -251,6 +257,39 @@ public class CalendarService {
                 .sorted(Comparator.comparing(CalendarTaskResponseDTO::notifyAt)
                         .thenComparing(CalendarTaskResponseDTO::id))
                 .toList();
+    }
+
+    /** One task as the clients see it. Someone else's task reads as missing, like every lookup here. */
+    @Transactional(readOnly = true)
+    public CalendarTaskResponseDTO get(User user, UUID taskId) {
+        return toResponse(owned(user, taskId), user);
+    }
+
+    /**
+     * The user's tasks dated {@code [from, to]}, by day, then timed before untimed, then by id.
+     * The assistant names a task by its title, and this is the list it is matched against. The
+     * caller bounds the window.
+     */
+    @Transactional(readOnly = true)
+    public List<CalendarTaskResponseDTO> tasksBetween(User user, LocalDate from, LocalDate to) {
+        validateWindow(from, to);
+        ZoneId zone = UserDateResolver.zoneOf(user);
+        LocalTime defaultTime = preferencesService.reminderSettings(user.getId()).defaultTime();
+        return taskRepository.findByUserIdAndTaskDateBetween(user.getId(), from, to).stream()
+                .map(task -> taskMapper.toResponseDTO(task, zone, defaultTime))
+                .sorted(Comparator.comparing(CalendarTaskResponseDTO::date)
+                        .thenComparing(CalendarTaskResponseDTO::time,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(CalendarTaskResponseDTO::id))
+                .toList();
+    }
+
+    private static void validateWindow(LocalDate from, LocalDate to) {
+        if (from == null || to == null || to.isBefore(from)
+                || ChronoUnit.DAYS.between(from, to) + 1 > MAX_LOOKUP_DAYS) {
+            throw new IllegalArgumentException("A task window needs both bounds, in order, at most "
+                    + MAX_LOOKUP_DAYS + " days");
+        }
     }
 
     private CalendarTask owned(User user, UUID taskId) {

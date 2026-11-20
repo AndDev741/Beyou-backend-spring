@@ -2,9 +2,13 @@ package beyou.beyouapp.backend.domain.aiAgent;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.time.format.TextStyle;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -302,6 +306,18 @@ public class AiAgentService {
         }
     }
 
+    /**
+     * The user's own day, weekday and clock, e.g. "2026-11-20 (Friday), 14:05". The weekday and the
+     * time are there for the calendar tools: "on Friday" and "in two hours" have to land on a real
+     * date and time, and a model left to work out a weekday from a bare date gets it wrong often
+     * enough to put a reminder on the wrong day.
+     */
+    static String promptNow(User user) {
+        ZonedDateTime now = ZonedDateTime.now(UserDateResolver.zoneOf(user));
+        return now.toLocalDate() + " (" + now.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH)
+                + "), " + now.toLocalTime().truncatedTo(ChronoUnit.MINUTES);
+    }
+
     private ChatClient.ChatClientRequestSpec buildPrompt(Chat chat, String userInput, String currentPage,
             UUID selectedItemGroupId, Map<String, Object> toolContext) {
         User user = chat.getUser();
@@ -316,7 +332,7 @@ public class AiAgentService {
                 .param("secondBrainProfile", orNone(secondBrainStore.profileForChat(user.getId())))
                 .param("currentPage", orNone(currentPage))
                 .param("focusItem", orNone(selectedItemGroupId == null ? null : selectedItemGroupId.toString()))
-                .param("today", UserDateResolver.today(user).toString()))
+                .param("today", promptNow(user)))
             .user(userInput)
             .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chat.getId().toString()))
             .tools(toolCallbacks)
