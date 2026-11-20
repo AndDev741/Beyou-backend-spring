@@ -279,6 +279,47 @@ class CalendarServiceIT extends AbstractIntegrationTest {
         assertThat(single.days()).hasSize(1);
     }
 
+    // ---- the assistant's reads: one task, and a window of them ----
+
+    @Test
+    @DisplayName("tasksBetween lists only the owner's tasks in the window, by day, timed before untimed")
+    void tasksBetweenOrdersByDayThenTime() {
+        UUID untimedToday = create("Water the plants", TODAY, null, 0);
+        UUID lateToday = create("Call the bank", TODAY, LocalTime.of(16, 0), 0);
+        UUID earlyToday = create("Pay the rent", TODAY, LocalTime.of(8, 30), 0);
+        UUID tomorrow = create("Dentist", TODAY.plusDays(1), LocalTime.of(7, 0), 0);
+        create("Outside the window", TODAY.plusDays(2), LocalTime.of(9, 0), 0);
+        calendarService.create(stranger, request("Not yours", null, TODAY, LocalTime.of(9, 0), 0));
+
+        List<UUID> ids = calendarService.tasksBetween(owner, TODAY, TODAY.plusDays(1)).stream()
+                .map(CalendarTaskResponseDTO::id)
+                .toList();
+
+        assertThat(ids).containsExactly(earlyToday, lateToday, untimedToday, tomorrow);
+    }
+
+    @Test
+    @DisplayName("tasksBetween refuses a window it was not meant to read")
+    void tasksBetweenRefusesABadWindow() {
+        assertThatThrownBy(() -> calendarService.tasksBetween(owner, TODAY, TODAY.minusDays(1)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> calendarService.tasksBetween(owner, TODAY, TODAY.plusDays(400)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(calendarService.tasksBetween(owner, TODAY, TODAY.plusDays(399))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("get returns the owner's task with its reminder, and someone else's as not found")
+    void getIsOwnerOnly() {
+        UUID id = create("Sign the lease", TODAY, LocalTime.of(10, 0), 60);
+
+        CalendarTaskResponseDTO read = calendarService.get(owner, id);
+        assertThat(read.title()).isEqualTo("Sign the lease");
+        assertThat(read.notifyAt()).isEqualTo(Instant.parse("2026-10-14T12:00:00Z"));
+
+        assertNotFound(() -> calendarService.get(stranger, id));
+    }
+
     // ---- helpers ----
 
     private UUID create(String title, LocalDate date, LocalTime time, int advance) {

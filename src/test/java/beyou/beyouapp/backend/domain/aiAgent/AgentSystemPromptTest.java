@@ -1,10 +1,12 @@
 package beyou.beyouapp.backend.domain.aiAgent;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -13,6 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.template.st.StTemplateRenderer;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.StreamUtils;
+
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
+import beyou.beyouapp.backend.user.User;
 
 /**
  * The system prompt against the parameters {@code AiAgentService.buildPrompt} actually supplies.
@@ -35,7 +40,7 @@ public class AgentSystemPromptTest {
         params.put("secondBrainProfile", "- Objective: Pass the visa interview");
         params.put("currentPage", "/focus");
         params.put("focusItem", "3f1a6f1e-0000-4000-8000-000000000001");
-        params.put("today", "2026-08-30");
+        params.put("today", "2026-08-30 (Sunday), 14:05");
         return params;
     }
 
@@ -54,6 +59,26 @@ public class AgentSystemPromptTest {
         assertTrue(rendered.contains("/focus"), rendered);
         assertTrue(rendered.contains("- Objective: Pass the visa interview"),
                 "the Second Brain profile is the general layer every chat starts from");
+    }
+
+    /**
+     * The calendar tools turn "Friday" and "in two hours" into a date and a time, so the prompt
+     * carries the weekday and the clock in the user's own zone. Kiritimati is fourteen hours ahead
+     * of UTC, so a date taken from the server's clock is a day off there for most of every day.
+     */
+    @Test
+    void todayCarriesTheWeekdayAndTheClockInTheUsersZone() {
+        User user = new User();
+        user.setTimezone("Pacific/Kiritimati");
+        LocalDate before = UserDateResolver.today(user);
+
+        String now = AiAgentService.promptNow(user);
+
+        assertTrue(now.matches("\\d{4}-\\d{2}-\\d{2} \\([A-Z][a-z]+day\\), \\d{2}:\\d{2}"), now);
+        LocalDate shown = LocalDate.parse(now.substring(0, 10));
+        assertTrue(shown.equals(before) || shown.equals(UserDateResolver.today(user)), now);
+        String weekday = shown.getDayOfWeek().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH);
+        assertEquals(weekday, now.substring(12, now.indexOf(')')), now);
     }
 
     /** The guard above only means something if a missing value really is refused. */
