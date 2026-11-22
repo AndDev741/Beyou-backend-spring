@@ -67,7 +67,9 @@ public class GlobalExceptionHandler {
             ErrorKey.CALENDAR_TASK_NOT_FOUND,
             ErrorKey.QUICK_NOTE_NOT_FOUND,
             ErrorKey.SECOND_BRAIN_FACT_NOT_FOUND,
-            ErrorKey.SECOND_BRAIN_QUESTION_NOT_FOUND);
+            ErrorKey.SECOND_BRAIN_QUESTION_NOT_FOUND,
+            ErrorKey.SECOND_BRAIN_NOTE_NOT_FOUND,
+            ErrorKey.SECOND_BRAIN_OLD_NOTE_LINE_NOT_FOUND);
 
     /**
      * Business errors whose answer is 409: the request was well formed and the caller's data

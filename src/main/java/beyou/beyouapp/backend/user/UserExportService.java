@@ -37,6 +37,7 @@ import beyou.beyouapp.backend.domain.mood.MoodService;
 import beyou.beyouapp.backend.domain.quicknote.QuickNoteRepository;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactRepository;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainInsightRepository;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainNoteRepository;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainQuestionRepository;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainStore;
 import beyou.beyouapp.backend.domain.routine.itemGroup.HabitGroup;
@@ -117,6 +118,7 @@ public class UserExportService {
     private final SecondBrainFactRepository secondBrainFactRepository;
     private final SecondBrainQuestionRepository secondBrainQuestionRepository;
     private final SecondBrainInsightRepository secondBrainInsightRepository;
+    private final SecondBrainNoteRepository secondBrainNoteRepository;
 
     @Transactional(readOnly = true)
     public Map<String, Object> exportUserData() {
@@ -140,9 +142,11 @@ public class UserExportService {
         profile.put("theme", user.getThemeInUse());
         profile.put("widgetsInUse", user.getWidgetsIdInUse() == null
                 ? List.of() : List.copyOf(user.getWidgetsIdInUse()));
-        // The note the assistant keeps about this person ACROSS conversations. It is
-        // written by a model, about a user, and stored on their row — an inference held
-        // about someone is their data whether or not they typed it.
+        // The note the assistant kept about this person ACROSS conversations before Second
+        // Brain's memory replaced it. Nothing writes it now, but it stays until the person has
+        // kept or discarded every sentence on the Second Brain page. It was written by a model,
+        // about a user, and stored on their row: an inference held about someone is their data
+        // whether or not they typed it.
         profile.put("assistantNotesAboutYou", user.getUserContext());
         profile.put("progress", xp(user.getXpProgress()));
         profile.put("streak", streak(user.getCheckProgress()));
@@ -350,8 +354,9 @@ public class UserExportService {
     }
 
     /**
-     * Second Brain's four tables. The questions travel with their answers, closed ones
-     * included: an answer is something the person wrote. {@code insight} is null for an account
+     * Second Brain's five tables. The questions travel with their answers, closed ones
+     * included: an answer is something the person wrote. The notes travel with the name of the
+     * thing they are about, which is all that is left of it once it was deleted. {@code insight} is null for an account
      * that never generated one, and {@code sources} lists all six switches with the value in
      * effect, so the file says what Second Brain was allowed to read even where the person
      * never touched a switch.
@@ -379,6 +384,18 @@ public class UserExportService {
                     map.put("answer", q.getAnswer());
                     map.put("createdAt", q.getCreatedAt());
                     map.put("answeredAt", q.getAnsweredAt());
+                    return map;
+                }).toList());
+        secondBrain.put("notes", secondBrainNoteRepository.findByUserIdOrderByCreatedAtAscIdAsc(userId)
+                .stream().map(n -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("subjectType", n.getSubjectType());
+                    map.put("subjectName", n.getSubjectName());
+                    map.put("formerType", n.getFormerType());
+                    map.put("text", n.getText());
+                    map.put("origin", n.getOrigin());
+                    map.put("createdAt", n.getCreatedAt());
+                    map.put("updatedAt", n.getUpdatedAt());
                     return map;
                 }).toList());
         secondBrain.put("insight", secondBrainInsightRepository.findById(userId).map(i -> {

@@ -36,6 +36,7 @@ import beyou.beyouapp.backend.domain.aiAgent.AiIconCatalog;
 import beyou.beyouapp.backend.domain.aiAgent.chat.AgentMessageService;
 import beyou.beyouapp.backend.domain.aiAgent.chat.Chat;
 import beyou.beyouapp.backend.domain.aiAgent.chat.ChatService;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainNotes;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainStore;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentMessageDTO;
 import beyou.beyouapp.backend.domain.aiAgent.chat.dto.AgentSegment;
@@ -83,6 +84,7 @@ public class AiAgentService {
     private final ChatService chatService;
     private final AgentMessageService agentMessageService;
     private final SecondBrainStore secondBrainStore;
+    private final SecondBrainNotes secondBrainNotes;
     private final Object[] toolCallbacks;
     private final Resource systemTemplate;
 
@@ -106,6 +108,7 @@ public class AiAgentService {
             ChatService chatService,
             AgentMessageService agentMessageService,
             SecondBrainStore secondBrainStore,
+            SecondBrainNotes secondBrainNotes,
             Tools tools,
             MeterRegistry meterRegistry,
             @Value("classpath:/prompts/aiAgent.st") Resource systemTemplate,
@@ -113,6 +116,7 @@ public class AiAgentService {
         this.chatService = chatService;
         this.agentMessageService = agentMessageService;
         this.secondBrainStore = secondBrainStore;
+        this.secondBrainNotes = secondBrainNotes;
         this.toolCallbacks = Arrays.stream(ToolCallbacks.from(tools))
                 .map(callback -> (Object) new MeteredToolCallback(callback, meterRegistry))
                 .toArray();
@@ -325,11 +329,16 @@ public class AiAgentService {
             .system(s -> s.text(systemTemplate)
                 .param("language", UserLanguage.forPrompt(user))
                 .param("iconCatalog", AiIconCatalog.promptCatalog())
+                // The hidden note from before the memory existed. It rides until the person has
+                // kept or discarded every sentence on the Second Brain page; nothing writes it now.
                 .param("userContext", orNone(user.getUserContext()))
                 .param("userChatContext", orNone(chat.getUserContextInChat()))
                 // Read on every turn and not cached: the person edits these lines on the
                 // Second Brain page and expects the next message to know.
                 .param("secondBrainProfile", orNone(secondBrainStore.profileForChat(user.getId())))
+                // Names only. A thing's notes reach the chat when the model reads them with
+                // readItemNotes, so only the conversations that need them pay for them.
+                .param("memorySubjects", orNone(secondBrainNotes.subjectsForChat(user.getId())))
                 .param("currentPage", orNone(currentPage))
                 .param("focusItem", orNone(selectedItemGroupId == null ? null : selectedItemGroupId.toString()))
                 .param("today", promptNow(user)))

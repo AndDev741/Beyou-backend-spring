@@ -2,7 +2,6 @@ package beyou.beyouapp.backend.unit.aiAgent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -148,24 +147,6 @@ public class ChatServiceUnitTest {
     }
 
     @Test
-    void shouldUpdateGlobalContextClampedToMax() {
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-
-        chatService.updateGlobalContext("x".repeat(5000), userId);
-
-        assertEquals(ChatService.GLOBAL_CONTEXT_MAX, user.getUserContext().length());
-        verify(userRepository).save(user);
-    }
-
-    @Test
-    void shouldThrowUserNotFound_whenUpdatingGlobalContextForUnknownUser() {
-        when(userRepository.findById(userId)).thenReturn(Optional.empty());
-
-        assertThrows(UserNotFound.class, () -> chatService.updateGlobalContext("ctx", userId));
-        verify(userRepository, never()).save(any(User.class));
-    }
-
-    @Test
     void shouldUpdateChatContextClampedToMax() {
         when(chatRepository.findById(chatId)).thenReturn(Optional.of(chat));
 
@@ -239,22 +220,25 @@ public class ChatServiceUnitTest {
         verify(chatRepository, never()).save(any(Chat.class));
     }
 
+    /**
+     * "Clear all conversations" deletes conversations. What Beyou remembers about the person,
+     * the old hidden note included, lives on the Second Brain page and is deleted there.
+     */
     @Test
-    void shouldDeleteAllChatsClearMemoryAndWipeGlobalContext() {
+    void shouldDeleteAllChatsAndTheirMemoryButLeaveTheOldNoteAlone() {
         user.setUserContext("remembered stuff");
         Chat other = new Chat();
         other.setId(UUID.randomUUID());
         other.setUser(user);
         when(chatRepository.findAllByUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of(chat, other));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         chatService.deleteAllChats(userId);
 
         verify(chatMemory).clear(chatId.toString());
         verify(chatMemory).clear(other.getId().toString());
         verify(chatRepository).deleteAll(List.of(chat, other));
-        assertNull(user.getUserContext());
-        verify(userRepository).save(user);
+        assertEquals("remembered stuff", user.getUserContext());
+        verify(userRepository, never()).save(any(User.class));
     }
 
     @Test

@@ -324,8 +324,10 @@ class SecondBrainServiceIT extends AbstractIntegrationTest {
         assertThat(everything).as("no date in ISO form").doesNotContainPattern("\\d{4}-\\d{2}-\\d{2}");
 
         String nothing = signals.promptData(owner, TODAY, EnumSet.noneOf(SecondBrainSource.class), facts);
-        assertThat(nothing).isEqualTo(
-                "PROFILE (what the person told Beyou about themselves)\n- Likes: Cooking on Sundays\n");
+        assertThat(nothing).as("the profile and the notes are the person's own, so no switch removes them").isEqualTo(
+                "PROFILE (what the person told Beyou about themselves)\n- Likes: Cooking on Sundays\n"
+                        + "NOTES (what the person told Beyou about their things: the newest few of each, oldest first)\n"
+                        + "- Nothing yet.\n");
 
         String defaults = signals.promptData(owner, TODAY, store.enabledSources(owner.getId()), facts);
         assertThat(defaults).contains("ROUTINES\n", "GOALS\n", "MOOD (")

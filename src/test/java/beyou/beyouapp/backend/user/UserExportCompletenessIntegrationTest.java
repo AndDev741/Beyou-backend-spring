@@ -48,6 +48,8 @@ import beyou.beyouapp.backend.domain.notebook.diagram.DiagramSpec;
 import beyou.beyouapp.backend.domain.notebook.study.StudyOutputKind;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactKind;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactOrigin;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainNoteOrigin;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainSubjectType;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainQuestionStatus;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainSource;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.RoutineItemRequestDTO;
@@ -130,6 +132,7 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
             entry("second_brain_questions", "secondBrain.questions"),
             entry("second_brain_insights", "secondBrain.insight"),
             entry("second_brain_sources", "secondBrain.sources"),
+            entry("second_brain_notes", "secondBrain.notes"),
             entry("notification_preferences", "profile.engagementEmails"),
             entry("notification_sends", "engagementEmailsSent"),
             entry("federated_identities", "profile.linkedSignIns"),
@@ -349,11 +352,13 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
 
         UUID chatId = chatService.createChat("Planning my week", userId).id();
         chatService.updateChatContext("Prefers mornings", chatId, userId);
-        chatService.updateGlobalContext("Training for a half marathon", userId);
+        // The note the assistant kept before Second Brain's memory. Nothing in the app writes it
+        // any more, so a row that still carries one is seeded the way it was left.
+        jdbc.update("UPDATE users SET user_context = ? WHERE id = ?", "Training for a half marathon", userId);
         agentMessageService.recordTurn(chatId, "Build me a morning routine",
                 List.of(AgentSegment.text("Done — here it is.")));
 
-        // The global note is written straight to the row, so the instance parked in the
+        // The old note is written straight to the row, so the instance parked in the
         // security context by setUp() is now stale. A real request never sees that —
         // SecurityFilter loads the user fresh every time — so reload here rather than
         // asserting against a copy from before the write.
@@ -539,7 +544,7 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         // Second Brain: the profile, the interview with its answers, the overview, and all six
         // switches with the value in effect (IDEAS was turned on; the rest are the defaults).
         Map<String, Object> secondBrain = (Map<String, Object>) export.get("secondBrain");
-        assertThat(secondBrain).containsOnlyKeys("facts", "questions", "insight", "sources");
+        assertThat(secondBrain).containsOnlyKeys("facts", "questions", "notes", "insight", "sources");
         Map<String, Object> fact = ((List<Map<String, Object>>) secondBrain.get("facts")).get(0);
         assertThat(fact).containsOnlyKeys("id", "kind", "text", "origin", "createdAt", "updatedAt");
         assertThat(fact.get("kind")).isEqualTo(SecondBrainFactKind.OBJECTIVE);
@@ -550,6 +555,23 @@ class UserExportCompletenessIntegrationTest extends AbstractIntegrationTest {
         assertThat(question.get("text")).isEqualTo("What is the half marathon for?");
         assertThat(question.get("status")).isEqualTo(SecondBrainQuestionStatus.ANSWERED);
         assertThat(question.get("answer")).as("an answer is something the person wrote").isEqualTo("To prove I can");
+        // A note on the habit, and one whose thing was deleted: the name is all that is left of it.
+        List<Map<String, Object>> notes = (List<Map<String, Object>>) secondBrain.get("notes");
+        assertThat(notes).allSatisfy(note -> assertThat(note).containsOnlyKeys(
+                "subjectType", "subjectName", "formerType", "text", "origin", "createdAt", "updatedAt"));
+        assertThat(notes).anySatisfy(note -> {
+            assertThat(note.get("subjectType")).isEqualTo(SecondBrainSubjectType.HABIT);
+            assertThat(note.get("subjectName")).isEqualTo("Drink water");
+            assertThat(note.get("formerType")).isNull();
+            assertThat(note.get("text")).isEqualTo("Started after a summer of headaches");
+            assertThat(note.get("origin")).isEqualTo(SecondBrainNoteOrigin.ANSWER);
+        });
+        assertThat(notes).anySatisfy(note -> {
+            assertThat(note.get("subjectType")).isEqualTo(SecondBrainSubjectType.LOOSE);
+            assertThat(note.get("subjectName")).isEqualTo("Evening walk");
+            assertThat(note.get("formerType")).isEqualTo(SecondBrainSubjectType.ROUTINE);
+            assertThat(note.get("origin")).isEqualTo(SecondBrainNoteOrigin.ASSISTANT);
+        });
         Map<String, Object> insight = (Map<String, Object>) secondBrain.get("insight");
         assertThat(insight.get("text")).isEqualTo("Your mornings hold.");
         assertThat(insight.get("generatedAt")).isNotNull();

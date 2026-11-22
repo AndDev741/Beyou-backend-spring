@@ -64,6 +64,9 @@ public class goalServiceUnitTest {
     UserCacheEvictService userCacheEvictService;
 
     @Mock
+    private beyou.beyouapp.backend.domain.secondbrain.SecondBrainHooks secondBrainHooks;
+
+    @Mock
     UserRepository userRepository;
 
     private GoalMapper goalMapper = new GoalMapper();
@@ -90,7 +93,7 @@ public class goalServiceUnitTest {
         goal.setUser(user);
 
         goalService = new GoalService(goalRepository, categoryService, goalMapper, xpCalculatorService,
-                refreshUiDtoBuilder, userCacheEvictService, userRepository);
+                refreshUiDtoBuilder, userCacheEvictService, userRepository, secondBrainHooks);
 
     }
 

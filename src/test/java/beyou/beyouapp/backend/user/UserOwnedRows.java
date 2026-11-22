@@ -18,7 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *
  * <p>Exists because the deletion tests used to seed only what existed when they were written.
  * Every table added after that (mood, focus, the whole notebook, federated sign-ins, the
- * briefing, calendar tasks, quick notes, Second Brain) cascades from {@code users} in its migration, and two of those migrations say a
+ * briefing, calendar tasks, quick notes, Second Brain and its notes) cascades from {@code users} in its migration, and two of those migrations say a
  * deletion test proves it. None did. A cascade nobody exercises is a comment, so both deletion
  * tests now seed a row here per table and check every one is gone.
  *
@@ -45,7 +45,8 @@ public final class UserOwnedRows {
             "notebook_cards", "notebook_card_reviews", "notebook_sources", "notebook_source_chunks",
             "notebook_study_outputs", "notebook_chat_messages", "notebook_roadmap_drafts",
             "study_cycles", "study_sessions", "calendar_tasks", "quick_notes",
-            "second_brain_sources", "second_brain_facts", "second_brain_questions", "second_brain_insights");
+            "second_brain_sources", "second_brain_facts", "second_brain_questions", "second_brain_insights",
+            "second_brain_notes");
 
     /** What the export assertions need to find again. */
     public record Seeded(UUID topicId, UUID pageId, UUID sectionNodeId, UUID pageNodeId, UUID cardId,
@@ -229,6 +230,15 @@ public final class UserOwnedRows {
                 + "'To prove I can', ?, ?)", UUID.randomUUID(), userId, now, now);
         jdbc.update("INSERT INTO second_brain_insights (user_id, text, verdict, generated_at) "
                 + "VALUES (?, 'Your mornings hold.', 'ON_COURSE', ?) ON CONFLICT DO NOTHING", userId, now);
+        // Second Brain notes (V47): one on the habit, and one a deleted routine left behind.
+        jdbc.update("INSERT INTO second_brain_notes (id, user_id, subject_type, subject_id, subject_name, text, "
+                + "origin, created_at, updated_at) VALUES (?, ?, 'HABIT', ?, 'Drink water', "
+                + "'Started after a summer of headaches', 'ANSWER', ?, ?)",
+                UUID.randomUUID(), userId, habitId, now, now);
+        jdbc.update("INSERT INTO second_brain_notes (id, user_id, subject_type, subject_name, former_type, text, "
+                + "origin, created_at, updated_at) VALUES (?, ?, 'LOOSE', 'Evening walk', 'ROUTINE', "
+                + "'Stopped when the days got short', 'ASSISTANT', ?, ?)",
+                UUID.randomUUID(), userId, now, now);
 
         return new Seeded(topicId, pageId, sectionNodeId, pageNodeId, cardId, itemGroupId, day);
     }

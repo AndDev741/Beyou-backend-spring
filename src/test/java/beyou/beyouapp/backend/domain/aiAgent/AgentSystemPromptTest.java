@@ -38,6 +38,7 @@ public class AgentSystemPromptTest {
         params.put("userContext", "(none yet)");
         params.put("userChatContext", "(none yet)");
         params.put("secondBrainProfile", "- Objective: Pass the visa interview");
+        params.put("memorySubjects", "\"Gym\", \"Read before bed\"");
         params.put("currentPage", "/focus");
         params.put("focusItem", "3f1a6f1e-0000-4000-8000-000000000001");
         params.put("today", "2026-08-30 (Sunday), 14:05");
@@ -59,6 +60,25 @@ public class AgentSystemPromptTest {
         assertTrue(rendered.contains("/focus"), rendered);
         assertTrue(rendered.contains("- Objective: Pass the visa interview"),
                 "the Second Brain profile is the general layer every chat starts from");
+        assertTrue(rendered.contains("Things with notes: \"Gym\", \"Read before bed\"."),
+                "the names of the things with notes tell the agent when to call readItemNotes");
+    }
+
+    /**
+     * The hidden note the model used to rewrite for itself is gone as a tool. The prompt must not
+     * send the model looking for it, and must teach the two tools that replaced it, with the
+     * confirmation the person reads in the chat.
+     */
+    @Test
+    void memoryBlockTeachesTheToolsThatReplacedTheHiddenNote() throws IOException {
+        String rendered = StTemplateRenderer.builder().build().apply(template(), params());
+
+        assertFalse(rendered.contains("updateGlobalContext"), rendered);
+        assertTrue(rendered.contains("rememberAboutUser"), rendered);
+        assertTrue(rendered.contains("rememberAboutItem"), rendered);
+        assertTrue(rendered.contains("readItemNotes"), rendered);
+        assertTrue(rendered.contains("\"Anotei: <the line>\""), rendered);
+        assertTrue(rendered.contains("updateChatContext"), "the per-chat note stays as it was");
     }
 
     /**

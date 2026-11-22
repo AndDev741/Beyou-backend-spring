@@ -127,7 +127,11 @@ public class User implements UserDetails {
 
     private String languageInUse;
 
-    /** AI agent global memory — compact profile the model rewrites via updateGlobalContext. */
+    /**
+     * The hidden note the assistant wrote about the person before Second Brain step 2. Nothing
+     * writes it any more: the Second Brain page shows it sentence by sentence for the person to
+     * keep in the profile or discard, and it rides in the assistant's prompt until they have.
+     */
     @Column(length = 2000)
     private String userContext;
 

@@ -73,6 +73,15 @@ import beyou.beyouapp.backend.domain.quicknote.QuickNoteService;
 import beyou.beyouapp.backend.domain.quicknote.dto.QuickNoteCreateRequestDTO;
 import beyou.beyouapp.backend.domain.quicknote.dto.QuickNoteResponseDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.ScheduleService;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactKind;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactOrigin;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainNoteOrigin;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainNotes;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainStore;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainSubject;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainSubjectType;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainFactDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainNoteDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.CreateScheduleDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.ScheduleResponseDTO;
 import beyou.beyouapp.backend.domain.routine.schedule.dto.UpdateScheduleDTO;
@@ -139,6 +148,10 @@ public class Tools {
     private StudyCycleAssistant studyCycleAssistant;
     @Autowired
     private StudyDiagramEditor studyDiagramEditor;
+    @Autowired
+    private SecondBrainStore secondBrainStore;
+    @Autowired
+    private SecondBrainNotes secondBrainNotes;
     @Autowired
     private Validator validator;
 
@@ -499,14 +512,128 @@ public class Tools {
                 + "The user's goals are: " + available;
     }
 
-    // Context memory
-    @Tool(description = "Remember stable user preferences across ALL chats (name, tone, language, "
-            + "standing goals). OVERWRITES the previous global context — always send the full compact "
-            + "summary, max 2000 characters. Never store secrets or sensitive data")
-    Map<String, String> updateGlobalContext(String context, ToolContext toolContext) {
-        log.info("AI agent is updating global context for user: {}", userId(toolContext));
-        chatService.updateGlobalContext(context, userId(toolContext));
-        return Map.of("success", "Global context updated");
+    // Memory: what Beyou keeps about the person, shown on their Second Brain page. These replaced
+    // updateGlobalContext, a hidden note the model rewrote for itself; every line here is one
+    // the person can read, correct and delete.
+    @Tool(description = "Save one lasting fact about the user to their Second Brain profile, the lines every "
+            + "conversation reads: something they work toward (OBJECTIVE), something they enjoy (LIKE), or their "
+            + "circumstances (ABOUT). One short line in their words and language, 200 characters at most, that will "
+            + "still be true next month. Never a secret or sensitive data. Fails when the profile already holds 20 "
+            + "lines: tell the user to delete one on the Second Brain page (/second-brain)")
+    Map<String, Object> rememberAboutUser(
+            @ToolParam(description = "OBJECTIVE, LIKE or ABOUT") String kind,
+            @ToolParam(description = "The line, in the user's words and language, 200 characters at most") String text,
+            ToolContext toolContext) {
+        UUID userId = userId(toolContext);
+        log.info("AI agent is saving a profile line for user: {}", userId);
+        SecondBrainFactDTO fact = secondBrainStore.rememberFact(userId, parseFactKind(kind),
+                requireText(text), SecondBrainFactOrigin.ASSISTANT);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", "Saved to the profile on the Second Brain page");
+        result.put("kind", fact.kind());
+        result.put("line", fact.text());
+        return result;
+    }
+
+    @Tool(description = "Save a dated note about one of the user's habits, goals, routines or categories: why they "
+            + "started it, what usually gets in the way, what changed. A change is a new note; the old ones stay as "
+            + "the thing's timeline on the Second Brain page. Read the id with getUserHabits, getUserGoals, "
+            + "getUserRoutines or getUserCategories first; never invent one. One short sentence in the user's words, "
+            + "500 characters at most. Never a secret or sensitive data")
+    Map<String, Object> rememberAboutItem(
+            @ToolParam(description = "HABIT, GOAL, ROUTINE or CATEGORY") String itemType,
+            @ToolParam(description = "The item's id, from the get tool of its type") String itemId,
+            @ToolParam(description = "The note, in the user's words and language, 500 characters at most") String text,
+            ToolContext toolContext) {
+        UUID userId = userId(toolContext);
+        SecondBrainSubjectType type = parseItemType(itemType);
+        UUID id = parseUuidOrNull(itemId == null ? "" : itemId.trim());
+        String note = requireText(text);
+        log.info("AI agent is saving a note on {} {} for user: {}", type, id, userId);
+        // Ownership first: someone else's id, a deleted thing and a made-up id all read the same.
+        SecondBrainSubject thing = (id == null ? java.util.Optional.<SecondBrainSubject>empty()
+                : secondBrainNotes.live(userId, type, id))
+                .orElseThrow(() -> new IllegalArgumentException("No " + type.name().toLowerCase(Locale.ROOT)
+                        + " with id '" + itemId + "' belongs to this user. Read the real id with "
+                        + getToolFor(type) + " and do not invent one"));
+        java.util.Optional<SecondBrainNoteDTO> saved =
+                secondBrainNotes.add(userId, type, thing.id(), note, SecondBrainNoteOrigin.ASSISTANT);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", saved.isPresent()
+                ? "Noted on the Second Brain page" : "Already noted: the same words were there");
+        result.put("item", thing.name());
+        result.put("note", saved.map(SecondBrainNoteDTO::text).orElse(note));
+        return result;
+    }
+
+    @Tool(description = "Read what the user told Beyou about one of their things: the dated notes of every habit, "
+            + "goal, routine or category whose name contains the text you send, including things they deleted. "
+            + "Call it when the conversation turns to a thing listed under \"Things with notes\". Read only")
+    List<Map<String, Object>> readItemNotes(
+            @ToolParam(description = "The thing's name, or part of it, as the user said it") String name,
+            ToolContext toolContext) {
+        User user = loadUser(toolContext);
+        log.info("AI agent is reading memory notes for user: {}", user.getId());
+        ZoneId zone = UserDateResolver.zoneOf(user);
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Missing name: send the thing's name, or part of it, as the user said it");
+        }
+        return secondBrainNotes.readByName(user.getId(), name.strip()).stream()
+                .map(subject -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("type", subject.formerType() != null ? subject.formerType() : subject.type());
+                    row.put("name", subject.name());
+                    if (subject.formerType() != null || subject.type() == SecondBrainSubjectType.LOOSE) {
+                        row.put("deleted", true);
+                    }
+                    row.put("notes", subject.notes().stream().map(note -> {
+                        Map<String, Object> line = new LinkedHashMap<>();
+                        line.put("date", note.createdAt().atZone(zone).toLocalDate().toString());
+                        line.put("text", note.text());
+                        line.put("origin", note.origin());
+                        return line;
+                    }).toList());
+                    return row;
+                })
+                .toList();
+    }
+
+    private static SecondBrainFactKind parseFactKind(String value) {
+        String name = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+        for (SecondBrainFactKind kind : SecondBrainFactKind.values()) {
+            if (name.equals(kind.name()) || name.equals(kind.name() + "S")) {
+                return kind;
+            }
+        }
+        throw new IllegalArgumentException("Invalid kind \"" + value + "\": use OBJECTIVE, LIKE or ABOUT");
+    }
+
+    private static SecondBrainSubjectType parseItemType(String value) {
+        String name = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+        return switch (name) {
+            case "HABIT" -> SecondBrainSubjectType.HABIT;
+            case "GOAL" -> SecondBrainSubjectType.GOAL;
+            case "ROUTINE" -> SecondBrainSubjectType.ROUTINE;
+            case "CATEGORY" -> SecondBrainSubjectType.CATEGORY;
+            default -> throw new IllegalArgumentException("Invalid itemType \"" + value
+                    + "\": use HABIT, GOAL, ROUTINE or CATEGORY");
+        };
+    }
+
+    private static String getToolFor(SecondBrainSubjectType type) {
+        return switch (type) {
+            case HABIT -> "getUserHabits";
+            case GOAL -> "getUserGoals";
+            case ROUTINE -> "getUserRoutines";
+            default -> "getUserCategories";
+        };
+    }
+
+    private static String requireText(String text) {
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("Missing text: send the words to keep");
+        }
+        return text.strip();
     }
 
     @Tool(description = "Remember facts about THIS conversation only (task at hand, decisions made). "

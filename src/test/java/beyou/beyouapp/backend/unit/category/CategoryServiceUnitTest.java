@@ -51,6 +51,9 @@ public class CategoryServiceUnitTest {
     @Mock
     private UserCacheEvictService userCacheEvictService;
 
+    @Mock
+    private beyou.beyouapp.backend.domain.secondbrain.SecondBrainHooks secondBrainHooks;
+
     private CategoryMapper categoryMapper = new CategoryMapper();
 
     @InjectMocks
@@ -80,7 +83,7 @@ public class CategoryServiceUnitTest {
         category.getXpProgress().setNextLevelXp(xpByLevel2.getXp());
         category.getXpProgress().setActualLevelXp(xpByLevel.getXp());
 
-        categoryService = new CategoryService(categoryRepository, xpDayRecorder, xpByLevelRepository, userRepository, categoryMapper, userCacheEvictService);
+        categoryService = new CategoryService(categoryRepository, xpDayRecorder, xpByLevelRepository, userRepository, categoryMapper, userCacheEvictService, secondBrainHooks);
     }
 
     @Test

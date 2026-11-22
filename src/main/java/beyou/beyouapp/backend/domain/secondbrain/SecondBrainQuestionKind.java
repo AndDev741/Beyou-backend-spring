@@ -25,7 +25,16 @@ public enum SecondBrainQuestionKind {
             "How is your day going? Describe it and I can check or skip your routine items.",
             "Como está o seu dia? Me descreve e eu marco ou pulo os itens da sua rotina."),
     /** Written by the model from the enabled sources. */
-    FOLLOW_UP(null, null, null);
+    FOLLOW_UP(null, null, null),
+    /**
+     * Asked once about a habit, goal or routine created after the account's first visit. Its
+     * wording depends on what the thing is and carries its name, so it comes from
+     * {@link #newThingText} instead of {@link #fixedText}.
+     */
+    NEW_THING(null, null, null);
+
+    /** How much of a thing's name a NEW_THING question quotes. */
+    public static final int NEW_THING_NAME_MAX = 80;
 
     private final SecondBrainFactKind factKind;
     private final String english;
@@ -53,5 +62,30 @@ public enum SecondBrainQuestionKind {
      */
     public String fixedText(String language) {
         return "pt".equals(language) ? portuguese : english;
+    }
+
+    /**
+     * The NEW_THING question about one thing, in the account's language, with the thing's name
+     * on one line and cut to {@link #NEW_THING_NAME_MAX} characters.
+     *
+     * @param type     HABIT, GOAL or ROUTINE
+     * @param language what {@code UserLanguage.forPrompt} answered: "pt" or anything else
+     */
+    public static String newThingText(SecondBrainSubjectType type, String name, String language) {
+        String quoted = SecondBrainStore.truncate(
+                name == null ? "" : name.replaceAll("\\s+", " ").strip(), NEW_THING_NAME_MAX);
+        boolean pt = "pt".equals(language);
+        return switch (type) {
+            case HABIT -> pt
+                    ? "Você começou o hábito \"" + quoted + "\". O que te levou a ele, e o que costuma atrapalhar?"
+                    : "You started the habit \"" + quoted + "\". What led you to it, and what usually gets in the way?";
+            case GOAL -> pt
+                    ? "Você criou a meta \"" + quoted + "\". O que te levou a ela, e o que pode atrapalhar?"
+                    : "You set the goal \"" + quoted + "\". What led you to it, and what could get in the way?";
+            case ROUTINE -> pt
+                    ? "Você criou a rotina \"" + quoted + "\". O que te levou a ela, e o que costuma atrapalhar?"
+                    : "You created the routine \"" + quoted + "\". What led you to it, and what usually gets in the way?";
+            case CATEGORY, LOOSE -> throw new IllegalArgumentException("No NEW_THING question for a " + type);
+        };
     }
 }

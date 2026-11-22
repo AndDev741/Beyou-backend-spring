@@ -25,12 +25,14 @@ import beyou.beyouapp.backend.domain.routine.schedule.ScheduledOnDayResolver;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainFactDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainInsightDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainOldNoteResultDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainQuestionDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainSourceDTO;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserLanguage;
+import beyou.beyouapp.backend.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -75,6 +77,7 @@ public class SecondBrainStore {
     private final SecondBrainQuestionRepository questionRepository;
     private final SecondBrainInsightRepository insightRepository;
     private final DiaryRoutineRepository diaryRoutineRepository;
+    private final UserRepository userRepository;
     private final SecondBrainMapper mapper;
 
     /**
@@ -159,12 +162,35 @@ public class SecondBrainStore {
     public SecondBrainFactDTO createFact(UUID userId, SecondBrainFactKind kind, String text) {
         lockProfile(userId);
         if (factRepository.countByUserId(userId) >= SecondBrainFact.MAX_PER_USER) {
-            throw new BusinessException(ErrorKey.SECOND_BRAIN_FACT_LIMIT_REACHED,
-                    "The profile holds at most " + SecondBrainFact.MAX_PER_USER
-                            + " facts; delete one to make room");
+            throw profileFull();
         }
         return mapper.toDTO(factRepository.save(
                 newFact(userId, kind, text.strip(), SecondBrainFactOrigin.USER, now())));
+    }
+
+    /**
+     * A line someone other than the person decided to keep: the assistant in a chat. A line the
+     * profile already holds word for word is not written twice; the one there is returned.
+     *
+     * @throws BusinessException {@link ErrorKey#SECOND_BRAIN_FACT_LIMIT_REACHED} with the
+     *                           profile full, with a message the assistant can relay
+     */
+    @Transactional
+    public SecondBrainFactDTO rememberFact(UUID userId, SecondBrainFactKind kind, String text,
+                                           SecondBrainFactOrigin origin) {
+        lockProfile(userId);
+        String cut = truncate(text.strip(), SecondBrainFact.TEXT_MAX);
+        List<SecondBrainFact> existing = factRepository.findByUserIdOrderByCreatedAtAscIdAsc(userId);
+        String key = duplicateKey(kind, cut);
+        for (SecondBrainFact fact : existing) {
+            if (duplicateKey(fact.getKind(), fact.getText()).equals(key)) {
+                return mapper.toDTO(fact);
+            }
+        }
+        if (existing.size() >= SecondBrainFact.MAX_PER_USER) {
+            throw profileFull();
+        }
+        return mapper.toDTO(factRepository.save(newFact(userId, kind, cut, origin, now())));
     }
 
     /** New words and kind. The origin stays: a learned fact the person corrected was still learned. */
@@ -335,6 +361,13 @@ public class SecondBrainStore {
     }
 
     /**
+     * A question just closed with its answer, and the thing a NEW_THING question was about.
+     *
+     * @param subjectType null for every kind but NEW_THING
+     */
+    public record Closed(SecondBrainQuestionDTO question, SecondBrainSubjectType subjectType, UUID subjectId) {}
+
+    /**
      * Closes the question with the person's answer, in a transaction that ends before anything
      * is learned from it. The answer is kept whatever the model does next, and a second submit
      * finds the question closed.
@@ -344,12 +377,12 @@ public class SecondBrainStore {
      *                           it was already answered or skipped
      */
     @Transactional
-    public SecondBrainQuestionDTO answer(UUID userId, UUID questionId, String answer) {
+    public Closed answer(UUID userId, UUID questionId, String answer) {
         SecondBrainQuestion question = openQuestion(userId, questionId);
         question.setStatus(SecondBrainQuestionStatus.ANSWERED);
         question.setAnswer(answer.strip());
         question.setAnsweredAt(now());
-        return mapper.toDTO(question);
+        return new Closed(mapper.toDTO(question), question.getSubjectType(), question.getSubjectId());
     }
 
     /** Closes the question without an answer. Same refusals as {@link #answer}. */
@@ -404,7 +437,63 @@ public class SecondBrainStore {
                 .toList();
     }
 
+    // ---- the old hidden note ----
+
+    /**
+     * The hidden note the assistant kept before step 2, one sentence per line (see
+     * {@link OldNote}). Read from the row, not from the caller's {@code User}, which was loaded
+     * when the request began.
+     */
+    @Transactional(readOnly = true)
+    public List<String> oldNote(UUID userId) {
+        return OldNote.lines(userRepository.findUserContext(userId));
+    }
+
+    /**
+     * Keeps one sentence of the old note as an ABOUT line of the profile, then takes it out of
+     * the note. Both or neither: a full profile changes nothing.
+     *
+     * @throws BusinessException {@link ErrorKey#SECOND_BRAIN_OLD_NOTE_LINE_NOT_FOUND} when the
+     *                           note has no such sentence; {@link ErrorKey#SECOND_BRAIN_FACT_LIMIT_REACHED}
+     *                           with the profile full
+     */
+    @Transactional
+    public SecondBrainOldNoteResultDTO keepOldNoteLine(UUID userId, String line) {
+        lockProfile(userId);
+        List<String> remaining = oldNoteWithout(userId, line);
+        SecondBrainFactDTO fact = rememberFact(userId, SecondBrainFactKind.ABOUT, line, SecondBrainFactOrigin.OLD_NOTE);
+        userRepository.setUserContext(userId, OldNote.join(remaining));
+        return new SecondBrainOldNoteResultDTO(remaining, fact);
+    }
+
+    /** Takes one sentence out of the old note. Same 404 as {@link #keepOldNoteLine}. */
+    @Transactional
+    public SecondBrainOldNoteResultDTO discardOldNoteLine(UUID userId, String line) {
+        lockProfile(userId);
+        List<String> remaining = oldNoteWithout(userId, line);
+        userRepository.setUserContext(userId, OldNote.join(remaining));
+        return new SecondBrainOldNoteResultDTO(remaining, null);
+    }
+
+    /** Deletes what is left of the old note. Nothing to delete is not an error. */
+    @Transactional
+    public void deleteOldNote(UUID userId) {
+        userRepository.setUserContext(userId, null);
+    }
+
+    private List<String> oldNoteWithout(UUID userId, String line) {
+        return OldNote.without(userRepository.findUserContext(userId), line).orElseThrow(() ->
+                new BusinessException(ErrorKey.SECOND_BRAIN_OLD_NOTE_LINE_NOT_FOUND,
+                        "The old note has no such sentence"));
+    }
+
     // ---- shared ----
+
+    private static BusinessException profileFull() {
+        return new BusinessException(ErrorKey.SECOND_BRAIN_FACT_LIMIT_REACHED,
+                "The profile already holds " + SecondBrainFact.MAX_PER_USER
+                        + " lines. One has to be deleted on the Second Brain page (/second-brain) to make room.");
+    }
 
     private void lockProfile(UUID userId) {
         factRepository.lockProfile("second-brain:" + userId);

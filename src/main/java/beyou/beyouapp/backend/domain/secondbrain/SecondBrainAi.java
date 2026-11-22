@@ -4,11 +4,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -16,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 
 import org.slf4j.MDC;
 import org.springframework.ai.chat.client.ChatClient;
@@ -37,13 +40,14 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * The three model calls Second Brain makes: the overview, the follow-up questions, and what an
- * answer adds to the profile.
+ * answer adds to the profile and to the notes on the person's things.
  *
  * <p>Built like {@code OnboardingSuggestionService}: one stateless structured call, no
  * advisors, no tools, no chat memory. With no tools the model cannot touch the account; all it
  * returns is text, and this class cuts that text to size before anything is stored. The caps it
- * cuts to are on {@link SecondBrainFact}, {@link SecondBrainQuestion} and
- * {@link SecondBrainInsight}.
+ * cuts to are on {@link SecondBrainFact}, {@link SecondBrainNote}, {@link SecondBrainQuestion}
+ * and {@link SecondBrainInsight}. A note the model files under a thing is only kept when the
+ * thing was in the list it was given, and the store checks the owner again before writing.
  *
  * <p>The person's data travels in the user message inside a marked block
  * ({@link SecondBrainData}), and each system prompt says that the block is data and never an
@@ -102,8 +106,10 @@ public class SecondBrainAi {
     /** The overview as the rest of the app sees it: the verdict read, the text cleaned. */
     public record Overview(SecondBrainVerdict verdict, String text) {}
     public record QuestionsPayload(List<String> questions) {}
-    public record FactsPayload(List<FactItem> facts) {}
+    public record FactsPayload(List<FactItem> facts, List<NoteItem> notes) {}
     public record FactItem(String kind, String text) {}
+    /** A note on one of the things the message listed, named by the id it was given. */
+    public record NoteItem(String type, String id, String text) {}
 
     // ---- the overview ----
 
@@ -213,22 +219,74 @@ public class SecondBrainAi {
         String message = "MODE: PROFILE\nSplit the answer into at most "
                 + SecondBrainFact.LEARNED_PER_PROFILE_ANSWER + " facts of kind " + kind + ".\n"
                 + SecondBrainData.wrap(answerBlock(question, answer, known));
-        return facts(user, today, message, kind, SecondBrainFact.LEARNED_PER_PROFILE_ANSWER);
+        return facts(callFacts(user, today, message), kind, SecondBrainFact.LEARNED_PER_PROFILE_ANSWER);
     }
 
     /**
-     * What a check-in or follow-up answer says that will still be true next month: at most
-     * {@link SecondBrainFact#LEARNED_PER_OTHER_ANSWER} facts, the model choosing each kind, and
-     * often none.
+     * What a check-in or follow-up answer says that will last: at most
+     * {@link SecondBrainFact#LEARNED_PER_OTHER_ANSWER} profile facts, the model choosing each
+     * kind, and at most {@link SecondBrainNote#LEARNED_PER_ANSWER} notes on the things listed in
+     * {@code things}. Often nothing.
      *
+     * @param things the person's habits, goals and routines, by id. A note on anything else is dropped
      * @throws RuntimeException whatever the call raises. The caller learns nothing then
      */
-    public List<LearnedFact> lastingFacts(User user, LocalDate today, String question, String answer,
-                                          List<SecondBrainFactDTO> known) {
+    public Learned lasting(User user, LocalDate today, String question, String answer,
+                           List<SecondBrainFactDTO> known, List<SecondBrainSubject> things) {
         String message = "MODE: LASTING\nExtract at most " + SecondBrainFact.LEARNED_PER_OTHER_ANSWER
-                + " lasting facts, or none.\n"
-                + SecondBrainData.wrap(answerBlock(question, answer, known));
-        return facts(user, today, message, null, SecondBrainFact.LEARNED_PER_OTHER_ANSWER);
+                + " lasting facts and at most " + SecondBrainNote.LEARNED_PER_ANSWER
+                + " notes on things, or none.\n"
+                + SecondBrainData.wrap(answerBlock(question, answer, known) + thingsBlock(things));
+        FactsPayload payload = callFacts(user, today, message);
+        Map<UUID, SecondBrainSubject> listed = new HashMap<>();
+        things.forEach(thing -> listed.put(thing.id(), thing));
+        return new Learned(
+                facts(payload, null, SecondBrainFact.LEARNED_PER_OTHER_ANSWER),
+                notes(payload, item -> listed.get(parseId(item.id()))));
+    }
+
+    /**
+     * The answer to a NEW_THING question, filed as at most {@link SecondBrainNote#LEARNED_PER_ANSWER}
+     * notes on that thing, plus at most {@link SecondBrainFact#LEARNED_PER_OTHER_ANSWER} profile
+     * facts when the answer also says something lasting about the person. Every note goes to
+     * the thing asked about, whatever the model wrote.
+     *
+     * @throws RuntimeException whatever the call raises. The caller keeps the answer as one note
+     */
+    public Learned newThing(User user, LocalDate today, SecondBrainSubject thing, String question,
+                            String answer, List<SecondBrainFactDTO> known) {
+        String message = "MODE: NEW_THING\nWrite at most " + SecondBrainNote.LEARNED_PER_ANSWER
+                + " notes about the thing and at most " + SecondBrainFact.LEARNED_PER_OTHER_ANSWER
+                + " profile facts, or none.\n"
+                + SecondBrainData.wrap("THING: " + label(thing.type()) + " \""
+                        + SecondBrainData.inline(thing.name()) + "\"\n" + answerBlock(question, answer, known));
+        FactsPayload payload = callFacts(user, today, message);
+        return new Learned(
+                facts(payload, null, SecondBrainFact.LEARNED_PER_OTHER_ANSWER),
+                notes(payload, item -> thing));
+    }
+
+    /** The things an answer may leave notes on, each with the id the model has to send back. */
+    private static String thingsBlock(List<SecondBrainSubject> things) {
+        StringBuilder body = new StringBuilder("THINGS (the person's routines, habits and goals a note can be about)\n");
+        if (things.isEmpty()) {
+            body.append("- None.\n");
+        }
+        for (SecondBrainSubject thing : things) {
+            body.append("- ").append(thing.type()).append(' ').append(thing.id()).append(" \"")
+                .append(SecondBrainData.inline(thing.name())).append("\"\n");
+        }
+        return body.toString();
+    }
+
+    static String label(SecondBrainSubjectType type) {
+        return switch (type) {
+            case HABIT -> "a habit";
+            case GOAL -> "a goal";
+            case ROUTINE -> "a routine";
+            case CATEGORY -> "a life area";
+            case LOOSE -> "something";
+        };
     }
 
     private static String answerBlock(String question, String answer, List<SecondBrainFactDTO> known) {
@@ -246,11 +304,13 @@ public class SecondBrainAi {
         return body.toString();
     }
 
-    /** @param forced the kind every fact gets, or null to keep the one the model chose */
-    private List<LearnedFact> facts(User user, LocalDate today, String message,
-                                    SecondBrainFactKind forced, int max) {
-        FactsPayload payload = within(Instant.now().plus(sideCallBudget),
+    private FactsPayload callFacts(User user, LocalDate today, String message) {
+        return within(Instant.now().plus(sideCallBudget),
                 () -> call(factsTemplate, FactsPayload.class, message, user, today));
+    }
+
+    /** @param forced the kind every fact gets, or null to keep the one the model chose */
+    private static List<LearnedFact> facts(FactsPayload payload, SecondBrainFactKind forced, int max) {
         if (payload == null || payload.facts() == null) {
             return List.of();
         }
@@ -270,6 +330,43 @@ public class SecondBrainAi {
             }
         }
         return facts;
+    }
+
+    /**
+     * The notes the model filed, each under the thing {@code thingOf} finds for it. One it
+     * cannot place is dropped: an id the model was not given is an id it made up.
+     */
+    private static List<LearnedNote> notes(FactsPayload payload, Function<NoteItem, SecondBrainSubject> thingOf) {
+        if (payload == null || payload.notes() == null) {
+            return List.of();
+        }
+        List<LearnedNote> notes = new ArrayList<>();
+        for (NoteItem item : payload.notes()) {
+            if (item == null) {
+                continue;
+            }
+            SecondBrainSubject thing = thingOf.apply(item);
+            String text = SecondBrainStore.truncate(oneParagraph(item.text()), SecondBrainNote.TEXT_MAX);
+            if (thing == null || text.isEmpty()) {
+                continue;
+            }
+            notes.add(new LearnedNote(thing.type(), thing.id(), text));
+            if (notes.size() == SecondBrainNote.LEARNED_PER_ANSWER) {
+                break;
+            }
+        }
+        return notes;
+    }
+
+    private static UUID parseId(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw.strip());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /** The kind the model named, forgiving case and a plural. Anything else is dropped. */

@@ -53,6 +53,10 @@ public enum ErrorKey {
     SECOND_BRAIN_QUESTION_NOT_FOUND,
     // Answering or skipping a question that was already answered or skipped. 409.
     SECOND_BRAIN_QUESTION_CLOSED,
+    // A memory note that is not the caller's, or does not exist. 404, like the facts' key.
+    SECOND_BRAIN_NOTE_NOT_FOUND,
+    // Keeping or discarding a sentence the old hidden note does not hold (any more). 404.
+    SECOND_BRAIN_OLD_NOTE_LINE_NOT_FOUND,
     MOOD_NOT_FOUND,
     // A mood is a report, not a plan: MoodService refuses days after the owner's today.
     MOOD_FUTURE_DATE,
