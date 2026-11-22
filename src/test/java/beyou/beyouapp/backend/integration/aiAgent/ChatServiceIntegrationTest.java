@@ -1,7 +1,6 @@
 package beyou.beyouapp.backend.integration.aiAgent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -69,9 +68,11 @@ class ChatServiceIntegrationTest extends AbstractIntegrationTest {
 
         chatService.deleteAllChats(attacker.getId());
 
-        // Attacker's own chats + context are gone...
+        // Attacker's own chats are gone. What the assistant remembered about them is not a
+        // conversation: it stays for the Second Brain page, where they delete it line by line.
         assertTrue(chatRepository.findAllByUserIdOrderByUpdatedAtDesc(attacker.getId()).isEmpty());
-        assertNull(userRepository.findById(attacker.getId()).orElseThrow().getUserContext());
+        assertEquals("attacker memory",
+                userRepository.findById(attacker.getId()).orElseThrow().getUserContext());
 
         // ...the victim's are untouched.
         assertEquals(2, chatRepository.findAllByUserIdOrderByUpdatedAtDesc(victim.getId()).size());

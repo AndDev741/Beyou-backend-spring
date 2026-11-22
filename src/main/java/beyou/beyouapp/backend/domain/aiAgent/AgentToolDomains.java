@@ -6,7 +6,9 @@ import java.util.Map;
 /**
  * Which frontend domains a WRITE tool touches — travels inside the
  * toolFinished event so the client refetches exactly what changed.
- * Read tools (and context tools, whose data has no UI yet) return empty.
+ * Read tools return empty, and so do updateChatContext and the memory tools
+ * (rememberAboutUser, rememberAboutItem): the Second Brain page they write to
+ * has no slice, and it reads everything again each time it opens.
  * Domain names match the frontend Redux slices.
  */
 public final class AgentToolDomains {

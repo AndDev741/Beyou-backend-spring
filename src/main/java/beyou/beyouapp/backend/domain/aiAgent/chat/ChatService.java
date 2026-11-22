@@ -25,7 +25,6 @@ import lombok.extern.slf4j.Slf4j;
 public class ChatService {
 
     private static final String DEFAULT_TITLE = "New chat";
-    public static final int GLOBAL_CONTEXT_MAX = 2000;
     public static final int CHAT_CONTEXT_MAX = 1000;
     public static final int TITLE_MAX = 255; // matches the chats.title column (V5)
 
@@ -70,14 +69,6 @@ public class ChatService {
         Chat chat = getChat(chatId, userId);
         chat.setUpdatedAt(java.time.LocalDateTime.now());
         chatRepository.save(chat);
-    }
-
-    /** Overwrites the user's cross-chat agent memory (clamped to {@value #GLOBAL_CONTEXT_MAX} chars). */
-    public void updateGlobalContext(String context, UUID userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFound("User not found when trying to update global context"));
-        user.setUserContext(clamp(context, GLOBAL_CONTEXT_MAX));
-        userRepository.save(user);
     }
 
     /** Overwrites this chat's agent memory (clamped to {@value #CHAT_CONTEXT_MAX} chars). */
@@ -158,9 +149,13 @@ public class ChatService {
     }
 
     /**
-     * "Reset the agent": delete ALL of the user's chats (cascades messages via
-     * the agent_message FK) and clear the model's memory of them — both the
-     * Spring AI window per chat and the cross-chat global context on the user.
+     * "Clear all conversations": delete ALL of the user's chats (cascades messages via the
+     * agent_message FK) and the model's window of each one in Spring AI's chat memory.
+     *
+     * <p>What Beyou remembers about the person is not a conversation and stays: the Second Brain
+     * profile, the notes on their things, and the old hidden note ({@code users.user_context})
+     * the page is helping them review. Those are deleted on the Second Brain page, line by line.
+     * Deleting the account still removes all of it, with the user row it hangs off.
      */
     @Transactional
     public void deleteAllChats(UUID userId) {
@@ -168,11 +163,6 @@ public class ChatService {
         try {
             chats.forEach(chat -> chatMemory.clear(chat.getId().toString()));
             chatRepository.deleteAll(chats);
-
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new UserNotFound("User not found when resetting the agent"));
-            user.setUserContext(null);
-            userRepository.save(user);
         } catch (Exception e) {
             log.error("Error resetting agent for user {}", userId, e);
             throw new BusinessException(ErrorKey.CHAT_DELETE_FAILED, "Error trying to reset the agent");
