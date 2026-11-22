@@ -124,6 +124,9 @@ public class DailyBriefingFactsBuilder {
      */
     static final int PACE_TOLERANCE_POINTS = 5;
 
+    /** A target at or under this is a goal done once, see {@link GoalPace#ONE_TIME}. */
+    static final double ONE_TIME_TARGET = 1d;
+
     /** How many blocks of a cycle's day the panel names. The study card has the rest. */
     static final int MAX_STUDY_ENTRIES = 3;
 
@@ -402,6 +405,8 @@ public class DailyBriefingFactsBuilder {
             pace = GoalPace.REACHED;
         } else if (daysRemaining < 0) {
             pace = GoalPace.OVERDUE;
+        } else if (target > 0 && target <= ONE_TIME_TARGET) {
+            pace = GoalPace.ONE_TIME;
         } else if (percent + PACE_TOLERANCE_POINTS < expected) {
             pace = GoalPace.BEHIND;
         } else {
@@ -410,7 +415,9 @@ public class DailyBriefingFactsBuilder {
 
         // Today counts as one of the days left, so a goal due today asks for the whole
         // remainder today rather than dividing by zero.
-        Double perDay = (daysRemaining < 0 || reached || target <= 0)
+        // A one-time goal has no rate either: "0.1 interviews a day" is what the clients turned
+        // into "3 interviews a month" for one interview due in fifteen days.
+        Double perDay = (daysRemaining < 0 || reached || target <= 0 || pace == GoalPace.ONE_TIME)
                 ? null
                 : roundOneDecimal(remaining / (daysRemaining + 1));
 

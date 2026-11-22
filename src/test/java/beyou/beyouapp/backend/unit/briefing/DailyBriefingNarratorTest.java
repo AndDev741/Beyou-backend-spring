@@ -284,6 +284,20 @@ class DailyBriefingNarratorTest {
         assertThat(message).contains("pays its XP");
     }
 
+    /** One interview in fifteen days is not "behind": the model is told there is no pace to keep. */
+    @Test
+    void factsMessage_givesAOneTimeGoalNoPace() {
+        GoalAhead interview = goal("Ace the interview", 0d, 1d, "interview", 15, 0, 1d, null, 60, GoalPace.ONE_TIME);
+
+        String message = DailyBriefingNarrator.factsMessage(facts(
+                recap(true, false, 1, 0, 10d, List.of()), today(List.of(interview), null), WeekSignals.empty()));
+
+        assertThat(message).contains("Goal \"Ace the interview\": 0% done (0 of 1 interview), ends in 15 days");
+        assertThat(message).contains("no pace to be behind on");
+        assertThat(message).doesNotContain("behind pace");
+        assertThat(message).doesNotContain("a day from today on");
+    }
+
     @Test
     void factsMessage_carriesAnOverdueGoalAsOverdue() {
         GoalAhead overdue = goal("Save 1000", 580d, 1000d, "BRL", -4, 58, 420d, null, 100, GoalPace.OVERDUE);

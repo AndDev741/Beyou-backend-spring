@@ -358,6 +358,29 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
         assertThat(reached.requiredPerDay()).isNull();
     }
 
+    /**
+     * A goal of one unit has two values, zero and done, so a straight line through it flags
+     * "behind" a few days in. Same fixture as above: the line says 78% by TODAY.
+     */
+    @Test
+    void goalsAhead_givesAOneTimeGoalNoPaceAndNoDailyRate() {
+        newGoal("Interview", TODAY.plusDays(9), 0d, 1d, GoalStatus.IN_PROGRESS, false);
+        newGoal("Two talks", TODAY.plusDays(9), 0d, 2d, GoalStatus.IN_PROGRESS, false);
+        newGoal("Signed", TODAY.plusDays(9), 1d, 1d, GoalStatus.IN_PROGRESS, false);
+        seedOpenYesterday();
+
+        List<GoalAhead> goals = briefingService.briefingFor(user, TODAY).today().goalsAhead();
+
+        GoalAhead interview = byName(goals, "Interview");
+        assertThat(interview.pace()).isEqualTo(GoalPace.ONE_TIME);
+        assertThat(interview.requiredPerDay()).isNull();
+        assertThat(interview.remainingValue()).isEqualTo(1d);
+        // Two units can be half done, so the line still applies to them.
+        assertThat(byName(goals, "Two talks").pace()).isEqualTo(GoalPace.BEHIND);
+        // Done is done, one unit or many.
+        assertThat(byName(goals, "Signed").pace()).isEqualTo(GoalPace.REACHED);
+    }
+
     @Test
     void goalsAhead_marksAnOverdueGoalWithNoDailyRate() {
         newGoal("Overdue", TODAY.minusDays(2), 5d, 10d, GoalStatus.IN_PROGRESS, false);

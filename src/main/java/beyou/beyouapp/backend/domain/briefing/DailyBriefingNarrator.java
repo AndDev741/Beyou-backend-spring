@@ -211,6 +211,10 @@ public class DailyBriefingNarrator {
                         + "done is what pays its XP.");
                 case OVERDUE -> sb.append("ended ").append(Math.abs(goal.daysRemaining()))
                         .append(" days ago without reaching the target.");
+                case ONE_TIME -> sb.append(goal.daysRemaining() == 0
+                                ? "ends today"
+                                : "ends in " + goal.daysRemaining() + " days")
+                        .append(". It is done once or not at all, so it has no pace to be behind on.");
                 case BEHIND, ON_TRACK -> {
                     sb.append(goal.daysRemaining() == 0
                             ? "ends today"

@@ -289,6 +289,8 @@ public class SecondBrainSignals {
                 case REACHED -> sb.append("target reached but not marked as done yet.");
                 case OVERDUE -> sb.append("ended ").append(Math.abs(goal.daysRemaining()))
                         .append(" days ago without reaching the target.");
+                case ONE_TIME -> sb.append(goal.daysRemaining() == 0 ? "ends today" : "ends in " + goal.daysRemaining() + " days")
+                        .append(". It is done once or not at all, so it has no pace to be behind on.");
                 case BEHIND, ON_TRACK -> {
                     sb.append(goal.daysRemaining() == 0 ? "ends today" : "ends in " + goal.daysRemaining() + " days");
                     sb.append(goal.pace() == GoalPace.BEHIND ? ", behind pace" : ", on pace");
