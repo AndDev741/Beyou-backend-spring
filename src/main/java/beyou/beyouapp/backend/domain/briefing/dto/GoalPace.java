@@ -25,5 +25,14 @@ public enum GoalPace {
      * is paid by {@code PUT /goal/complete}, not by reaching the number, so a goal sitting
      * here is a reward the user has earned and not collected.
      */
-    REACHED
+    REACHED,
+
+    /**
+     * A goal of a single unit that is not done yet and not past its date: a job interview, a
+     * marathon, a document signed. It has no straight line to trail, because the only values
+     * it can hold are zero and done, so "behind pace" would fire on it a few days in and stay
+     * there, which is what a person saw on "0 of 1 interview, 15 days left". Its pace line is
+     * left out and so is the tick on its bar.
+     */
+    ONE_TIME
 }
