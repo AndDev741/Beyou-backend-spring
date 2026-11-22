@@ -8,6 +8,7 @@ import beyou.beyouapp.backend.domain.category.dto.CategoryResponseDTO;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevel;
 import beyou.beyouapp.backend.domain.category.xpbylevel.XpByLevelRepository;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainHooks;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.category.CategoryNotFound;
@@ -47,6 +48,8 @@ public class CategoryService {
     private final CategoryMapper categoryMapper;
 
     private final UserCacheEvictService userCacheEvictService;
+
+    private final SecondBrainHooks secondBrainHooks;
 
     public Category getCategory(UUID categoryId, UUID userId){
         Category category = categoryRepository.findById(categoryId)
@@ -107,6 +110,13 @@ public class CategoryService {
         }
     }
 
+    /**
+     * Transactional so what Second Brain remembers under the category turns loose only if the
+     * category really goes. The flush inside the try keeps a category still used by a habit
+     * reported as {@code CATEGORY_IN_USE}: without it the foreign key would only fail at
+     * commit, outside the catch, as it never did when the delete committed on its own.
+     */
+    @Transactional
     public ResponseEntity<Map<String, String>> deleteCategory(String categoryId, UUID userId){
         try{
             Category category = categoryRepository.findById(UUID.fromString(categoryId))
@@ -115,9 +125,11 @@ public class CategoryService {
                 throw new BusinessException(ErrorKey.CATEGORY_NOT_OWNED, "This category are not from the user in context");
             }
 
+            secondBrainHooks.categoryDeleted(userId, category.getId(), category.getName());
             // owner_id carries no foreign key, so nothing in the database clears this.
             xpDayRecorder.forget(XpDayOwnerType.CATEGORY, category.getId());
             categoryRepository.delete(category);
+            categoryRepository.flush();
             userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok().body(Map.of("success", "Category deleted successfully"));
         }catch(DataIntegrityViolationException exception){

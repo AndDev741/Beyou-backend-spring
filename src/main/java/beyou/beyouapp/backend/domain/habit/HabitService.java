@@ -25,6 +25,8 @@ import beyou.beyouapp.backend.domain.habit.dto.EditHabitDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutine;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.DiaryRoutineRepository;
 import beyou.beyouapp.backend.domain.common.UserCacheEvictService;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainHooks;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainSubjectType;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.habit.HabitNotFound;
@@ -62,6 +64,8 @@ public class HabitService {
 
     private final EntityCheckDayRepository entityCheckDayRepository;
 
+    private final SecondBrainHooks secondBrainHooks;
+
     public Habit getHabit(UUID habitId){
         return habitRepository.findById(habitId)
         .orElseThrow(() -> new HabitNotFound("Habit not found"));
@@ -97,7 +101,12 @@ public class HabitService {
                 .toList();
     }
 
-    /** Core create: saves and returns the entity. Does NOT evict caches — callers decide. */
+    /**
+     * Core create: saves and returns the entity. Does NOT evict caches — callers decide.
+     *
+     * <p>Every habit create passes through here, the REST route and the assistant's tool alike,
+     * so this is where Second Brain hears of it (it may ask about the habit on its page).
+     */
     public Habit createHabitEntity(CreateHabitDTO createHabitDTO, UUID userId){
         User user = userRepository.findById(userId)
         .orElseThrow(() -> new UserNotFound("User not found"));
@@ -113,11 +122,15 @@ public class HabitService {
 
         Habit newHabit = habitMapper.toEntity(createHabitDTO, categories, actualBaseXp, nextLevelXp, user);
 
+        Habit saved;
         try{
-            return habitRepository.save(newHabit);
+            saved = habitRepository.save(newHabit);
         }catch(Exception e){
             throw new BusinessException(ErrorKey.HABIT_CREATE_FAILED, "Error trying to create habit");
         }
+        // Never throws, and waits for the commit when there is a transaction.
+        secondBrainHooks.created(user, SecondBrainSubjectType.HABIT, saved.getId(), saved.getName());
+        return saved;
     }
 
     public ResponseEntity<Map<String, String>> createHabit(CreateHabitDTO createHabitDTO, UUID userId){
@@ -173,6 +186,10 @@ public class HabitService {
             throw new BusinessException(ErrorKey.HABIT_IN_ROUTINE, "This habit is used in some routine, please remove it first");
         }
         try{
+            // What Second Brain remembers about the habit goes to its first category, in this
+            // same transaction, so it moves only if the habit really goes.
+            secondBrainHooks.habitOrGoalDeleted(userId, SecondBrainSubjectType.HABIT, habitId,
+                    habitToDelete.getName(), habitToDelete.getCategories());
             int removedDays = entityCheckDayRepository.deleteAllByOwner(CheckDayOwnerType.HABIT, habitId);
             xpDayRecorder.forget(XpDayOwnerType.HABIT, habitId);
             log.info("Removed {} check-day rows for habit {}", removedDays, habitId);

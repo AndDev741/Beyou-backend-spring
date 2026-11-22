@@ -70,4 +70,15 @@ public class SecondBrainQuestion {
     /** Set when answered. A skipped question keeps it null. */
     @Column(name = "answered_at")
     private Instant answeredAt;
+
+    /**
+     * The habit, goal or routine a NEW_THING question asks about, and null for every other
+     * kind. It is what makes the question once per thing, and what an answer is filed under.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subject_type", length = 16, updatable = false)
+    private SecondBrainSubjectType subjectType;
+
+    @Column(name = "subject_id", updatable = false)
+    private UUID subjectId;
 }

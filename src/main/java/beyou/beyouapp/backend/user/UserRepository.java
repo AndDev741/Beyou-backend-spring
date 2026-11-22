@@ -66,4 +66,20 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Modifying
     @Query("UPDATE User u SET u.verificationTokenSentAt = null WHERE u.id = :id")
     void clearVerificationTokenSentAt(@Param("id") UUID id);
+
+    /**
+     * The assistant's old hidden note, read from the row. A query rather than the entity, so
+     * a {@code User} loaded earlier in the same request cannot hand back a stale copy.
+     */
+    @Query("SELECT u.userContext FROM User u WHERE u.id = :id")
+    String findUserContext(@Param("id") UUID id);
+
+    /**
+     * Rewrites the old hidden note as the Second Brain page whittles it down, or clears it.
+     * An update of one column rather than a save, so the rest of a {@code User} loaded at the
+     * start of the request is never written back with it.
+     */
+    @Modifying
+    @Query("UPDATE User u SET u.userContext = :context WHERE u.id = :id")
+    void setUserContext(@Param("id") UUID id, @Param("context") String context);
 }

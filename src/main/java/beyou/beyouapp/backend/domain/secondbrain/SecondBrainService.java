@@ -16,6 +16,10 @@ import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainAnswerResultDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainFactDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainFactRequestDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainInsightDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainNoteDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainNoteRequestDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainOldNoteRequestDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainOldNoteResultDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainQuestionDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainOverviewDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainSourceDTO;
@@ -26,10 +30,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Second Brain, step 1: what Beyou understands about a person, and how they steer it.
+ * Second Brain: what Beyou understands about a person, and how they steer it. Step 1 is the
+ * profile and the interview; step 2 is the memory, dated notes about the person's things.
  *
  * <p>The page is one read ({@link #overview}) that writes nothing. The interview, the profile
- * and the switches are small writes in {@link SecondBrainStore}. Three routes call a model:
+ * and the switches are small writes in {@link SecondBrainStore}, the notes in
+ * {@link SecondBrainNotes}. Three routes call a model:
  * {@link #refill}, {@link #answer} and {@link #refreshInsight}.
  *
  * <p><b>Those three are not {@code @Transactional}, and must not become so.</b> A model call
@@ -41,7 +47,8 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>Whether a model exists at all is {@link LlmProperties#isConfigured()}. Without one the
  * page still works: seeds and check-ins are asked, an answer to a profile question becomes a
- * fact as written, and only the overview refresh answers {@code AI_UNAVAILABLE}.
+ * fact as written, an answer about a new thing becomes a note as written, and only the overview
+ * refresh answers {@code AI_UNAVAILABLE}.
  */
 @Service
 @Slf4j
@@ -49,6 +56,7 @@ import lombok.extern.slf4j.Slf4j;
 public class SecondBrainService {
 
     private final SecondBrainStore store;
+    private final SecondBrainNotes notes;
     private final SecondBrainSignals signals;
     private final SecondBrainAi ai;
     private final LlmProperties llm;
@@ -77,7 +85,9 @@ public class SecondBrainService {
                 store.openQuestions(userId),
                 store.facts(userId),
                 store.sources(userId),
-                llm.isConfigured());
+                llm.isConfigured(),
+                notes.memory(userId),
+                store.oldNote(userId));
     }
 
     public List<SecondBrainSourceDTO> setSource(User user, SecondBrainSource source, boolean enabled) {
@@ -94,6 +104,26 @@ public class SecondBrainService {
 
     public void deleteFact(User user, UUID factId) {
         store.deleteFact(user.getId(), factId);
+    }
+
+    public SecondBrainNoteDTO editNote(User user, UUID noteId, SecondBrainNoteRequestDTO request) {
+        return notes.edit(user.getId(), noteId, request.text());
+    }
+
+    public void deleteNote(User user, UUID noteId) {
+        notes.delete(user.getId(), noteId);
+    }
+
+    public SecondBrainOldNoteResultDTO keepOldNoteLine(User user, SecondBrainOldNoteRequestDTO request) {
+        return store.keepOldNoteLine(user.getId(), request.text());
+    }
+
+    public SecondBrainOldNoteResultDTO discardOldNoteLine(User user, SecondBrainOldNoteRequestDTO request) {
+        return store.discardOldNoteLine(user.getId(), request.text());
+    }
+
+    public void deleteOldNote(User user) {
+        store.deleteOldNote(user.getId());
     }
 
     /**
@@ -134,33 +164,54 @@ public class SecondBrainService {
      *
      * <p>A profile question always leaves something: the model's split of the answer, or, with
      * no model in use or a failed call or an empty split, the answer itself cut to one fact. A
-     * check-in or a follow-up leaves only what the model judged lasting, which is often nothing.
+     * NEW_THING question always leaves a note on its thing the same way. A check-in or a
+     * follow-up leaves only what the model judged lasting, which is often nothing.
      */
     public SecondBrainAnswerResultDTO answer(User user, UUID questionId, SecondBrainAnswerRequestDTO request) {
         UUID userId = user.getId();
-        SecondBrainQuestionDTO closed = store.answer(userId, questionId, request.answer());
-        List<LearnedFact> learned = learn(user, closed);
-        return new SecondBrainAnswerResultDTO(closed, store.saveLearned(userId, learned));
+        SecondBrainStore.Closed closed = store.answer(userId, questionId, request.answer());
+        Learned learned = learn(user, closed);
+        return new SecondBrainAnswerResultDTO(closed.question(),
+                store.saveLearned(userId, learned.facts()),
+                notes.saveLearned(userId, learned.notes()));
     }
 
-    private List<LearnedFact> learn(User user, SecondBrainQuestionDTO closed) {
-        SecondBrainFactKind profileKind = closed.kind().factKind();
-        List<LearnedFact> learned = List.of();
-        if (aiInUse(user.getId())) {
+    private Learned learn(User user, SecondBrainStore.Closed closed) {
+        UUID userId = user.getId();
+        SecondBrainQuestionDTO question = closed.question();
+        SecondBrainFactKind profileKind = question.kind().factKind();
+        // The thing a NEW_THING question asked about, read now. Null when it was deleted since,
+        // and then there is nothing to file the answer under.
+        SecondBrainSubject thing = question.kind() == SecondBrainQuestionKind.NEW_THING
+                ? notes.live(userId, closed.subjectType(), closed.subjectId()).orElse(null)
+                : null;
+
+        Learned learned = Learned.NOTHING;
+        if (aiInUse(userId)) {
             try {
-                List<SecondBrainFactDTO> known = store.facts(user.getId());
+                List<SecondBrainFactDTO> known = store.facts(userId);
                 LocalDate today = store.today(user);
-                learned = profileKind != null
-                        ? ai.profileFacts(user, today, profileKind, closed.text(), closed.answer(), known)
-                        : ai.lastingFacts(user, today, closed.text(), closed.answer(), known);
+                if (profileKind != null) {
+                    learned = Learned.facts(ai.profileFacts(user, today, profileKind, question.text(),
+                            question.answer(), known));
+                } else if (thing != null) {
+                    learned = ai.newThing(user, today, thing, question.text(), question.answer(), known);
+                } else if (question.kind() != SecondBrainQuestionKind.NEW_THING) {
+                    learned = ai.lasting(user, today, question.text(), question.answer(), known,
+                            notes.things(userId));
+                }
             } catch (RuntimeException e) {
                 log.warn("Second Brain could not read facts out of an answer for user {}: {}",
-                        user.getId(), e.getMessage());
+                        userId, e.getMessage());
             }
         }
-        if (profileKind != null && learned.isEmpty()) {
-            // Cut to size by the store, like every learned fact.
-            return List.of(new LearnedFact(profileKind, closed.answer()));
+        // Cut to size by the stores, like everything learned.
+        if (profileKind != null && learned.facts().isEmpty()) {
+            return Learned.facts(List.of(new LearnedFact(profileKind, question.answer())));
+        }
+        if (thing != null && learned.notes().isEmpty()) {
+            return new Learned(learned.facts(),
+                    List.of(new LearnedNote(thing.type(), thing.id(), question.answer())));
         }
         return learned;
     }

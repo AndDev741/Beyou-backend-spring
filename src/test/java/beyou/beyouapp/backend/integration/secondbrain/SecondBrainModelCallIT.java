@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -30,7 +31,21 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import beyou.beyouapp.backend.AbstractIntegrationTest;
 import beyou.beyouapp.backend.domain.common.XpProgress;
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
+import beyou.beyouapp.backend.domain.secondbrain.Learned;
 import beyou.beyouapp.backend.domain.secondbrain.LearnedFact;
+import beyou.beyouapp.backend.domain.secondbrain.LearnedNote;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainNoteOrigin;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainSubject;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainSubjectType;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainNoteDTO;
+import beyou.beyouapp.backend.domain.category.CategoryRepository;
+import beyou.beyouapp.backend.domain.category.CategoryService;
+import beyou.beyouapp.backend.domain.category.dto.CategoryRequestDTO;
+import beyou.beyouapp.backend.domain.common.ExperienceLevel;
+import beyou.beyouapp.backend.domain.habit.HabitRepository;
+import beyou.beyouapp.backend.domain.habit.HabitService;
+import beyou.beyouapp.backend.domain.habit.dto.CreateHabitDTO;
+import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainAi;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactKind;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactOrigin;
@@ -76,6 +91,11 @@ class SecondBrainModelCallIT extends AbstractIntegrationTest {
 
     @Autowired private SecondBrainService service;
     @Autowired private UserRepository userRepository;
+    @Autowired private UserService userService;
+    @Autowired private CategoryService categoryService;
+    @Autowired private CategoryRepository categoryRepository;
+    @Autowired private HabitService habitService;
+    @Autowired private HabitRepository habitRepository;
     @Autowired private JdbcTemplate jdbc;
 
     private final List<Boolean> transactionOpenDuringCall = new ArrayList<>();
@@ -239,12 +259,12 @@ class SecondBrainModelCallIT extends AbstractIntegrationTest {
     void checkInAnswerLearnsOnlyWhatLasts() {
         UUID first = question(SecondBrainQuestionKind.CHECK_IN, "How is your day going?");
         UUID second = question(SecondBrainQuestionKind.FOLLOW_UP, "What got in the way of reading?");
-        when(ai.lastingFacts(eq(user), any(), eq("How is your day going?"), anyString(), anyList()))
+        when(ai.lasting(eq(user), any(), eq("How is your day going?"), anyString(), anyList(), anyList()))
                 .thenAnswer(call -> {
                     recordTransaction();
-                    return List.of(new LearnedFact(SecondBrainFactKind.ABOUT, "Started a new job in October"));
+                    return Learned.facts(List.of(new LearnedFact(SecondBrainFactKind.ABOUT, "Started a new job in October")));
                 });
-        when(ai.lastingFacts(eq(user), any(), eq("What got in the way of reading?"), anyString(), anyList()))
+        when(ai.lasting(eq(user), any(), eq("What got in the way of reading?"), anyString(), anyList(), anyList()))
                 .thenThrow(new IllegalStateException("upstream 502"));
 
         SecondBrainAnswerResultDTO learned = service.answer(user, first, new SecondBrainAnswerRequestDTO("First day at the new job"));
@@ -256,6 +276,89 @@ class SecondBrainModelCallIT extends AbstractIntegrationTest {
         assertThat(nothing.learned()).isEmpty();
         assertThat(nothing.question().status()).isEqualTo(SecondBrainQuestionStatus.ANSWERED);
         assertThat(nothing.question().answer()).isEqualTo("Too tired");
+    }
+
+    // ---- notes on things ----
+
+    /**
+     * An answer about a new thing is filed by the model as notes on that thing, with no
+     * transaction open while it is asked, and with the answer itself as the one note when the
+     * model files none.
+     */
+    @Test
+    @DisplayName("an answer about a new thing is filed by the model outside a transaction, or kept whole when it files nothing")
+    void newThingAnswersAreFiledByTheModel() {
+        UUID health = category(user, "Health");
+        UUID run = habit(user, "Run", health);
+        UUID swim = habit(user, "Swim", health);
+        try {
+            UUID aboutRun = newThingQuestion(user, "HABIT", run, "You started the habit \"Run\". What led you to it?");
+            UUID aboutSwim = newThingQuestion(user, "HABIT", swim, "You started the habit \"Swim\". What led you to it?");
+            when(ai.newThing(eq(user), any(), argThat(thing -> thing != null && run.equals(thing.id())),
+                    anyString(), anyString(), anyList()))
+                    .thenAnswer(call -> {
+                        recordTransaction();
+                        SecondBrainSubject thing = call.getArgument(2);
+                        assertThat(thing.name()).isEqualTo("Run");
+                        return new Learned(
+                                List.of(new LearnedFact(SecondBrainFactKind.ABOUT, "Works from home")),
+                                List.of(new LearnedNote(SecondBrainSubjectType.HABIT, run, "Wants more energy for work"),
+                                        new LearnedNote(SecondBrainSubjectType.HABIT, run, "Rain is what stops it")));
+                    });
+            when(ai.newThing(eq(user), any(), argThat(thing -> thing != null && swim.equals(thing.id())),
+                    anyString(), anyString(), anyList()))
+                    .thenReturn(new Learned(List.of(), List.of()));
+
+            SecondBrainAnswerResultDTO filed = service.answer(user, aboutRun,
+                    new SecondBrainAnswerRequestDTO("More energy for work, rain stops me. I work from home."));
+            SecondBrainAnswerResultDTO kept = service.answer(user, aboutSwim,
+                    new SecondBrainAnswerRequestDTO("The pool is next door"));
+
+            assertNoTransactionDuringTheCall();
+            assertThat(filed.notes()).extracting(SecondBrainNoteDTO::text, SecondBrainNoteDTO::origin)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple("Wants more energy for work", SecondBrainNoteOrigin.ANSWER),
+                            org.assertj.core.groups.Tuple.tuple("Rain is what stops it", SecondBrainNoteOrigin.ANSWER));
+            assertThat(filed.learned()).extracting(SecondBrainFactDTO::text).containsExactly("Works from home");
+            assertThat(kept.notes()).extracting(SecondBrainNoteDTO::text, SecondBrainNoteDTO::subjectName)
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("The pool is next door", "Swim"));
+        } finally {
+            userService.deleteUser(userRepository.findById(user.getId()).orElseThrow());
+        }
+    }
+
+    /**
+     * A check-in can leave notes on any of the person's things the model was shown. The store
+     * checks the owner again before writing, so an id that is someone else's thing is dropped
+     * even if it reached that far.
+     */
+    @Test
+    @DisplayName("a check-in's notes land only on the person's own things")
+    void checkInNotesLandOnlyOnTheOwnersThings() {
+        User stranger = newUser();
+        UUID health = category(user, "Health");
+        UUID run = habit(user, "Run", health);
+        UUID theirs = habit(stranger, "Their run", category(stranger, "Theirs"));
+        try {
+            UUID checkIn = question(SecondBrainQuestionKind.CHECK_IN, "How is your day going?");
+            ArgumentCaptor<List<SecondBrainSubject>> shown = ArgumentCaptor.captor();
+            when(ai.lasting(eq(user), any(), anyString(), anyString(), anyList(), shown.capture()))
+                    .thenReturn(new Learned(List.of(), List.of(
+                            new LearnedNote(SecondBrainSubjectType.HABIT, run, "Hurt my knee, paused for two weeks"),
+                            new LearnedNote(SecondBrainSubjectType.HABIT, theirs, "planted on someone else"))));
+
+            SecondBrainAnswerResultDTO result = service.answer(user, checkIn,
+                    new SecondBrainAnswerRequestDTO("Knee hurts, no running for two weeks"));
+
+            assertThat(shown.getValue()).extracting(SecondBrainSubject::id).containsExactly(run);
+            assertThat(result.notes()).extracting(SecondBrainNoteDTO::text)
+                    .containsExactly("Hurt my knee, paused for two weeks");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM second_brain_notes WHERE user_id = ?",
+                    Integer.class, stranger.getId())).isZero();
+        } finally {
+            userService.deleteUser(userRepository.findById(user.getId()).orElseThrow());
+            userService.deleteUser(userRepository.findById(stranger.getId()).orElseThrow());
+        }
     }
 
     // ---- insight ----
@@ -309,6 +412,27 @@ class SecondBrainModelCallIT extends AbstractIntegrationTest {
     private void assertNoTransactionDuringTheCall() {
         assertThat(transactionOpenDuringCall).as("the model was asked").isNotEmpty();
         assertThat(transactionOpenDuringCall).as("no transaction while the model is asked").containsOnly(false);
+    }
+
+    private UUID newThingQuestion(User account, String type, UUID thing, String text) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO second_brain_questions (id, user_id, kind, text, status, created_at, subject_type, "
+                + "subject_id) VALUES (?, ?, 'NEW_THING', ?, 'OPEN', now(), ?, ?)", id, account.getId(), text, type, thing);
+        return id;
+    }
+
+    private UUID category(User account, String name) {
+        categoryService.createCategory(new CategoryRequestDTO(name, "lucide:heart", "", ExperienceLevel.BEGINNER),
+                account.getId());
+        return categoryRepository.findAllByUserId(account.getId()).orElseThrow().stream()
+                .filter(category -> category.getName().equals(name)).findFirst().orElseThrow().getId();
+    }
+
+    private UUID habit(User account, String name, UUID category) {
+        habitService.createHabit(new CreateHabitDTO(name, "", "", "lucide:heart", 3, 3, List.of(category),
+                ExperienceLevel.BEGINNER), account.getId());
+        return habitRepository.findAllByUserId(account.getId()).stream()
+                .filter(habit -> habit.getName().equals(name)).findFirst().orElseThrow().getId();
     }
 
     private UUID question(SecondBrainQuestionKind kind, String text) {

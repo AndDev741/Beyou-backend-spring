@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,8 @@ import beyou.beyouapp.backend.domain.briefing.dto.GoalAhead;
 import beyou.beyouapp.backend.domain.briefing.dto.GoalPace;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactKind;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainFactOrigin;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainNoteOrigin;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainSubjectType;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainQuestionKind;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainQuestionStatus;
 import beyou.beyouapp.backend.domain.secondbrain.SecondBrainService;
@@ -43,6 +46,12 @@ import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainAreaDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainFactDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainFactRequestDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainInsightDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainMemoryGroupDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainMemorySubjectDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainNoteDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainNoteRequestDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainOldNoteRequestDTO;
+import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainOldNoteResultDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainQuestionDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainRoutineDTO;
 import beyou.beyouapp.backend.domain.secondbrain.dto.SecondBrainRoutineItemDTO;
@@ -64,6 +73,7 @@ class SecondBrainControllerTest extends AbstractIntegrationTest {
     private static final UUID QUESTION_ID = UUID.fromString("9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d");
     private static final UUID CATEGORY_ID = UUID.fromString("5d7e9f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a");
     private static final UUID GOAL_ID = UUID.fromString("1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9");
+    private static final UUID NOTE_ID = UUID.fromString("7b2c4d6e-8f0a-4b1c-9d2e-3f4a5b6c7d8e");
     private static final Instant CREATED = Instant.parse("2026-11-11T12:00:00Z");
 
     @Autowired private MockMvc mockMvc;
@@ -82,6 +92,11 @@ class SecondBrainControllerTest extends AbstractIntegrationTest {
     private static SecondBrainFactDTO fact() {
         return new SecondBrainFactDTO(FACT_ID, SecondBrainFactKind.OBJECTIVE, "Run a half marathon by June",
                 SecondBrainFactOrigin.USER, CREATED, CREATED.plusSeconds(60));
+    }
+
+    private static SecondBrainNoteDTO note() {
+        return new SecondBrainNoteDTO(NOTE_ID, "Wants more energy for work", SecondBrainNoteOrigin.ANSWER, "Run",
+                CREATED, CREATED.plusSeconds(60));
     }
 
     private static SecondBrainQuestionDTO question(SecondBrainQuestionStatus status, String answer, Instant answeredAt) {
@@ -114,7 +129,15 @@ class SecondBrainControllerTest extends AbstractIntegrationTest {
                 List.of(question(SecondBrainQuestionStatus.OPEN, null, null)),
                 List.of(fact()),
                 sources(),
-                true));
+                true,
+                List.of(
+                        new SecondBrainMemoryGroupDTO(CATEGORY_ID, "Health", "lucide:heart", List.of(
+                                new SecondBrainMemorySubjectDTO(SecondBrainSubjectType.CATEGORY, CATEGORY_ID, "Run",
+                                        null, SecondBrainSubjectType.HABIT, List.of(note())))),
+                        new SecondBrainMemoryGroupDTO(null, null, null, List.of(
+                                new SecondBrainMemorySubjectDTO(SecondBrainSubjectType.LOOSE, null, "Evening walk",
+                                        null, null, List.of())))),
+                List.of("Training for a half marathon.", "Prefers mornings.")));
 
         mockMvc.perform(get("/second-brain"))
                 .andExpect(status().isOk())
@@ -157,7 +180,29 @@ class SecondBrainControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.sources[2].source").value("MOOD"))
                 .andExpect(jsonPath("$.sources[2].enabled").value(false))
                 .andExpect(jsonPath("$.aiAvailable").value(true))
-                .andExpect(jsonPath("$.length()").value(8));
+                .andExpect(jsonPath("$.memory.length()").value(2))
+                .andExpect(jsonPath("$.memory[0].categoryId").value(CATEGORY_ID.toString()))
+                .andExpect(jsonPath("$.memory[0].categoryName").value("Health"))
+                .andExpect(jsonPath("$.memory[0].categoryIconId").value("lucide:heart"))
+                .andExpect(jsonPath("$.memory[0].length()").value(4))
+                .andExpect(jsonPath("$.memory[0].subjects[0].type").value("CATEGORY"))
+                .andExpect(jsonPath("$.memory[0].subjects[0].id").value(CATEGORY_ID.toString()))
+                .andExpect(jsonPath("$.memory[0].subjects[0].name").value("Run"))
+                .andExpect(jsonPath("$.memory[0].subjects[0].iconId").isEmpty())
+                .andExpect(jsonPath("$.memory[0].subjects[0].formerType").value("HABIT"))
+                .andExpect(jsonPath("$.memory[0].subjects[0].length()").value(6))
+                .andExpect(jsonPath("$.memory[0].subjects[0].notes[0].id").value(NOTE_ID.toString()))
+                .andExpect(jsonPath("$.memory[0].subjects[0].notes[0].text").value("Wants more energy for work"))
+                .andExpect(jsonPath("$.memory[0].subjects[0].notes[0].origin").value("ANSWER"))
+                .andExpect(jsonPath("$.memory[0].subjects[0].notes[0].subjectName").value("Run"))
+                .andExpect(jsonPath("$.memory[0].subjects[0].notes[0].createdAt").value("2026-11-11T12:00:00Z"))
+                .andExpect(jsonPath("$.memory[0].subjects[0].notes[0].updatedAt").value("2026-11-11T12:01:00Z"))
+                .andExpect(jsonPath("$.memory[0].subjects[0].notes[0].length()").value(6))
+                .andExpect(jsonPath("$.memory[1].categoryId").isEmpty())
+                .andExpect(jsonPath("$.memory[1].subjects[0].type").value("LOOSE"))
+                .andExpect(jsonPath("$.memory[1].subjects[0].id").isEmpty())
+                .andExpect(jsonPath("$.oldNote[1]").value("Prefers mornings."))
+                .andExpect(jsonPath("$.length()").value(10));
     }
 
     @Test
@@ -176,7 +221,116 @@ class SecondBrainControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.questions").isEmpty())
                 .andExpect(jsonPath("$.facts").isEmpty())
                 .andExpect(jsonPath("$.aiAvailable").value(false))
-                .andExpect(jsonPath("$.length()").value(8));
+                .andExpect(jsonPath("$.memory").isEmpty())
+                .andExpect(jsonPath("$.oldNote").isEmpty())
+                .andExpect(jsonPath("$.length()").value(10));
+    }
+
+    // ---- notes ----
+
+    @Test
+    void editingANoteAnswersTheNoteAndDeletingOneIs204() throws Exception {
+        when(secondBrainService.editNote(eq(user), eq(NOTE_ID), any(SecondBrainNoteRequestDTO.class))).thenReturn(note());
+
+        mockMvc.perform(put("/second-brain/notes/" + NOTE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"Wants more energy for work\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(NOTE_ID.toString()))
+                .andExpect(jsonPath("$.origin").value("ANSWER"))
+                .andExpect(jsonPath("$.length()").value(6));
+        verify(secondBrainService).editNote(user, NOTE_ID, new SecondBrainNoteRequestDTO("Wants more energy for work"));
+
+        mockMvc.perform(delete("/second-brain/notes/" + NOTE_ID))
+                .andExpect(status().isNoContent());
+        verify(secondBrainService).deleteNote(user, NOTE_ID);
+    }
+
+    /** The e2e suite sends 501 characters and expects a 400, so the cap is pinned here too. */
+    @Test
+    void invalidNoteBodiesAreRefusedBeforeTheService() throws Exception {
+        mockMvc.perform(put("/second-brain/notes/" + NOTE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"" + "x".repeat(500) + "\"}"))
+                .andExpect(status().isOk());
+        for (String body : List.of("{}", "{\"text\":\"   \"}", "{\"text\":\"" + "x".repeat(501) + "\"}")) {
+            mockMvc.perform(put("/second-brain/notes/" + NOTE_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorKey").value("INVALID_REQUEST"));
+        }
+        verify(secondBrainService, times(1)).editNote(any(), any(), any());
+    }
+
+    @Test
+    void aNoteThatIsNotTheCallersIsA404() throws Exception {
+        BusinessException notFound = new BusinessException(ErrorKey.SECOND_BRAIN_NOTE_NOT_FOUND, "Note not found");
+        when(secondBrainService.editNote(eq(user), eq(NOTE_ID), any(SecondBrainNoteRequestDTO.class))).thenThrow(notFound);
+        doThrow(notFound).when(secondBrainService).deleteNote(user, NOTE_ID);
+
+        mockMvc.perform(put("/second-brain/notes/" + NOTE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"mine now\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorKey").value("SECOND_BRAIN_NOTE_NOT_FOUND"));
+        mockMvc.perform(delete("/second-brain/notes/" + NOTE_ID))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorKey").value("SECOND_BRAIN_NOTE_NOT_FOUND"));
+    }
+
+    // ---- the old note ----
+
+    @Test
+    void keepingAndDiscardingASentenceOfTheOldNote() throws Exception {
+        when(secondBrainService.keepOldNoteLine(eq(user), any(SecondBrainOldNoteRequestDTO.class)))
+                .thenReturn(new SecondBrainOldNoteResultDTO(List.of("Prefers mornings."), fact()));
+        when(secondBrainService.discardOldNoteLine(eq(user), any(SecondBrainOldNoteRequestDTO.class)))
+                .thenReturn(new SecondBrainOldNoteResultDTO(List.of(), null));
+
+        mockMvc.perform(post("/second-brain/old-note/keep")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"Training for a half marathon.\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lines[0]").value("Prefers mornings."))
+                .andExpect(jsonPath("$.fact.id").value(FACT_ID.toString()))
+                .andExpect(jsonPath("$.length()").value(2));
+        verify(secondBrainService).keepOldNoteLine(user, new SecondBrainOldNoteRequestDTO("Training for a half marathon."));
+
+        mockMvc.perform(post("/second-brain/old-note/discard")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"Prefers mornings.\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lines").isEmpty())
+                .andExpect(jsonPath("$.fact").isEmpty())
+                .andExpect(jsonPath("$.length()").value(2));
+
+        mockMvc.perform(delete("/second-brain/old-note"))
+                .andExpect(status().isNoContent());
+        verify(secondBrainService).deleteOldNote(user);
+    }
+
+    @Test
+    void theOldNoteAnswers404ForASentenceItLacksAnd409WithTheProfileFull() throws Exception {
+        when(secondBrainService.keepOldNoteLine(eq(user), any(SecondBrainOldNoteRequestDTO.class)))
+                .thenThrow(new BusinessException(ErrorKey.SECOND_BRAIN_FACT_LIMIT_REACHED, "full"));
+        when(secondBrainService.discardOldNoteLine(eq(user), any(SecondBrainOldNoteRequestDTO.class)))
+                .thenThrow(new BusinessException(ErrorKey.SECOND_BRAIN_OLD_NOTE_LINE_NOT_FOUND, "no such line"));
+
+        mockMvc.perform(post("/second-brain/old-note/keep")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"Training for a half marathon.\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorKey").value("SECOND_BRAIN_FACT_LIMIT_REACHED"));
+        mockMvc.perform(post("/second-brain/old-note/discard")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"Never said this.\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorKey").value("SECOND_BRAIN_OLD_NOTE_LINE_NOT_FOUND"));
+        mockMvc.perform(post("/second-brain/old-note/discard")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"  \"}"))
+                .andExpect(status().isBadRequest());
     }
 
     // ---- PUT /second-brain/sources/{source} ----
@@ -325,7 +479,7 @@ class SecondBrainControllerTest extends AbstractIntegrationTest {
         when(secondBrainService.answer(eq(user), eq(QUESTION_ID), any(SecondBrainAnswerRequestDTO.class)))
                 .thenReturn(new SecondBrainAnswerResultDTO(
                         question(SecondBrainQuestionStatus.ANSWERED, "A half marathon", CREATED.plusSeconds(90)),
-                        List.of(fact())));
+                        List.of(fact()), List.of(note())));
 
         mockMvc.perform(post("/second-brain/questions/" + QUESTION_ID + "/answer")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -337,7 +491,9 @@ class SecondBrainControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.question.answeredAt").value("2026-11-11T12:01:30Z"))
                 .andExpect(jsonPath("$.learned.length()").value(1))
                 .andExpect(jsonPath("$.learned[0].id").value(FACT_ID.toString()))
-                .andExpect(jsonPath("$.length()").value(2));
+                .andExpect(jsonPath("$.notes.length()").value(1))
+                .andExpect(jsonPath("$.notes[0].id").value(NOTE_ID.toString()))
+                .andExpect(jsonPath("$.length()").value(3));
 
         verify(secondBrainService).answer(user, QUESTION_ID, new SecondBrainAnswerRequestDTO("A half marathon"));
     }

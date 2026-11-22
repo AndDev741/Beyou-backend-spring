@@ -70,6 +70,9 @@ public class HabitServiceUnitTest {
     private UserCacheEvictService userCacheEvictService;
 
     @Mock
+    private beyou.beyouapp.backend.domain.secondbrain.SecondBrainHooks secondBrainHooks;
+
+    @Mock
     private EntityCheckDayRepository entityCheckDayRepository;
 
     private HabitMapper habitMapper = new HabitMapper();
@@ -92,7 +95,7 @@ public class HabitServiceUnitTest {
         habit.setImportance(0);
         habit.setDificulty(1);
 
-        habitService = new HabitService(habitRepository, xpDayRecorder, userRepository, xpByLevelRepository, categoryService, habitMapper, diaryRoutineRepository, userCacheEvictService, entityCheckDayRepository);
+        habitService = new HabitService(habitRepository, xpDayRecorder, userRepository, xpByLevelRepository, categoryService, habitMapper, diaryRoutineRepository, userCacheEvictService, entityCheckDayRepository, secondBrainHooks);
     }
 
     @Test
@@ -129,11 +132,17 @@ public class HabitServiceUnitTest {
         when(xpByLevelRepository.findByLevel(0)).thenReturn(xpByLevel);
         when(xpByLevelRepository.findByLevel(0 + 1)).thenReturn(xpByLevel);
         when(categoryService.getCategory(categories.get(0), userId)).thenReturn(newCategory);
+        when(habitRepository.save(org.mockito.ArgumentMatchers.any(Habit.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         ResponseEntity<Map<String, String>> assertResponse = habitService.createHabit(createHabitDTO, userId);
 
         assertEquals(response.getBody(), assertResponse.getBody());
         assertEquals(response.getStatusCode(), assertResponse.getStatusCode());
+        // Every habit create tells Second Brain, which may ask about it on its page.
+        verify(secondBrainHooks).created(org.mockito.ArgumentMatchers.eq(user),
+                org.mockito.ArgumentMatchers.eq(beyou.beyouapp.backend.domain.secondbrain.SecondBrainSubjectType.HABIT),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("name"));
     }
 
     @Test

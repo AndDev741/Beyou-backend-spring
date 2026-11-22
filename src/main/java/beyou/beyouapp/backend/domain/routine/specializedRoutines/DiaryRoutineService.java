@@ -22,6 +22,8 @@ import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshot;
 import beyou.beyouapp.backend.domain.routine.snapshot.RoutineSnapshotRepository;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.CheckGroupRequestDTO;
 import beyou.beyouapp.backend.domain.routine.specializedRoutines.dto.itemGroup.SkipGroupRequestDTO;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainHooks;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainSubjectType;
 import beyou.beyouapp.backend.domain.task.Task;
 import beyou.beyouapp.backend.domain.task.TaskService;
 import beyou.beyouapp.backend.exceptions.BusinessException;
@@ -62,6 +64,7 @@ public class DiaryRoutineService {
     private final TaskService taskService;
     private final RoutineSnapshotRepository routineSnapshotRepository;
     private final UserRepository userRepository;
+    private final SecondBrainHooks secondBrainHooks;
 
     @Cacheable(cacheNames = "routine", key = "#userId + '_' + #id")
     @Transactional(readOnly = true)
@@ -120,6 +123,10 @@ public class DiaryRoutineService {
         return createDiaryRoutine(dto, user);
     }
 
+    /**
+     * Every routine create ends here, the REST route and the assistant's tools alike, so this
+     * is where Second Brain hears of it. Its question waits for this transaction to commit.
+     */
     @Transactional
     public DiaryRoutineResponseDTO createDiaryRoutine(DiaryRoutineRequestDTO dto, User user) {
         validateRequestDTO(dto);
@@ -127,6 +134,7 @@ public class DiaryRoutineService {
         diaryRoutine.setUser(user);
         DiaryRoutine saved = diaryRoutineRepository.save(diaryRoutine);
         userCacheEvictService.evictAllUserCaches(user.getId());
+        secondBrainHooks.created(user, SecondBrainSubjectType.ROUTINE, saved.getId(), saved.getName());
         return mapper.toResponse(saved);
     }
 
@@ -381,6 +389,9 @@ public class DiaryRoutineService {
             routineSnapshotRepository.deleteAll(snapshots);
             routineSnapshotRepository.flush();
         }
+
+        // What Second Brain remembers about the routine stays, loose, under its name.
+        secondBrainHooks.routineDeleted(userId, id, diaryRoutineToDelete.getName());
 
         // owner_id carries no foreign key, so nothing in the database clears this.
         xpDayRecorder.forget(XpDayOwnerType.ROUTINE, id);

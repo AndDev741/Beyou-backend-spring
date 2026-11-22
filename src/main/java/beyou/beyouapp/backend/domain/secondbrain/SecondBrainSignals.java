@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.domain.secondbrain;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ import beyou.beyouapp.backend.domain.briefing.dto.GoalPace;
 import beyou.beyouapp.backend.domain.calendar.CalendarTask;
 import beyou.beyouapp.backend.domain.calendar.CalendarTaskRepository;
 import beyou.beyouapp.backend.domain.category.Category;
+import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.domain.habit.HabitRepository;
 import beyou.beyouapp.backend.domain.mood.MoodEntryRepository;
 import beyou.beyouapp.backend.domain.notebook.NotebookPage;
@@ -83,6 +85,7 @@ public class SecondBrainSignals {
     private final CalendarTaskRepository calendarTaskRepository;
     private final NotebookProgressService notebookProgressService;
     private final QuickNoteRepository quickNoteRepository;
+    private final SecondBrainNotes notes;
 
     /**
      * What the page draws from the person's data.
@@ -103,8 +106,10 @@ public class SecondBrainSignals {
 
     /**
      * Everything the model may know about the person, as plain labelled lines: one section per
-     * enabled source, then the profile. An enabled source with nothing in it says so, which
-     * keeps the model from inventing what it was not given. A disabled one is absent.
+     * enabled source, then the profile and the notes on their things. An enabled source with
+     * nothing in it says so, which keeps the model from inventing what it was not given. A
+     * disabled one is absent. The profile and the notes are always there: they are what the
+     * person told Beyou, not data Beyou reads from elsewhere, and no switch governs them.
      *
      * <p>No date is written in ISO form. Days are given as distances from today, so the model
      * has nothing to copy a date from.
@@ -132,7 +137,20 @@ public class SecondBrainSignals {
             appendIdeas(sb, user.getId());
         }
         appendFacts(sb, facts);
+        appendNotes(sb, notes.forPrompt(user.getId(), namedInTheData(read)), today, UserDateResolver.zoneOf(user));
         return sb.toString();
+    }
+
+    /**
+     * The names the routine and goal sections above mention. Their notes go first, so when an
+     * item slips the model has the reason the person gave for it on the same page.
+     */
+    private static List<String> namedInTheData(Read read) {
+        List<String> named = new ArrayList<>();
+        read.week().slipping().forEach(item -> named.add(item.name()));
+        read.week().steady().forEach(item -> named.add(item.name()));
+        read.goals().forEach(goal -> named.add(goal.name()));
+        return named;
     }
 
     // ---- the shared reads ----
@@ -399,6 +417,50 @@ public class SecondBrainSignals {
             sb.append("- ").append(factLabel(fact.kind())).append(": ")
               .append(SecondBrainData.inline(fact.text())).append('\n');
         }
+    }
+
+    private static void appendNotes(StringBuilder sb, List<SecondBrainNotes.Subject> subjects, LocalDate today,
+                                    ZoneId zone) {
+        sb.append("NOTES (what the person told Beyou about their things: the newest few of each, oldest first)\n");
+        if (subjects.isEmpty()) {
+            sb.append("- Nothing yet.\n");
+            return;
+        }
+        for (SecondBrainNotes.Subject subject : subjects) {
+            sb.append("- ").append(subjectLabel(subject)).append(": ");
+            for (int i = 0; i < subject.notes().size(); i++) {
+                SecondBrainNote note = subject.notes().get(i);
+                if (i > 0) {
+                    sb.append("; ");
+                }
+                sb.append(daysAgo(note.getCreatedAt().atZone(zone).toLocalDate(), today)).append(" \"")
+                  .append(SecondBrainData.inline(note.getText())).append('"');
+            }
+            sb.append(".\n");
+        }
+    }
+
+    private static String subjectLabel(SecondBrainNotes.Subject subject) {
+        String name = "\"" + SecondBrainData.inline(subject.name()) + "\"";
+        if (subject.formerType() != null) {
+            return name + ", " + SecondBrainAi.label(subject.formerType()) + " that was deleted";
+        }
+        return switch (subject.type()) {
+            case HABIT -> "Habit " + name;
+            case GOAL -> "Goal " + name;
+            case ROUTINE -> "Routine " + name;
+            case CATEGORY -> "Life area " + name;
+            case LOOSE -> name + ", a life area that was deleted";
+        };
+    }
+
+    /** When a note was written, as a distance from today. Never an ISO date. */
+    private static String daysAgo(LocalDate day, LocalDate today) {
+        long days = ChronoUnit.DAYS.between(day, today);
+        if (days <= 0) {
+            return "today";
+        }
+        return days == 1 ? "yesterday" : days + " days ago";
     }
 
     /** How much of one answer the overview is shown. An answer can run to 2000 characters. */

@@ -76,6 +76,9 @@ class DiaryRoutineServiceUnitTest {
     private UserCacheEvictService userCacheEvictService;
 
     @Mock
+    private beyou.beyouapp.backend.domain.secondbrain.SecondBrainHooks secondBrainHooks;
+
+    @Mock
     private RoutineSnapshotRepository routineSnapshotRepository;
 
     @Mock
@@ -171,7 +174,7 @@ class DiaryRoutineServiceUnitTest {
         section.setRoutine(diaryRoutine);
         diaryRoutine.setRoutineSections(new ArrayList<>(List.of(section)));
 
-        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, xpDayRecorder, mapper, checkItemService, userCacheEvictService, habitService, taskService, routineSnapshotRepository, userRepository);
+        diaryRoutineService = new DiaryRoutineService(diaryRoutineRepository, xpDayRecorder, mapper, checkItemService, userCacheEvictService, habitService, taskService, routineSnapshotRepository, userRepository, secondBrainHooks);
     }
 
     @Test

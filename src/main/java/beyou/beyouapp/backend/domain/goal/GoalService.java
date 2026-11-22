@@ -25,6 +25,8 @@ import beyou.beyouapp.backend.domain.goal.dto.CreateGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.EditGoalRequestDTO;
 import beyou.beyouapp.backend.domain.goal.dto.GoalResponseDTO;
 import beyou.beyouapp.backend.domain.goal.util.GoalXpCalculator;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainHooks;
+import beyou.beyouapp.backend.domain.secondbrain.SecondBrainSubjectType;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.exceptions.goal.GoalNotFound;
@@ -45,6 +47,7 @@ public class GoalService {
     private final RefreshUiDtoBuilder refreshUiDtoBuilder;
     private final UserCacheEvictService userCacheEvictService;
     private final UserRepository userRepository;
+    private final SecondBrainHooks secondBrainHooks;
 
     public Goal getGoal(UUID goalId) {
         return goalRepository.findById(goalId)
@@ -75,13 +78,17 @@ public class GoalService {
 
         Goal goal = goalMapper.toEntity(dto, categories, user);
         goal.setParent(resolveParent(null, dto.parentId(), userId));
+        Goal saved;
         try {
-            goalRepository.save(goal);
+            saved = goalRepository.save(goal);
             userCacheEvictService.evictAllUserCaches(userId);
-            return ResponseEntity.ok(Map.of("success", "Goal created successfully"));
         } catch (Exception e) {
             throw new BusinessException(ErrorKey.GOAL_CREATE_FAILED, "Error trying to create goal");
         }
+        // The one goal create, for the REST route and the assistant's tool alike, so Second
+        // Brain hears of every new goal here. Never throws.
+        secondBrainHooks.created(user, SecondBrainSubjectType.GOAL, saved.getId(), saved.getName());
+        return ResponseEntity.ok(Map.of("success", "Goal created successfully"));
     }
 
     public ResponseEntity<Map<String, String>> editGoal(EditGoalRequestDTO dto, UUID userId) {
@@ -104,12 +111,21 @@ public class GoalService {
         }
     }
 
+    /**
+     * Transactional so what Second Brain remembers about the goal moves to its first category
+     * only if the goal really goes. The flush inside the try keeps a failed delete reported as
+     * {@code GOAL_DELETE_FAILED}, as it was when the delete committed on its own.
+     */
+    @Transactional
     public ResponseEntity<Map<String, String>> deleteGoal(UUID goalId, UUID userId) {
         Goal goal = getGoal(goalId);
         checkIfGoalIsFromTheUserInContext(goal, userId);
 
         try {
+            secondBrainHooks.habitOrGoalDeleted(userId, SecondBrainSubjectType.GOAL, goalId,
+                    goal.getName(), goal.getCategories());
             goalRepository.delete(goal);
+            goalRepository.flush();
             userCacheEvictService.evictAllUserCaches(userId);
             return ResponseEntity.ok(Map.of("success", "Goal deleted successfully"));
         } catch (Exception e) {
