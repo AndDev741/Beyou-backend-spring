@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
+import beyou.beyouapp.backend.user.enums.AiConsent;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import beyou.beyouapp.backend.user.enums.TimezoneSource;
 
@@ -69,6 +70,12 @@ public record UserResponseDTO(
          * setting somewhere else in the app, and both clients read an ISO-8601 date
          * without having to agree on anything further.
          */
-        String createdAt
+        String createdAt,
+        /**
+         * The person's answer about the AI provider. The phone asks before any AI feature
+         * runs while this is {@code UNASKED}, and hides the AI features while it is
+         * {@code DECLINED}. Changed only through {@code PUT /user/ai-consent}.
+         */
+        AiConsent aiConsent
 ) {
 }

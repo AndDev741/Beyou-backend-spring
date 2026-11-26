@@ -63,8 +63,16 @@ class SecondBrainAiTest {
     private ChatModel chatModel;
     private SecondBrainAi ai;
 
+    private beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy allowAll;
+
+    @org.junit.jupiter.api.AfterEach
+    void forgetConsentPolicy() {
+        allowAll.unregister();
+    }
+
     @BeforeEach
     void setUp() {
+        allowAll = beyou.beyouapp.backend.utils.AiConsentTestSupport.allowAll();
         chatModel = mock(ChatModel.class);
         // The ChatClient seeds every prompt from the model's options, so they cannot be null.
         when(chatModel.getOptions()).thenReturn(ToolCallingChatOptions.builder().build());
@@ -365,6 +373,7 @@ class SecondBrainAiTest {
 
     private static User user(String language) {
         User user = new User();
+        user.setId(java.util.UUID.randomUUID());
         user.setLanguageInUse(language);
         return user;
     }

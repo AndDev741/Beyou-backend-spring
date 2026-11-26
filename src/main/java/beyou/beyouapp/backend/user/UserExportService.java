@@ -139,6 +139,8 @@ public class UserExportService {
         profile.put("phraseAuthor", user.getPerfilPhraseAuthor());
         profile.put("timezone", user.getTimezone());
         profile.put("language", user.getLanguageInUse());
+        profile.put("aiConsent", user.getAiConsent());
+        profile.put("aiConsentAt", user.getAiConsentAt());
         profile.put("theme", user.getThemeInUse());
         profile.put("widgetsInUse", user.getWidgetsIdInUse() == null
                 ? List.of() : List.copyOf(user.getWidgetsIdInUse()));

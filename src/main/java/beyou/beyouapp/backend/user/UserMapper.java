@@ -79,7 +79,8 @@ public class UserMapper {
             // toInstant() throws UnsupportedOperationException by contract. Null-guarded
             // because @PrePersist writes it on insert, so an entity assembled in memory
             // has none — and a mapper is not the place to blow up over that.
-            user.getCreatedAt() == null ? null : user.getCreatedAt().toLocalDate().toString()
+            user.getCreatedAt() == null ? null : user.getCreatedAt().toLocalDate().toString(),
+            user.getAiConsent()
         );
     }
 }

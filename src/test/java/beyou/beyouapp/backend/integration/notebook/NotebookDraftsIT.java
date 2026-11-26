@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.HashSet;
@@ -58,6 +60,7 @@ class NotebookDraftsIT extends AbstractIntegrationTest {
     @Autowired private NotebookAiService aiService;
     @Autowired private NotebookRoadmapDraftRepository draftRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private beyou.beyouapp.backend.user.UserService userService;
 
     private User user;
 
@@ -105,6 +108,20 @@ class NotebookDraftsIT extends AbstractIntegrationTest {
     }
 
     /** The job only writes to a row that is still DRAFTING; a deleted draft stays deleted. */
+    /** A "no" to the AI provider given while the draft waited for the pool holds. */
+    @Test
+    void aNoGivenWhileTheDraftWaitedStopsTheModelCall() {
+        UUID id = draftService.start(user, request("Statistics")).id();
+        userService.setAiConsent(user.getId(), false);
+
+        draftService.run(id);
+
+        RoadmapDraftRecordDTO failed = draftService.get(user, id);
+        assertThat(failed.status()).isEqualTo(RoadmapDraftStatus.FAILED);
+        assertThat(failed.errorKey()).isEqualTo("AI_CONSENT_DECLINED");
+        verify(llm, never()).call(eq(LlmPayloads.RoadmapPayload.class), anyString(), any());
+    }
+
     @Test
     void aDraftDeletedWhileTheModelWorksStaysDeleted() {
         UUID id = draftService.start(user, request("Calculus")).id();
@@ -214,6 +231,8 @@ class NotebookDraftsIT extends AbstractIntegrationTest {
         u.setCompletedDays(new HashSet<>());
         u.setXpDecayStrategy(XpDecayStrategy.GRADUAL);
         u.setXpProgress(new XpProgress(0D, 0, 0D, 50D));
+        // Drafts are written by the model, which only an account that allowed it reaches.
+        u.setAiConsent(beyou.beyouapp.backend.user.enums.AiConsent.GRANTED);
         return userRepository.saveAndFlush(u);
     }
 }

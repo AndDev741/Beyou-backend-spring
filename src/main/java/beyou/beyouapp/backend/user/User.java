@@ -23,6 +23,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.user.federation.FederatedPrincipal;
+import beyou.beyouapp.backend.user.enums.AiConsent;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import beyou.beyouapp.backend.user.enums.TimezoneSource;
 import beyou.beyouapp.backend.user.enums.UserRole;
@@ -157,6 +158,22 @@ public class User implements UserDetails {
 
     private boolean isTutorialCompleted;
 
+    /**
+     * Whether Beyou may send what this person writes to its AI provider. See {@link AiConsent}.
+     *
+     * <p>{@code updatable = false}: a save of the whole row (a profile edit, a check-in that
+     * saves the principal) must never write back the answer it read at the start of its
+     * request, or a "no" given in between would be undone. The only writer is
+     * {@code UserRepository.setAiConsent}, a one-row UPDATE.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ai_consent", nullable = false, length = 16, updatable = false)
+    private AiConsent aiConsent = AiConsent.UNASKED;
+
+    /** When {@link #aiConsent} was last answered. Null while it is UNASKED. Same rule. */
+    @Column(name = "ai_consent_at", updatable = false)
+    private Instant aiConsentAt;
+
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean emailVerified = false;
 
@@ -193,6 +210,7 @@ public class User implements UserDetails {
         if (this.timezone == null) this.timezone = "UTC";
         if (this.timezoneSource == null) this.timezoneSource = TimezoneSource.DEFAULT;
         if (this.xpDecayStrategy == null) this.xpDecayStrategy = XpDecayStrategy.GRADUAL;
+        if (this.aiConsent == null) this.aiConsent = AiConsent.UNASKED;
         setTutorialCompleted(false);
         if (!this.emailVerified) this.emailVerified = false;
     }

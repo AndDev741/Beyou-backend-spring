@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.controllers;
 
+import beyou.beyouapp.backend.security.aiconsent.SendsToAiProvider;
 import java.util.List;
 import java.util.UUID;
 
@@ -67,6 +68,7 @@ public class NotebookAiController {
      * "New topic with AI": stores the draft and answers at once, DRAFTING. The model writes it in
      * the background, and the client reads it back from {@code GET /notebook/drafts/{id}}.
      */
+    @SendsToAiProvider
     @PostMapping("/ai/drafts")
     public ResponseEntity<RoadmapDraftRecordDTO> startDraft(@Valid @RequestBody RoadmapDraftRequestDTO request) {
         return ResponseEntity.status(HttpStatus.ACCEPTED)
@@ -74,6 +76,7 @@ public class NotebookAiController {
     }
 
     /** Drafts again, from scratch or applying {@code changeRequest} to {@code previous}. */
+    @SendsToAiProvider
     @PostMapping("/ai/drafts/{draftId}/redraft")
     public ResponseEntity<RoadmapDraftRecordDTO> redraft(@PathVariable UUID draftId,
             @Valid @RequestBody RoadmapDraftRequestDTO request) {
@@ -117,18 +120,21 @@ public class NotebookAiController {
                 .body(aiService.createFromDraft(authenticatedUser.getAuthenticatedUser(), request));
     }
 
+    @SendsToAiProvider
     @PostMapping("/ai/pages/{pageId}/suggest-nodes")
     public ResponseEntity<List<SuggestedNodeDTO>> suggestNodes(@PathVariable UUID pageId,
             @RequestBody SuggestNodesRequestDTO request) {
         return ResponseEntity.ok(aiService.suggestNodes(authenticatedUser.getAuthenticatedUser(), pageId, request));
     }
 
+    @SendsToAiProvider
     @PostMapping("/ai/pages/{pageId}/explain")
     public ResponseEntity<AnswerDTO> explain(@PathVariable UUID pageId, @Valid @RequestBody ExplainRequestDTO request) {
         return ResponseEntity.ok(aiService.explain(authenticatedUser.getAuthenticatedUser(), pageId, request));
     }
 
     /** Flashcards drafted by the AI and saved to the page. */
+    @SendsToAiProvider
     @PostMapping("/ai/pages/{pageId}/cards")
     public ResponseEntity<List<CardDTO>> cards(@PathVariable UUID pageId, @Valid @RequestBody AiCardsRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -140,6 +146,7 @@ public class NotebookAiController {
      * or from the model's own knowledge. Nothing is saved: the client puts the result in the page.
      * With {@code base}, an adjustment of that diagram.
      */
+    @SendsToAiProvider
     @PostMapping("/ai/pages/{pageId}/diagram")
     public ResponseEntity<DiagramResultDTO> diagram(@PathVariable UUID pageId,
             @Valid @RequestBody DiagramRequestDTO request) {
@@ -150,6 +157,7 @@ public class NotebookAiController {
      * One question in the study room. Answered from the page's notes and sources where they cover
      * it, with citations, and from the model's own knowledge where they do not.
      */
+    @SendsToAiProvider
     @PostMapping("/ai/pages/{pageId}/chat")
     public ResponseEntity<ChatTurnDTO> chat(@PathVariable UUID pageId, @Valid @RequestBody ChatRequestDTO request) {
         return ResponseEntity.ok(studyService.chat(authenticatedUser.getAuthenticatedUser(), pageId, request.message()));
@@ -159,6 +167,7 @@ public class NotebookAiController {
      * "Find sources for me": a web search for what the person described, every result opened and
      * checked. Nothing is stored; the client adds the ones the person picks as link sources.
      */
+    @SendsToAiProvider
     @PostMapping("/ai/pages/{pageId}/discover-sources")
     public ResponseEntity<DiscoveryResultDTO> discoverSources(@PathVariable UUID pageId,
             @Valid @RequestBody DiscoverSourcesRequestDTO request) {
@@ -166,6 +175,7 @@ public class NotebookAiController {
     }
 
     /** A studio output: overview, summary, study guide or quiz. */
+    @SendsToAiProvider
     @PostMapping("/ai/pages/{pageId}/outputs")
     public ResponseEntity<StudyOutputDTO> generate(@PathVariable UUID pageId,
             @Valid @RequestBody GenerateOutputRequestDTO request) {

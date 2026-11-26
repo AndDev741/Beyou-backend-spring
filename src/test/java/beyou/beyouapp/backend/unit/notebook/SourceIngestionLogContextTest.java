@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.unit.notebook;
 
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,7 +45,8 @@ class SourceIngestionLogContextTest {
             return false; // stop the job here; the log context is all this test is about
         });
         SourceIngestionService service = new SourceIngestionService(writes, mock(SourceChunkStore.class),
-                mock(PdfTextExtractor.class), mock(LinkFetcher.class), mock(EmbeddingClient.class), true);
+                mock(PdfTextExtractor.class), mock(LinkFetcher.class), mock(EmbeddingClient.class),
+                mock(AiConsentPolicy.class), true);
         UUID userId = UUID.randomUUID();
 
         service.submit(UUID.randomUUID(), userId, new SourceIngestionService.TextPayload("notes"));

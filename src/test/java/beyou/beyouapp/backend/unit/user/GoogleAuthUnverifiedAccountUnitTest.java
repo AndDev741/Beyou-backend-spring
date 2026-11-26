@@ -66,7 +66,7 @@ class GoogleAuthUnverifiedAccountUnitTest {
         // Map.of, which rejects null values. Only its non-nullness matters here.
         when(userMapper.toResponseDTO(any(User.class))).thenReturn(
                 new UserResponseDTO(UUID.randomUUID(), "Victim", EMAIL, null, null, 0, false, null,
-                        false, List.of(), null, 0, 0, 0, 0, null, false, 0, false, null, "UTC", null, null, null));
+                        false, List.of(), null, 0, 0, 0, 0, null, false, 0, false, null, "UTC", null, null, null, null));
         response = new MockHttpServletResponse();
 
         // Bookkeeping only: the federated row is written after the decision this test is

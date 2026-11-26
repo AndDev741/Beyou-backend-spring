@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.controllers;
 
+import beyou.beyouapp.backend.security.aiconsent.SendsToAiProvider;
 import java.util.List;
 import java.util.UUID;
 
@@ -119,12 +120,14 @@ public class SecondBrainController {
     }
 
     /** Tops the interview up (seeds, the daily check-in, follow-ups) and answers the OPEN questions. */
+    @SendsToAiProvider
     @PostMapping("/questions/refill")
     public ResponseEntity<List<SecondBrainQuestionDTO>> refill() {
         return ResponseEntity.ok(secondBrainService.refill(authenticatedUser.getAuthenticatedUser()));
     }
 
     /** Closes the question with the answer and says which facts and notes it left. */
+    @SendsToAiProvider
     @PostMapping("/questions/{id}/answer")
     public ResponseEntity<SecondBrainAnswerResultDTO> answer(
             @PathVariable UUID id, @Valid @RequestBody SecondBrainAnswerRequestDTO request) {
@@ -137,6 +140,7 @@ public class SecondBrainController {
     }
 
     /** Writes the overview again. {@code AI_UNAVAILABLE} when no model answers. */
+    @SendsToAiProvider
     @PostMapping("/insight/refresh")
     public ResponseEntity<SecondBrainInsightDTO> refreshInsight() {
         return ResponseEntity.ok(secondBrainService.refreshInsight(authenticatedUser.getAuthenticatedUser()));

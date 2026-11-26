@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.notebook.source;
 
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -46,6 +47,8 @@ public class SourceIngestionService {
     private final LinkFetcher linkFetcher;
     private final EmbeddingClient embeddingClient;
     private final boolean background;
+    /** Read before each batch goes to the embedding model. */
+    private final AiConsentPolicy aiConsentPolicy;
 
     private final ExecutorService pool = Executors.newFixedThreadPool(THREADS, runnable -> {
         Thread thread = new Thread(runnable, "notebook-ingest");
@@ -55,7 +58,9 @@ public class SourceIngestionService {
 
     public SourceIngestionService(SourceWrites writes, SourceChunkStore chunkStore,
             PdfTextExtractor pdfExtractor, LinkFetcher linkFetcher, EmbeddingClient embeddingClient,
+            AiConsentPolicy aiConsentPolicy,
             @Value("${notebook.ingest.background:true}") boolean background) {
+        this.aiConsentPolicy = aiConsentPolicy;
         this.writes = writes;
         this.chunkStore = chunkStore;
         this.pdfExtractor = pdfExtractor;
@@ -126,7 +131,7 @@ public class SourceIngestionService {
             }
             List<UUID> ids = chunkStore.insert(sourceId, userId, chunks);
             if (!writes.progress(sourceId, NotebookSourceStatus.READING, 55)) return;
-            embed(sourceId, ids, chunks);
+            embed(sourceId, userId, ids, chunks);
             int chars = chunks.stream().mapToInt(c -> c.content().length()).sum();
             writes.ready(sourceId, pageCount, chars);
         } catch (BusinessException expected) {
@@ -150,14 +155,20 @@ public class SourceIngestionService {
         });
     }
 
-    private void embed(UUID sourceId, List<UUID> ids, List<TextChunker.Chunk> chunks) {
+    private void embed(UUID sourceId, UUID userId, List<UUID> ids, List<TextChunker.Chunk> chunks) {
         if (!embeddingClient.enabled()) return;
         int batch = embeddingClient.batchSize();
         try {
             for (int from = 0; from < chunks.size(); from += batch) {
+                // A "no" to the AI provider given while the source was being read stops the
+                // next batch. The chunks stay searchable through full-text search.
+                if (!aiConsentPolicy.allowsNow(userId)) {
+                    log.info("Embedding source {} stopped: the owner turned the AI features off", sourceId);
+                    return;
+                }
                 int to = Math.min(chunks.size(), from + batch);
                 List<String> inputs = chunks.subList(from, to).stream().map(TextChunker.Chunk::content).toList();
-                List<float[]> vectors = embeddingClient.embed(inputs);
+                List<float[]> vectors = embeddingClient.embed(userId, inputs);
                 chunkStore.setEmbeddings(ids.subList(from, to), vectors, embeddingClient.model());
                 writes.progress(sourceId, NotebookSourceStatus.READING, 55 + (44 * to) / chunks.size());
             }

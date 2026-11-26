@@ -17,6 +17,7 @@ import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
+import beyou.beyouapp.backend.user.enums.AiConsent;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(SpringExtension.class)
 public class UserServiceUnitTest {
@@ -616,6 +620,50 @@ public class UserServiceUnitTest {
 
             assertEquals(ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED)
                     .body(Map.of("error", "Email or password incorrect")), loginResponse);
+        }
+    }
+
+    @Nested
+    @DisplayName("AI consent")
+    class AiConsentAnswer {
+
+        @Test
+        void aYesIsWrittenByItsOwnUpdateWithTheTime() {
+            when(userRepository.setAiConsent(eq(userId), eq(AiConsent.GRANTED), any())).thenAnswer(inv -> {
+                user.setAiConsent(AiConsent.GRANTED);
+                user.setAiConsentAt(inv.getArgument(2));
+                return 1;
+            });
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            UserResponseDTO response = userService.setAiConsent(userId, true);
+
+            assertNotNull(user.getAiConsentAt());
+            assertEquals(AiConsent.GRANTED, response.aiConsent());
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        void aNoIsWrittenTheSameWay() {
+            when(userRepository.setAiConsent(eq(userId), eq(AiConsent.DECLINED), any())).thenReturn(1);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            userService.setAiConsent(userId, false);
+
+            verify(userRepository).setAiConsent(eq(userId), eq(AiConsent.DECLINED), any());
+        }
+
+        @Test
+        void anUnknownAccountIsNotFound() {
+            when(userRepository.setAiConsent(eq(userId), any(), any())).thenReturn(0);
+
+            assertThrows(RuntimeException.class, () -> userService.setAiConsent(userId, true));
+        }
+
+        @Test
+        void aNewAccountStartsUnasked() {
+            assertEquals(AiConsent.UNASKED, new User().getAiConsent());
+            assertNull(new User().getAiConsentAt());
         }
     }
 }

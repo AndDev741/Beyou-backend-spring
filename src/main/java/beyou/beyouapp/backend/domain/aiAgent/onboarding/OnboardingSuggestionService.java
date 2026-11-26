@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.aiAgent.onboarding;
 
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -78,10 +79,12 @@ public class OnboardingSuggestionService {
         try {
             return doCall(type, userMessage, user);
         } catch (RuntimeException first) {
+            if (AiConsentPolicy.isRefusal(first)) throw first;
             log.warn("Onboarding suggestion call failed, retrying once: {}", first.getMessage());
             try {
                 return doCall(type, userMessage + "\nIMPORTANT: return ONLY valid JSON matching the schema.", user);
             } catch (RuntimeException second) {
+                if (AiConsentPolicy.isRefusal(second)) throw second;
                 log.error("Onboarding suggestion retry failed", second);
                 throw new BusinessException(ErrorKey.AI_UNAVAILABLE, "AI suggestions unavailable");
             }
@@ -89,6 +92,7 @@ public class OnboardingSuggestionService {
     }
 
     private <T> T doCall(Class<T> type, String userMessage, User user) {
+        AiConsentPolicy.requireNow(user.getId());
         return chatClient.prompt()
                 .system(s -> s.text(systemTemplate)
                         .param("language", UserLanguage.forPrompt(user))

@@ -45,7 +45,7 @@ class AppleSignInServiceTest {
 
     private static UserResponseDTO dummyDto() {
         return new UserResponseDTO(UUID.randomUUID(), "Ana", "ana@example.test", null, null, 0, false, null, true,
-                List.of(), null, 0d, 0d, 0d, 0, null, false, 0, false, null, null, null, null, null);
+                List.of(), null, 0d, 0d, 0d, 0, null, false, 0, false, null, null, null, null, null, null);
     }
 
     @BeforeEach

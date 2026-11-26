@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.notebook.ai.draft;
 
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -192,6 +193,12 @@ public class RoadmapDraftService {
             try {
                 User user = userRepository.findById(userId).orElse(null);
                 if (user == null) return;
+                // Read fresh just now: a "no" to the AI provider given while the draft waited
+                // holds, and the draft fails with that reason instead of calling the model.
+                if (!AiConsentPolicy.allows(user.getAiConsent())) {
+                    writes.failed(draftId, ErrorKey.AI_CONSENT_DECLINED.name());
+                    return;
+                }
                 RoadmapDraftRequestDTO request = objectMapper.readValue(draft.getRequest(), RoadmapDraftRequestDTO.class);
                 RoadmapDraftDTO result = aiService.roadmapDraft(user, request);
                 writes.ready(draftId, objectMapper.writeValueAsString(result));

@@ -59,7 +59,10 @@ class AgentStreamSecurityIntegrationTest extends AbstractIntegrationTest {
         ownerChatId = chatRepository.saveAndFlush(chat).getId();
 
         String otherEmail = "other-" + UUID.randomUUID() + "@test.com";
-        registerAndVerify(otherEmail);
+        User other = registerAndVerify(otherEmail);
+        // The stream route is refused to anyone who hasn't allowed AI, before the ownership
+        // check. Allow it here so the request gets as far as that check.
+        userService.setAiConsent(other.getId(), true);
         otherUserToken = login(otherEmail);
     }
 

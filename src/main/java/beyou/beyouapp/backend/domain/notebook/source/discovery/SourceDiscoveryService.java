@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.notebook.source.discovery;
 
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
@@ -79,10 +80,13 @@ public class SourceDiscoveryService {
         String topic = page.isTopic() ? page.getTitle()
                 : pageRepository.findById(page.getTopicId()).map(NotebookPage::getTitle).orElse(page.getTitle());
 
+        // The title, the topic and the description go to the search provider.
+        AiConsentPolicy.requireNow(user.getId());
         List<SearchHit> hits;
         try {
-            hits = search.search(query(description, page, topic), prompt(description, page, topic));
+            hits = search.search(user.getId(), query(description, page, topic), prompt(description, page, topic));
         } catch (RuntimeException e) {
+            if (AiConsentPolicy.isRefusal(e)) throw e;
             log.warn("Source discovery search failed: {}", e.getMessage());
             throw new BusinessException(ErrorKey.NOTEBOOK_DISCOVERY_FAILED, "The search did not answer");
         }

@@ -136,6 +136,9 @@ public enum ErrorKey {
     FEEDBACK_ATTACHMENT_LIMIT_REACHED,
     FEEDBACK_ATTACHMENT_NOT_FOUND,
     AI_UNAVAILABLE,
+    // The person declined to have their data sent to the AI provider (AiConsent.DECLINED).
+    // Answered as a 400 like any business error; the client points to Configuration.
+    AI_CONSENT_DECLINED,
     FEDERATED_IDENTITY_ALREADY_LINKED,
     FEDERATED_IDENTITY_ISSUER_ALREADY_LINKED,
     OIDC_PROVIDER_UNKNOWN,

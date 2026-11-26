@@ -79,6 +79,26 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * An update of one column rather than a save, so the rest of a {@code User} loaded at the
      * start of the request is never written back with it.
      */
+    /**
+     * The one writer of the AI answer. An UPDATE of those two columns, never a save: the
+     * entity maps them {@code updatable = false}, so no other write can put an old answer back.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.aiConsent = :consent, u.aiConsentAt = :at WHERE u.id = :id")
+    int setAiConsent(@Param("id") UUID id, @Param("consent") beyou.beyouapp.backend.user.enums.AiConsent consent,
+                     @Param("at") java.time.Instant at);
+
+    /** The same, only for an account nobody has answered for yet. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.aiConsent = :consent, u.aiConsentAt = :at WHERE u.id = :id "
+            + "AND u.aiConsent = beyou.beyouapp.backend.user.enums.AiConsent.UNASKED")
+    int setAiConsentIfUnasked(@Param("id") UUID id, @Param("consent") beyou.beyouapp.backend.user.enums.AiConsent consent,
+                              @Param("at") java.time.Instant at);
+
+    /** The AI answer as it stands now, for work that started before it may have changed. */
+    @Query("SELECT u.aiConsent FROM User u WHERE u.id = :id")
+    beyou.beyouapp.backend.user.enums.AiConsent findAiConsent(@Param("id") UUID id);
+
     @Modifying
     @Query("UPDATE User u SET u.userContext = :context WHERE u.id = :id")
     void setUserContext(@Param("id") UUID id, @Param("context") String context);

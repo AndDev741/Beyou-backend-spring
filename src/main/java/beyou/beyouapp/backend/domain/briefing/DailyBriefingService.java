@@ -23,6 +23,7 @@ import beyou.beyouapp.backend.domain.briefing.dto.BriefingNarrative;
 import beyou.beyouapp.backend.domain.briefing.dto.DailyBriefingResponseDTO;
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import jakarta.annotation.PreDestroy;
 import beyou.beyouapp.backend.monitoring.UserContextLogFilter;
 import lombok.extern.slf4j.Slf4j;
@@ -121,11 +122,16 @@ public class DailyBriefingService {
      */
     private final boolean narrationEnabled;
 
+    /** The AI answer, read again on the narration pool right before the model call. */
+    private final AiConsentPolicy aiConsentPolicy;
+
     public DailyBriefingService(DailyBriefingFactsBuilder factsBuilder,
                                 DailyBriefingNarrator narrator,
                                 DailyBriefingWrites writes,
                                 DailyBriefingRepository repository,
+                                AiConsentPolicy aiConsentPolicy,
                                 @Value("${briefing.narration-enabled:true}") boolean narrationEnabled) {
+        this.aiConsentPolicy = aiConsentPolicy;
         this.factsBuilder = factsBuilder;
         this.narrator = narrator;
         this.writes = writes;
@@ -188,6 +194,10 @@ public class DailyBriefingService {
 
     /** The same, against a named day. See {@link #briefingFor(User, LocalDate)}. */
     public BriefingNarrative narrativeFor(User user, LocalDate date) {
+        // Without a yes to the AI provider there is no prose to hand out, stored or not.
+        if (!AiConsentPolicy.allows(user.getAiConsent())) {
+            return BriefingNarrative.absent(NarrativeStatus.UNAVAILABLE);
+        }
         DailyBriefing row = repository.findByUserIdAndBriefingDate(user.getId(), date).orElse(null);
         if (row == null) {
             // No row means GET /daily-briefing decided the day was not worth a dialog, or was
@@ -256,6 +266,12 @@ public class DailyBriefingService {
 
     private BriefingNarrative resolveNarrative(User user, DailyBriefing row,
                                                DailyBriefingFactsBuilder.Facts facts) {
+        // The person has not said yes to the AI provider (never asked, or said no): the facts
+        // are Beyou's own and still show; prose is neither written nor handed out, not even
+        // prose stored before a "no". UNAVAILABLE so the client does not poll for it.
+        if (!AiConsentPolicy.allows(user.getAiConsent())) {
+            return BriefingNarrative.absent(NarrativeStatus.UNAVAILABLE);
+        }
         if (isReady(row)) {
             return readStored(row);
         }
@@ -318,6 +334,12 @@ public class DailyBriefingService {
         UUID userId = user.getId();
         CompletableFuture<BriefingNarrative> future = CompletableFuture.supplyAsync(
                 () -> UserContextLogFilter.withUserId(userId, () -> {
+                    // The request was allowed, but the pool may have kept it waiting: a "no"
+                    // given meanwhile holds. Stored as UNAVAILABLE, so the day is not retried.
+                    if (!aiConsentPolicy.allowsNow(userId)) {
+                        writes.storeNarrative(rowId, NarrativeStatus.UNAVAILABLE, null);
+                        return BriefingNarrative.absent(NarrativeStatus.UNAVAILABLE);
+                    }
                     BriefingNarrative narrative = narrator.narrate(facts, user);
                     writes.storeNarrative(rowId, NarrativeStatus.READY, writeJson(narrative));
                     return narrative;

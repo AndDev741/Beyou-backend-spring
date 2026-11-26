@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.notebook.source;
 
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -40,14 +41,18 @@ public class NotebookRetriever {
     private final SourceChunkStore chunkStore;
     private final EmbeddingClient embeddingClient;
 
-    public List<SourceChunkStore.StoredChunk> retrieve(Collection<UUID> sourceIds, String question, int limit) {
+    /**
+     * @param userId the person asking: the question goes to the embedding model only with
+     *               their yes to the AI provider, read fresh; otherwise full-text search answers.
+     */
+    public List<SourceChunkStore.StoredChunk> retrieve(UUID userId, Collection<UUID> sourceIds, String question, int limit) {
         if (sourceIds.isEmpty()) return List.of();
-        if (embeddingClient.enabled()) {
+        if (embeddingClient.enabled() && consentAllows(userId)) {
             try {
                 List<SourceChunkStore.ChunkVector> vectors =
                         chunkStore.vectors(sourceIds, embeddingClient.model(), MAX_VECTORS);
                 if (!vectors.isEmpty()) {
-                    float[] q = embeddingClient.embedOne(question);
+                    float[] q = embeddingClient.embedOne(userId, question);
                     List<UUID> best = vectors.stream()
                             .map(v -> Map.entry(v.id(), cosine(q, v.vector())))
                             .sorted(Map.Entry.<UUID, Double>comparingByValue().reversed())
@@ -88,5 +93,15 @@ public class NotebookRetriever {
         }
         out.sort(Comparator.comparingInt(c -> order.indexOf(c.id())));
         return out;
+    }
+
+    private static boolean consentAllows(UUID userId) {
+        try {
+            AiConsentPolicy.requireNow(userId);
+            return true;
+        } catch (RuntimeException refused) {
+            if (AiConsentPolicy.isRefusal(refused)) return false;
+            throw refused;
+        }
     }
 }

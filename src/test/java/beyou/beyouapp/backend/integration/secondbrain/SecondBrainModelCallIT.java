@@ -453,6 +453,8 @@ class SecondBrainModelCallIT extends AbstractIntegrationTest {
         account.setCompletedDays(new HashSet<>());
         account.setXpDecayStrategy(XpDecayStrategy.GRADUAL);
         account.setXpProgress(new XpProgress(0D, 0, 0D, 50D));
+        // These tests drive the model calls, which only an account that allowed them reaches.
+        account.setAiConsent(beyou.beyouapp.backend.user.enums.AiConsent.GRANTED);
         return userRepository.saveAndFlush(account);
     }
 }
