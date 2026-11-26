@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.domain.notebook.source;
 
+import java.util.UUID;
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -51,11 +53,13 @@ public class EmbeddingClient {
         return properties.batchSize();
     }
 
-    public List<float[]> embed(List<String> inputs) {
+    /** @param userId whose text this is: refused unless they allowed the AI provider, read fresh. */
+    public List<float[]> embed(UUID userId, List<String> inputs) {
         if (!enabled()) {
             throw new IllegalStateException("Embeddings are not configured");
         }
         if (inputs.isEmpty()) return List.of();
+        AiConsentPolicy.requireNow(userId);
         EmbeddingResponse response = restClient.post()
                 .uri("/embeddings")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -71,8 +75,8 @@ public class EmbeddingClient {
         return items.stream().map(EmbeddingItem::embedding).toList();
     }
 
-    public float[] embedOne(String input) {
-        return embed(List.of(input)).get(0);
+    public float[] embedOne(UUID userId, String input) {
+        return embed(userId, List.of(input)).get(0);
     }
 
     record EmbeddingRequest(String model, List<String> input) {

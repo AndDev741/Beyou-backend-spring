@@ -168,7 +168,7 @@ public class SourceIngestionService {
                 }
                 int to = Math.min(chunks.size(), from + batch);
                 List<String> inputs = chunks.subList(from, to).stream().map(TextChunker.Chunk::content).toList();
-                List<float[]> vectors = embeddingClient.embed(inputs);
+                List<float[]> vectors = embeddingClient.embed(userId, inputs);
                 chunkStore.setEmbeddings(ids.subList(from, to), vectors, embeddingClient.model());
                 writes.progress(sourceId, NotebookSourceStatus.READING, 55 + (44 * to) / chunks.size());
             }

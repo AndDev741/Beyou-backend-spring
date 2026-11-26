@@ -32,8 +32,16 @@ public class OnboardingSuggestionServiceTest {
     private ChatModel chatModel;
     private OnboardingSuggestionService service;
 
+    private beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy allowAll;
+
+    @org.junit.jupiter.api.AfterEach
+    void forgetConsentPolicy() {
+        allowAll.unregister();
+    }
+
     @BeforeEach
     public void setUp() {
+        allowAll = beyou.beyouapp.backend.utils.AiConsentTestSupport.allowAll();
         chatModel = mock(ChatModel.class);
         // Mock getOptions() to prevent NPE in ChatClient
         when(chatModel.getOptions()).thenReturn(ToolCallingChatOptions.builder().build());
@@ -47,6 +55,7 @@ public class OnboardingSuggestionServiceTest {
 
     private static User user() {
         User u = new User();
+        u.setId(java.util.UUID.randomUUID());
         u.setLanguageInUse("en");
         return u;
     }

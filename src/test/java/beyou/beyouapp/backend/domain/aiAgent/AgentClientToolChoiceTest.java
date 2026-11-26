@@ -38,7 +38,22 @@ class AgentClientToolChoiceTest {
     private static final ChatResponse OK =
             new ChatResponse(List.of(new Generation(new AssistantMessage("ok"))));
 
+    /** The agent model refuses a prompt whose person has not said yes; this one has. */
+    private static final java.util.UUID USER_ID = java.util.UUID.randomUUID();
+
     private final ChatModel model = mock(ChatModel.class);
+
+    private beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy allowAll;
+
+    @org.junit.jupiter.api.BeforeEach
+    void allowTheModel() {
+        allowAll = beyou.beyouapp.backend.utils.AiConsentTestSupport.allowAll();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void forgetConsentPolicy() {
+        allowAll.unregister();
+    }
 
     private OpenAiChatOptions optionsSentWith(String toolChoice) {
         when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().model("some-combo").build());
@@ -53,7 +68,7 @@ class AgentClientToolChoiceTest {
                 .user("update my goal")
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "chat-1"))
                 .tools(tool)
-                .toolContext(Map.of("userId", "u1"))
+                .toolContext(Map.of("userId", USER_ID))
                 .stream()
                 .content()
                 .blockLast();
@@ -71,7 +86,7 @@ class AgentClientToolChoiceTest {
         // The model id comes from LlmConfig. Adding tool_choice must leave it in place.
         assertThat(options.getModel()).isEqualTo("some-combo");
         assertThat(options.getToolCallbacks()).hasSize(1);
-        assertThat(options.getToolContext()).containsEntry("userId", "u1");
+        assertThat(options.getToolContext()).containsEntry("userId", USER_ID);
     }
 
     // Blank has to mean the field is absent, so the provider stays on its default (auto)

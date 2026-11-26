@@ -52,7 +52,7 @@ public class NotebookRetriever {
                 List<SourceChunkStore.ChunkVector> vectors =
                         chunkStore.vectors(sourceIds, embeddingClient.model(), MAX_VECTORS);
                 if (!vectors.isEmpty()) {
-                    float[] q = embeddingClient.embedOne(question);
+                    float[] q = embeddingClient.embedOne(userId, question);
                     List<UUID> best = vectors.stream()
                             .map(v -> Map.entry(v.id(), cosine(q, v.vector())))
                             .sorted(Map.Entry.<UUID, Double>comparingByValue().reversed())

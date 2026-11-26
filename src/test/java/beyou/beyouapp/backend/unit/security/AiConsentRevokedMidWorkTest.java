@@ -3,8 +3,9 @@ package beyou.beyouapp.backend.unit.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Map;
@@ -13,13 +14,16 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.model.ToolContext;
-import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.definition.ToolDefinition;
+import java.util.List;
 
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 
-import beyou.beyouapp.backend.domain.aiAgent.MeteredToolCallback;
+import beyou.beyouapp.backend.security.aiconsent.ConsentCheckingChatModel;
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
 import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
@@ -58,20 +62,34 @@ class AiConsentRevokedMidWorkTest {
     }
 
     @Test
-    void theAgentStopsAfterATool_insteadOfHandingTheResultBackToTheModel() {
-        ToolCallback tool = mock(ToolCallback.class);
-        when(tool.getToolDefinition()).thenReturn(
-                ToolDefinition.builder().name("listHabits").description("d").inputSchema("{}").build());
-        when(tool.call(anyString(), any(ToolContext.class))).thenReturn("[]");
-        MeteredToolCallback metered = new MeteredToolCallback(tool, new SimpleMeterRegistry());
-        ToolContext context = new ToolContext(Map.of("userId", userId));
+    void everyCallOfTheAgentsToolLoopChecksFirst_soANoStopsTheNextOne() {
+        ChatModel model = mock(ChatModel.class);
+        ChatResponse ok = new ChatResponse(List.of(new Generation(new AssistantMessage("ok"))));
+        when(model.call(any(Prompt.class))).thenReturn(ok);
+        ConsentCheckingChatModel checked = new ConsentCheckingChatModel(model);
+        Prompt prompt = new Prompt("hi", ToolCallingChatOptions.builder().toolContext(Map.of("userId", userId)).build());
 
         when(users.findAiConsent(userId)).thenReturn(AiConsent.GRANTED);
-        assertThat(metered.call("{}", context)).isEqualTo("[]");
+        assertThat(checked.call(prompt)).isSameAs(ok);
 
+        // The person says no while a tool runs; the loop's next call to the model is refused.
         when(users.findAiConsent(userId)).thenReturn(AiConsent.DECLINED);
-        assertThatThrownBy(() -> metered.call("{}", context))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorKey()).isEqualTo(ErrorKey.AI_CONSENT_DECLINED));
+        assertThatThrownBy(() -> checked.call(prompt)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> checked.stream(prompt).blockLast()).isInstanceOf(BusinessException.class);
+        verify(model, times(1)).call(any(Prompt.class));
+    }
+
+    @Test
+    void aPromptThatNamesNobodyIsRefused() {
+        ChatModel model = mock(ChatModel.class);
+        assertThatThrownBy(() -> new ConsentCheckingChatModel(model).call(new Prompt("hi")))
+                .isInstanceOf(BusinessException.class);
+        verify(model, times(0)).call(any(Prompt.class));
+    }
+
+    @Test
+    void withNoPolicyEverythingIsRefused() {
+        policy.unregister();
+        assertThatThrownBy(() -> AiConsentPolicy.requireNow(userId)).isInstanceOf(BusinessException.class);
     }
 }

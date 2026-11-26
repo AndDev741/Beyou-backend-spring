@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.aiAgent;
 
+import beyou.beyouapp.backend.security.aiconsent.ConsentCheckingChatModel;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.ZonedDateTime;
@@ -139,7 +140,8 @@ public class AiAgentService {
      * tools, and an OpenAI-compatible endpoint may refuse {@code tool_choice} without them.
      */
     static ChatClient agentClient(ChatModel chatModel, ChatMemory chatMemory, String toolChoice) {
-        ChatClient.Builder builder = ChatClient.builder(chatModel)
+        // Every model call of a turn, the tool loop's included, checks the person's yes first.
+        ChatClient.Builder builder = ChatClient.builder(new ConsentCheckingChatModel(chatModel))
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build());
         if (toolChoice != null && !toolChoice.isBlank()) {
             // Combined onto the model's own options for every prompt, so the model id

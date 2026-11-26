@@ -51,9 +51,11 @@ class NotebookLlmTest {
 
     private ChatModel chatModel;
     private NotebookLlm llm;
+    private AiConsentPolicy allowAll;
 
     @BeforeEach
     void setUp() {
+        allowAll = beyou.beyouapp.backend.utils.AiConsentTestSupport.allowAll();
         chatModel = mock(ChatModel.class);
         when(chatModel.getOptions()).thenReturn(ToolCallingChatOptions.builder().build());
         llm = new NotebookLlm(chatModel,
@@ -62,6 +64,7 @@ class NotebookLlmTest {
 
     @AfterEach
     void tearDown() {
+        allowAll.unregister();
         llm.shutdown();
         MDC.clear();
     }
@@ -194,6 +197,7 @@ class NotebookLlmTest {
 
     private static User user() {
         User u = new User();
+        u.setId(java.util.UUID.randomUUID());
         u.setLanguageInUse("en");
         return u;
     }

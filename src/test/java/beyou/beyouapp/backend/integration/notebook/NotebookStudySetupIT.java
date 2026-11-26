@@ -139,7 +139,7 @@ class NotebookStudySetupIT extends AbstractIntegrationTest {
     void discoveryOffersOnlyPagesThatOpenAndAreNotSourcesYet() {
         sourceService.addLink(user, algorithms, new AddLinkRequestDTO("https://already.example/notes"));
         when(search.provider()).thenReturn(DiscoveryProperties.Provider.GEMINI);
-        when(search.search(anyString(), anyString())).thenReturn(List.of(
+        when(search.search(any(), anyString(), anyString())).thenReturn(List.of(
                 new SearchHit("mit.edu", "https://redirect.example/1", "MIT's notes cover merge sort with proofs."),
                 new SearchHit("dead.example", "https://dead.example/", "Gone."),
                 new SearchHit("already", "https://already.example/notes", "Already a source."),

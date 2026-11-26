@@ -84,8 +84,9 @@ public class SourceDiscoveryService {
         AiConsentPolicy.requireNow(user.getId());
         List<SearchHit> hits;
         try {
-            hits = search.search(query(description, page, topic), prompt(description, page, topic));
+            hits = search.search(user.getId(), query(description, page, topic), prompt(description, page, topic));
         } catch (RuntimeException e) {
+            if (AiConsentPolicy.isRefusal(e)) throw e;
             log.warn("Source discovery search failed: {}", e.getMessage());
             throw new BusinessException(ErrorKey.NOTEBOOK_DISCOVERY_FAILED, "The search did not answer");
         }

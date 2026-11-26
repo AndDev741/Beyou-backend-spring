@@ -1,5 +1,7 @@
 package beyou.beyouapp.backend.domain.notebook.source.discovery;
 
+import java.util.UUID;
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,9 +52,11 @@ public class WebSearchClient {
      * @param query  a search query, for Tavily
      * @param prompt the same ask as instructions, for Gemini
      */
-    public List<SearchHit> search(String query, String prompt) {
+    /** @param userId whose words these are: refused unless they allowed the AI provider, read fresh. */
+    public List<SearchHit> search(UUID userId, String query, String prompt) {
         DiscoveryProperties.Provider provider = properties.provider();
         if (provider == null) throw new IllegalStateException("No search provider is configured");
+        AiConsentPolicy.requireNow(userId);
         int max = properties.maxResults();
         if (provider == DiscoveryProperties.Provider.TAVILY) {
             String body = tavily.post()

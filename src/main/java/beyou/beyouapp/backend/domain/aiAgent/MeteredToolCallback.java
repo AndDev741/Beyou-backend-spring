@@ -1,6 +1,5 @@
 package beyou.beyouapp.backend.domain.aiAgent;
 
-import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -64,10 +63,6 @@ public class MeteredToolCallback implements ToolCallback {
             String timedResult = timed(() -> delegate.call(toolInput, context));
             
             emit(events, AgentEvent.toolFinished(name, null, AgentToolDomains.domainsOf(name), display.fields()));
-            // The tool's result goes back to the model next. A "no" to the AI provider given
-            // while the turn was running stops it here: the refusal is not a tool error, so it
-            // ends the stream instead of being handed to the model.
-            AiConsentPolicy.requireNow(userIdFrom(toolContext));
             
             return timedResult;
         }catch(RuntimeException e){
@@ -93,12 +88,6 @@ public class MeteredToolCallback implements ToolCallback {
     }
 
     @SuppressWarnings("unchecked")
-    private static java.util.UUID userIdFrom(ToolContext toolContext) {
-        if (toolContext == null) return null;
-        Object id = toolContext.getContext().get("userId");
-        return id instanceof java.util.UUID uuid ? uuid : null;
-    }
-
     private Consumer<AgentEvent> eventsFrom(ToolContext toolContext){
         if(toolContext == null) return null;
         return (Consumer<AgentEvent>) toolContext.getContext().get(EVENTS_KEY);

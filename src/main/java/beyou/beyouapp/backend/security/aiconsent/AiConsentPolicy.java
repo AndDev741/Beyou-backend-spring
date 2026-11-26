@@ -28,7 +28,8 @@ public class AiConsentPolicy {
     /**
      * The instance the provider clients reach through {@link #requireNow}. Static so the clients
      * (the model, embedding and search clients, built by hand in their unit tests) need no new
-     * constructor argument; with no Spring context there is nothing to check and the call passes.
+     * constructor argument. With none registered every call is refused: unit tests that drive a
+     * client register one of their own.
      */
     private static volatile AiConsentPolicy current;
 
@@ -36,15 +37,19 @@ public class AiConsentPolicy {
         this.userRepository = userRepository;
     }
 
+    /** The one this replaced, so a test that registers its own hands the old one back. */
+    private AiConsentPolicy previous;
+
     @PostConstruct
     public void register() {
+        previous = current;
         current = this;
     }
 
     @PreDestroy
     public void unregister() {
         if (current == this) {
-            current = null;
+            current = previous;
         }
     }
 
@@ -54,14 +59,10 @@ public class AiConsentPolicy {
      * {@code AI_CONSENT_DECLINED} unless it is a yes. One primary-key read per provider call.
      */
     public static void requireNow(UUID userId) {
+        // Closed by default: no policy, no user or no row is a refusal. Only a stored yes passes.
         AiConsentPolicy policy = current;
-        if (policy == null || userId == null) {
-            return;
-        }
-        AiConsent consent = policy.userRepository.findAiConsent(userId);
-        // No row: the account is gone, and with it everything a provider could be sent about
-        // it. The request that started this work was already checked with the account in hand.
-        if (consent != null && !allows(consent)) {
+        AiConsent consent = policy == null || userId == null ? null : policy.userRepository.findAiConsent(userId);
+        if (!allows(consent)) {
             throw new BusinessException(ErrorKey.AI_CONSENT_DECLINED,
                     "The account has not allowed the AI features");
         }
