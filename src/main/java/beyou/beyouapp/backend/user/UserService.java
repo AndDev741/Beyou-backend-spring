@@ -15,6 +15,7 @@ import beyou.beyouapp.backend.security.passwordreset.PasswordResetTokenRepositor
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
+import beyou.beyouapp.backend.user.enums.AiConsent;
 import beyou.beyouapp.backend.user.enums.TimezoneSource;
 import beyou.beyouapp.backend.user.event.UserRegisteredEvent;
 import beyou.beyouapp.backend.user.verification.EmailVerificationService;
@@ -42,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.time.Instant;
 import java.util.UUID;
 
 @Service
@@ -485,6 +487,24 @@ public class UserService {
         }else{
             throw new UserNotFound("User not found by id");
         }
+    }
+
+    /**
+     * Records the person's answer about the AI provider, and when they gave it.
+     *
+     * <p>Its own method and route rather than a field of {@link UserEditDTO}: this is the one
+     * setting that is a permission, so it is written only when a person answers the question,
+     * never as a side effect of saving other settings, and the assistant's
+     * {@code updateUserConfiguration} tool cannot reach it.
+     */
+    @Transactional
+    public UserResponseDTO setAiConsent(UUID userId, boolean granted) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User not found by id"));
+        user.setAiConsent(granted ? AiConsent.GRANTED : AiConsent.DECLINED);
+        user.setAiConsentAt(Instant.now());
+        User saved = userRepository.save(user);
+        return userMapper.toResponseDTO(saved, photoStorageService.getVersion(userId));
     }
 
     /**

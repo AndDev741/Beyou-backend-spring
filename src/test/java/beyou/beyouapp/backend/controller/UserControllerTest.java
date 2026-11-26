@@ -1,6 +1,7 @@
 package beyou.beyouapp.backend.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -221,6 +222,28 @@ public class UserControllerTest extends AbstractIntegrationTest {
 
     //     verify(userService).editUser(eq(dto), eq(userId));
     // }
+
+    @Test
+    void shouldRecordTheAiConsentAnswer() throws Exception {
+        when(userService.setAiConsent(userId, false)).thenReturn(userResponseDTO);
+
+        mockMvc.perform(put("/user/ai-consent")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"granted\":false}"))
+            .andExpect(status().isOk());
+
+        verify(userService).setAiConsent(userId, false);
+    }
+
+    @Test
+    void shouldRefuseAnAiConsentWithoutAnAnswer() throws Exception {
+        mockMvc.perform(put("/user/ai-consent")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest());
+
+        verify(userService, never()).setAiConsent(any(), anyBoolean());
+    }
 
     @Test
     void shouldAskForADeletionCode() throws Exception {

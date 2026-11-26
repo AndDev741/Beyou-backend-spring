@@ -17,6 +17,7 @@ import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserLoginDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
+import beyou.beyouapp.backend.user.enums.AiConsent;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -616,6 +617,40 @@ public class UserServiceUnitTest {
 
             assertEquals(ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED)
                     .body(Map.of("error", "Email or password incorrect")), loginResponse);
+        }
+    }
+
+    @Nested
+    @DisplayName("AI consent")
+    class AiConsentAnswer {
+
+        @Test
+        void aYesIsKeptWithTheTimeItWasGiven() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(user)).thenReturn(user);
+
+            UserResponseDTO response = userService.setAiConsent(userId, true);
+
+            assertEquals(AiConsent.GRANTED, user.getAiConsent());
+            assertNotNull(user.getAiConsentAt());
+            assertEquals(AiConsent.GRANTED, response.aiConsent());
+        }
+
+        @Test
+        void aNoIsKeptToo() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(user)).thenReturn(user);
+
+            UserResponseDTO response = userService.setAiConsent(userId, false);
+
+            assertEquals(AiConsent.DECLINED, user.getAiConsent());
+            assertEquals(AiConsent.DECLINED, response.aiConsent());
+        }
+
+        @Test
+        void aNewAccountStartsUnasked() {
+            assertEquals(AiConsent.UNASKED, new User().getAiConsent());
+            assertNull(new User().getAiConsentAt());
         }
     }
 }

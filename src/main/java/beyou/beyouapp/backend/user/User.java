@@ -23,6 +23,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
 import beyou.beyouapp.backend.domain.routine.snapshot.XpDecayStrategy;
 import beyou.beyouapp.backend.user.federation.FederatedPrincipal;
+import beyou.beyouapp.backend.user.enums.AiConsent;
 import beyou.beyouapp.backend.user.enums.ConstanceConfiguration;
 import beyou.beyouapp.backend.user.enums.TimezoneSource;
 import beyou.beyouapp.backend.user.enums.UserRole;
@@ -157,6 +158,18 @@ public class User implements UserDetails {
 
     private boolean isTutorialCompleted;
 
+    /**
+     * Whether Beyou may send what this person writes to its AI provider. See {@link AiConsent}
+     * for what each value switches; written only by {@code UserService.setAiConsent}.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ai_consent", nullable = false, length = 16)
+    private AiConsent aiConsent = AiConsent.UNASKED;
+
+    /** When {@link #aiConsent} was last answered. Null while it is UNASKED. */
+    @Column(name = "ai_consent_at")
+    private Instant aiConsentAt;
+
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean emailVerified = false;
 
@@ -193,6 +206,7 @@ public class User implements UserDetails {
         if (this.timezone == null) this.timezone = "UTC";
         if (this.timezoneSource == null) this.timezoneSource = TimezoneSource.DEFAULT;
         if (this.xpDecayStrategy == null) this.xpDecayStrategy = XpDecayStrategy.GRADUAL;
+        if (this.aiConsent == null) this.aiConsent = AiConsent.UNASKED;
         setTutorialCompleted(false);
         if (!this.emailVerified) this.emailVerified = false;
     }

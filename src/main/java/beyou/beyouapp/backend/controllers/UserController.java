@@ -20,6 +20,7 @@ import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.deletion.AccountDeletionService;
 import beyou.beyouapp.backend.user.deletion.dto.ConfirmAccountDeletionDTO;
+import beyou.beyouapp.backend.user.dto.AiConsentRequestDTO;
 import beyou.beyouapp.backend.user.dto.UserEditDTO;
 import beyou.beyouapp.backend.user.dto.UserResponseDTO;
 import jakarta.servlet.http.HttpServletRequest;
@@ -53,6 +54,16 @@ public class UserController {
     public UserResponseDTO editUser(@Valid @RequestBody UserEditDTO userEdit){
         User user = authenticatedUser.getAuthenticatedUser();
         return userService.editUser(userEdit, user.getId());
+    }
+
+    /**
+     * The person's yes or no to Beyou sending their data to its AI provider. Asked by the
+     * phone before the first AI feature runs, and changeable in Configuration.
+     */
+    @PutMapping("/ai-consent")
+    public UserResponseDTO setAiConsent(@Valid @RequestBody AiConsentRequestDTO request){
+        User user = authenticatedUser.getAuthenticatedUser();
+        return userService.setAiConsent(user.getId(), request.granted());
     }
 
     /**

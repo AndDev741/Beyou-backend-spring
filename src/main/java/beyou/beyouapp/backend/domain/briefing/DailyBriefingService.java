@@ -23,6 +23,7 @@ import beyou.beyouapp.backend.domain.briefing.dto.BriefingNarrative;
 import beyou.beyouapp.backend.domain.briefing.dto.DailyBriefingResponseDTO;
 import beyou.beyouapp.backend.domain.common.UserDateResolver;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.enums.AiConsent;
 import jakarta.annotation.PreDestroy;
 import beyou.beyouapp.backend.monitoring.UserContextLogFilter;
 import lombok.extern.slf4j.Slf4j;
@@ -264,6 +265,11 @@ public class DailyBriefingService {
         // user can see.
         if (row.getNarrativeStatus() == NarrativeStatus.UNAVAILABLE || !narrationEnabled) {
             return BriefingNarrative.absent(row.getNarrativeStatus());
+        }
+        // The person said no to the AI provider: the facts above are Beyou's own and still
+        // show, the prose is never asked for. UNAVAILABLE so the client does not poll for it.
+        if (user.getAiConsent() == AiConsent.DECLINED) {
+            return BriefingNarrative.absent(NarrativeStatus.UNAVAILABLE);
         }
         return generate(user, row, facts);
     }
