@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.controllers;
 
+import beyou.beyouapp.backend.security.aiconsent.SendsToAiProvider;
 import java.util.List;
 import java.util.UUID;
 
@@ -46,18 +47,21 @@ public class NotebookSourceController {
         return ResponseEntity.ok(sourceService.list(authenticatedUser.getAuthenticatedUser(), pageId));
     }
 
+    @SendsToAiProvider
     @PostMapping(value = "/pages/{pageId}/sources/pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<SourceDTO> addPdf(@PathVariable UUID pageId, @RequestParam("file") MultipartFile file) {
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(sourceService.addPdf(authenticatedUser.getAuthenticatedUser(), pageId, file));
     }
 
+    @SendsToAiProvider
     @PostMapping("/pages/{pageId}/sources/link")
     public ResponseEntity<SourceDTO> addLink(@PathVariable UUID pageId, @Valid @RequestBody AddLinkRequestDTO request) {
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(sourceService.addLink(authenticatedUser.getAuthenticatedUser(), pageId, request));
     }
 
+    @SendsToAiProvider
     @PostMapping("/pages/{pageId}/sources/text")
     public ResponseEntity<SourceDTO> addText(@PathVariable UUID pageId, @Valid @RequestBody AddTextRequestDTO request) {
         return ResponseEntity.status(HttpStatus.ACCEPTED)

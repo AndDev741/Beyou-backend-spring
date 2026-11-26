@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.controllers;
 
+import beyou.beyouapp.backend.security.aiconsent.SendsToAiProvider;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +21,7 @@ public class OnboardingController {
     private final OnboardingSuggestionService suggestionService;
     private final AuthenticatedUser authenticatedUser;
 
+    @SendsToAiProvider
     @PostMapping("/suggestions")
     public OnboardingSuggestions suggest(@RequestBody @Valid OnboardingSuggestionRequest request) {
         return suggestionService.suggest(request, authenticatedUser.getAuthenticatedUser());

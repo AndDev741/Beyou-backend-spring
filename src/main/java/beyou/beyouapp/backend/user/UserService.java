@@ -499,12 +499,14 @@ public class UserService {
      */
     @Transactional
     public UserResponseDTO setAiConsent(UUID userId, boolean granted) {
+        int updated = userRepository.setAiConsent(userId,
+                granted ? AiConsent.GRANTED : AiConsent.DECLINED, Instant.now());
+        if (updated == 0) {
+            throw new UserNotFound("User not found by id");
+        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFound("User not found by id"));
-        user.setAiConsent(granted ? AiConsent.GRANTED : AiConsent.DECLINED);
-        user.setAiConsentAt(Instant.now());
-        User saved = userRepository.save(user);
-        return userMapper.toResponseDTO(saved, photoStorageService.getVersion(userId));
+        return userMapper.toResponseDTO(user, photoStorageService.getVersion(userId));
     }
 
     /**

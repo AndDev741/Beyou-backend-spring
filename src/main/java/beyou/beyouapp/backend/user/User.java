@@ -159,15 +159,19 @@ public class User implements UserDetails {
     private boolean isTutorialCompleted;
 
     /**
-     * Whether Beyou may send what this person writes to its AI provider. See {@link AiConsent}
-     * for what each value switches; written only by {@code UserService.setAiConsent}.
+     * Whether Beyou may send what this person writes to its AI provider. See {@link AiConsent}.
+     *
+     * <p>{@code updatable = false}: a save of the whole row (a profile edit, a check-in that
+     * saves the principal) must never write back the answer it read at the start of its
+     * request, or a "no" given in between would be undone. The only writer is
+     * {@code UserRepository.setAiConsent}, a one-row UPDATE.
      */
     @Enumerated(EnumType.STRING)
-    @Column(name = "ai_consent", nullable = false, length = 16)
+    @Column(name = "ai_consent", nullable = false, length = 16, updatable = false)
     private AiConsent aiConsent = AiConsent.UNASKED;
 
-    /** When {@link #aiConsent} was last answered. Null while it is UNASKED. */
-    @Column(name = "ai_consent_at")
+    /** When {@link #aiConsent} was last answered. Null while it is UNASKED. Same rule. */
+    @Column(name = "ai_consent_at", updatable = false)
     private Instant aiConsentAt;
 
     @Column(nullable = false, columnDefinition = "boolean default false")

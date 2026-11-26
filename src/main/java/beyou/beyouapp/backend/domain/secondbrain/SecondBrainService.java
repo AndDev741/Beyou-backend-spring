@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.secondbrain;
 
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -85,7 +86,10 @@ public class SecondBrainService {
                 store.openQuestions(userId),
                 store.facts(userId),
                 store.sources(userId),
-                llm.isConfigured(),
+                // "Can the AI write here": the model is configured AND the person said yes to
+                // the AI provider. The clients hide the AI buttons and skip their automatic
+                // refill and overview on false.
+                llm.isConfigured() && AiConsentPolicy.allows(user.getAiConsent()),
                 notes.memory(userId),
                 store.oldNote(userId));
     }

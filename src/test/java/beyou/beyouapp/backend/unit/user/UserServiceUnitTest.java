@@ -49,6 +49,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(SpringExtension.class)
 public class UserServiceUnitTest {
@@ -625,26 +628,36 @@ public class UserServiceUnitTest {
     class AiConsentAnswer {
 
         @Test
-        void aYesIsKeptWithTheTimeItWasGiven() {
+        void aYesIsWrittenByItsOwnUpdateWithTheTime() {
+            when(userRepository.setAiConsent(eq(userId), eq(AiConsent.GRANTED), any())).thenAnswer(inv -> {
+                user.setAiConsent(AiConsent.GRANTED);
+                user.setAiConsentAt(inv.getArgument(2));
+                return 1;
+            });
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(userRepository.save(user)).thenReturn(user);
 
             UserResponseDTO response = userService.setAiConsent(userId, true);
 
-            assertEquals(AiConsent.GRANTED, user.getAiConsent());
             assertNotNull(user.getAiConsentAt());
             assertEquals(AiConsent.GRANTED, response.aiConsent());
+            verify(userRepository, never()).save(any());
         }
 
         @Test
-        void aNoIsKeptToo() {
+        void aNoIsWrittenTheSameWay() {
+            when(userRepository.setAiConsent(eq(userId), eq(AiConsent.DECLINED), any())).thenReturn(1);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(userRepository.save(user)).thenReturn(user);
 
-            UserResponseDTO response = userService.setAiConsent(userId, false);
+            userService.setAiConsent(userId, false);
 
-            assertEquals(AiConsent.DECLINED, user.getAiConsent());
-            assertEquals(AiConsent.DECLINED, response.aiConsent());
+            verify(userRepository).setAiConsent(eq(userId), eq(AiConsent.DECLINED), any());
+        }
+
+        @Test
+        void anUnknownAccountIsNotFound() {
+            when(userRepository.setAiConsent(eq(userId), any(), any())).thenReturn(0);
+
+            assertThrows(RuntimeException.class, () -> userService.setAiConsent(userId, true));
         }
 
         @Test

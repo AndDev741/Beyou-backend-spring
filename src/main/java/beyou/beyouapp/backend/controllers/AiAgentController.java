@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.controllers;
 
+import beyou.beyouapp.backend.security.aiconsent.SendsToAiProvider;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -50,6 +51,7 @@ public class AiAgentController {
         return chatService.createChat(request == null ? null : request.title(), userId);
     }
 
+    @SendsToAiProvider
     @PostMapping(value = "/chats/{chatId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamMessage(@PathVariable UUID chatId, @RequestBody @Valid AiAgentRequest request,
             HttpServletResponse response) {

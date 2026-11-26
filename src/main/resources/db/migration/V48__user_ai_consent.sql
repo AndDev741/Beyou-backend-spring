@@ -24,5 +24,6 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_consent_at timestamptz;
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_ai_consent_check;
 
 -- Mirrored by AiConsent. A value added there without adding it here fails every write of it.
--- squawk-ignore constraint-missing-not-valid
-ALTER TABLE users ADD CONSTRAINT users_ai_consent_check CHECK (ai_consent IN ('UNASKED', 'GRANTED', 'DECLINED'));
+-- NOT VALID: new writes are checked at once, and the scan of the existing rows (which can only
+-- hold the default) runs in V49 under a lighter lock, so this never holds users for a scan.
+ALTER TABLE users ADD CONSTRAINT users_ai_consent_check CHECK (ai_consent IN ('UNASKED', 'GRANTED', 'DECLINED')) NOT VALID;

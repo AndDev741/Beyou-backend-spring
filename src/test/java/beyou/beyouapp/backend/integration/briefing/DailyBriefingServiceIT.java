@@ -812,6 +812,9 @@ class DailyBriefingServiceIT extends AbstractIntegrationTest {
         account.setXpDecayStrategy(XpDecayStrategy.GRADUAL);
         account.setConstanceConfiguration(ConstanceConfiguration.ANY);
         account.setXpProgress(new XpProgress(0D, 0, 0D, 50D));
+        // The prose is only written for an account that allowed the AI features; the facts
+        // these tests are about do not depend on it (DailyBriefingConsentTest covers the rest).
+        account.setAiConsent(beyou.beyouapp.backend.user.enums.AiConsent.GRANTED);
         return userRepository.saveAndFlush(account);
     }
 
