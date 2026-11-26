@@ -225,14 +225,14 @@ public class UserControllerTest extends AbstractIntegrationTest {
 
     @Test
     void shouldRecordTheAiConsentAnswer() throws Exception {
-        when(userService.setAiConsent(userId, false)).thenReturn(userResponseDTO);
+        when(userService.setAiConsent(userId, false, false)).thenReturn(userResponseDTO);
 
         mockMvc.perform(put("/user/ai-consent")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"granted\":false}"))
             .andExpect(status().isOk());
 
-        verify(userService).setAiConsent(userId, false);
+        verify(userService).setAiConsent(userId, false, false);
     }
 
     @Test
@@ -242,7 +242,7 @@ public class UserControllerTest extends AbstractIntegrationTest {
                 .content("{}"))
             .andExpect(status().isBadRequest());
 
-        verify(userService, never()).setAiConsent(any(), anyBoolean());
+        verify(userService, never()).setAiConsent(any(), anyBoolean(), anyBoolean());
     }
 
     @Test

@@ -65,6 +65,19 @@ class AiConsentWriteIT extends AbstractIntegrationTest {
         assertThat(userRepository.findAiConsent(id)).isEqualTo(AiConsent.DECLINED);
     }
 
+    /** A phone handing over an answer kept on the device must not overwrite a newer one. */
+    @Test
+    void aHandedOverAnswerOnlyLandsOnAnAccountNobodyAnsweredFor() {
+        UUID answered = newUser().getId();
+        transactionTemplate.executeWithoutResult(tx -> userService.setAiConsent(answered, false));
+        var kept = transactionTemplate.execute(tx -> userService.setAiConsent(answered, true, true));
+        assertThat(kept.aiConsent()).isEqualTo(AiConsent.DECLINED);
+
+        UUID fresh = newUser().getId();
+        var landed = transactionTemplate.execute(tx -> userService.setAiConsent(fresh, true, true));
+        assertThat(landed.aiConsent()).isEqualTo(AiConsent.GRANTED);
+    }
+
     @Test
     void aNewAccountStartsUnaskedInTheDatabase() {
         UUID id = newUser().getId();

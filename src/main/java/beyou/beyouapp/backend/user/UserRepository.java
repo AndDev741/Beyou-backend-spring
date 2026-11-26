@@ -88,6 +88,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     int setAiConsent(@Param("id") UUID id, @Param("consent") beyou.beyouapp.backend.user.enums.AiConsent consent,
                      @Param("at") java.time.Instant at);
 
+    /** The same, only for an account nobody has answered for yet. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.aiConsent = :consent, u.aiConsentAt = :at WHERE u.id = :id "
+            + "AND u.aiConsent = beyou.beyouapp.backend.user.enums.AiConsent.UNASKED")
+    int setAiConsentIfUnasked(@Param("id") UUID id, @Param("consent") beyou.beyouapp.backend.user.enums.AiConsent consent,
+                              @Param("at") java.time.Instant at);
+
     /** The AI answer as it stands now, for work that started before it may have changed. */
     @Query("SELECT u.aiConsent FROM User u WHERE u.id = :id")
     beyou.beyouapp.backend.user.enums.AiConsent findAiConsent(@Param("id") UUID id);

@@ -201,6 +201,8 @@ class NotebookStudySetupIT extends AbstractIntegrationTest {
         u.setCompletedDays(new HashSet<>());
         u.setXpDecayStrategy(XpDecayStrategy.GRADUAL);
         u.setXpProgress(new XpProgress(0D, 0, 0D, 50D));
+        // Source discovery sends the search to a provider, which only a yes allows.
+        u.setAiConsent(beyou.beyouapp.backend.user.enums.AiConsent.GRANTED);
         return userRepository.saveAndFlush(u);
     }
 }

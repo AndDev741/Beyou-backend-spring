@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.notebook.ai;
 
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -81,6 +82,7 @@ public class NotebookLlm {
         try {
             return within(deadline, () -> doCall(type, userMessage, user));
         } catch (RuntimeException first) {
+            if (AiConsentPolicy.isRefusal(first)) throw first;
             Duration left = Duration.between(Instant.now(), deadline);
             if (left.compareTo(minRetry) < 0) {
                 log.error("Notebook AI call failed with {} ms of the budget left, not retrying: {}",
@@ -92,6 +94,7 @@ public class NotebookLlm {
                 return within(deadline,
                         () -> doCall(type, userMessage + "\nIMPORTANT: return ONLY valid JSON matching the schema.", user));
             } catch (RuntimeException second) {
+                if (AiConsentPolicy.isRefusal(second)) throw second;
                 log.error("Notebook AI retry failed", second);
                 throw unavailable();
             }
@@ -126,6 +129,7 @@ public class NotebookLlm {
     }
 
     private <T> T doCall(Class<T> type, String userMessage, User user) {
+        AiConsentPolicy.requireNow(user.getId());
         T result = chatClient.prompt()
                 .system(s -> s.text(systemTemplate)
                         .param("language", UserLanguage.forPrompt(user))

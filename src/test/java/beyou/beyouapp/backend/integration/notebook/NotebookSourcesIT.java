@@ -83,7 +83,7 @@ class NotebookSourcesIT extends AbstractIntegrationTest {
         NotebookSource read = sourceRepository.findById(added.id()).orElseThrow();
         assertThat(read.getStatus()).isEqualTo(NotebookSourceStatus.READY);
         assertThat(read.getProgress()).isEqualTo(100);
-        List<SourceChunkStore.StoredChunk> found = retriever.retrieve(List.of(added.id()), "how is the successor deleted", 3);
+        List<SourceChunkStore.StoredChunk> found = retriever.retrieve(user.getId(), List.of(added.id()), "how is the successor deleted", 3);
         assertThat(found).isNotEmpty();
         assertThat(found.get(0).content()).contains("successor");
     }
@@ -101,7 +101,7 @@ class NotebookSourcesIT extends AbstractIntegrationTest {
         NotebookSource read = sourceRepository.findById(added.id()).orElseThrow();
         assertThat(read.getStatus()).isEqualTo(NotebookSourceStatus.READY);
         assertThat(read.getPageCount()).isEqualTo(2);
-        List<SourceChunkStore.StoredChunk> hashes = retriever.retrieve(List.of(added.id()), "hash tables memory", 1);
+        List<SourceChunkStore.StoredChunk> hashes = retriever.retrieve(user.getId(), List.of(added.id()), "hash tables memory", 1);
         assertThat(hashes.get(0).pageNumber()).isEqualTo(2);
     }
 

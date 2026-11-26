@@ -63,7 +63,7 @@ public class UserController {
     @PutMapping("/ai-consent")
     public UserResponseDTO setAiConsent(@Valid @RequestBody AiConsentRequestDTO request){
         User user = authenticatedUser.getAuthenticatedUser();
-        return userService.setAiConsent(user.getId(), request.granted());
+        return userService.setAiConsent(user.getId(), request.granted(), Boolean.TRUE.equals(request.onlyIfUnasked()));
     }
 
     /**

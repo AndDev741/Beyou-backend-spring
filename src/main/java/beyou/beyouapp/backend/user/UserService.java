@@ -499,9 +499,16 @@ public class UserService {
      */
     @Transactional
     public UserResponseDTO setAiConsent(UUID userId, boolean granted) {
-        int updated = userRepository.setAiConsent(userId,
-                granted ? AiConsent.GRANTED : AiConsent.DECLINED, Instant.now());
-        if (updated == 0) {
+        return setAiConsent(userId, granted, false);
+    }
+
+    /** @param onlyIfUnasked see {@link beyou.beyouapp.backend.user.dto.AiConsentRequestDTO}. */
+    @Transactional
+    public UserResponseDTO setAiConsent(UUID userId, boolean granted, boolean onlyIfUnasked) {
+        AiConsent answer = granted ? AiConsent.GRANTED : AiConsent.DECLINED;
+        if (onlyIfUnasked) {
+            userRepository.setAiConsentIfUnasked(userId, answer, Instant.now());
+        } else if (userRepository.setAiConsent(userId, answer, Instant.now()) == 0) {
             throw new UserNotFound("User not found by id");
         }
         User user = userRepository.findById(userId)

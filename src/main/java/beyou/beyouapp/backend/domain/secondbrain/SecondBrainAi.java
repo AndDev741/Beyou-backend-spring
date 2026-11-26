@@ -1,5 +1,6 @@
 package beyou.beyouapp.backend.domain.secondbrain;
 
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -127,6 +128,7 @@ public class SecondBrainAi {
         try {
             return insightOnce(user, today, message, deadline);
         } catch (RuntimeException first) {
+            if (AiConsentPolicy.isRefusal(first)) throw first;
             Duration left = Duration.between(Instant.now(), deadline);
             if (left.compareTo(minRetry) < 0) {
                 log.error("Second Brain overview failed with {} ms of the budget left, not retrying: {}",
@@ -138,6 +140,7 @@ public class SecondBrainAi {
                 return insightOnce(user, today,
                         message + "IMPORTANT: return ONLY valid JSON matching the schema.", deadline);
             } catch (RuntimeException second) {
+                if (AiConsentPolicy.isRefusal(second)) throw second;
                 log.error("Second Brain overview retry failed", second);
                 throw unavailable();
             }
@@ -386,6 +389,7 @@ public class SecondBrainAi {
     // ---- the call ----
 
     private <T> T call(Resource template, Class<T> type, String message, User user, LocalDate today) {
+        AiConsentPolicy.requireNow(user.getId());
         return chatClient.prompt()
                 .system(s -> s.text(template)
                         .param("language", UserLanguage.forPrompt(user))

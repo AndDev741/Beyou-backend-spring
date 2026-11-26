@@ -122,7 +122,7 @@ public class StudyContextBuilder {
         List<NotebookSource> sources = sourceService.readable(user, page.getId());
         Map<UUID, NotebookSource> byId = sourceService.byId(sources);
         for (SourceChunkStore.StoredChunk chunk :
-                retriever.retrieve(NotebookSourceService.ids(sources), query, SOURCE_PASSAGES)) {
+                retriever.retrieve(user.getId(), NotebookSourceService.ids(sources), query, SOURCE_PASSAGES)) {
             NotebookSource source = byId.get(chunk.sourceId());
             if (source == null) continue;
             String label = source.getTitle() + " (" + source.getKind().name().toLowerCase(Locale.ROOT)

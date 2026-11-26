@@ -29,7 +29,10 @@ import org.springframework.core.io.ByteArrayResource;
 
 import beyou.beyouapp.backend.exceptions.BusinessException;
 import beyou.beyouapp.backend.exceptions.ErrorKey;
+import beyou.beyouapp.backend.security.aiconsent.AiConsentPolicy;
 import beyou.beyouapp.backend.user.User;
+import beyou.beyouapp.backend.user.UserRepository;
+import beyou.beyouapp.backend.user.enums.AiConsent;
 
 /**
  * The notebook AI's time budget. The production numbers are 90 and 20 seconds; these tests use
@@ -61,6 +64,33 @@ class NotebookLlmTest {
     void tearDown() {
         llm.shutdown();
         MDC.clear();
+    }
+
+    /**
+     * The retry is a second send of the same data. A "no" given after the first attempt failed
+     * stops it, and the person is told why rather than "the AI is not answering".
+     */
+    @Test
+    void aNoBetweenTheAttemptAndItsRetryStopsTheRetry() {
+        UserRepository users = mock(UserRepository.class);
+        AiConsentPolicy policy = new AiConsentPolicy(users);
+        policy.register();
+        try {
+            User person = user();
+            person.setId(java.util.UUID.randomUUID());
+            when(users.findAiConsent(person.getId())).thenReturn(AiConsent.GRANTED);
+            when(chatModel.call(any(Prompt.class))).thenAnswer(inv -> {
+                when(users.findAiConsent(person.getId())).thenReturn(AiConsent.DECLINED);
+                throw new IllegalStateException("provider hiccup");
+            });
+
+            assertThatThrownBy(() -> llm.call(Answer.class, "Explain", person))
+                    .isInstanceOfSatisfying(BusinessException.class,
+                            e -> assertThat(e.getErrorKey()).isEqualTo(ErrorKey.AI_CONSENT_DECLINED));
+            verify(chatModel, times(1)).call(any(Prompt.class));
+        } finally {
+            policy.unregister();
+        }
     }
 
     @Test
