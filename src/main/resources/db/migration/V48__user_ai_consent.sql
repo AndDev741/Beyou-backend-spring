@@ -21,6 +21,9 @@ SET LOCAL statement_timeout = '60s';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_consent varchar(16) NOT NULL DEFAULT 'UNASKED';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_consent_at timestamptz;
 
+-- The constraint is new, so this drops nothing; it lets a rerun after a failure part way through
+-- add it again instead of stopping on a duplicate.
+-- squawk-ignore ban-drop-constraint
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_ai_consent_check;
 
 -- Mirrored by AiConsent. A value added there without adding it here fails every write of it.

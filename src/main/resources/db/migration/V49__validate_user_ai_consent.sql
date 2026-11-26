@@ -7,4 +7,7 @@
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '60s';
 
+-- Flyway runs each migration in its own transaction, and validating an already valid
+-- constraint is a no-op, so a rerun after a failure is safe.
+-- squawk-ignore prefer-robust-stmts
 ALTER TABLE users VALIDATE CONSTRAINT users_ai_consent_check;

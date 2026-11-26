@@ -47,11 +47,6 @@ public class ConsentCheckingChatModel implements ChatModel {
         return delegate.getOptions();
     }
 
-    @Override
-    public ChatOptions getDefaultOptions() {
-        return delegate.getDefaultOptions();
-    }
-
     static UUID userIdOf(Prompt prompt) {
         if (prompt == null || !(prompt.getOptions() instanceof ToolCallingChatOptions options)) {
             return null;
