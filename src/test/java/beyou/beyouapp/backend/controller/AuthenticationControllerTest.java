@@ -33,6 +33,7 @@ import beyou.beyouapp.backend.user.UserService;
 import beyou.beyouapp.backend.user.User;
 import beyou.beyouapp.backend.user.dto.GoogleUserDTO;
 import beyou.beyouapp.backend.user.dto.UserRegisterDTO;
+import beyou.beyouapp.backend.user.federation.FederatedPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -273,6 +274,39 @@ public class AuthenticationControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true));
 
         assertEquals(0, passwordResetTokenRepository.count());
+    }
+
+    @Test
+    public void shouldReturnSuccessWithoutTokenForFederatedAccountResetRequest() throws Exception {
+        // Created by Sign in with Apple (or any OIDC provider): isGoogleAccount is false, and
+        // the password column holds the marker, not a hash.
+        userRepository.save(User.fromFederatedPrincipal(new FederatedPrincipal(
+                "https://appleid.apple.com", "apple-sub-1", "x7k2@privaterelay.appleid.com", true, "Apple", null)));
+
+        mockMvc.perform(post("/auth/forgot-password")
+                .content("{\"email\": \"x7k2@privaterelay.appleid.com\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        assertEquals(0, passwordResetTokenRepository.count());
+    }
+
+    @Test
+    public void shouldRefuseToSetAPasswordOnAFederatedAccount() throws Exception {
+        userRepository.save(User.fromFederatedPrincipal(new FederatedPrincipal(
+                "https://appleid.apple.com", "apple-sub-2", "q9m4@privaterelay.appleid.com", true, "Apple", null)));
+        // A token that exists anyway, e.g. one issued before the forgot-password rule held.
+        String token = createResetTokenForUser("q9m4@privaterelay.appleid.com");
+
+        mockMvc.perform(post("/auth/reset-password")
+                .content("{\"token\": \"" + token + "\", \"password\": \"NewPassword1!\"}")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorKey").value("PASSWORD_RESET_NOT_ALLOWED"));
+
+        assertEquals("FEDERATED_USER",
+                userRepository.findByEmail("q9m4@privaterelay.appleid.com").orElseThrow().getPassword());
     }
 
     @Test
