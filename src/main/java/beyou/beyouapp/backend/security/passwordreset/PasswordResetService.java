@@ -57,8 +57,10 @@ public class PasswordResetService {
         }
 
         User user = userOpt.get();
-        if (user.isGoogleAccount()) {
-            return; // Avoid user enumeration for Google accounts
+        if (user.hasNoPassword()) {
+            // Google, Apple and federated accounts have no password to reset. Same silent
+            // 200 as an unknown address, so the answer says nothing about the account.
+            return;
         }
 
         enforceCooldown(user);
@@ -87,8 +89,10 @@ public class PasswordResetService {
         PasswordResetToken resetToken = resolveValidToken(token);
         User user = resetToken.getUser();
 
-        if (user.isGoogleAccount()) {
-            throw new BusinessException(ErrorKey.PASSWORD_RESET_NOT_ALLOWED, "Password reset not available for Google accounts");
+        // Checked again here: a token issued before the rule above held must not set one either.
+        if (user.hasNoPassword()) {
+            throw new BusinessException(ErrorKey.PASSWORD_RESET_NOT_ALLOWED,
+                    "Password reset not available for accounts that sign in through Google, Apple or another provider");
         }
 
         if (!PasswordValidator.isValid(newPassword)) {

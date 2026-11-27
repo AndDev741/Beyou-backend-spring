@@ -62,6 +62,15 @@ public class User implements UserDetails {
     @Size(min = 6, message = "Password require a minimum of 6 characters")
     private String password;
 
+    /**
+     * The {@link #password} of an account Google created. Not a hash, so no bcrypt comparison
+     * can ever match it: the password door is shut for that account.
+     */
+    public static final String GOOGLE_PASSWORD_MARKER = "GOOGLE_USER";
+
+    /** The same marker, for an account Sign in with Apple or a federated provider created. */
+    public static final String FEDERATED_PASSWORD_MARKER = "FEDERATED_USER";
+
     private boolean isGoogleAccount;
 
     private String perfilPhrase;
@@ -214,7 +223,7 @@ public class User implements UserDetails {
     public User(GoogleUserDTO googleUser) {
         setName(googleUser.name());
         setEmail(googleUser.email());
-        setPassword("GOOGLE_USER");
+        setPassword(GOOGLE_PASSWORD_MARKER);
         setGoogleAccount(googleUser.isGoogleAccount());
         setPerfilPhoto(googleUser.perfilPhoto());
         setEmailVerified(true);
@@ -239,14 +248,29 @@ public class User implements UserDetails {
         user.setName(principal.name() != null ? principal.name() : principal.email());
         user.setEmail(principal.email());
         // Not a hash, so it can never match a bcrypt comparison — same device as
-        // "GOOGLE_USER" above. The password door stays shut for this account.
-        user.setPassword("FEDERATED_USER");
+        // GOOGLE_PASSWORD_MARKER above. The password door stays shut for this account.
+        user.setPassword(FEDERATED_PASSWORD_MARKER);
         user.setGoogleAccount(false);
         user.setPerfilPhoto(principal.picture());
         user.setEmailVerified(true);
         user.adoptClaimedTimezone(principal.timezone());
         user.adoptClaimedLanguage(principal.language());
         return user;
+    }
+
+    /**
+     * Whether this account has no Beyou password: Google, Sign in with Apple or a federated
+     * provider created it, and its password column still holds the marker, not a hash.
+     *
+     * <p>The password reset reads it. {@code isGoogleAccount} alone let every Apple and OIDC
+     * account through, whose flag is false, so a forgot-password link could put a password
+     * on an account meant to open only through its provider. An account that registered with
+     * a password and linked a provider later keeps its hash, and keeps its reset.
+     */
+    public boolean hasNoPassword() {
+        return isGoogleAccount()
+                || GOOGLE_PASSWORD_MARKER.equals(password)
+                || FEDERATED_PASSWORD_MARKER.equals(password);
     }
 
     /**
